@@ -404,10 +404,10 @@
       '</span>' +
       (project.isShared
         ? project.cloudOffline
-          ? '<span class="p-cloud p-cloud--stale" title="Cloud offline — sessions saved locally, new sessions paused until sync resumes">☁</span>'
+          ? '<span class="p-cloud p-cloud--stale" title="Cloud offline — sessions saved locally, new sessions paused until sync resumes">⊙</span>'
           : (project.unlinkedDevices && project.unlinkedDevices.length > 0)
-            ? '<span class="p-cloud p-cloud--unlinked" title="Device(s) not linked: ' + escapeHtml(project.unlinkedDevices.join(', ')) + ' — run ccm link on those devices">☁?</span>'
-            : '<span class="p-cloud p-cloud--ok" title="Shared storage — writes directly to cloud">☁</span>'
+            ? '<span class="p-cloud p-cloud--unlinked" title="Device(s) not linked: ' + escapeHtml(project.unlinkedDevices.join(', ')) + ' — run ccm link on those devices">⊙?</span>'
+            : '<span class="p-cloud p-cloud--ok" title="Shared storage — writes directly to cloud">⊙</span>'
         : '') +
       (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
       '<span class="p-cnt">' +

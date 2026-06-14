@@ -58,7 +58,7 @@ export default function ProjectList({
                   project.cloudOffline ? COLORS.muted :
                   (project.unlinkedDevices?.length ? COLORS.orange : COLORS.ok)
                 }>
-                  {project.unlinkedDevices?.length ? '☁?' : '☁'}
+                  {project.unlinkedDevices?.length ? '⊙?' : '⊙'}
                 </Text>
               </Box>
             ) : null}
