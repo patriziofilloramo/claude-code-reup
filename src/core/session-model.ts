@@ -39,11 +39,17 @@ export interface Project {
   path: string
   sessions: Session[]
   /**
-   * True when the project's storage directory is a junction or symlink
-   * pointing to a shared location (e.g. .claude-memory/ inside the project).
-   * Used to show the ⊙ shared-storage indicator in the UI.
+   * True when the project's storage directory is linked to a cloud location
+   * (either via a .ccm-link file or a legacy NTFS junction / symlink).
+   * Used to show the ☁ shared-storage indicator in the UI.
    */
   isShared: boolean
+  /**
+   * Absolute path to the cloud directory that sessions are synced with.
+   * Set when a .ccm-link file is present; undefined for local-only projects
+   * or legacy junctions that have not yet been migrated.
+   */
+  cloudPath?: string
 }
 
 export interface Session {

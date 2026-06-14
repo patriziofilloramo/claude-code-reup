@@ -60,6 +60,9 @@ export async function startWeb(commandArguments: string[]): Promise<void> {
   const port = await findAvailablePort(preferredPort)
   const url = `http://localhost:${port}`
 
+  const { initCloudSync } = await import('../core/cloud-sync.js')
+  await initCloudSync()
+
   serve({ fetch: buildApp().fetch, hostname: '127.0.0.1', port })
 
   log.info(`ccm web  →  ${url}`)

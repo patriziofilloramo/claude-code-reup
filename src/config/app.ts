@@ -101,4 +101,24 @@ export const APP = {
    * responsive if the local Claude API is slow to respond.
    */
   accountUsageRequestTimeoutMs: 5_000,
+
+  // ── Cloud sync ──────────────────────────────────────────────────────────────
+
+  /**
+   * Subdirectory name created inside the project root by `ccm link` to hold
+   * the shared session files that are kept in sync with local storage.
+   */
+  cloudMemoryDir: '.claude-memory',
+  /**
+   * Marker file written inside ~/.claude/projects/<id>/ to record which cloud
+   * directory the project is linked to. Its presence means local-first sync
+   * is active; its absence means local-only storage.
+   */
+  cloudLinkFile: '.ccm-link',
+  /**
+   * How often (ms) the background sync loop copies session files between the
+   * local ~/.claude/projects/<id>/ directory and its linked cloud directory.
+   * Only runs for projects registered with `ccm link`.
+   */
+  cloudSyncIntervalMs: 30_000,
 } as const

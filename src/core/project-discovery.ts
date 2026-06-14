@@ -3,6 +3,7 @@ import { access, lstat, readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { APP } from '../config/app.js'
 import { log } from '../utils/logger.js'
 import { getClaudeProjectsDirectory, resolveProjectPath } from './claude-paths.js'
 import { getCachedProjects, setCachedProjects } from './project-cache.js'
@@ -82,11 +83,12 @@ async function loadProjectDirectory(
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
 
-    const isShared = await isJunctionOrSymlink(projectDirectory)
+    const { isShared, cloudPath } = await readLinkState(projectDirectory)
 
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
       isShared,
+      cloudPath,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -97,14 +99,23 @@ async function loadProjectDirectory(
 }
 
 /**
- * Returns true when a path is a junction (Windows) or symlink (Unix).
- * lstat does not follow links, so it reports the link itself — unlike stat.
+ * Returns the link state for a project directory.
+ * Prefers the .ccm-link file (new local-first model); falls back to detecting
+ * legacy NTFS junctions / symlinks for projects not yet migrated.
  */
-async function isJunctionOrSymlink(path: string): Promise<boolean> {
+async function readLinkState(
+  projectDirectory: string
+): Promise<{ isShared: boolean; cloudPath?: string }> {
   try {
-    return (await lstat(path)).isSymbolicLink()
+    const cloudPath = (await readFile(join(projectDirectory, APP.cloudLinkFile), 'utf8')).trim()
+    if (cloudPath) return { isShared: true, cloudPath }
+  } catch { /* no .ccm-link file — check for legacy junction */ }
+
+  try {
+    const isJunction = (await lstat(projectDirectory)).isSymbolicLink()
+    return { isShared: isJunction }
   } catch {
-    return false
+    return { isShared: false }
   }
 }
 

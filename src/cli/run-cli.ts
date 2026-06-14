@@ -178,8 +178,12 @@ function acceptsNoArguments(command: string, commandArguments: string[]): boolea
 // -----------------------------------------------------------------------------
 
 async function runTerminalInterface(): Promise<void> {
+  const { initCloudSync, stopSyncLoop } = await import('../core/cloud-sync.js')
+  await initCloudSync()
+
   const { runTUI } = await import('../tui/App.js')
   const resumeTarget = await runTUI()
+  stopSyncLoop()
   if (!resumeTarget) return
 
   process.chdir(resumeTarget.projectPath)
