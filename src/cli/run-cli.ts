@@ -178,6 +178,8 @@ function acceptsNoArguments(command: string, commandArguments: string[]): boolea
 // -----------------------------------------------------------------------------
 
 async function runTerminalInterface(): Promise<void> {
+  const { guardOfflineLinks } = await import('./memory-command.js')
+  await guardOfflineLinks()
   const { runTUI } = await import('../tui/App.js')
   const resumeTarget = await runTUI()
   if (!resumeTarget) return

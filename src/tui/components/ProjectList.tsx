@@ -52,7 +52,11 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
-            {project.isShared ? (
+            {project.storageOffline ? (
+              <Box flexShrink={0} paddingLeft={1}>
+                <Text color={COLORS.warn}>⚠</Text>
+              </Box>
+            ) : project.isShared ? (
               <Box flexShrink={0} paddingLeft={1}>
                 <Text color={COLORS.border}>☁</Text>
               </Box>

@@ -402,7 +402,11 @@
       '<span class="p-name">' +
       escapeHtml(compactPath(project.path)) +
       '</span>' +
-      (project.isShared ? '<span class="p-cloud" title="Shared storage (cloud-linked)">☁</span>' : '') +
+      (project.storageOffline
+        ? '<span class="p-cloud p-cloud--offline" title="Cloud storage offline — sessions saved locally until reconnected">⚠</span>'
+        : project.isShared
+          ? '<span class="p-cloud" title="Shared storage (cloud-linked)">☁</span>'
+          : '') +
       (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
       '<span class="p-cnt">' +
       sessionCount +
