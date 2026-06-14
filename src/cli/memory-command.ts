@@ -40,6 +40,14 @@ export async function runMemoryCommand(args: string[]): Promise<void> {
 async function linkMemory(args: string[]): Promise<void> {
   if (args.length > 1) { failCommand('usage: ccm link [project-path]'); return }
 
+  writeOutput([
+    '⚠  ccm memory is experimental — use at your own risk.',
+    '   Sessions are moved into the cloud directory via a filesystem junction.',
+    '   Back up ~/.claude/projects/<id> before proceeding.',
+    '   Run `ccm unlink <path>` to safely restore to local-only storage.',
+    '',
+  ].join('\n'))
+
   const projects = await loadProjects()
 
   if (args.length === 0) {
@@ -155,6 +163,12 @@ async function linkProject(projectPath: string, projects: Project[]): Promise<vo
 
 async function unlinkMemory(args: string[]): Promise<void> {
   if (args.length > 1) { failCommand('usage: ccm unlink [project-path]'); return }
+
+  writeOutput([
+    '⚠  ccm memory is experimental — use at your own risk.',
+    '   Sessions will be copied from the cloud directory back to local storage.',
+    '',
+  ].join('\n'))
 
   const projects = await loadProjects()
 
