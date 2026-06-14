@@ -23,6 +23,7 @@
 
 import {
   copyFile,
+  lstat,
   mkdir,
   readdir,
   readlink,
@@ -78,25 +79,29 @@ export async function initCloudSync(): Promise<number> {
   const backupRoot = join(getCcmDirectory(), APP.cloudSyncBackupDir)
 
   for (const project of projects) {
+    if (!project.isShared) continue
+
     const junctionPath = join(projectsDir, project.id)
 
-    if (project.isShared && project.cloudPath) {
-      // .ccm-link project: migrate back to junction model
-      try {
-        await migrateLinkFileToJunction(junctionPath, project.cloudPath)
-        await setupProjectSync(project.id, junctionPath, project.cloudPath, backupRoot)
-      } catch (error) {
-        log.debug(`cloud-sync: migration failed for ${project.id}: ${error}`)
-      }
-    } else if (project.isShared && !project.cloudPath) {
-      // Already a junction: get cloud dir via readlink
-      try {
+    try {
+      // Determine the actual filesystem representation: junction or real directory.
+      // readLinkState sets cloudPath for both junctions (via readlink) and .ccm-link
+      // files (via readFile), so we must check lstat to distinguish the two cases.
+      const pathStat = await lstat(junctionPath).catch(() => null)
+      const isJunction = pathStat?.isSymbolicLink() ?? false
+
+      if (isJunction) {
+        // Already a junction — read the target and set up the backup guard.
         let cloudDir = await readlink(junctionPath)
         if (cloudDir.startsWith('\\\\?\\')) cloudDir = cloudDir.slice(4)
         await setupProjectSync(project.id, junctionPath, cloudDir, backupRoot)
-      } catch (error) {
-        log.debug(`cloud-sync: failed to register ${project.id}: ${error}`)
+      } else if (project.cloudPath) {
+        // Real directory with a .ccm-link file: migrate to junction.
+        await migrateLinkFileToJunction(junctionPath, project.cloudPath)
+        await setupProjectSync(project.id, junctionPath, project.cloudPath, backupRoot)
       }
+    } catch (error) {
+      log.debug(`cloud-sync: init failed for ${project.id}: ${error}`)
     }
   }
 
