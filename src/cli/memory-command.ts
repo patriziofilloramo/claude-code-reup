@@ -1,4 +1,4 @@
-import { access, lstat, mkdir, readFile, readlink, rm } from 'node:fs/promises'
+import { access, lstat, mkdir, readFile, readlink, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -8,7 +8,8 @@ import {
   removeLinkAt,
   syncBidirectional,
 } from '../core/cloud-sync.js'
-import { encodeProjectPath, getClaudeProjectsDirectory } from '../core/claude-paths.js'
+import { encodeProjectPath, getCcmDirectory, getClaudeProjectsDirectory } from '../core/claude-paths.js'
+import { getOrCreateDeviceId } from '../core/device-id.js'
 import { loadProjects } from '../core/project-discovery.js'
 import type { Project } from '../core/session-model.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
@@ -136,9 +137,13 @@ async function linkProject(projectPath: string, projects: Project[]): Promise<vo
 
   await createLinkAt(localDir, cloudDir)
 
+  const deviceId = await getOrCreateDeviceId()
+  await injectClaudeMdSection(projectPath, cloudDir, deviceId)
+
   writeOutput([
     `✓ linked: ${projectPath}`,
     `  sessions write directly to ${cloudDir}`,
+    `  CLAUDE.md updated — other devices will be prompted to run ccm link`,
     `  start ccm to enable offline backup and automatic conflict merge`,
   ].join('\n'))
 }
@@ -208,6 +213,8 @@ async function unlinkProject(projectPath: string, projects: Project[]): Promise<
     await rm(join(localDir, APP.cloudLinkFile), { force: true })
   }
 
+  await removeClaudeMdSection(projectPath)
+
   writeOutput([
     `✓ unlinked: ${projectPath}`,
     `  sessions remain in local storage.`,
@@ -249,6 +256,111 @@ async function showMemoryStatus(): Promise<void> {
     }
   }
   writeOutput(lines.join('\n'))
+}
+
+// ---------------------------------------------------------------------------
+// CLAUDE.md cross-device sync section
+// ---------------------------------------------------------------------------
+
+const CCM_MARKER_START = '<!-- ccm:sync:start -->'
+const CCM_MARKER_END = '<!-- ccm:sync:end -->'
+
+/**
+ * Writes (or replaces) the ccm sync section in the project's CLAUDE.md.
+ *
+ * The section instructs the Claude Code agent to:
+ *   1. Check for the local device-id file every session (new or resumed).
+ *   2. If missing → warn the user and offer to set up or suppress forever.
+ *   3. If present → load shared memories from the cloud directory.
+ *
+ * Using markers allows safe idempotent re-runs and clean removal on unlink.
+ */
+async function injectClaudeMdSection(
+  projectPath: string,
+  cloudDir: string,
+  deviceId: string,
+): Promise<void> {
+  const claudeMdPath = join(projectPath, 'CLAUDE.md')
+  const home = homedir()
+  const deviceIdPath = process.platform === 'win32'
+    ? join(home, '.claude', 'ccm', 'device-id').replace(/\\/g, '\\\\')
+    : join(home, '.claude', 'ccm', 'device-id')
+  const ignorePath = process.platform === 'win32'
+    ? join(home, '.claude', 'ccm', 'sync-warning-ignored').replace(/\\/g, '\\\\')
+    : join(home, '.claude', 'ccm', 'sync-warning-ignored')
+  const memoryDir = join(cloudDir, 'memory')
+
+  const section = [
+    CCM_MARKER_START,
+    '## CCM: Cross-device Sync',
+    '',
+    `Cloud storage for this project: \`${cloudDir}\``,
+    `Linked from device: \`${deviceId}\``,
+    '',
+    '**At the start of every session (new or resumed), run this check:**',
+    '',
+    `1. Try to read \`${deviceIdPath}\``,
+    `2. **File missing** — this device is not set up for sync:`,
+    `   - Try to read \`${ignorePath}\``,
+    `   - If that file also does not exist: tell the user —`,
+    `     "⚠ Questo device non è configurato per il sync cross-device ccm.`,
+    `     Esegui \`ccm link \\"${projectPath}\\"\` per condividere sessioni e memoria`,
+    `     tra dispositivi, oppure dimmi \\"ignora sync\\" per non mostrare più questo avviso."`,
+    `   - If the user replies with "ignora sync" (or similar):`,
+    `     Write the text \`ignored\` to \`${ignorePath}\` using your Write tool,`,
+    `     then confirm: "Avviso sync disattivato su questo device."`,
+    `   - If the ignore file already exists: skip the warning silently.`,
+    `3. **File present** — sync is active on this device:`,
+    `   Read all \`.md\` files in \`${memoryDir}\` for shared context from other devices.`,
+    CCM_MARKER_END,
+  ].join('\n')
+
+  let existing = ''
+  try {
+    existing = await readFile(claudeMdPath, 'utf8')
+  } catch { /* file does not exist yet */ }
+
+  const startIdx = existing.indexOf(CCM_MARKER_START)
+  const endIdx = existing.indexOf(CCM_MARKER_END)
+
+  let updated: string
+  if (startIdx !== -1 && endIdx !== -1) {
+    // Replace existing section
+    updated = existing.slice(0, startIdx) + section + existing.slice(endIdx + CCM_MARKER_END.length)
+  } else {
+    // Append new section (with blank line separator if file has content)
+    updated = existing ? existing.trimEnd() + '\n\n' + section + '\n' : section + '\n'
+  }
+
+  await writeFile(claudeMdPath, updated, 'utf8')
+}
+
+/**
+ * Removes the ccm sync section from the project's CLAUDE.md on unlink.
+ * Leaves the rest of the file intact.
+ */
+async function removeClaudeMdSection(projectPath: string): Promise<void> {
+  const claudeMdPath = join(projectPath, 'CLAUDE.md')
+  let content: string
+  try {
+    content = await readFile(claudeMdPath, 'utf8')
+  } catch {
+    return  // file doesn't exist, nothing to remove
+  }
+
+  const startIdx = content.indexOf(CCM_MARKER_START)
+  const endIdx = content.indexOf(CCM_MARKER_END)
+  if (startIdx === -1 || endIdx === -1) return
+
+  const before = content.slice(0, startIdx).trimEnd()
+  const after = content.slice(endIdx + CCM_MARKER_END.length).trimStart()
+  const updated = before && after ? before + '\n\n' + after : before || after
+
+  if (updated.trim()) {
+    await writeFile(claudeMdPath, updated + '\n', 'utf8')
+  } else {
+    await rm(claudeMdPath, { force: true })
+  }
 }
 
 // ---------------------------------------------------------------------------
