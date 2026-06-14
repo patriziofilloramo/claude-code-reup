@@ -319,6 +319,10 @@ async function injectClaudeMdSection(
     `      Write \`ignored\` to \`${ignoredDir}\\HOSTNAME\`,`,
     `      delete \`${presenceDir}\\HOSTNAME.json\` if it exists,`,
     `      then confirm: "Avviso sync disattivato su questo device."`,
+    `   e. During the session, if you learn important context (user goals, decisions,`,
+    `      preferences, key facts about the project), append them to \`${memoryDir}\\shared.md\`.`,
+    `      Use append-only writes — never overwrite. Format: "## HOSTNAME — <date>\\n<notes>"`,
+    `      This lets linked devices benefit from context gathered here even without a full link.`,
     CCM_MARKER_END,
   ].join('\n')
 
