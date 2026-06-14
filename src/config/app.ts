@@ -101,4 +101,32 @@ export const APP = {
    * responsive if the local Claude API is slow to respond.
    */
   accountUsageRequestTimeoutMs: 5_000,
+
+  // ── Cloud sync ──────────────────────────────────────────────────────────────
+
+  /**
+   * Subdirectory name created inside the project root by `ccm link` to hold
+   * the shared session files that are kept in sync with local storage.
+   */
+  cloudMemoryDir: '.claude-memory',
+  /**
+   * Marker file written inside ~/.claude/projects/<id>/ to record which cloud
+   * directory the project is linked to. Its presence means local-first sync
+   * is active; its absence means local-only storage.
+   */
+  cloudLinkFile: '.ccm-link',
+  /**
+   * How often (ms) the background offline-guard loop checks whether the cloud
+   * junction target is reachable and transitions between online/offline modes.
+   * Also the interval at which the local backup is refreshed from the cloud.
+   */
+  cloudSyncIntervalMs: 30_000,
+  /**
+   * Path segment appended to getCcmDirectory() (~/.claude/ccm/) to locate the
+   * local backup root. Each linked project gets its own subdirectory here:
+   *   ~/.claude/ccm/<cloudSyncBackupDir>/<projectId>/
+   * The backup is kept in sync with the cloud dir and used as an offline
+   * fallback when the junction target (pCloud, etc.) becomes unreachable.
+   */
+  cloudSyncBackupDir: 'sync',
 } as const

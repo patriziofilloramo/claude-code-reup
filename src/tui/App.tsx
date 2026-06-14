@@ -297,7 +297,11 @@ function App({ onResume }: AppProps) {
     if (!selectedProject) return
     switch (command) {
       case 'new-session':
-        newSession(selectedProject)
+        if (selectedProject.cloudOffline) {
+          flashMessage('cloud offline — new session paused until sync resumes')
+        } else {
+          newSession(selectedProject)
+        }
         break
       case 'browse-sessions':
         setFocusedPanel('sessions')
@@ -450,7 +454,13 @@ function App({ onResume }: AppProps) {
         if (focusedSession) setResumeCardSession(focusedSession)
         break
       case 'new-session':
-        if (selectedProject) newSession(selectedProject)
+        if (selectedProject) {
+          if (selectedProject.cloudOffline) {
+            flashMessage('cloud offline — new session paused until sync resumes')
+          } else {
+            newSession(selectedProject)
+          }
+        }
         break
       case 'archive':
         archiveSelectedSession()
@@ -539,7 +549,11 @@ function App({ onResume }: AppProps) {
       return
     }
     if (!isLoading && input === 'n' && selectedProject) {
-      newSession(selectedProject)
+      if (selectedProject.cloudOffline) {
+        flashMessage('cloud offline — new session paused until sync resumes')
+      } else {
+        newSession(selectedProject)
+      }
       return
     }
     if (!isLoading && input === '/') {

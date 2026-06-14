@@ -52,13 +52,14 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
-            {project.storageOffline ? (
+            {project.isShared ? (
               <Box flexShrink={0} paddingLeft={1}>
-                <Text color={COLORS.warn}>⚠</Text>
-              </Box>
-            ) : project.isShared ? (
-              <Box flexShrink={0} paddingLeft={1}>
-                <Text color={COLORS.border}>☁</Text>
+                <Text color={
+                  project.cloudOffline ? COLORS.muted :
+                  (project.unlinkedDevices?.length ? COLORS.orange : COLORS.ok)
+                }>
+                  {'☁'}
+                </Text>
               </Box>
             ) : null}
             <Box flexShrink={0}>

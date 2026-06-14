@@ -39,17 +39,31 @@ export interface Project {
   path: string
   sessions: Session[]
   /**
-   * True when the project's storage directory is a junction or symlink
-   * pointing to a shared location (e.g. .claude-memory/ inside the project).
-   * Used to show the ☁ shared-storage indicator in the UI.
+   * True when the project's storage directory is linked to a cloud location
+   * (either via a .ccm-link file or a legacy NTFS junction / symlink).
+   * Used to show the cloud shared-storage indicator in the UI.
    */
   isShared: boolean
   /**
-   * True when the project is shared but its junction target is currently
-   * unreachable (e.g. cloud drive offline). Sessions cannot be read or
-   * written until the target comes back online or the link is guarded.
+   * Absolute path to the cloud directory that sessions are synced with.
+   * Set when a .ccm-link file is present; undefined for local-only projects
+   * or legacy junctions that have not yet been migrated.
    */
-  storageOffline?: boolean
+  cloudPath?: string
+  /**
+   * True when the cloud junction target is temporarily unreachable and ccm
+   * has switched the project to a local backup directory. Sessions written
+   * while offline will be merged back to the cloud when it comes online.
+   * Shown as grey cloud in the UI so the user knows sync is paused.
+   */
+  cloudOffline?: boolean
+  /**
+   * Device names that wrote a presence file to the cloud directory while not
+   * linked (i.e. they opened the project without running `ccm link`).
+   * Populated from {cloudDir}/device-presence/ on each discovery pass.
+   * Shown as orange cloud in the UI to prompt the user to link that device.
+   */
+  unlinkedDevices?: string[]
 }
 
 export interface Session {

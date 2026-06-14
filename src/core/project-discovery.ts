@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process'
-import { access, lstat, readdir, readFile } from 'node:fs/promises'
+import { access, lstat, readdir, readFile, readlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { APP } from '../config/app.js'
 import { log } from '../utils/logger.js'
 import { getClaudeProjectsDirectory, resolveProjectPath } from './claude-paths.js'
 import { getCachedProjects, setCachedProjects } from './project-cache.js'
@@ -11,6 +12,7 @@ import { isValidSessionId } from './session-model.js'
 import { mergeProjectSidecarMetadata } from './session-metadata.js'
 import { calculateExpiryDays } from './session-signals.js'
 import { parseSessionTranscript } from './session-transcript.js'
+import { syncRegistry } from './sync-registry.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -39,7 +41,7 @@ export async function loadProjects(): Promise<Project[]> {
   const projects = discoveredProjects
     .filter(
       (project): project is Project =>
-        project !== null && (project.sessions.length > 0 || project.storageOffline === true)
+        project !== null && (project.sessions.length > 0 || project.cloudOffline === true)
     )
     .sort(compareProjectsByRecentActivity)
 
@@ -78,14 +80,17 @@ async function loadProjectDirectory(
   try {
     const projectDirectory = join(projectsDirectory, directoryName)
     const decodedProjectPath = await resolveProjectPath(directoryName)
-    const isShared = await isJunctionOrSymlink(projectDirectory)
+    const { isShared, cloudPath, cloudOffline } = await readLinkState(projectDirectory)
+    const unlinkedDevices = isShared && cloudPath
+      ? await readUnlinkedDevices(cloudPath)
+      : undefined
 
     // Detect offline cloud storage before attempting to read sessions.
     // An inaccessible junction target means the drive is unmounted; surfacing
-    // the project with storageOffline=true lets the UI warn the user rather
+    // the project with cloudOffline=true lets the UI warn the user rather
     // than silently hiding the project.
     if (isShared && !(await isAccessible(projectDirectory))) {
-      return { id: directoryName, isShared: true, storageOffline: true, path: decodedProjectPath, sessions: [] }
+      return { id: directoryName, isShared: true, cloudOffline: true, path: decodedProjectPath, sessions: [] }
     }
 
     const sessions =
@@ -98,7 +103,9 @@ async function loadProjectDirectory(
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
       isShared,
-      storageOffline: false,
+      cloudPath,
+      cloudOffline,
+      unlinkedDevices,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -109,14 +116,62 @@ async function loadProjectDirectory(
 }
 
 /**
- * Returns true when a path is a junction (Windows) or symlink (Unix).
- * lstat does not follow links, so it reports the link itself — unlike stat.
+ * Returns the link state for a project directory.
+ *
+ * Priority:
+ *   1. syncRegistry (populated by initCloudSync): authoritative after startup,
+ *      covers the offline case where the junction is temporarily replaced by a
+ *      real local directory.
+ *   2. NTFS junction / symlink detection via lstat: pre-startup state and
+ *      fresh installs.
+ *   3. Legacy .ccm-link file: projects not yet migrated to junction model.
  */
-async function isJunctionOrSymlink(path: string): Promise<boolean> {
+async function readLinkState(
+  projectDirectory: string
+): Promise<{ isShared: boolean; cloudPath?: string; cloudOffline?: boolean }> {
+  // 1. Registry — always wins when populated (ccm is running)
+  const regEntry = syncRegistry.get(projectDirectory)
+  if (regEntry) {
+    return {
+      isShared: true,
+      cloudPath: regEntry.cloudDir,
+      cloudOffline: !regEntry.isOnline,
+    }
+  }
+
+  // 2. Junction / symlink
   try {
-    return (await lstat(path)).isSymbolicLink()
+    const fileStat = await lstat(projectDirectory)
+    if (fileStat.isSymbolicLink()) {
+      let cloudPath = await readlink(projectDirectory)
+      if (cloudPath.startsWith('\\\\?\\')) cloudPath = cloudPath.slice(4)
+      return { isShared: true, cloudPath }
+    }
+  } catch { /* not a junction */ }
+
+  // 3. Legacy .ccm-link (will be migrated to junction on next initCloudSync)
+  try {
+    const cloudPath = (await readFile(join(projectDirectory, APP.cloudLinkFile), 'utf8')).trim()
+    if (cloudPath) return { isShared: true, cloudPath }
+  } catch { /* no marker file */ }
+
+  return { isShared: false }
+}
+
+/**
+ * Reads device names from {cloudDir}/device-presence/.
+ * Files are written by unlinked devices following CLAUDE.md instructions.
+ * Returns undefined (not an empty array) when the directory is absent or empty.
+ */
+async function readUnlinkedDevices(cloudDir: string): Promise<string[] | undefined> {
+  try {
+    const entries = await readdir(join(cloudDir, 'device-presence'))
+    const devices = entries
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.slice(0, -5))
+    return devices.length > 0 ? devices : undefined
   } catch {
-    return false
+    return undefined
   }
 }
 

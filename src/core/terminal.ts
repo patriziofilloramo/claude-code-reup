@@ -1,8 +1,8 @@
-import type { LaunchResult } from './terminal.shared.js'
-import { launchUnix } from './terminal.unix.js'
-import { launchWindows } from './terminal.windows.js'
+import type { LaunchResult } from './terminal-shared.js'
+import { launchUnix } from './terminal-unix.js'
+import { launchWindows } from './terminal-windows.js'
 
-export type { LaunchResult } from './terminal.shared.js'
+export type { LaunchResult } from './terminal-shared.js'
 
 /**
  * Opens a new terminal window and resumes a UUID-validated session.

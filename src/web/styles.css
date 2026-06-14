@@ -1028,13 +1028,27 @@ body {
 /* ── Cloud / shared storage indicator ───────────────────────────────────── */
 
 .p-cloud {
-  color: var(--accent);
   flex-shrink: 0;
   font-size: 10px;
   opacity: 0.65;
 }
 .p-cloud--offline {
   color: var(--amber);
+  opacity: 1;
+}
+
+.p-cloud--ok {
+  color: var(--green);
+  opacity: 1;
+}
+
+.p-cloud--stale {
+  color: var(--muted2);
+  opacity: 1;
+}
+
+.p-cloud--unlinked {
+  color: var(--orange);
   opacity: 1;
 }
 
