@@ -25,13 +25,13 @@ export function unregisterSync(localDir: string): void {
 }
 
 /**
- * Starts the periodic sync loop. Does nothing if already running.
- * Fires an immediate first sync so the UI is up-to-date on launch.
+ * Starts the periodic background sync loop. Does nothing if already running.
+ * Does NOT run an immediate sync — callers that need the initial sync to
+ * complete before proceeding should call initCloudSync(), which awaits it.
  */
 export function startSyncLoop(): void {
   if (syncTimer !== null) return
   syncTimer = setInterval(() => { void runAllSyncs() }, APP.cloudSyncIntervalMs)
-  void runAllSyncs()
 }
 
 export function stopSyncLoop(): void {
@@ -46,13 +46,19 @@ export function stopSyncLoop(): void {
 // -----------------------------------------------------------------------------
 
 /**
- * Reads all discovered projects, registers cloud syncs for any that have a
- * .ccm-link file, auto-migrates legacy NTFS junctions to the .ccm-link model,
- * and starts the sync loop. Call once on TUI/web startup.
+ * Discovers all linked projects, registers their sync pairs, runs the initial
+ * bidirectional sync to completion (blocking), then starts the background loop.
+ *
+ * Awaiting this guarantees the caller sees fully up-to-date session data
+ * before any UI is shown. Subsequent periodic syncs run in the background
+ * and never block the user.
+ *
+ * @returns The number of projects that were synced on startup.
  */
-export async function initCloudSync(): Promise<void> {
+export async function initCloudSync(): Promise<number> {
   const { loadProjects } = await import('./project-discovery.js')
   const { getClaudeProjectsDirectory } = await import('./claude-paths.js')
+  const { invalidateProjectCache } = await import('./project-cache.js')
   const { join: pathJoin } = await import('node:path')
 
   const projects = await loadProjects()
@@ -68,7 +74,17 @@ export async function initCloudSync(): Promise<void> {
     }
   }
 
+  const syncedCount = syncRegistry.size
+  if (syncedCount > 0) {
+    // Block until the initial sync is complete so the UI always opens with
+    // up-to-date sessions. Subsequent syncs run as background intervals.
+    await runAllSyncs()
+    // Invalidate the discovery cache so the TUI rescans and sees new files.
+    invalidateProjectCache()
+  }
+
   startSyncLoop()
+  return syncedCount
 }
 
 // -----------------------------------------------------------------------------
