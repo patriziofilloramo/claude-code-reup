@@ -116,9 +116,17 @@ export const APP = {
    */
   cloudLinkFile: '.ccm-link',
   /**
-   * How often (ms) the background sync loop copies session files between the
-   * local ~/.claude/projects/<id>/ directory and its linked cloud directory.
-   * Only runs for projects registered with `ccm link`.
+   * How often (ms) the background offline-guard loop checks whether the cloud
+   * junction target is reachable and transitions between online/offline modes.
+   * Also the interval at which the local backup is refreshed from the cloud.
    */
   cloudSyncIntervalMs: 30_000,
+  /**
+   * Path segment appended to getCcmDirectory() (~/.claude/ccm/) to locate the
+   * local backup root. Each linked project gets its own subdirectory here:
+   *   ~/.claude/ccm/<cloudSyncBackupDir>/<projectId>/
+   * The backup is kept in sync with the cloud dir and used as an offline
+   * fallback when the junction target (pCloud, etc.) becomes unreachable.
+   */
+  cloudSyncBackupDir: 'sync',
 } as const

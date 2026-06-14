@@ -1,38 +1,57 @@
-import { copyFile, mkdir, readdir, readlink, stat, writeFile } from 'node:fs/promises'
+/**
+ * Cloud sync — junction-first architecture.
+ *
+ * When a project is linked via `ccm link`, its Claude Code session directory
+ * (~/.claude/projects/<id>/) is replaced with an NTFS junction (Windows) or
+ * symlink (Unix) pointing directly at the cloud storage directory inside the
+ * project (e.g. P:\Projects\...\.claude-memory\). Claude Code writes through
+ * the junction into cloud storage; the cloud provider (pCloud, Dropbox, …)
+ * replicates those writes to every other device automatically — no ccm
+ * required on the other device.
+ *
+ * Offline resilience: ccm maintains a local backup at ~/.claude/ccm/sync/<id>/
+ * that mirrors the cloud dir. When the junction target goes offline, ccm:
+ *   1. Removes the junction and creates a real local directory from the backup.
+ *   2. Claude Code continues writing sessions normally (no data loss).
+ *   3. When the cloud comes back, ccm merges the offline sessions into the cloud
+ *      dir and restores the junction.
+ *
+ * The syncRegistry (src/core/sync-registry.ts) is updated on every transition
+ * so project-discovery can annotate projects with their online/offline status
+ * without importing this module directly (which would create a circular dep).
+ */
+
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readlink,
+  rm,
+  stat,
+} from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP } from '../config/app.js'
+import { getCcmDirectory, getClaudeProjectsDirectory } from './claude-paths.js'
 import { log } from '../utils/logger.js'
+import { syncRegistry } from './sync-registry.js'
+import type { ProjectSyncInfo } from './sync-registry.js'
 
-// localDir → cloudDir
-const syncRegistry = new Map<string, string>()
+// ---------------------------------------------------------------------------
+// Internal state
+// ---------------------------------------------------------------------------
+
+interface SyncState extends ProjectSyncInfo {
+  junctionPath: string
+  backupDir: string
+}
+
+const syncStates = new Map<string, SyncState>()
 let syncTimer: ReturnType<typeof setInterval> | null = null
 
-// -----------------------------------------------------------------------------
-// Sync loop lifecycle
-// -----------------------------------------------------------------------------
-
-/**
- * Registers a local↔cloud directory pair for background sync.
- * Idempotent — re-registering the same localDir updates its cloud target.
- */
-export function registerSync(localDir: string, cloudDir: string): void {
-  syncRegistry.set(localDir, cloudDir)
-}
-
-export function unregisterSync(localDir: string): void {
-  syncRegistry.delete(localDir)
-}
-
-/**
- * Starts the periodic background sync loop. Does nothing if already running.
- * Does NOT run an immediate sync — callers that need the initial sync to
- * complete before proceeding should call initCloudSync(), which awaits it.
- */
-export function startSyncLoop(): void {
-  if (syncTimer !== null) return
-  syncTimer = setInterval(() => { void runAllSyncs() }, APP.cloudSyncIntervalMs)
-}
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
 
 export function stopSyncLoop(): void {
   if (syncTimer !== null) {
@@ -41,180 +60,276 @@ export function stopSyncLoop(): void {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Startup helper
-// -----------------------------------------------------------------------------
-
 /**
- * Discovers all linked projects, registers their sync pairs, runs the initial
- * bidirectional sync to completion (blocking), then starts the background loop.
+ * Discovers all linked projects, migrates any .ccm-link files to junctions,
+ * initialises the local backup for every linked project, and starts the
+ * background offline-guard loop.
  *
- * Awaiting this guarantees the caller sees fully up-to-date session data
- * before any UI is shown. Subsequent periodic syncs run in the background
- * and never block the user.
+ * Awaiting this guarantees the caller has up-to-date data before showing UI.
  *
- * @returns The number of projects that were synced on startup.
+ * @returns Number of cloud-linked projects initialised.
  */
 export async function initCloudSync(): Promise<number> {
   const { loadProjects } = await import('./project-discovery.js')
-  const { getClaudeProjectsDirectory } = await import('./claude-paths.js')
   const { invalidateProjectCache } = await import('./project-cache.js')
-  const { join: pathJoin } = await import('node:path')
 
   const projects = await loadProjects()
   const projectsDir = getClaudeProjectsDirectory()
+  const backupRoot = join(getCcmDirectory(), APP.cloudSyncBackupDir)
 
   for (const project of projects) {
-    const localDir = pathJoin(projectsDir, project.id)
-    if (project.isShared && !project.cloudPath) {
-      const cloudDir = await migrateLegacyJunction(localDir).catch(() => null)
-      if (cloudDir) registerSync(localDir, cloudDir)
-    } else if (project.cloudPath) {
-      registerSync(localDir, project.cloudPath)
+    const junctionPath = join(projectsDir, project.id)
+
+    if (project.isShared && project.cloudPath) {
+      // .ccm-link project: migrate back to junction model
+      try {
+        await migrateLinkFileToJunction(junctionPath, project.cloudPath)
+        await setupProjectSync(project.id, junctionPath, project.cloudPath, backupRoot)
+      } catch (error) {
+        log.debug(`cloud-sync: migration failed for ${project.id}: ${error}`)
+      }
+    } else if (project.isShared && !project.cloudPath) {
+      // Already a junction: get cloud dir via readlink
+      try {
+        let cloudDir = await readlink(junctionPath)
+        if (cloudDir.startsWith('\\\\?\\')) cloudDir = cloudDir.slice(4)
+        await setupProjectSync(project.id, junctionPath, cloudDir, backupRoot)
+      } catch (error) {
+        log.debug(`cloud-sync: failed to register ${project.id}: ${error}`)
+      }
     }
   }
 
-  const syncedCount = syncRegistry.size
-  if (syncedCount > 0) {
-    // Block until the initial sync is complete so the UI always opens with
-    // up-to-date sessions. Subsequent syncs run as background intervals.
-    await runAllSyncs()
-    // Invalidate the discovery cache so the TUI rescans and sees new files.
+  if (syncStates.size > 0) {
     invalidateProjectCache()
+    syncTimer = setInterval(() => { void runSyncCycle() }, APP.cloudSyncIntervalMs)
   }
 
-  startSyncLoop()
-  return syncedCount
+  return syncStates.size
 }
 
-// -----------------------------------------------------------------------------
-// Sync engine
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Project sync initialisation
+// ---------------------------------------------------------------------------
 
-async function runAllSyncs(): Promise<void> {
-  for (const [localDir, cloudDir] of syncRegistry) {
-    await syncBidirectional(localDir, cloudDir).catch((error) => {
-      log.debug(`cloud-sync: error syncing ${localDir} ↔ ${cloudDir}: ${error}`)
-    })
+/**
+ * Determines the initial online/offline state for one linked project,
+ * sets up the local backup, and registers the project in syncStates +
+ * syncRegistry so project-discovery can annotate it correctly.
+ */
+async function setupProjectSync(
+  projectId: string,
+  junctionPath: string,
+  cloudDir: string,
+  backupRoot: string,
+): Promise<void> {
+  const backupDir = join(backupRoot, projectId)
+  const online = await isCloudAccessible(cloudDir)
+
+  const state: SyncState = {
+    junctionPath,
+    cloudDir,
+    backupDir,
+    isOnline: online,
+    hasPendingMerge: false,
   }
+
+  if (online) {
+    await refreshBackup(state)
+  } else {
+    const hasBackup = await backupHasData(backupDir)
+    if (hasBackup) {
+      await activateOfflineMode(state)
+    }
+    // No backup and offline: leave junction in place (broken but best we can do).
+  }
+
+  syncStates.set(junctionPath, state)
+  syncRegistry.set(junctionPath, state)
+}
+
+// ---------------------------------------------------------------------------
+// Sync cycle (background)
+// ---------------------------------------------------------------------------
+
+async function runSyncCycle(): Promise<void> {
+  const { invalidateProjectCache } = await import('./project-cache.js')
+  let changed = false
+
+  for (const [, state] of syncStates) {
+    const wasOnline = state.isOnline
+    const nowOnline = await isCloudAccessible(state.cloudDir)
+
+    if (wasOnline && !nowOnline) {
+      await activateOfflineMode(state).catch((e) => {
+        log.debug(`cloud-sync: offline transition failed for ${state.junctionPath}: ${e}`)
+      })
+      state.isOnline = false
+      changed = true
+    } else if (!wasOnline && nowOnline) {
+      await deactivateOfflineMode(state).catch((e) => {
+        log.debug(`cloud-sync: online restore failed for ${state.junctionPath}: ${e}`)
+      })
+      state.isOnline = true
+      state.hasPendingMerge = false
+      changed = true
+    } else if (nowOnline) {
+      await refreshBackup(state).catch((e) => {
+        log.debug(`cloud-sync: backup refresh failed for ${state.junctionPath}: ${e}`)
+      })
+    }
+  }
+
+  if (changed) invalidateProjectCache()
+}
+
+// ---------------------------------------------------------------------------
+// Online / offline transitions
+// ---------------------------------------------------------------------------
+
+/**
+ * Cloud just went offline. Replaces the junction with a real local directory
+ * populated from the backup so Claude Code can continue writing without error.
+ */
+async function activateOfflineMode(state: SyncState): Promise<void> {
+  await removeLinkAt(state.junctionPath)
+  await mkdir(state.junctionPath, { recursive: true })
+  await copyDir(state.backupDir, state.junctionPath)
+  state.hasPendingMerge = true
+  log.debug(`cloud-sync: offline — local dir at ${state.junctionPath}`)
 }
 
 /**
- * Bidirectional recursive sync between a local directory and a cloud directory.
- *
- * For every regular file present in either location, the larger copy wins.
- * Larger = more appended entries — correct for Claude Code's append-only JSONL
- * transcripts; safe for the metadata files (sessions-index.json, ccm.json) since
- * a longer file means a more recent write.
- *
- * Subdirectories (e.g. memory/) are synced recursively with the same rules.
- *
- * Reachability is tested via readdir() rather than access(): pCloud drives can
- * report access() success even when the network drive is unmounted.
+ * Cloud came back online. Merges any sessions written during the offline period
+ * into the cloud directory, refreshes the backup, then restores the junction
+ * so all future writes go directly to cloud storage again.
  */
-export async function syncBidirectional(localDir: string, cloudDir: string): Promise<void> {
-  let cloudEntries: string[]
+async function deactivateOfflineMode(state: SyncState): Promise<void> {
+  await syncBidirectional(state.junctionPath, state.cloudDir)
+  await mkdir(state.backupDir, { recursive: true })
+  await copyDir(state.cloudDir, state.backupDir)
+  await rm(state.junctionPath, { recursive: true, force: true })
+  await createLinkAt(state.junctionPath, state.cloudDir)
+  log.debug(`cloud-sync: online — junction restored at ${state.junctionPath}`)
+}
+
+/**
+ * Cloud is accessible. Copies cloud → backup to keep the offline fallback
+ * current. Picks up sessions written by other devices via the cloud provider.
+ */
+async function refreshBackup(state: SyncState): Promise<void> {
+  await mkdir(state.backupDir, { recursive: true })
+  await copyDir(state.cloudDir, state.backupDir)
+}
+
+// ---------------------------------------------------------------------------
+// Migration: .ccm-link → junction
+// ---------------------------------------------------------------------------
+
+/**
+ * Converts a .ccm-link local-first directory back to an NTFS junction.
+ * Sessions are merged into the cloud dir first so no data is lost.
+ */
+async function migrateLinkFileToJunction(junctionPath: string, cloudDir: string): Promise<void> {
+  await syncBidirectional(junctionPath, cloudDir)
+  await rm(junctionPath, { recursive: true, force: true })
+  await createLinkAt(junctionPath, cloudDir)
+  log.debug(`cloud-sync: migrated .ccm-link → junction: ${junctionPath} → ${cloudDir}`)
+}
+
+// ---------------------------------------------------------------------------
+// Bidirectional sync (exported for ccm link/unlink)
+// ---------------------------------------------------------------------------
+
+/**
+ * Bidirectional recursive sync between two directories.
+ *
+ * For each file present in either location the larger copy wins — safe for
+ * Claude Code's append-only JSONL transcripts and conservative for memory
+ * markdown files (more content = more Claude writes). Subdirectories are
+ * synced recursively (covers memory/, etc.).
+ *
+ * Reachability is probed via readdir() rather than access(): pCloud drives
+ * can return access() success even when the network volume is unmounted.
+ */
+export async function syncBidirectional(dirA: string, dirB: string): Promise<void> {
+  let entriesB: string[]
   try {
-    cloudEntries = await readdir(cloudDir)
+    entriesB = await readdir(dirB)
   } catch {
-    log.debug(`cloud-sync: cloud dir unreachable, skipping sync: ${cloudDir}`)
+    log.debug(`cloud-sync: unreachable: ${dirB}`)
     return
   }
 
-  await mkdir(localDir, { recursive: true })
-
-  const localEntries = await readdir(localDir).catch((): string[] => [])
-  const allNames = new Set([...localEntries, ...cloudEntries])
+  await mkdir(dirA, { recursive: true })
+  const entriesA = await readdir(dirA).catch((): string[] => [])
+  const allNames = new Set([...entriesA, ...entriesB])
 
   await Promise.all(
     [...allNames].map(async (name) => {
-      if (name === APP.cloudLinkFile) return
+      if (name === APP.cloudLinkFile) return  // skip legacy marker if still present
 
-      const localPath = join(localDir, name)
-      const cloudPath = join(cloudDir, name)
-
-      const [localStat, cloudStat] = await Promise.all([
-        stat(localPath).catch(() => null),
-        stat(cloudPath).catch(() => null),
+      const pathA = join(dirA, name)
+      const pathB = join(dirB, name)
+      const [statA, statB] = await Promise.all([
+        stat(pathA).catch(() => null),
+        stat(pathB).catch(() => null),
       ])
 
-      const isDir = localStat?.isDirectory() || cloudStat?.isDirectory()
-      if (isDir) {
-        await syncBidirectional(localPath, cloudPath)
+      if (statA?.isDirectory() || statB?.isDirectory()) {
+        await syncBidirectional(pathA, pathB)
       } else {
-        await syncOneFile(name, localDir, cloudDir, localStat, cloudStat)
+        await syncOneFile(pathA, pathB, statA, statB)
       }
     })
   )
 }
 
 async function syncOneFile(
-  name: string,
-  localDir: string,
-  cloudDir: string,
-  localStat: Awaited<ReturnType<typeof stat>> | null,
-  cloudStat: Awaited<ReturnType<typeof stat>> | null,
+  pathA: string,
+  pathB: string,
+  statA: Awaited<ReturnType<typeof stat>> | null,
+  statB: Awaited<ReturnType<typeof stat>> | null,
 ): Promise<void> {
-  const localPath = join(localDir, name)
-  const cloudPath = join(cloudDir, name)
-
-  if (localStat?.isFile() && !cloudStat) {
-    await copyFile(localPath, cloudPath).catch((err) => {
-      log.debug(`cloud-sync: local→cloud ${name}: ${err}`)
-    })
+  if (statA?.isFile() && !statB) {
+    await copyFile(pathA, pathB).catch((e) => log.debug(`cloud-sync: A→B ${pathA}: ${e}`))
     return
   }
-
-  if (!localStat && cloudStat?.isFile()) {
-    await copyFile(cloudPath, localPath).catch((err) => {
-      log.debug(`cloud-sync: cloud→local ${name}: ${err}`)
-    })
+  if (!statA && statB?.isFile()) {
+    await copyFile(pathB, pathA).catch((e) => log.debug(`cloud-sync: B→A ${pathB}: ${e}`))
     return
   }
-
-  if (localStat?.isFile() && cloudStat?.isFile() && localStat.size !== cloudStat.size) {
-    const [srcPath, destPath] =
-      localStat.size > cloudStat.size ? [localPath, cloudPath] : [cloudPath, localPath]
-    await copyFile(srcPath, destPath).catch((err) => {
-      log.debug(`cloud-sync: sync ${name}: ${err}`)
-    })
+  if (statA?.isFile() && statB?.isFile() && statA.size !== statB.size) {
+    const [src, dst] = statA.size > statB.size ? [pathA, pathB] : [pathB, pathA]
+    await copyFile(src, dst).catch((e) => log.debug(`cloud-sync: sync ${src}: ${e}`))
   }
 }
 
-// -----------------------------------------------------------------------------
-// Legacy junction migration
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Filesystem helpers (exported for memory-command)
+// ---------------------------------------------------------------------------
 
 /**
- * Converts a legacy NTFS junction or Unix symlink at junctionPath into a real
- * local directory with a .ccm-link file pointing to the junction target.
- *
- * After migration the project directory is local-first: Claude Code always
- * writes locally, and the sync loop keeps the cloud copy up-to-date.
- *
- * @returns The cloud directory path so the caller can register it for sync.
- * @throws  When the junction cannot be read or the migration fails.
+ * Creates a directory junction (Windows) or symlink (Unix) at linkPath
+ * pointing at target. On Windows this requires no elevated privileges.
  */
-export async function migrateLegacyJunction(junctionPath: string): Promise<string> {
-  let cloudDir = await readlink(junctionPath)
-  // Node.js on Windows may return the NT namespace prefix — strip it.
-  if (cloudDir.startsWith('\\\\?\\')) cloudDir = cloudDir.slice(4)
-
-  await removeLinkAt(junctionPath)
-  await mkdir(junctionPath, { recursive: true })
-  await writeFile(join(junctionPath, APP.cloudLinkFile), cloudDir, 'utf8')
-  await syncBidirectional(junctionPath, cloudDir)
-
-  log.debug(`cloud-sync: migrated legacy junction to .ccm-link: ${junctionPath} → ${cloudDir}`)
-  return cloudDir
+export async function createLinkAt(linkPath: string, target: string): Promise<void> {
+  if (process.platform === 'win32') {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    await promisify(execFile)('cmd', ['/c', 'mklink', '/J', linkPath, target])
+  } else {
+    const { symlink } = await import('node:fs/promises')
+    await symlink(target, linkPath)
+  }
 }
 
 /**
- * Removes a junction (Windows) or symlink (Unix) without touching its target.
- * Uses `rmdir` on Windows because junctions are directory reparse points and
- * neither `unlink` nor `rm --recursive` work safely on them.
+ * Removes a junction (Windows) or symlink (Unix) without deleting the target.
+ * Uses `rmdir` on Windows because junctions are directory reparse points —
+ * `unlink` and recursive `rm` do not work on them correctly.
  */
-async function removeLinkAt(linkPath: string): Promise<void> {
+export async function removeLinkAt(linkPath: string): Promise<void> {
   if (process.platform === 'win32') {
     const { execFile } = await import('node:child_process')
     const { promisify } = await import('node:util')
@@ -223,4 +338,51 @@ async function removeLinkAt(linkPath: string): Promise<void> {
     const { unlink } = await import('node:fs/promises')
     await unlink(linkPath)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+async function isCloudAccessible(cloudDir: string): Promise<boolean> {
+  try {
+    await readdir(cloudDir)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function backupHasData(backupDir: string): Promise<boolean> {
+  try {
+    const entries = await readdir(backupDir)
+    return entries.length > 0
+  } catch {
+    return false
+  }
+}
+
+async function copyDir(src: string, dst: string): Promise<void> {
+  let entries: string[]
+  try {
+    entries = await readdir(src)
+  } catch {
+    return
+  }
+  await mkdir(dst, { recursive: true })
+  await Promise.all(
+    entries.map(async (name) => {
+      const srcPath = join(src, name)
+      const dstPath = join(dst, name)
+      const s = await stat(srcPath).catch(() => null)
+      if (!s) return
+      if (s.isDirectory()) {
+        await copyDir(srcPath, dstPath)
+      } else if (s.isFile()) {
+        await copyFile(srcPath, dstPath).catch((e) => {
+          log.debug(`cloud-sync: copyDir ${srcPath}: ${e}`)
+        })
+      }
+    })
+  )
 }

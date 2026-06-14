@@ -403,9 +403,9 @@
       escapeHtml(compactPath(project.path)) +
       '</span>' +
       (project.isShared
-        ? project.syncStale
-          ? '<span class="p-cloud p-cloud--stale" title="Cloud sync pending — files differ between local and cloud">☁!</span>'
-          : '<span class="p-cloud" title="Shared storage (cloud-linked)">☁</span>'
+        ? project.cloudOffline
+          ? '<span class="p-cloud p-cloud--stale" title="Cloud offline — sessions saved locally and will sync when cloud returns">☁!</span>'
+          : '<span class="p-cloud" title="Shared storage — writes directly to cloud">☁</span>'
         : '') +
       (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
       '<span class="p-cnt">' +

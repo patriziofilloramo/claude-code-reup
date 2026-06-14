@@ -51,11 +51,12 @@ export interface Project {
    */
   cloudPath?: string
   /**
-   * True when the local project directory and its linked cloud directory
-   * have diverged — i.e. one has files the other doesn't, or a file differs
-   * in size. Cleared after the next background sync brings them back in sync.
+   * True when the cloud junction target is temporarily unreachable and ccm
+   * has switched the project to a local backup directory. Sessions written
+   * while offline will be merged back to the cloud when it comes online.
+   * Shown as ☁! (amber) in the UI so the user knows sync is paused.
    */
-  syncStale?: boolean
+  cloudOffline?: boolean
 }
 
 export interface Session {

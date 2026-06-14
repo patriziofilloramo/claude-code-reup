@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, lstat, readdir, readFile, stat } from 'node:fs/promises'
+import { access, lstat, readdir, readFile, readlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -12,6 +12,7 @@ import { isValidSessionId } from './session-model.js'
 import { mergeProjectSidecarMetadata } from './session-metadata.js'
 import { calculateExpiryDays } from './session-signals.js'
 import { parseSessionTranscript } from './session-transcript.js'
+import { syncRegistry } from './sync-registry.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -83,14 +84,13 @@ async function loadProjectDirectory(
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
 
-    const { isShared, cloudPath } = await readLinkState(projectDirectory)
-    const syncStale = cloudPath ? await checkSyncStale(projectDirectory, cloudPath) : undefined
+    const { isShared, cloudPath, cloudOffline } = await readLinkState(projectDirectory)
 
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
       isShared,
       cloudPath,
-      syncStale,
+      cloudOffline,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -101,81 +101,46 @@ async function loadProjectDirectory(
 }
 
 /**
- * Compares a local project directory against its linked cloud directory.
- * Returns true if any file is present in one location but missing in the
- * other, or if a file differs in size (indicating the sync is behind).
- *
- * Checks one level of subdirectories (e.g. memory/) so cross-device memory
- * divergence is detected. Returns false when the cloud dir is unreachable.
- */
-async function checkSyncStale(localDir: string, cloudDir: string): Promise<boolean> {
-  let cloudEntries: string[]
-  try {
-    cloudEntries = await readdir(cloudDir)
-  } catch {
-    return false
-  }
-
-  const localEntries = await readdir(localDir).catch((): string[] => [])
-  const localSet = new Set(localEntries)
-  const cloudSet = new Set(cloudEntries)
-
-  // Check top-level files (skip the .ccm-link marker — it is local-only)
-  for (const name of [...localSet, ...cloudSet]) {
-    if (name === APP.cloudLinkFile) continue
-    const inLocal = localSet.has(name)
-    const inCloud = cloudSet.has(name)
-    if (inLocal !== inCloud) {
-      const path = inLocal ? join(localDir, name) : join(cloudDir, name)
-      const s = await stat(path).catch(() => null)
-      if (s?.isFile()) return true
-    }
-  }
-
-  // Recurse into shared subdirectories one level (covers memory/, etc.)
-  for (const name of localSet) {
-    if (!cloudSet.has(name)) continue
-    const localSub = join(localDir, name)
-    const cloudSub = join(cloudDir, name)
-    const [lStat, cStat] = await Promise.all([
-      stat(localSub).catch(() => null),
-      stat(cloudSub).catch(() => null),
-    ])
-    if (!lStat?.isDirectory() || !cStat?.isDirectory()) continue
-
-    const [localSubFiles, cloudSubFiles] = await Promise.all([
-      readdir(localSub).catch((): string[] => []),
-      readdir(cloudSub).catch((): string[] => []),
-    ])
-    if (localSubFiles.length !== cloudSubFiles.length) return true
-    const cloudSubSet = new Set(cloudSubFiles)
-    for (const f of localSubFiles) {
-      if (!cloudSubSet.has(f)) return true
-    }
-  }
-
-  return false
-}
-
-/**
  * Returns the link state for a project directory.
- * Prefers the .ccm-link file (new local-first model); falls back to detecting
- * legacy NTFS junctions / symlinks for projects not yet migrated.
+ *
+ * Priority:
+ *   1. syncRegistry (populated by initCloudSync): authoritative after startup,
+ *      covers the offline case where the junction is temporarily replaced by a
+ *      real local directory.
+ *   2. NTFS junction / symlink detection via lstat: pre-startup state and
+ *      fresh installs.
+ *   3. Legacy .ccm-link file: projects not yet migrated to junction model.
  */
 async function readLinkState(
   projectDirectory: string
-): Promise<{ isShared: boolean; cloudPath?: string }> {
+): Promise<{ isShared: boolean; cloudPath?: string; cloudOffline?: boolean }> {
+  // 1. Registry — always wins when populated (ccm is running)
+  const regEntry = syncRegistry.get(projectDirectory)
+  if (regEntry) {
+    return {
+      isShared: true,
+      cloudPath: regEntry.cloudDir,
+      cloudOffline: !regEntry.isOnline,
+    }
+  }
+
+  // 2. Junction / symlink
+  try {
+    const fileStat = await lstat(projectDirectory)
+    if (fileStat.isSymbolicLink()) {
+      let cloudPath = await readlink(projectDirectory)
+      if (cloudPath.startsWith('\\\\?\\')) cloudPath = cloudPath.slice(4)
+      return { isShared: true, cloudPath }
+    }
+  } catch { /* not a junction */ }
+
+  // 3. Legacy .ccm-link (will be migrated to junction on next initCloudSync)
   try {
     const cloudPath = (await readFile(join(projectDirectory, APP.cloudLinkFile), 'utf8')).trim()
     if (cloudPath) return { isShared: true, cloudPath }
-  } catch { /* no .ccm-link file — check for legacy junction */ }
+  } catch { /* no marker file */ }
 
-  try {
-    const isJunction = (await lstat(projectDirectory)).isSymbolicLink()
-    return { isShared: isJunction }
-  } catch {
-    return { isShared: false }
-  }
+  return { isShared: false }
 }
 
 /**
