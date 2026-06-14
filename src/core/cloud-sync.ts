@@ -84,12 +84,14 @@ async function runAllSyncs(): Promise<void> {
 }
 
 /**
- * Bidirectional file-level sync between a local directory and a cloud directory.
+ * Bidirectional recursive sync between a local directory and a cloud directory.
  *
  * For every regular file present in either location, the larger copy wins.
  * Larger = more appended entries — correct for Claude Code's append-only JSONL
  * transcripts; safe for the metadata files (sessions-index.json, ccm.json) since
  * a longer file means a more recent write.
+ *
+ * Subdirectories (e.g. memory/) are synced recursively with the same rules.
  *
  * Reachability is tested via readdir() rather than access(): pCloud drives can
  * report access() success even when the network drive is unmounted.
@@ -106,24 +108,39 @@ export async function syncBidirectional(localDir: string, cloudDir: string): Pro
   await mkdir(localDir, { recursive: true })
 
   const localEntries = await readdir(localDir).catch((): string[] => [])
-  const allFiles = new Set([...localEntries, ...cloudEntries])
+  const allNames = new Set([...localEntries, ...cloudEntries])
 
   await Promise.all(
-    [...allFiles].map((name) => syncOneFile(name, localDir, cloudDir))
+    [...allNames].map(async (name) => {
+      if (name === APP.cloudLinkFile) return
+
+      const localPath = join(localDir, name)
+      const cloudPath = join(cloudDir, name)
+
+      const [localStat, cloudStat] = await Promise.all([
+        stat(localPath).catch(() => null),
+        stat(cloudPath).catch(() => null),
+      ])
+
+      const isDir = localStat?.isDirectory() || cloudStat?.isDirectory()
+      if (isDir) {
+        await syncBidirectional(localPath, cloudPath)
+      } else {
+        await syncOneFile(name, localDir, cloudDir, localStat, cloudStat)
+      }
+    })
   )
 }
 
-async function syncOneFile(name: string, localDir: string, cloudDir: string): Promise<void> {
-  // Never sync the link marker itself — it is local metadata, not session data.
-  if (name === APP.cloudLinkFile) return
-
+async function syncOneFile(
+  name: string,
+  localDir: string,
+  cloudDir: string,
+  localStat: Awaited<ReturnType<typeof stat>> | null,
+  cloudStat: Awaited<ReturnType<typeof stat>> | null,
+): Promise<void> {
   const localPath = join(localDir, name)
   const cloudPath = join(cloudDir, name)
-
-  const [localStat, cloudStat] = await Promise.all([
-    stat(localPath).catch(() => null),
-    stat(cloudPath).catch(() => null),
-  ])
 
   if (localStat?.isFile() && !cloudStat) {
     await copyFile(localPath, cloudPath).catch((err) => {
