@@ -54,7 +54,9 @@ export default function ProjectList({
             </Box>
             {project.isShared ? (
               <Box flexShrink={0} paddingLeft={1}>
-                <Text color={COLORS.border}>☁</Text>
+                <Text color={project.syncStale ? COLORS.warn : COLORS.border}>
+                  {project.syncStale ? '☁!' : '☁'}
+                </Text>
               </Box>
             ) : null}
             <Box flexShrink={0}>

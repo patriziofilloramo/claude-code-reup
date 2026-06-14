@@ -50,6 +50,12 @@ export interface Project {
    * or legacy junctions that have not yet been migrated.
    */
   cloudPath?: string
+  /**
+   * True when the local project directory and its linked cloud directory
+   * have diverged — i.e. one has files the other doesn't, or a file differs
+   * in size. Cleared after the next background sync brings them back in sync.
+   */
+  syncStale?: boolean
 }
 
 export interface Session {

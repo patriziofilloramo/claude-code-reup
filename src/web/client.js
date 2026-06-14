@@ -402,7 +402,11 @@
       '<span class="p-name">' +
       escapeHtml(compactPath(project.path)) +
       '</span>' +
-      (project.isShared ? '<span class="p-cloud" title="Shared storage (cloud-linked)">☁</span>' : '') +
+      (project.isShared
+        ? project.syncStale
+          ? '<span class="p-cloud p-cloud--stale" title="Cloud sync pending — files differ between local and cloud">☁!</span>'
+          : '<span class="p-cloud" title="Shared storage (cloud-linked)">☁</span>'
+        : '') +
       (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
       '<span class="p-cnt">' +
       sessionCount +

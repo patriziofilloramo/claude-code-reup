@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, lstat, readdir, readFile } from 'node:fs/promises'
+import { access, lstat, readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -84,11 +84,13 @@ async function loadProjectDirectory(
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
 
     const { isShared, cloudPath } = await readLinkState(projectDirectory)
+    const syncStale = cloudPath ? await checkSyncStale(projectDirectory, cloudPath) : undefined
 
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
       isShared,
       cloudPath,
+      syncStale,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -96,6 +98,63 @@ async function loadProjectDirectory(
     // One unreadable or malformed project must not hide the remaining projects.
     return null
   }
+}
+
+/**
+ * Compares a local project directory against its linked cloud directory.
+ * Returns true if any file is present in one location but missing in the
+ * other, or if a file differs in size (indicating the sync is behind).
+ *
+ * Checks one level of subdirectories (e.g. memory/) so cross-device memory
+ * divergence is detected. Returns false when the cloud dir is unreachable.
+ */
+async function checkSyncStale(localDir: string, cloudDir: string): Promise<boolean> {
+  let cloudEntries: string[]
+  try {
+    cloudEntries = await readdir(cloudDir)
+  } catch {
+    return false
+  }
+
+  const localEntries = await readdir(localDir).catch((): string[] => [])
+  const localSet = new Set(localEntries)
+  const cloudSet = new Set(cloudEntries)
+
+  // Check top-level files (skip the .ccm-link marker — it is local-only)
+  for (const name of [...localSet, ...cloudSet]) {
+    if (name === APP.cloudLinkFile) continue
+    const inLocal = localSet.has(name)
+    const inCloud = cloudSet.has(name)
+    if (inLocal !== inCloud) {
+      const path = inLocal ? join(localDir, name) : join(cloudDir, name)
+      const s = await stat(path).catch(() => null)
+      if (s?.isFile()) return true
+    }
+  }
+
+  // Recurse into shared subdirectories one level (covers memory/, etc.)
+  for (const name of localSet) {
+    if (!cloudSet.has(name)) continue
+    const localSub = join(localDir, name)
+    const cloudSub = join(cloudDir, name)
+    const [lStat, cStat] = await Promise.all([
+      stat(localSub).catch(() => null),
+      stat(cloudSub).catch(() => null),
+    ])
+    if (!lStat?.isDirectory() || !cStat?.isDirectory()) continue
+
+    const [localSubFiles, cloudSubFiles] = await Promise.all([
+      readdir(localSub).catch((): string[] => []),
+      readdir(cloudSub).catch((): string[] => []),
+    ])
+    if (localSubFiles.length !== cloudSubFiles.length) return true
+    const cloudSubSet = new Set(cloudSubFiles)
+    for (const f of localSubFiles) {
+      if (!cloudSubSet.has(f)) return true
+    }
+  }
+
+  return false
 }
 
 /**
