@@ -57,6 +57,13 @@ export interface Project {
    * Shown as ☁! (amber) in the UI so the user knows sync is paused.
    */
   cloudOffline?: boolean
+  /**
+   * Device names that wrote a presence file to the cloud directory while not
+   * linked (i.e. they opened the project without running `ccm link`).
+   * Populated from {cloudDir}/device-presence/ on each discovery pass.
+   * Shown as ☁? (orange) in the UI to prompt the user to link that device.
+   */
+  unlinkedDevices?: string[]
 }
 
 export interface Session {

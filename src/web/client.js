@@ -405,7 +405,9 @@
       (project.isShared
         ? project.cloudOffline
           ? '<span class="p-cloud p-cloud--stale" title="Cloud offline — sessions saved locally and will sync when cloud returns">☁!</span>'
-          : '<span class="p-cloud" title="Shared storage — writes directly to cloud">☁</span>'
+          : (project.unlinkedDevices && project.unlinkedDevices.length > 0)
+            ? '<span class="p-cloud p-cloud--unlinked" title="Device(s) not linked: ' + escapeHtml(project.unlinkedDevices.join(', ')) + ' — run ccm link on those devices">☁?</span>'
+            : '<span class="p-cloud" title="Shared storage — writes directly to cloud">☁</span>'
         : '') +
       (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
       '<span class="p-cnt">' +

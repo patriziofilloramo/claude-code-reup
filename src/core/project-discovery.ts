@@ -85,12 +85,16 @@ async function loadProjectDirectory(
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
 
     const { isShared, cloudPath, cloudOffline } = await readLinkState(projectDirectory)
+    const unlinkedDevices = isShared && cloudPath
+      ? await readUnlinkedDevices(cloudPath)
+      : undefined
 
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
       isShared,
       cloudPath,
       cloudOffline,
+      unlinkedDevices,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -141,6 +145,23 @@ async function readLinkState(
   } catch { /* no marker file */ }
 
   return { isShared: false }
+}
+
+/**
+ * Reads device names from {cloudDir}/device-presence/.
+ * Files are written by unlinked devices following CLAUDE.md instructions.
+ * Returns undefined (not an empty array) when the directory is absent or empty.
+ */
+async function readUnlinkedDevices(cloudDir: string): Promise<string[] | undefined> {
+  try {
+    const entries = await readdir(join(cloudDir, 'device-presence'))
+    const devices = entries
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.slice(0, -5))
+    return devices.length > 0 ? devices : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**

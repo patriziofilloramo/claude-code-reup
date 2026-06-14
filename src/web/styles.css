@@ -1039,6 +1039,11 @@ body {
   opacity: 1;
 }
 
+.p-cloud--unlinked {
+  color: var(--orange);
+  opacity: 1;
+}
+
 /* ── Hint button (clickable header hint) ─────────────────────────────────── */
 
 .hint-btn {

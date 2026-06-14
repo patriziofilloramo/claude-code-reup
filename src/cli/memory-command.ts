@@ -138,6 +138,7 @@ async function linkProject(projectPath: string, projects: Project[]): Promise<vo
   await createLinkAt(localDir, cloudDir)
 
   const deviceId = await getOrCreateDeviceId()
+  await writeLinkedMarker(cloudDir, deviceId)
   await injectClaudeMdSection(projectPath, cloudDir, deviceId)
 
   writeOutput([
@@ -199,6 +200,7 @@ async function unlinkProject(projectPath: string, projects: Project[]): Promise<
     return
   }
 
+  const cloudDir = join(projectPath, APP.cloudMemoryDir)
   const localDir = join(getClaudeProjectsDirectory(), project.id)
   const localStat = await lstat(localDir).catch(() => null)
 
@@ -213,6 +215,8 @@ async function unlinkProject(projectPath: string, projects: Project[]): Promise<
     await rm(join(localDir, APP.cloudLinkFile), { force: true })
   }
 
+  const deviceId = await getOrCreateDeviceId()
+  await removeLinkedMarker(cloudDir, deviceId)
   await removeClaudeMdSection(projectPath)
 
   writeOutput([
@@ -268,12 +272,14 @@ const CCM_MARKER_END = '<!-- ccm:sync:end -->'
 /**
  * Writes (or replaces) the ccm sync section in the project's CLAUDE.md.
  *
- * The section instructs the Claude Code agent to:
- *   1. Check for the local device-id file every session (new or resumed).
- *   2. If missing → warn the user and offer to set up or suppress forever.
- *   3. If present → load shared memories from the cloud directory.
+ * The section instructs the Claude Code agent (on any device) to:
+ *   1. Detect whether this device has run `ccm link` by checking a marker file
+ *      inside the cloud directory (already accessible — no extra permissions).
+ *   2. If not linked → write a presence file so Device B can detect it, then warn.
+ *   3. If linked → read shared memories from the cloud directory.
  *
- * Using markers allows safe idempotent re-runs and clean removal on unlink.
+ * All file paths are inside the project's cloud directory so Claude Code needs
+ * no extra path permissions beyond its normal project access.
  */
 async function injectClaudeMdSection(
   projectPath: string,
@@ -281,13 +287,9 @@ async function injectClaudeMdSection(
   deviceId: string,
 ): Promise<void> {
   const claudeMdPath = join(projectPath, 'CLAUDE.md')
-  const home = homedir()
-  const deviceIdPath = process.platform === 'win32'
-    ? join(home, '.claude', 'ccm', 'device-id').replace(/\\/g, '\\\\')
-    : join(home, '.claude', 'ccm', 'device-id')
-  const ignorePath = process.platform === 'win32'
-    ? join(home, '.claude', 'ccm', 'sync-warning-ignored').replace(/\\/g, '\\\\')
-    : join(home, '.claude', 'ccm', 'sync-warning-ignored')
+  const linkedDir = join(cloudDir, 'linked')
+  const presenceDir = join(cloudDir, 'device-presence')
+  const ignoredDir = join(cloudDir, 'sync-ignored')
   const memoryDir = join(cloudDir, 'memory')
 
   const section = [
@@ -297,21 +299,26 @@ async function injectClaudeMdSection(
     `Cloud storage for this project: \`${cloudDir}\``,
     `Linked from device: \`${deviceId}\``,
     '',
-    '**At the start of every session (new or resumed), run this check:**',
+    '**At the start of every session (new or resumed):**',
     '',
-    `1. Try to read \`${deviceIdPath}\``,
-    `2. **File missing** — this device is not set up for sync:`,
-    `   - Try to read \`${ignorePath}\``,
-    `   - If that file also does not exist: tell the user —`,
-    `     "⚠ Questo device non è configurato per il sync cross-device ccm.`,
-    `     Esegui \`ccm link \\"${projectPath}\\"\` per condividere sessioni e memoria`,
-    `     tra dispositivi, oppure dimmi \\"ignora sync\\" per non mostrare più questo avviso."`,
-    `   - If the user replies with "ignora sync" (or similar):`,
-    `     Write the text \`ignored\` to \`${ignorePath}\` using your Write tool,`,
-    `     then confirm: "Avviso sync disattivato su questo device."`,
-    `   - If the ignore file already exists: skip the warning silently.`,
-    `3. **File present** — sync is active on this device:`,
+    '1. Run `hostname` in Bash to get this device\'s name (call it HOSTNAME)',
+    `2. Check if \`${linkedDir}\\HOSTNAME\` exists (use your Read tool with the actual hostname)`,
+    `3. **File exists** — sync is configured on this device:`,
     `   Read all \`.md\` files in \`${memoryDir}\` for shared context from other devices.`,
+    `4. **File missing** — this device is not set up for sync:`,
+    `   a. Check if \`${ignoredDir}\\HOSTNAME\` exists`,
+    `      - If the file exists: skip the warning silently`,
+    `   b. Write \`${presenceDir}\\HOSTNAME.json\` with:`,
+    `      \`{"device":"HOSTNAME","lastSeen":"<today date>"}\``,
+    `      (replace HOSTNAME and date with real values)`,
+    `   c. Tell the user:`,
+    `      "⚠ Questo device non è configurato per il sync cross-device ccm.`,
+    `      Esegui \`ccm link \\"${projectPath}\\"\` per condividere sessioni e memoria`,
+    `      tra dispositivi, oppure dimmi \\"ignora sync\\" per non mostrare più questo avviso."`,
+    `   d. If the user replies "ignora sync":`,
+    `      Write \`ignored\` to \`${ignoredDir}\\HOSTNAME\`,`,
+    `      delete \`${presenceDir}\\HOSTNAME.json\` if it exists,`,
+    `      then confirm: "Avviso sync disattivato su questo device."`,
     CCM_MARKER_END,
   ].join('\n')
 
@@ -339,6 +346,24 @@ async function injectClaudeMdSection(
  * Removes the ccm sync section from the project's CLAUDE.md on unlink.
  * Leaves the rest of the file intact.
  */
+/**
+ * Writes {cloudDir}/linked/{deviceId} so the Claude Code agent on this device
+ * can confirm it is set up for sync without reading any file outside the project.
+ * Also removes any stale presence file left from before the device was linked.
+ */
+async function writeLinkedMarker(cloudDir: string, deviceId: string): Promise<void> {
+  const linkedDir = join(cloudDir, 'linked')
+  await mkdir(linkedDir, { recursive: true })
+  await writeFile(join(linkedDir, deviceId), JSON.stringify({ device: deviceId }), 'utf8')
+  // Remove presence file if it exists (device is now properly linked)
+  await rm(join(cloudDir, 'device-presence', `${deviceId}.json`), { force: true })
+}
+
+/** Removes {cloudDir}/linked/{deviceId} when unlinking. */
+async function removeLinkedMarker(cloudDir: string, deviceId: string): Promise<void> {
+  await rm(join(cloudDir, 'linked', deviceId), { force: true })
+}
+
 async function removeClaudeMdSection(projectPath: string): Promise<void> {
   const claudeMdPath = join(projectPath, 'CLAUDE.md')
   let content: string
