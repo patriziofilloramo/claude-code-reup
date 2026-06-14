@@ -54,6 +54,8 @@ function openBrowser(url: string): void {
 
 /** Starts the loopback-only web server and opens its browser client. */
 export async function startWeb(commandArguments: string[]): Promise<void> {
+  const { guardOfflineLinks } = await import('../cli/memory-command.js')
+  await guardOfflineLinks()
   const requestedPort = parseRequestedPort(commandArguments)
   const configuredPort = process.env[APP.portEnvVar]
   const preferredPort = configuredPort ? parseInt(configuredPort, 10) : requestedPort

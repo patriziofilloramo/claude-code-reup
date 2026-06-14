@@ -37,7 +37,10 @@ export async function loadProjects(): Promise<Project[]> {
   )
 
   const projects = discoveredProjects
-    .filter((project): project is Project => project !== null && project.sessions.length > 0)
+    .filter(
+      (project): project is Project =>
+        project !== null && (project.sessions.length > 0 || project.storageOffline === true)
+    )
     .sort(compareProjectsByRecentActivity)
 
   setCachedProjects(projectsDirectory, projects)
@@ -75,6 +78,16 @@ async function loadProjectDirectory(
   try {
     const projectDirectory = join(projectsDirectory, directoryName)
     const decodedProjectPath = await resolveProjectPath(directoryName)
+    const isShared = await isJunctionOrSymlink(projectDirectory)
+
+    // Detect offline cloud storage before attempting to read sessions.
+    // An inaccessible junction target means the drive is unmounted; surfacing
+    // the project with storageOffline=true lets the UI warn the user rather
+    // than silently hiding the project.
+    if (isShared && !(await isAccessible(projectDirectory))) {
+      return { id: directoryName, isShared: true, storageOffline: true, path: decodedProjectPath, sessions: [] }
+    }
+
     const sessions =
       (await loadIndexedSessions(projectDirectory)) ??
       (await loadTranscriptSessions(projectDirectory, decodedProjectPath))
@@ -82,11 +95,10 @@ async function loadProjectDirectory(
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
 
-    const isShared = await isJunctionOrSymlink(projectDirectory)
-
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
       isShared,
+      storageOffline: false,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -103,6 +115,19 @@ async function loadProjectDirectory(
 async function isJunctionOrSymlink(path: string): Promise<boolean> {
   try {
     return (await lstat(path)).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Returns true when a path is accessible (following junctions/symlinks).
+ * Used to detect offline cloud drives whose junction target can't be reached.
+ */
+async function isAccessible(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
   } catch {
     return false
   }

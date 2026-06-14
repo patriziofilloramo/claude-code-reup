@@ -41,9 +41,15 @@ export interface Project {
   /**
    * True when the project's storage directory is a junction or symlink
    * pointing to a shared location (e.g. .claude-memory/ inside the project).
-   * Used to show the ⊙ shared-storage indicator in the UI.
+   * Used to show the ☁ shared-storage indicator in the UI.
    */
   isShared: boolean
+  /**
+   * True when the project is shared but its junction target is currently
+   * unreachable (e.g. cloud drive offline). Sessions cannot be read or
+   * written until the target comes back online or the link is guarded.
+   */
+  storageOffline?: boolean
 }
 
 export interface Session {

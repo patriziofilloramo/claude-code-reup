@@ -1,4 +1,4 @@
-import { access, cp, lstat, mkdir, readdir, readFile, rm, symlink } from 'node:fs/promises'
+import { access, cp, lstat, mkdir, readdir, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -6,9 +6,12 @@ import { encodeProjectPath, getClaudeProjectsDirectory } from '../core/claude-pa
 import { loadProjects } from '../core/project-discovery.js'
 import type { Project } from '../core/session-model.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
+import { log } from '../utils/logger.js'
 import { failCommand, writeOutput } from './output.js'
 
 const SHARED_DIR = '.claude-memory'
+/** Marker file written inside a local fallback directory to record the original junction target. */
+const OFFLINE_MARKER = '.ccm-offline'
 
 export async function runMemoryCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args
@@ -291,6 +294,115 @@ async function removeLink(linkPath: string): Promise<void> {
   } else {
     const { unlink } = await import('node:fs/promises')
     await unlink(linkPath)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Offline guard — runs at ccm startup to protect against data loss when the
+// cloud drive that backs a junction/symlink is temporarily unavailable.
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans all project storage directories and:
+ * - If a junction/symlink target is unreachable (cloud offline): replaces the
+ *   junction with a real local directory so Claude Code can still write sessions.
+ *   A `.ccm-offline` marker records the original target for later restoration.
+ * - If a local directory carries a `.ccm-offline` marker and the cloud target is
+ *   now reachable again: syncs locally-written sessions back to cloud storage and
+ *   restores the junction.
+ *
+ * Designed to be called silently at startup — only logs; never throws.
+ */
+export async function guardOfflineLinks(): Promise<void> {
+  const projectsDir = getClaudeProjectsDirectory()
+  const entries = await readdir(projectsDir, { withFileTypes: true }).catch(() => null)
+  if (!entries) return
+
+  for (const entry of entries) {
+    const projectDir = join(projectsDir, entry.name)
+
+    // Real local directory — check for offline fallback marker (cloud may be back).
+    if (!entry.isSymbolicLink()) {
+      const markerPath = join(projectDir, OFFLINE_MARKER)
+      let savedTarget: string | null = null
+      try {
+        savedTarget = (await readFile(markerPath, 'utf8')).trim()
+      } catch {
+        continue // No marker — normal local project, nothing to do.
+      }
+      if (savedTarget) await tryRestoreFromFallback(projectDir, savedTarget)
+      continue
+    }
+
+    // Junction / symlink — check if the target is reachable.
+    const online = await isLinkTargetAccessible(projectDir)
+    if (!online) await activateLocalFallback(projectDir)
+  }
+}
+
+/**
+ * Checks if following a junction/symlink reaches an accessible path.
+ * Uses readdir rather than access because some cloud drivers (pCloud) return
+ * success from access() on unmounted drives but fail on actual I/O.
+ */
+async function isLinkTargetAccessible(linkPath: string): Promise<boolean> {
+  try {
+    await readdir(linkPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Replaces an offline junction with a real local directory so Claude Code
+ * can still write sessions. Records the original target in `.ccm-offline`.
+ */
+async function activateLocalFallback(junctionPath: string): Promise<void> {
+  let target: string
+  try {
+    target = await readlink(junctionPath)
+  } catch {
+    return // Can't read the target path — skip.
+  }
+  try {
+    await removeLink(junctionPath)
+    await mkdir(junctionPath, { recursive: true })
+    await writeFile(join(junctionPath, OFFLINE_MARKER), target, 'utf8')
+    log.debug('guardOfflineLinks: cloud offline — switched to local fallback', junctionPath)
+  } catch (error) {
+    log.debug('guardOfflineLinks: failed to activate fallback', junctionPath, error)
+  }
+}
+
+/**
+ * When cloud storage comes back online: syncs locally-written sessions to the
+ * cloud directory, removes the local fallback, and restores the junction.
+ */
+async function tryRestoreFromFallback(localDir: string, cloudTarget: string): Promise<void> {
+  // Verify the cloud target is actually reachable before touching anything.
+  try {
+    await readdir(cloudTarget)
+  } catch {
+    return // Still offline.
+  }
+
+  // Copy any locally-written sessions to cloud storage.
+  for (const name of await readdir(localDir).catch(() => [])) {
+    if (name === OFFLINE_MARKER) continue
+    await cp(join(localDir, name), join(cloudTarget, name), { recursive: true, force: true }).catch(
+      (error) => log.debug('guardOfflineLinks: sync error', name, error)
+    )
+  }
+
+  // Restore the junction.
+  try {
+    await rm(localDir, { recursive: true, force: true })
+    await createLink(cloudTarget, localDir)
+    log.debug('guardOfflineLinks: cloud restored — junction reinstated', localDir)
+  } catch (error) {
+    log.debug('guardOfflineLinks: failed to restore junction', localDir, error)
+    // Sessions remain safe in localDir; user can run `ccm link` to retry.
   }
 }
 
