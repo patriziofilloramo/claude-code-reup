@@ -3,8 +3,8 @@ import { promisify } from 'node:util'
 
 import which from 'which'
 
-import { copyLaunchCommand, executeShellCommand, successfulLaunch } from './terminal.shared.js'
-import type { LaunchResult } from './terminal.shared.js'
+import { copyLaunchCommand, executeShellCommand, successfulLaunch } from './terminal-shared.js'
+import type { LaunchResult } from './terminal-shared.js'
 
 const executeFile = promisify(execFile)
 

@@ -22,7 +22,7 @@ const SNAPSHOT: LiveUsageSnapshot = {
 
 describe('usage command formatting', () => {
   it('prints a compact status-line value from supported fields', () => {
-    expect(formatStatusLineUsage(SNAPSHOT)).toBe('ccm | Sonnet | ctx 42% | 5h 81% | 7d 23%')
+    expect(formatStatusLineUsage(SNAPSHOT)).toBe('ccm | ctx 42% | 5h 81% | 7d 23%')
   })
 
   it('distinguishes unavailable, waiting, fresh, and stale states', () => {
@@ -31,8 +31,8 @@ describe('usage command formatting', () => {
     expect(formatUsageSummary(summary(SNAPSHOT, true, 'fresh'))).toContain('5h 81%')
     expect(formatUsageSummary(summary(SNAPSHOT, true, 'fresh'))).toContain('limits updated')
     expect(formatUsageSummary(summary(SNAPSHOT, true, 'fresh'))).not.toContain('live feed')
-    expect(formatUsageSummary(summary(SNAPSHOT, true, 'stale'))).toContain('cached limits, updated')
-    expect(formatUsageSummary(summary(SNAPSHOT, true, 'stale'))).not.toContain('limits updated')
+    expect(formatUsageSummary(summary(SNAPSHOT, true, 'stale'))).toContain('updated')
+    expect(formatUsageSummary(summary(SNAPSHOT, true, 'stale'))).not.toContain('cached limits')
   })
 
   it('surfaces account-limit refresh failures', () => {
@@ -57,8 +57,8 @@ describe('usage command formatting', () => {
   it('uses accent colour for stale bars — staleness is conveyed by the header note', () => {
     const output = renderUsageSummary(summary(SNAPSHOT, true, 'stale'))
     expect(output).toContain('\x1b[38;2;34;211;238m')
-    expect(output).toContain('cached limits')
     expect(output).toContain('updated')
+    expect(output).not.toContain('cached limits')
     expect(output).not.toContain('payload updated')
     expect(output).not.toContain('limits updated')
   })

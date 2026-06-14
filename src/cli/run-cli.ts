@@ -218,7 +218,6 @@ async function runWithSyncSpinner(fn: () => Promise<number>): Promise<void> {
   clearInterval(spinTimer)
   if (visible) {
     process.stderr.write(`\r\x1b[K`)  // erase the spinner line
-    if (syncedCount > 0) process.stderr.write(`✓ synced ${syncedCount} project(s)\n`)
   }
 }
 

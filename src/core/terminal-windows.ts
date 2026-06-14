@@ -3,8 +3,8 @@ import {
   executableExists,
   executeShellCommand,
   successfulLaunch,
-} from './terminal.shared.js'
-import type { LaunchResult } from './terminal.shared.js'
+} from './terminal-shared.js'
+import type { LaunchResult } from './terminal-shared.js'
 
 /**
  * Opens a Windows terminal using Windows Terminal, PowerShell, or cmd.

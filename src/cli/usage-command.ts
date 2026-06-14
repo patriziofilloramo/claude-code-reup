@@ -62,7 +62,6 @@ export function formatUsageSummary(summary: LiveUsageSummary): string {
     formatLimit('5h', summary.rateLimits.fiveHour),
     formatLimit('7d', summary.rateLimits.sevenDay),
     summary.usageCreditsEnabled ? 'usage credits on' : '',
-    snapshot?.modelDisplayName ?? snapshot?.modelId ?? '',
     snapshot?.agentName ? `agent ${snapshot.agentName}` : '',
   ].filter(Boolean)
 
@@ -122,14 +121,11 @@ export function renderUsageSummary(summary: LiveUsageSummary): string {
 
   const title = ansi(ANSI.bold + ANSI.cyan, 'ccm') + ansi(ANSI.dim, ' · usage')
 
-  // Header line: title · model · optional stale note
-  const model = snapshot
-    ? '  ' + ansi(ANSI.white, snapshot.modelDisplayName ?? snapshot.modelId ?? 'unknown model')
-    : ''
-  const agentPart = snapshot?.agentName ? ansi(ANSI.dim, ' / ' + snapshot.agentName) : ''
+  // Header line: title · optional agent · staleness note
+  const agentPart = snapshot?.agentName ? ansi(ANSI.dim, '  / ' + snapshot.agentName) : ''
   const stalenessNote = formatCaptureStatusNote(summary)
   const creditsPart = summary.usageCreditsEnabled ? ansi(ANSI.green, '  credits on') : ''
-  const header = INDENT + title + model + agentPart + creditsPart + stalenessNote
+  const header = INDENT + title + agentPart + creditsPart + stalenessNote
 
   // Metrics line: account-level windows only (ctx is per-session, not meaningful here)
   const chips: string[] = []
@@ -157,7 +153,6 @@ export function renderUsageSummary(summary: LiveUsageSummary): string {
 
 export function formatStatusLineUsage(snapshot: LiveUsageSnapshot): string {
   const labels = [
-    snapshot.modelDisplayName ?? snapshot.modelId ?? '',
     snapshot.contextUsedPercentage !== undefined
       ? `ctx ${roundedPercentage(snapshot.contextUsedPercentage)}`
       : '',
@@ -286,10 +281,8 @@ function formatCaptureStatusNote(summary: LiveUsageSummary): string {
       )
     case 'stale':
       return ansi(
-        ANSI.yellow,
-        `  cached limits; updated ${
-          summary.limitsUpdatedAt ? relativeTime(summary.limitsUpdatedAt) : 'unknown'
-        }`
+        ANSI.dim,
+        `  updated ${summary.limitsUpdatedAt ? relativeTime(summary.limitsUpdatedAt) : 'unknown'}`
       )
     case 'unavailable':
       return ansi(ANSI.yellow, '  account limits unavailable')
@@ -306,8 +299,8 @@ function formatCaptureStatusText(summary: LiveUsageSummary): string {
         : 'limits updated'
     case 'stale':
       return summary.limitsUpdatedAt
-        ? `cached limits, updated ${relativeTime(summary.limitsUpdatedAt)}`
-        : 'cached limits'
+        ? `updated ${relativeTime(summary.limitsUpdatedAt)}`
+        : 'limits updating'
     case 'unavailable':
       return summary.limitsIssue
         ? `account limits unavailable: ${summary.limitsIssue}`
