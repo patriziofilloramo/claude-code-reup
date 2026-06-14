@@ -164,10 +164,50 @@ milestones faster to implement. No visible behaviour changes — this is purely 
 - [ ] **CSS architecture** — `styles.css` has grown to ~1200 lines without clear section
       boundaries. Reorganise with consistent naming, remove dead `.ds-*` drawer rules, and enforce
       the BEM-lite pattern already used in newer sections
-- [ ] **Core module boundaries** — audit imports across `src/core/` for circular dependencies and
-      unclear responsibilities; extract any mixed concerns into dedicated files
+- [x] **Core module boundary cleanup (partial)** — renamed terminal platform modules from
+      `terminal.{shared,unix,windows}.ts` to `terminal-{shared,unix,windows}.ts` (kebab-case
+      consistency); remaining circular-dependency and responsibility audit still pending
 - [ ] **Test coverage gaps** — identify untested code paths introduced in milestones 5–6 (usage
       capture parsing, deep search route, config TUI state machine) and add targeted unit tests
+
+---
+
+## Milestone 7.5 — Cross-device sync (local-first) ✓ done
+
+Share Claude Code sessions and memory across multiple machines without a server.
+Uses NTFS junctions / symlinks to redirect Claude Code's per-project directory into
+a shared cloud folder (pCloud, Dropbox, OneDrive, etc.) managed entirely by the OS.
+No server, no auth — the cloud provider handles transfer.
+
+> ⚠ Experimental: see `CHANGELOG.md` for known risks and the backup procedure.
+
+- [x] `ccm link [path]` — creates a per-project NTFS junction pointing the Claude Code
+      project directory at a shared cloud folder; backs up existing local sessions first
+- [x] `ccm unlink [path]` — restores the local directory; sessions written while linked
+      remain accessible through the shared folder
+- [x] **Sync registry** (`syncRegistry`) — in-memory `Map` of junction paths to cloud state;
+      avoids circular imports between discovery, sync, and memory modules
+- [x] `initCloudSync()` / `stopSyncLoop()` — startup guard that verifies junction targets
+      on launch; replaces offline junctions with a local backup so sessions remain writable
+      while the cloud drive is unmounted; restores on reconnect
+- [x] **Cloud indicator in TUI and web** — `☁` icon coloured green (online), grey (cloud
+      offline / sync paused), or orange (one or more devices used the project without
+      running `ccm link`)
+- [x] **Offline guard** — new sessions are blocked when a project's cloud storage is
+      unreachable; flash message informs the user and resumes automatically on reconnect
+- [x] `ccm memory link [path]` / `ccm memory unlink [path]` — inject / remove a
+      `<!-- ccm:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
+      Claude Code on any device to: detect whether the device is linked, write a presence
+      file when it is not, warn once, and silently skip after the user dismisses the warning
+- [x] **Cross-device CLAUDE.md protocol** — all check files live inside the shared cloud
+      folder so Claude Code needs only `hostname` (via Bash) and file access inside the
+      project to run the protocol; no extra permissions required
+- [x] **Unlinked-device detection** — linked devices scan `{cloudDir}/device-presence/` on
+      each discovery pass and surface device names as `unlinkedDevices[]` on the `Project`
+      object; orange cloud indicator prompts the user to run `ccm link` on that device
+- [x] **Append-only shared memory** — unlinked devices append context to
+      `{cloudDir}/memory/shared.md` under a `## HOSTNAME — date` header; avoids pCloud
+      conflict copies that would arise from concurrent rewrites
 
 ---
 
@@ -307,7 +347,7 @@ dashboard that makes context exhaustion and rate limits impossible to miss.
 | Item                             | Reason                                              |
 | -------------------------------- | --------------------------------------------------- |
 | npm publish                      | Local stable version first; package name unresolved |
-| Cloud sync / auth / multi-user   | Intentionally local-first                           |
+| Server-based cloud sync / auth   | Local-first only; OS-level junctions via pCloud etc.|
 | Required/free-form config files  | Zero-config remains a design constraint             |
 | Support for non-Claude-Code CLIs | Claude Code only                                    |
 | Backup / restore of transcripts  | Out of scope; archive = hide only                   |
