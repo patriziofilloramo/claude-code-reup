@@ -1,0 +1,46 @@
+import { Box, Text } from 'ink'
+
+import { COLORS } from '../../config/theme.js'
+import SearchBar from './SearchBar.js'
+
+interface AppToolbarProps {
+  isLoading: boolean
+  isSearchOpen: boolean
+  projectCount: number
+  searchQuery: string
+}
+
+export default function AppToolbar({
+  isLoading,
+  isSearchOpen,
+  projectCount,
+  searchQuery,
+}: AppToolbarProps) {
+  return (
+    <Box
+      borderBottom={true}
+      borderColor={COLORS.border}
+      borderLeft={false}
+      borderRight={false}
+      borderStyle="single"
+      borderTop={false}
+      gap={2}
+      paddingX={1}
+    >
+      {isSearchOpen ? (
+        <SearchBar query={searchQuery} />
+      ) : (
+        <Box gap={2}>
+          <Text color={COLORS.dim}>{isLoading ? '…' : projectCount} projects</Text>
+          <Text color={COLORS.muted}>
+            {'  '}
+            <Text color={COLORS.text}>/</Text>
+            {' search  '}
+            <Text color={COLORS.text}>tab</Text>
+            {' switch'}
+          </Text>
+        </Box>
+      )}
+    </Box>
+  )
+}

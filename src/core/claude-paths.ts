@@ -1,0 +1,108 @@
+import { readdir } from 'node:fs/promises'
+import os from 'node:os'
+import { join } from 'node:path'
+
+import { APP } from '../config/app.js'
+
+// -----------------------------------------------------------------------------
+// Claude data locations
+// -----------------------------------------------------------------------------
+
+/** Returns Claude Code's data directory, respecting `CLAUDE_CONFIG_DIR`. */
+export function getClaudeDirectory(): string {
+  return process.env[APP.claudeConfigEnvVar] ?? join(os.homedir(), '.claude')
+}
+
+/** Returns the directory where Claude Code stores per-project session data. */
+export function getClaudeProjectsDirectory(): string {
+  return join(getClaudeDirectory(), 'projects')
+}
+
+/** Returns the CCM-private data directory inside Claude Code's config root. */
+export function getCcmDirectory(): string {
+  return join(getClaudeDirectory(), 'ccm')
+}
+
+/** Returns Claude Code's adjacent local application-state file. */
+export function getClaudeStatePath(): string {
+  return `${getClaudeDirectory()}.json`
+}
+
+/** Returns the project-specific subdirectory inside the Claude Code projects directory. */
+export function getProjectDirectory(projectId: string): string {
+  return join(getClaudeProjectsDirectory(), projectId)
+}
+
+// -----------------------------------------------------------------------------
+// Encoded project path resolution
+// -----------------------------------------------------------------------------
+
+/**
+ * Encodes a filesystem path into the directory name Claude Code uses under
+ * ~/.claude/projects/. This is the inverse of decodeProjectDirectoryName and
+ * shares the same ambiguity around hyphens in directory names — use
+ * resolveProjectPath() to disambiguate when the directory already exists.
+ */
+export function encodeProjectPath(projectPath: string): string {
+  if (process.platform === 'win32') {
+    const match = projectPath.match(/^([a-zA-Z]):[/\\](.*)$/)
+    if (match) return `${match[1].toUpperCase()}--${match[2].replace(/[/\\]/g, '-')}`
+  }
+  return projectPath.replace(/^\//, '').replace(/\//g, '-')
+}
+
+/**
+ * Naively converts a Claude project directory name back to a filesystem path.
+ * Prefer `resolveProjectPath()` when filesystem-aware Windows resolution matters.
+ */
+export function decodeProjectDirectoryName(directoryName: string): string {
+  if (process.platform === 'win32') {
+    const match = directoryName.match(/^([a-zA-Z])--(.*)$/)
+    if (match) {
+      const drive = match[1].toUpperCase()
+      const pathAfterDrive = match[2].replace(/-/g, '\\')
+      return `${drive}:\\${pathAfterDrive}`
+    }
+  }
+  return '/' + directoryName.replace(/-/g, '/')
+}
+
+/** Resolves an encoded project directory name to the most likely filesystem path. */
+export async function resolveProjectPath(directoryName: string): Promise<string> {
+  if (process.platform !== 'win32') return decodeProjectDirectoryName(directoryName)
+
+  const match = directoryName.match(/^([a-zA-Z])--(.*)$/)
+  if (!match) return decodeProjectDirectoryName(directoryName)
+
+  let resolvedPath = `${match[1].toUpperCase()}:\\`
+  let encodedPathRemainder = match[2]
+
+  while (encodedPathRemainder.length > 0) {
+    let directoryEntries: string[]
+    try {
+      directoryEntries = await readdir(resolvedPath)
+    } catch {
+      return join(resolvedPath, encodedPathRemainder.replace(/-/g, '\\'))
+    }
+
+    // Claude's encoding makes literal hyphens ambiguous. Prefer the longest
+    // real directory name that can consume the next encoded path segment.
+    const matchingEntry = directoryEntries
+      .filter(
+        (entry) =>
+          encodedPathRemainder === entry ||
+          encodedPathRemainder.toLowerCase().startsWith(entry.toLowerCase() + '-')
+      )
+      .sort((left, right) => right.length - left.length)[0]
+
+    if (!matchingEntry) return join(resolvedPath, encodedPathRemainder.replace(/-/g, '\\'))
+
+    resolvedPath = join(resolvedPath, matchingEntry)
+    encodedPathRemainder =
+      encodedPathRemainder === matchingEntry
+        ? ''
+        : encodedPathRemainder.slice(matchingEntry.length + 1)
+  }
+
+  return resolvedPath
+}

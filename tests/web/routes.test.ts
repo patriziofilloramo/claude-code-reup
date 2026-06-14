@@ -1,0 +1,155 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+import { buildApp } from '../../src/web/routes.js'
+
+const PROJECT_ID = 'known-project'
+const SESSION_ID = '00000000-0000-0000-0000-000000000001'
+
+describe('web routes', () => {
+  let claudeDirectory: string
+  let originalClaudeDirectory: string | undefined
+
+  beforeEach(async () => {
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-routes-test-'))
+    originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = claudeDirectory
+  })
+
+  afterEach(async () => {
+    if (originalClaudeDirectory === undefined) delete process.env.CLAUDE_CONFIG_DIR
+    else process.env.CLAUDE_CONFIG_DIR = originalClaudeDirectory
+    await rm(claudeDirectory, { force: true, recursive: true })
+  })
+
+  it('returns an empty project list for a fresh Claude directory', async () => {
+    const response = await buildApp().request('/api/projects')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual([])
+  })
+
+  it('rejects state-changing requests from a non-local host', async () => {
+    const response = await buildApp().request('/api/resume/not-a-session', {
+      method: 'POST',
+      headers: { Host: 'example.com' },
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects state-changing requests from a non-local origin', async () => {
+    const response = await buildApp().request('/api/resume/not-a-session', {
+      method: 'POST',
+      headers: { Host: 'localhost', Origin: 'https://example.com' },
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  it('validates session IDs before parsing resume request bodies', async () => {
+    const response = await buildApp().request('/api/resume/not-a-session', {
+      method: 'POST',
+      headers: { Host: 'localhost' },
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'invalid session id' })
+  })
+
+  it('returns no results for an empty search query', async () => {
+    const response = await buildApp().request('/api/search?q=')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual([])
+  })
+
+  it('searches globally by stable project and session IDs', async () => {
+    await createKnownSession()
+
+    for (const query of [PROJECT_ID, SESSION_ID.slice(0, 8)]) {
+      const response = await buildApp().request(`/api/search?q=${query}`)
+      const results = (await response.json()) as Array<{ id: string }>
+
+      expect(response.status).toBe(200)
+      expect(results).toContainEqual(expect.objectContaining({ id: SESSION_ID }))
+    }
+  })
+
+  it('returns the shared non-destructive diagnostics report', async () => {
+    const response = await buildApp().request('/api/diagnostics')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      brokenIndices: [],
+      expiring: [],
+      orphanedTranscripts: [],
+      pathMissing: [],
+      staleLocks: [],
+    })
+  })
+
+  it('returns an honest unavailable usage summary before capture is configured', async () => {
+    const response = await buildApp().request('/api/usage')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      captureIssue: null,
+      captureStatus: 'off',
+      configured: false,
+      freshness: 'unavailable',
+      limitsIssue: null,
+      limitsSource: 'unavailable',
+      limitsStatus: 'unavailable',
+      limitsUpdatedAt: null,
+      rateLimits: {},
+      snapshot: null,
+      updateStrategy: 'account-api-with-status-line-fallback',
+      updatedAt: null,
+      usageCreditsEnabled: null,
+    })
+  })
+
+  it('serializes the derived primary status for API consumers', async () => {
+    await createKnownSession()
+
+    const response = await buildApp().request('/api/projects')
+    const projects = (await response.json()) as Array<{
+      sessions: Array<{ id: string; primaryStatus: string }>
+    }>
+
+    expect(projects[0]?.sessions[0]).toMatchObject({
+      id: SESSION_ID,
+      primaryStatus: 'ok',
+    })
+  })
+
+  it('validates archive request bodies before writing metadata', async () => {
+    await createKnownSession()
+
+    const response = await buildApp().request(`/api/sessions/${PROJECT_ID}/${SESSION_ID}/archive`, {
+      body: JSON.stringify({ archived: 'false' }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'archived must be boolean' })
+  })
+
+  async function createKnownSession(): Promise<void> {
+    const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
+    await mkdir(projectDirectory, { recursive: true })
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      JSON.stringify({
+        cwd: claudeDirectory,
+        message: { content: 'hello' },
+        timestamp: new Date().toISOString(),
+        type: 'user',
+      })
+    )
+  }
+})

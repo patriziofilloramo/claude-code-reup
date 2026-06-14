@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ccm</title>
+    <!-- CCM:STYLES -->
+  </head>
+  <body>
+    <div class="app">
+      <header class="hdr">
+        <span class="logo">ccm</span>
+        <div class="usage-summary" id="usage-summary">usage loading…</div>
+        <div class="hdr-hints" id="hdr-hints">
+          <span class="hint"><b>/</b> search</span>
+          <span class="hint"><b>enter</b> resume</span>
+        </div>
+        <div class="search-wrap" id="search-wrap" style="display: none">
+          <span class="search-lbl">/</span>
+          <input
+            id="search-input"
+            placeholder="project / session — tab: search all context"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="search-deep-btn" id="search-deep-btn" title="Deep search (Tab)">⌕</button>
+          <span class="search-clear" id="search-clear">✕</span>
+        </div>
+        <span class="search-mode-label" id="search-mode-label" style="display:none">⌕ deep</span>
+      </header>
+
+      <div class="body">
+        <div class="pnl-left">
+          <div class="pnl-label">
+            <span id="proj-label">PROJECTS</span>
+            <select
+              class="sort-select project-sort-select"
+              id="project-sort-select"
+              title="Project sort order"
+            >
+              <option value="recent">Recent</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
+          <div class="proj-list" id="proj-list"></div>
+        </div>
+        <div class="pnl-right">
+          <div class="right-hdr">
+            <span class="right-hdr-title" id="right-title">Select a project</span>
+            <span class="right-cnt" id="right-cnt"></span>
+            <a class="md-tag" id="md-tag" style="display: none" href="#">
+              <span class="md-pip"></span>CLAUDE.md
+            </a>
+          </div>
+          <div class="filter-bar" id="filter-bar" style="display: none">
+            <button class="filter-pill active" data-filter="all">All</button>
+            <button class="filter-pill" data-filter="attention">Needs Attention</button>
+            <button class="filter-pill" data-filter="active">Active</button>
+            <button class="filter-pill" data-filter="archived">Archived</button>
+            <span class="filter-sep"></span>
+            <select class="sort-select" id="sort-select" title="Sort order">
+              <option value="recent">Recent</option>
+              <option value="risk">Risk</option>
+              <option value="context">Context</option>
+            </select>
+          </div>
+          <div class="sess-list" id="sess-list"></div>
+          <div class="sess-inspector" id="sess-inspector" style="display: none"></div>
+        </div>
+      </div>
+
+      <footer class="ftr">
+        <span class="ftr-item"><b class="ftr-k">click</b> select</span>
+        <span class="ftr-item"><b class="ftr-k">enter</b> resume</span>
+        <span class="ftr-item"><b class="ftr-k">/</b> search</span>
+        <span class="ftr-sp"></span>
+        <button class="ftr-diagnostics" id="ftr-diagnostics" style="display: none"></button>
+        <span class="ftr-status" id="ftr-status">loading…</span>
+      </footer>
+    </div>
+
+    <div class="overlay" id="resume-overlay">
+      <div class="dlg">
+        <div class="dlg-label">Resume Session</div>
+        <div class="dlg-cmd" id="dlg-cmd"></div>
+        <div class="dlg-name" id="dlg-name"></div>
+        <div class="dlg-branch" id="dlg-branch"></div>
+        <div class="dlg-actions">
+          <button class="btn btn-primary" id="dlg-confirm">Resume</button>
+          <button class="btn btn-secondary" id="dlg-cancel">Cancel</button>
+          <span class="dlg-msg" id="dlg-msg"></span>
+        </div>
+        <label class="dlg-pref">
+          <input type="checkbox" id="dlg-always-confirm" checked />
+          Always confirm before resuming
+        </label>
+      </div>
+    </div>
+
+    <div class="drawer" id="md-drawer">
+      <div class="drawer-pane">
+        <div class="drawer-hdr">
+          <div>
+            <div class="drawer-title">CLAUDE.md</div>
+            <div class="drawer-path" id="md-path"></div>
+          </div>
+          <button class="drawer-close" id="md-close">✕</button>
+        </div>
+        <div class="drawer-body">
+          <textarea id="md-editor" placeholder="No CLAUDE.md found for this project."></textarea>
+        </div>
+        <div class="drawer-footer">
+          <button class="btn btn-primary" id="md-save">Save</button>
+          <button class="btn btn-secondary" id="md-close2">Close</button>
+          <span class="save-status" id="md-save-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer" id="lf-drawer">
+      <div class="drawer-pane">
+        <div class="drawer-hdr">
+          <div>
+            <div class="drawer-title">Lost &amp; Found</div>
+            <div class="drawer-path" id="lf-subtitle"></div>
+          </div>
+          <button class="drawer-close" id="lf-close">✕</button>
+        </div>
+        <div class="drawer-body lf-body" id="lf-body">
+          <div class="lf-loading">Scanning…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctx-menu" id="ctx-menu"></div>
+    <div class="toast" id="toast"></div>
+
+    <!-- CCM:SCRIPT -->
+  </body>
+</html>

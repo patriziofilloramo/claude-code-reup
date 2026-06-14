@@ -1,0 +1,1822 @@
+/**
+ * Standalone browser application.
+ *
+ * This remains one script deliberately: splitting it without a browser build
+ * step would require shared globals and make ownership less clear. Strong
+ * sections and responsibility-oriented names keep the file navigable instead.
+ */
+;(function () {
+  // ---------------------------------------------------------------------------
+  // Configuration and application state
+  // ---------------------------------------------------------------------------
+
+  // ── Tunable constants ────────────────────────────────────────────────────────
+  // Change these to adjust behaviour without touching the surrounding logic.
+
+  /** Debounce delay (ms) before auto-saving CLAUDE.md edits to the server. */
+  const AUTO_SAVE_DELAY_MS = 1500
+  /** How long to wait (ms) before attempting to reconnect a dropped SSE stream. */
+  const SSE_RECONNECT_DELAY_MS = 3000
+  /** How long (ms) a toast notification stays visible before fading out. */
+  const TOAST_DURATION_MS = 2400
+  /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */
+  const USAGE_POLL_INTERVAL_MS = 5000
+  /** localStorage key for the "always show confirm dialog before resuming" preference. */
+  const CONFIRM_RESUME_PREFERENCE = 'ccm:confirmResume'
+
+  const FILTER_LABELS = {
+    active: 'Active',
+    all: 'All',
+    archived: 'Archived',
+    attention: 'Needs Attention',
+  }
+  const RISK_RANK = {
+    interrupted: 0,
+    expiring: 1,
+    'path-missing': 2,
+    'heavily-compacted': 3,
+    ok: 4,
+  }
+
+  let projects = []
+  let activeSessionIds = new Set()
+  let liveUsage = null
+  let selectedProject = null
+  let selectedSession = null
+  let selectedFilter = 'all'
+  let selectedProjectSort = 'recent'
+  let selectedSort = 'recent'
+  let searchQuery = ''
+  let renamingSessionId = null
+  let claudeInstructionsProjectId = null
+  let claudeInstructionsSaveTimer = null
+  let liveUpdatesSource = null
+  let usageRefreshInProgress = false
+  let deepLinkProcessed = false
+  let ctxProject = null
+  let ctxSession = null
+  let deepSearchActive = false
+  let deepSearchMatches = []
+  let deepSearchLoading = false
+  let deepSearchQueryTerm = ''
+
+  function elementById(id) {
+    return document.getElementById(id)
+  }
+
+  const elements = {
+    alwaysConfirmCheckbox: elementById('dlg-always-confirm'),
+    contextMenu: elementById('ctx-menu'),
+    filterBar: elementById('filter-bar'),
+    footerStatus: elementById('ftr-status'),
+    headerHints: elementById('hdr-hints'),
+    instructionsCloseButton: elementById('md-close'),
+    instructionsDrawer: elementById('md-drawer'),
+    instructionsEditor: elementById('md-editor'),
+    instructionsFooterCloseButton: elementById('md-close2'),
+    instructionsPath: elementById('md-path'),
+    instructionsSaveButton: elementById('md-save'),
+    instructionsSaveStatus: elementById('md-save-status'),
+    instructionsTag: elementById('md-tag'),
+    projectCountLabel: elementById('proj-label'),
+    projectList: elementById('proj-list'),
+    projectSortSelect: elementById('project-sort-select'),
+    resumeCancelButton: elementById('dlg-cancel'),
+    resumeCommand: elementById('dlg-cmd'),
+    resumeConfirmButton: elementById('dlg-confirm'),
+    resumeDialogBranch: elementById('dlg-branch'),
+    resumeDialogMessage: elementById('dlg-msg'),
+    resumeDialogName: elementById('dlg-name'),
+    resumeOverlay: elementById('resume-overlay'),
+    searchClearButton: elementById('search-clear'),
+    searchInput: elementById('search-input'),
+    searchWrapper: elementById('search-wrap'),
+    sessionCount: elementById('right-cnt'),
+    sessionInspector: elementById('sess-inspector'),
+    sessionList: elementById('sess-list'),
+    sessionPanelTitle: elementById('right-title'),
+    sortSelect: elementById('sort-select'),
+    toast: elementById('toast'),
+    usageSummary: elementById('usage-summary'),
+    diagnosticsButton: elementById('ftr-diagnostics'),
+    diagnosticsDrawer: elementById('lf-drawer'),
+    diagnosticsBody: elementById('lf-body'),
+    diagnosticsSubtitle: elementById('lf-subtitle'),
+    diagnosticsCloseButton: elementById('lf-close'),
+    searchDeepBtn: elementById('search-deep-btn'),
+    searchModeLabel: elementById('search-mode-label'),
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared presentation and request helpers
+  // ---------------------------------------------------------------------------
+
+  /** Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS. */
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
+
+  /**
+   * Returns a human-readable relative time string, e.g. "just now", "3h ago", "2d ago".
+   * Used in session row timestamps and inspector panels where full precision is less useful.
+   */
+  function relativeTime(isoTimestamp) {
+    const elapsedMs = Date.now() - new Date(isoTimestamp).getTime()
+    if (elapsedMs < 60000) return 'just now'
+
+    const minutes = Math.floor(elapsedMs / 60000)
+    if (minutes < 60) return minutes + 'm ago'
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return hours + 'h ago'
+
+    const days = Math.floor(hours / 24)
+    if (days < 30) return days + 'd ago'
+
+    const months = Math.floor(days / 30)
+    return months < 12 ? months + 'mo ago' : Math.floor(months / 12) + 'y ago'
+  }
+
+  /** Formats a token count with k/m suffixes, e.g. 1500 → "1.5k", 2100000 → "2.1m". */
+  function formatTokenCount(tokenCount) {
+    if (tokenCount < 1000) return String(tokenCount)
+    if (tokenCount < 1000000) {
+      return (tokenCount / 1000).toFixed(tokenCount < 10000 ? 1 : 0) + 'k'
+    }
+    return (tokenCount / 1000000).toFixed(1) + 'm'
+  }
+
+  /** Returns a short countdown string until the given ISO date, e.g. "2h 15m", "1d 3h". */
+  function formatResetCountdown(resetAt) {
+    if (!resetAt) return ''
+    const remainingMinutes = Math.ceil((new Date(resetAt).getTime() - Date.now()) / 60000)
+    if (remainingMinutes <= 0) return 'now'
+    const days = Math.floor(remainingMinutes / 1440)
+    const hours = Math.floor((remainingMinutes % 1440) / 60)
+    const minutes = remainingMinutes % 60
+    if (days > 0) return days + 'd' + (hours > 0 ? ' ' + hours + 'h' : '')
+    if (hours > 0) return hours + 'h' + (minutes > 0 ? ' ' + minutes + 'm' : '')
+    return minutes + 'm'
+  }
+
+  /**
+   * Shorter variant of relativeTime for tight spaces: "now", "3m", "4h", "2d".
+   * Returns an empty string when the timestamp is absent.
+   */
+  function compactRelativeTime(isoTimestamp) {
+    if (!isoTimestamp) return ''
+    const elapsedMs = Date.now() - new Date(isoTimestamp).getTime()
+    if (elapsedMs < 60000) return 'now'
+    const minutes = Math.floor(elapsedMs / 60000)
+    if (minutes < 60) return minutes + 'm'
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return hours + 'h'
+    const days = Math.floor(hours / 24)
+    if (days < 30) return days + 'd'
+    const months = Math.floor(days / 30)
+    return months < 12 ? months + 'mo' : Math.floor(months / 12) + 'y'
+  }
+
+  /**
+   * Returns a CSS class modifier for a usage bar: "stale" when data is old,
+   * then "danger" (≥100%), "caution" (≥90%), "warn" (≥80%), or "fresh".
+   */
+  function usageLevel(percentage, isStale) {
+    if (isStale) return 'stale'
+    if (percentage >= 100) return 'danger'
+    if (percentage >= 90) return 'caution'
+    if (percentage >= 80) return 'warn'
+    return 'fresh'
+  }
+
+  /** Appends a usage-limit chip (label + bar + percentage + countdown) to container. No-ops if limit is absent. */
+  function appendUsageLimit(container, label, limit) {
+    if (!limit) return
+
+    const item = document.createElement('span')
+    item.className = 'usage-limit ' + usageLevel(limit.usedPercentage, false)
+
+    const labelElement = document.createElement('span')
+    labelElement.className = 'usage-limit-label'
+    labelElement.textContent = label
+
+    const bar = document.createElement('span')
+    bar.className = 'usage-limit-bar'
+    const fill = document.createElement('span')
+    fill.className = 'usage-limit-fill'
+    fill.style.width = Math.max(0, Math.min(100, limit.usedPercentage)) + '%'
+    bar.appendChild(fill)
+
+    const value = document.createElement('span')
+    value.className = 'usage-limit-value'
+    value.textContent = Math.round(limit.usedPercentage) + '%'
+
+    const reset = document.createElement('span')
+    reset.className = 'usage-limit-reset'
+    reset.textContent = formatResetCountdown(limit.resetsAt)
+
+    item.append(labelElement, bar, value, reset)
+    container.appendChild(item)
+  }
+
+  /** Appends a "credits on" badge when the account is on a credits plan. No-ops otherwise. */
+  function appendUsageCreditsBadge(container) {
+    if (!liveUsage || liveUsage.usageCreditsEnabled !== true) return
+    const badge = document.createElement('span')
+    badge.className = 'usage-credits'
+    badge.textContent = 'credits on'
+    container.appendChild(badge)
+  }
+
+  /** Re-renders the header usage bar from the current liveUsage snapshot. Safe to call repeatedly. */
+  function renderUsageSummary() {
+    if (!liveUsage) {
+      elements.usageSummary.textContent = 'usage loading'
+      elements.usageSummary.className = 'usage-summary'
+      return
+    }
+
+    const fiveHour = liveUsage.rateLimits && liveUsage.rateLimits.fiveHour
+    const sevenDay = liveUsage.rateLimits && liveUsage.rateLimits.sevenDay
+
+    elements.usageSummary.replaceChildren()
+    elements.usageSummary.className = 'usage-summary'
+    const heading = document.createElement('span')
+    heading.className = 'usage-heading'
+    heading.textContent = 'limits'
+    elements.usageSummary.appendChild(heading)
+    const state = document.createElement('span')
+    state.className = 'usage-state ' + liveUsage.limitsStatus
+    state.textContent = usageFeedStatus()
+    elements.usageSummary.appendChild(state)
+    appendUsageCreditsBadge(elements.usageSummary)
+    appendUsageLimit(elements.usageSummary, '5h', fiveHour)
+    appendUsageLimit(elements.usageSummary, '7d', sevenDay)
+    elements.usageSummary.title =
+      liveUsage.limitsSource === 'account-api'
+        ? 'Account limits refreshed directly from Claude.'
+        : 'Account limits from the latest available Claude status-line observation.'
+  }
+
+  /** Returns a short status string for the usage feed freshness indicator. */
+  function usageFeedStatus() {
+    if (liveUsage.limitsStatus === 'fresh' || liveUsage.limitsStatus === 'stale') {
+      if (!liveUsage.limitsUpdatedAt) return 'updated'
+      return liveUsage.limitsSource === 'account-api'
+        ? 'updated ' + relativeTime(liveUsage.limitsUpdatedAt)
+        : 'cached, updated ' + relativeTime(liveUsage.limitsUpdatedAt)
+    }
+    return 'limits unavailable'
+  }
+
+  /** Returns the last two path segments, normalised to forward slashes: "user/myproject". */
+  function compactPath(path) {
+    return path.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/')
+  }
+
+  /** Maps a git branch name to a CSS colour variable based on common naming conventions. */
+  function colorForGitBranch(branch) {
+    if (!branch || branch === 'main' || branch === 'master') return 'var(--muted2)'
+    if (branch.startsWith('feat/') || branch.startsWith('feature/')) return 'var(--accent)'
+    if (branch.startsWith('fix/') || branch.startsWith('hotfix/')) return 'var(--amber)'
+    if (branch.startsWith('develop') || branch === 'dev') return 'var(--green)'
+    return 'var(--muted2)'
+  }
+
+  /**
+   * Returns an HTML badge showing the current branch when it differs from the
+   * branch recorded in the session transcript. Empty string when there is no drift.
+   */
+  function buildBranchDriftHtml(session) {
+    if (!session.currentBranch || session.currentBranch === session.gitBranch) return ''
+    return (
+      '<span class="s-drift" title="Project is now on ' +
+      escapeHtml(session.currentBranch) +
+      '">⇢ ' +
+      escapeHtml(session.currentBranch) +
+      '</span>'
+    )
+  }
+
+  /** Returns an HTML badge for warning/error session states. Empty string for the "ok" state. */
+  function buildStatusBadgeHtml(session) {
+    const status = session.primaryStatus
+    if (status === 'interrupted') {
+      return '<span class="s-badge s-badge-warn">✗ interrupted</span>'
+    }
+    if (status === 'expiring') {
+      const days =
+        session.signals && session.signals.expiresInDays != null
+          ? session.signals.expiresInDays
+          : '?'
+      return '<span class="s-badge s-badge-err">⚠ ' + days + 'd left</span>'
+    }
+    if (status === 'path-missing') {
+      return '<span class="s-badge s-badge-err">⚠ path gone</span>'
+    }
+    if (status === 'heavily-compacted') {
+      return '<span class="s-badge s-badge-dim">⤡ heavy ctx</span>'
+    }
+    return ''
+  }
+
+  /**
+   * Fetches a JSON endpoint and returns the parsed body.
+   * Throws an Error with a human-readable message on any non-2xx response,
+   * using the server-provided `error` or `message` field when present.
+   */
+  async function requestJson(url, options) {
+    const response = await fetch(url, options)
+    let payload = null
+    try {
+      payload = await response.json()
+    } catch {
+      // Preserve the HTTP status when an unexpected non-JSON response is returned.
+    }
+    if (!response.ok) {
+      throw new Error(
+        (payload && (payload.error || payload.message)) || 'server returned ' + response.status
+      )
+    }
+    return payload
+  }
+
+  /** Displays a toast notification for TOAST_DURATION_MS. Optional variant: "copied" | "err". */
+  function showToast(message, variant) {
+    elements.toast.textContent = message
+    elements.toast.className = 'toast' + (variant ? ' ' + variant : '')
+    void elements.toast.offsetWidth
+    elements.toast.classList.add('show')
+    setTimeout(function () {
+      elements.toast.classList.remove('show')
+    }, TOAST_DURATION_MS)
+  }
+
+  /** Returns true unless the user has explicitly opted out of the resume-confirmation dialog. */
+  function shouldConfirmResume() {
+    return localStorage.getItem(CONFIRM_RESUME_PREFERENCE) !== 'false'
+  }
+
+  // ---------------------------------------------------------------------------
+  // Project list
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolves the Project object from a clicked .proj-row DOM element.
+   * Uses data-project-id to look up the in-memory project list rather than
+   * trusting any other DOM state, so event delegation stays safe.
+   */
+  function resolveProjectFromRow(row) {
+    if (!row) return null
+    const projectId = row.dataset.projectId
+    return (
+      projects.find(function (project) {
+        return project.id === projectId
+      }) || null
+    )
+  }
+
+  /** Renders a single project row as an HTML string for innerHTML assignment. */
+  function buildProjectRowHtml(project) {
+    const isSelected = selectedProject && project.id === selectedProject.id
+    const sessionCount = searchQuery.trim()
+      ? deriveVisibleSessionsForProject(project).length
+      : project.sessions.length
+    const lastActive = project.sessions.reduce(function (max, s) {
+      return s.updated > max ? s.updated : max
+    }, '')
+    const lastLabel = lastActive ? compactRelativeTime(lastActive) : ''
+    return (
+      '<div class="proj-row' +
+      (isSelected ? ' sel' : '') +
+      '" data-project-id="' +
+      escapeHtml(project.id) +
+      '" title="' +
+      escapeHtml(project.path) +
+      (lastActive ? '\nlast active: ' + relativeTime(lastActive) : '') +
+      '">' +
+      '<span class="p-name">' +
+      escapeHtml(compactPath(project.path)) +
+      '</span>' +
+      (project.isShared ? '<span class="p-cloud" title="Shared storage (cloud-linked)">☁</span>' : '') +
+      (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
+      '<span class="p-cnt">' +
+      sessionCount +
+      '</span>' +
+      '<div class="p-actions">' +
+      '<button class="p-act-btn p-new-btn" title="New session">+</button>' +
+      '<button class="p-act-btn p-menu-btn" title="More actions">⋯</button>' +
+      '</div>' +
+      '</div>'
+    )
+  }
+
+  /** Looks up the deep-search match record for a given session ID, or null if not found. */
+  function getDeepMatchForSession(sessionId) {
+    for (var i = 0; i < deepSearchMatches.length; i++) {
+      if (deepSearchMatches[i].sessionId === sessionId) return deepSearchMatches[i]
+    }
+    return null
+  }
+
+  /** Returns an HTML snippet row showing the match count and text excerpt. Empty string when match is null. */
+  function buildDeepSnippetHtml(match) {
+    if (!match) return ''
+    return (
+      '<div class="s-deep-snippet">' +
+      '<span class="s-deep-count">' +
+      match.matchCount +
+      (match.matchCount === 1 ? ' hit' : ' hits') +
+      '</span>' +
+      '<span class="s-deep-text">' +
+      escapeHtml(match.snippet) +
+      '</span>' +
+      '</div>'
+    )
+  }
+
+  /**
+   * Returns the subset of projects that should appear in the left panel given
+   * the current search query, active filters, and deep-search state.
+   * In deep-search mode only projects that contain at least one transcript match are shown.
+   */
+  function deriveVisibleProjects() {
+    if (deepSearchActive) {
+      if (deepSearchLoading) return []
+      const matchedProjectIds = new Set(deepSearchMatches.map(function (m) { return m.projectId }))
+      return projects.filter(function (p) { return matchedProjectIds.has(p.id) })
+    }
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    const visibleProjects = normalizedQuery
+      ? projects.filter(function (project) {
+          return (
+            projectMatchesSearch(project, normalizedQuery) ||
+            deriveVisibleSessionsForProject(project).length > 0
+          )
+        })
+      : projects
+    if (selectedProjectSort !== 'name') return visibleProjects
+
+    return visibleProjects.slice().sort(function (left, right) {
+      const pathComparison = compactPath(left.path).localeCompare(compactPath(right.path))
+      return pathComparison || left.path.localeCompare(right.path)
+    })
+  }
+
+  /** Re-renders the full project list panel from current state. */
+  function renderProjects() {
+    const visibleProjects = deriveVisibleProjects()
+    elements.projectCountLabel.textContent = 'PROJECTS [' + visibleProjects.length + ']'
+    elements.projectList.innerHTML = visibleProjects.map(buildProjectRowHtml).join('')
+  }
+
+  /** Selects a project, clears the session selection, and re-renders both panels. */
+  function selectProject(project) {
+    selectedProject = project
+    selectedSession = null
+    if (!searchQuery.trim()) selectedFilter = 'all'
+    renderProjects()
+    renderSessions()
+    void refreshClaudeInstructionsAvailability(project)
+  }
+
+  elements.projectList.addEventListener('click', function (event) {
+    const newBtn = event.target.closest('.p-new-btn')
+    if (newBtn) {
+      event.stopPropagation()
+      const project = resolveProjectFromRow(newBtn.closest('.proj-row'))
+      if (project) void startNewSession(project)
+      return
+    }
+
+    const menuBtn = event.target.closest('.p-menu-btn')
+    if (menuBtn) {
+      event.stopPropagation()
+      const project = resolveProjectFromRow(menuBtn.closest('.proj-row'))
+      if (!project) return
+      ctxProject = project
+      ctxSession = null
+      openContextMenu(menuBtn, [
+        { action: 'project-new-session', label: '+ new session' },
+        { action: 'project-copy-path', label: 'copy path' },
+      ])
+      return
+    }
+
+    const project = resolveProjectFromRow(event.target.closest('.proj-row'))
+    if (project) selectProject(project)
+  })
+
+  elements.projectSortSelect.addEventListener('change', function () {
+    selectedProjectSort = elements.projectSortSelect.value
+    renderProjects()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Session view model and selection
+  // ---------------------------------------------------------------------------
+
+  /** Returns the sessions in a project that satisfy the given filter tab. */
+  function sessionsMatchingFilter(project, filter) {
+    if (!project) return []
+    const sessions = project.sessions
+
+    if (filter === 'attention') {
+      return sessions.filter(function (session) {
+        const status = session.primaryStatus
+        return (
+          !session.signals.archived &&
+          (status === 'interrupted' || status === 'expiring' || status === 'path-missing')
+        )
+      })
+    }
+    if (filter === 'active') {
+      return sessions.filter(function (session) {
+        return !session.signals.archived && activeSessionIds.has(session.id)
+      })
+    }
+    if (filter === 'archived') {
+      return sessions.filter(function (session) {
+        return session.signals.archived
+      })
+    }
+    // The default "all" view intentionally excludes locally archived sessions.
+    return sessions.filter(function (session) {
+      return !session.signals.archived
+    })
+  }
+
+  /** Returns true if any string in values contains the already-lowercased query. */
+  function valuesMatchSearch(values, normalizedQuery) {
+    return values.some(function (value) {
+      return (value || '').toLowerCase().includes(normalizedQuery)
+    })
+  }
+
+  /** Returns true if the project's ID or path matches the search query. */
+  function projectMatchesSearch(project, normalizedQuery) {
+    return valuesMatchSearch([project.id, project.path], normalizedQuery)
+  }
+
+  /** Returns true if any searchable field of the session matches the query. */
+  function sessionMatchesSearch(session, normalizedQuery) {
+    return valuesMatchSearch(
+      [
+        session.id,
+        session.name,
+        session.alias,
+        session.projectPath,
+        session.gitBranch,
+        session.currentBranch,
+      ].concat(session.context.models || []),
+      normalizedQuery
+    )
+  }
+
+  /**
+   * Returns sessions to display for a project given current filter, search, and deep-search state.
+   * In deep-search mode returns only transcript-matched sessions for this project.
+   */
+  function deriveVisibleSessionsForProject(project) {
+    if (deepSearchActive) {
+      const matchedIds = new Set(
+        deepSearchMatches
+          .filter(function (m) { return m.projectId === project.id })
+          .map(function (m) { return m.sessionId })
+      )
+      return project.sessions.filter(function (s) { return matchedIds.has(s.id) })
+    }
+    const sessions = sessionsMatchingFilter(project, selectedFilter)
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    if (!normalizedQuery || projectMatchesSearch(project, normalizedQuery)) return sessions
+
+    return sessions.filter(function (session) {
+      return sessionMatchesSearch(session, normalizedQuery)
+    })
+  }
+
+  /** Returns the visible sessions for the selected project, sorted per the current sort selection. */
+  function deriveVisibleSessions() {
+    const sessions = selectedProject ? deriveVisibleSessionsForProject(selectedProject) : []
+    if (selectedSort === 'context') {
+      return sessions.slice().sort(function (left, right) {
+        const leftTokens = left.context.latestContextTokens ?? -1
+        const rightTokens = right.context.latestContextTokens ?? -1
+        return rightTokens - leftTokens || right.updated.localeCompare(left.updated)
+      })
+    }
+    if (selectedSort !== 'risk') return sessions
+
+    return sessions.slice().sort(function (left, right) {
+      const leftRank = RISK_RANK[left.primaryStatus] != null ? RISK_RANK[left.primaryStatus] : 4
+      const rightRank = RISK_RANK[right.primaryStatus] != null ? RISK_RANK[right.primaryStatus] : 4
+      if (leftRank !== rightRank) return leftRank - rightRank
+      return right.updated.localeCompare(left.updated)
+    })
+  }
+
+  /**
+   * Ensures selectedProject is still visible after a filter/search/data change.
+   * Falls back to the first visible project when the current selection is hidden.
+   * This prevents a stale project from staying "active" while showing zero sessions.
+   */
+  function synchronizeSelectedProjectWithView() {
+    const visibleProjects = deriveVisibleProjects()
+    if (
+      selectedProject &&
+      visibleProjects.some(function (project) {
+        return project.id === selectedProject.id
+      })
+    ) {
+      return
+    }
+
+    selectedProject = visibleProjects[0] || null
+    selectedSession = null
+    renamingSessionId = null
+    if (selectedProject) void refreshClaudeInstructionsAvailability(selectedProject)
+  }
+
+  /** Resolves a Session from a clicked .sess-row DOM element using data-session-id lookup. */
+  function resolveSessionFromRow(row) {
+    if (!row || !selectedProject) return null
+    const sessionId = row.dataset.sessionId
+    return (
+      selectedProject.sessions.find(function (session) {
+        return session.id === sessionId
+      }) || null
+    )
+  }
+
+  /**
+   * Rebinds the selection to freshly fetched data without forgetting a session
+   * merely because search or filters currently hide it.
+   */
+  function synchronizeSelectedSession() {
+    if (!selectedSession || !selectedProject) return
+    const refreshedSession = selectedProject.sessions.find(function (session) {
+      return session.id === selectedSession.id
+    })
+    selectedSession = refreshedSession || null
+    if (!selectedSession) renamingSessionId = null
+  }
+
+  /**
+   * Marks a session as selected, updates the URL hash so the session is deep-linkable,
+   * and toggles the .sel class on the relevant row without rebuilding the list.
+   * Keeping row nodes stable preserves any in-progress rename input.
+   */
+  function selectSession(session) {
+    const previousSession = selectedSession
+    selectedSession = session
+    // Update URL so this session can be bookmarked or shared
+    if (window.history && window.history.replaceState) {
+      history.replaceState(null, '', '#' + session.id)
+    }
+
+    // Selection must not rebuild the list. Keeping row nodes stable preserves
+    // inline rename text and browser double-click detection.
+    elements.sessionList.querySelectorAll('.sess-row').forEach(function (row) {
+      row.classList.toggle('sel', row.dataset.sessionId === session.id)
+      const arrow = row.querySelector('.s-arrow')
+      if (arrow) arrow.textContent = row.dataset.sessionId === session.id ? '▶' : ' '
+    })
+    renderInspector(deriveVisibleSessions())
+  }
+
+  // ---------------------------------------------------------------------------
+  // Session filters and inspector
+  // ---------------------------------------------------------------------------
+
+  /** Returns session counts per filter tab for the selected project. */
+  function calculateFilterCounts() {
+    if (!selectedProject) return {}
+    return {
+      active: sessionsMatchingFilter(selectedProject, 'active').length,
+      all: sessionsMatchingFilter(selectedProject, 'all').length,
+      archived: sessionsMatchingFilter(selectedProject, 'archived').length,
+      attention: sessionsMatchingFilter(selectedProject, 'attention').length,
+    }
+  }
+
+  /** Updates filter pill active state and counts. Hides the bar entirely when no project is selected. */
+  function renderFilterBar() {
+    if (!selectedProject) {
+      elements.filterBar.style.display = 'none'
+      return
+    }
+
+    elements.filterBar.style.display = 'flex'
+    const counts = calculateFilterCounts()
+    elements.filterBar.querySelectorAll('.filter-pill').forEach(function (pill) {
+      const filter = pill.dataset.filter
+      const count = counts[filter] || 0
+      pill.classList.toggle('active', filter === selectedFilter)
+      pill.innerHTML =
+        (FILTER_LABELS[filter] || filter) +
+        (count > 0 ? '<span class="pill-cnt">' + count + '</span>' : '')
+    })
+  }
+
+  /** Returns an HTML row string for the session inspector panel (label + value pair). */
+  function buildInspectorRowHtml(label, value, valueClass, valueAttributes) {
+    return (
+      '<div class="insp-row"><span class="insp-key">' +
+      label +
+      '</span><span class="insp-val' +
+      (valueClass ? ' ' + valueClass : '') +
+      '"' +
+      (valueAttributes ? ' ' + valueAttributes : '') +
+      '>' +
+      value +
+      '</span></div>'
+    )
+  }
+
+  /** Re-renders the session inspector panel for the selected session. Hides it when no selection is visible. */
+  function renderInspector(visibleSessions) {
+    const selectionIsVisible =
+      selectedSession &&
+      visibleSessions.some(function (session) {
+        return session.id === selectedSession.id
+      })
+    if (!selectionIsVisible) {
+      elements.sessionInspector.style.display = 'none'
+      return
+    }
+
+    const session = selectedSession
+    const signals = session.signals || {}
+    const descriptions = {
+      interrupted: 'Claude had pending tool calls with no result — resume to continue.',
+      expiring:
+        'Transcript expires in ' + signals.expiresInDays + ' days (Claude auto-deletes after 30).',
+      'path-missing': 'Project directory no longer exists on disk.',
+      'heavily-compacted': 'Context was compacted ' + signals.compactionCount + ' times.',
+    }
+    const statusDescription = descriptions[session.primaryStatus]
+    const status = buildStatusBadgeHtml(session) || '<span style="color:var(--muted2)">ok</span>'
+    const statusValue =
+      status +
+      (statusDescription
+        ? '<span class="insp-note">' + escapeHtml(statusDescription) + '</span>'
+        : '')
+
+    let html = '<div class="insp-title">Session Details</div>'
+    html += buildInspectorRowHtml('Status', statusValue)
+    html += buildInspectorRowHtml(
+      'Last active',
+      '<em>' + escapeHtml(relativeTime(session.updated)) + '</em>'
+    )
+    html += buildInspectorRowHtml('Messages', session.messageCount)
+    if (signals.analysisComplete && signals.compactionCount > 0) {
+      html += buildInspectorRowHtml('Compactions', signals.compactionCount)
+    }
+    if (signals.expiresInDays != null) {
+      html += buildInspectorRowHtml('Expires in', signals.expiresInDays + ' days')
+    }
+    if (session.context.latestModel) {
+      html += buildInspectorRowHtml('Latest model', escapeHtml(session.context.latestModel))
+    }
+    if (session.context.latestContextTokens != null) {
+      html += buildInspectorRowHtml(
+        'Last context',
+        formatTokenCount(session.context.latestContextTokens) + ' tokens'
+      )
+    }
+    if (session.context.latestOutputTokens != null) {
+      html += buildInspectorRowHtml(
+        'Last output',
+        formatTokenCount(session.context.latestOutputTokens) + ' tokens'
+      )
+    }
+    if (session.context.models && session.context.models.length > 1) {
+      html += buildInspectorRowHtml('Models used', escapeHtml(session.context.models.join(', ')))
+    }
+    html += buildInspectorRowHtml(
+      'Session ID',
+      session.id.slice(0, 8) + '…',
+      'insp-copy',
+      'title="Click to copy" data-copy="' + escapeHtml(session.id) + '"'
+    )
+    html += buildInspectorRowHtml(
+      'Path',
+      escapeHtml(session.projectPath),
+      'insp-path',
+      'title="' + escapeHtml(session.projectPath) + '"'
+    )
+
+    elements.sessionInspector.innerHTML = html
+    elements.sessionInspector.style.display = 'block'
+  }
+
+  elements.sessionInspector.addEventListener('click', function (event) {
+    const copyTarget = event.target.closest('.insp-copy')
+    const text = copyTarget && copyTarget.dataset.copy
+    if (!text) return
+
+    navigator.clipboard.writeText(text).then(function () {
+      showToast('Copied: ' + text.slice(0, 20) + '…')
+    })
+  })
+
+  elements.filterBar.addEventListener('click', function (event) {
+    const pill = event.target.closest('.filter-pill')
+    if (!pill) return
+    selectedFilter = pill.dataset.filter || 'all'
+    synchronizeSelectedProjectWithView()
+    renderProjects()
+    renderSessions()
+  })
+
+  elements.sortSelect.addEventListener('change', function () {
+    selectedSort = elements.sortSelect.value
+    renderSessions()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Session list rendering and metadata actions
+  // ---------------------------------------------------------------------------
+
+  /** Renders a single session row (two lines + optional deep-search snippet) as an HTML string. */
+  function buildSessionRowHtml(session) {
+    const isSelected = selectedSession && session.id === selectedSession.id
+    const branch = session.gitBranch || null
+    const displayName = session.alias || session.name
+
+    return (
+      '<div class="sess-row' +
+      (isSelected ? ' sel' : '') +
+      (session.signals.archived ? ' archived' : '') +
+      '" data-session-id="' +
+      escapeHtml(session.id) +
+      '">' +
+      '<div class="s-line1">' +
+      '<span class="s-arrow">' +
+      (isSelected ? '▶' : ' ') +
+      '</span>' +
+      (activeSessionIds.has(session.id) ? '<span class="s-live">●</span>' : '') +
+      (renamingSessionId === session.id
+        ? '<input class="s-rename-input" value="' + escapeHtml(displayName) + '" maxlength="160">'
+        : '<span class="s-name">' + escapeHtml(displayName) + '</span>') +
+      '<span class="s-time">' +
+      relativeTime(session.updated) +
+      '</span>' +
+      '<button class="s-menu-btn" title="More actions">⋯</button>' +
+      '</div>' +
+      '<div class="s-line2">' +
+      (branch
+        ? '<span class="pip" style="background:' +
+          colorForGitBranch(branch) +
+          '"></span><span class="branch-n">⎷ ' +
+          escapeHtml(branch) +
+          '</span>' +
+          buildBranchDriftHtml(session) +
+          '<span style="color:var(--dim)">·</span>'
+        : '') +
+      '<span class="s-msgs">' +
+      session.messageCount +
+      ' msgs</span>' +
+      (session.context.latestModel
+        ? '<span class="s-model">' + escapeHtml(session.context.latestModel) + '</span>'
+        : '') +
+      (session.context.latestContextTokens != null
+        ? '<span class="s-context">' +
+          formatTokenCount(session.context.latestContextTokens) +
+          ' ctx</span>'
+        : '') +
+      buildStatusBadgeHtml(session) +
+      '</div>' +
+      (deepSearchActive ? buildDeepSnippetHtml(getDeepMatchForSession(session.id)) : '') +
+      '</div>'
+    )
+  }
+
+  /** Returns an empty-state HTML message when there are no sessions to show, or "" when there are. */
+  function buildEmptySessionListHtml(visibleSessions) {
+    if (!selectedProject) {
+      return searchQuery
+        ? '<div class="empty">No projects or sessions match.</div>'
+        : '<div class="empty">Select a project from the left panel.</div>'
+    }
+    if (visibleSessions.length > 0) return ''
+
+    const archivedCount = sessionsMatchingFilter(selectedProject, 'archived').length
+    const message = searchQuery
+      ? 'No sessions match.'
+      : selectedFilter === 'all'
+        ? 'No sessions.'
+        : 'No sessions in this filter.'
+    const archiveHint =
+      selectedFilter === 'all' && archivedCount > 0
+        ? ' <span class="empty-hint">' + archivedCount + ' archived.</span>'
+        : ''
+    return '<div class="empty">' + message + archiveHint + '</div>'
+  }
+
+  /** Re-renders the session list, panel header, filter bar, and inspector from current state. */
+  function renderSessions() {
+    const visibleSessions = deriveVisibleSessions()
+    synchronizeSelectedSession()
+
+    if (deepSearchActive) {
+      elements.sessionPanelTitle.textContent = deepSearchLoading
+        ? 'searching transcripts…'
+        : '⌕ ' + deepSearchQueryTerm
+      elements.sessionCount.textContent = deepSearchLoading
+        ? ''
+        : deepSearchMatches.length + ' sessions found'
+    } else {
+      elements.sessionPanelTitle.textContent = selectedProject
+        ? compactPath(selectedProject.path)
+        : 'Select a project'
+      elements.sessionCount.textContent = selectedProject ? visibleSessions.length + ' sessions' : ''
+    }
+    renderFilterBar()
+    renderInspector(visibleSessions)
+
+    const emptyHtml = buildEmptySessionListHtml(visibleSessions)
+    elements.sessionList.innerHTML = emptyHtml || visibleSessions.map(buildSessionRowHtml).join('')
+
+    if (renamingSessionId) {
+      const input = elements.sessionList.querySelector('.s-rename-input')
+      if (input) {
+        input.focus()
+        input.select()
+      }
+    }
+  }
+
+  /** Persists a session alias to the server, then refreshes and shows a toast. Clears alias when empty. */
+  async function saveSessionAlias(session, aliasInput) {
+    renamingSessionId = null
+    const alias = aliasInput.trim().slice(0, 160)
+
+    try {
+      await requestJson('/api/sessions/' + selectedProject.id + '/' + session.id + '/alias', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: alias || null }),
+      })
+      await refreshProjectData()
+      showToast(alias ? 'Renamed to "' + alias + '"' : 'Alias cleared')
+    } catch (error) {
+      await refreshProjectData()
+      showToast('Rename failed: ' + error.message, 'err')
+    }
+  }
+
+  /** Toggles the local archive flag on a session and refreshes. Note: Claude may still delete the transcript. */
+  async function toggleSessionArchivedState(session) {
+    const shouldArchive = !session.signals.archived
+    try {
+      await requestJson('/api/sessions/' + selectedProject.id + '/' + session.id + '/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: shouldArchive }),
+      })
+      await refreshProjectData()
+      if (shouldArchive) showToast('Archived locally. Claude may still delete the transcript.')
+    } catch (error) {
+      showToast('Archive failed: ' + error.message, 'err')
+    }
+  }
+
+  // Event delegation keeps handlers valid when renderSessions replaces rows.
+  elements.sessionList.addEventListener('click', function (event) {
+    const menuBtn = event.target.closest('.s-menu-btn')
+    if (menuBtn) {
+      event.stopPropagation()
+      const session = resolveSessionFromRow(menuBtn.closest('.sess-row'))
+      if (!session) return
+      ctxSession = session
+      ctxProject = null
+      openContextMenu(menuBtn, [
+        { action: 'session-resume', label: 'resume' },
+        { action: 'session-rename', label: 'rename' },
+        { action: 'session-archive', label: session.signals.archived ? 'unarchive' : 'archive locally' },
+        { action: 'session-copy-id', label: 'copy session ID' },
+      ])
+      return
+    }
+
+    const row = event.target.closest('.sess-row')
+    if (!row || event.target.closest('.s-rename-input')) return
+
+    // Clicking the row being renamed must leave its input node and typed value
+    // untouched. Clicking elsewhere exits rename mode before normal selection.
+    if (renamingSessionId) {
+      if (row.dataset.sessionId === renamingSessionId) return
+      renamingSessionId = null
+      renderSessions()
+      return
+    }
+
+    const session = resolveSessionFromRow(row)
+    if (!session || (selectedSession && selectedSession.id === session.id)) return
+    selectSession(session)
+  })
+
+  elements.sessionList.addEventListener('keydown', function (event) {
+    if (!event.target.classList.contains('s-rename-input')) return
+    const session = resolveSessionFromRow(event.target.closest('.sess-row'))
+    if (!session) return
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void saveSessionAlias(session, event.target.value)
+    } else if (event.key === 'Escape') {
+      renamingSessionId = null
+      renderSessions()
+    }
+  })
+
+  elements.sessionList.addEventListener(
+    'blur',
+    function (event) {
+      if (!event.target.classList.contains('s-rename-input')) return
+      // Blur fires before a related click. Let the click handler cancel or move
+      // rename mode before committing the input value.
+      setTimeout(function () {
+        if (!renamingSessionId) return
+        const session = resolveSessionFromRow(event.target.closest('.sess-row'))
+        if (session) void saveSessionAlias(session, event.target.value)
+      }, 150)
+    },
+    true
+  )
+
+  elements.sessionList.addEventListener('dblclick', function (event) {
+    if (event.target.closest('.s-rename-input')) return
+    const session = resolveSessionFromRow(event.target.closest('.sess-row'))
+    if (!session) return
+
+    if (shouldConfirmResume()) openResumeDialog(session)
+    else {
+      selectSession(session)
+      void resumeSelectedSession()
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Resume dialog and terminal launch
+  // ---------------------------------------------------------------------------
+
+  /** Opens the resume confirmation dialog pre-populated with the session details. */
+  function openResumeDialog(session) {
+    selectSession(session)
+    elements.resumeCommand.textContent = 'claude --resume ' + session.id
+    elements.resumeDialogName.textContent = session.name
+    elements.resumeDialogBranch.textContent = session.gitBranch ? '⎷ ' + session.gitBranch : ''
+    elements.resumeDialogMessage.textContent = ''
+    elements.resumeOverlay.classList.add('open')
+    elements.resumeConfirmButton.focus()
+  }
+
+  function closeResumeDialog() {
+    elements.resumeOverlay.classList.remove('open')
+  }
+
+  /**
+   * Disables the confirm button and starts a "launching…" dot animation.
+   * Returns the setInterval handle so the caller can stop it with stopLaunchAnimation.
+   */
+  function startLaunchAnimation() {
+    const labels = ['launching', 'launching.', 'launching..', 'launching...']
+    let frame = 0
+
+    elements.resumeConfirmButton.disabled = true
+    elements.resumeDialogMessage.textContent = ''
+    elements.resumeConfirmButton.textContent = labels[frame]
+
+    return setInterval(function () {
+      frame = (frame + 1) % labels.length
+      elements.resumeConfirmButton.textContent = labels[frame]
+    }, 300)
+  }
+
+  /** Stops the launch animation and restores the confirm button to its default state. */
+  function stopLaunchAnimation(launchAnimationTimer) {
+    clearInterval(launchAnimationTimer)
+    elements.resumeConfirmButton.textContent = 'Resume'
+    elements.resumeConfirmButton.disabled = false
+  }
+
+  /**
+   * Asks the server to open the selected session in a terminal.
+   * Falls back gracefully: when the terminal launch fails, the server copies the
+   * resume command to the clipboard and returns copied=true so the user can paste it.
+   */
+  async function resumeSelectedSession() {
+    if (!selectedSession || !selectedProject) return
+    const launchAnimationTimer = startLaunchAnimation()
+
+    try {
+      const launchResult = await requestJson('/api/resume/' + selectedSession.id, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProject.id }),
+      })
+      stopLaunchAnimation(launchAnimationTimer)
+
+      if (launchResult.launched) {
+        closeResumeDialog()
+        showToast('Session resumed in terminal')
+      } else if (launchResult.copied && launchResult.message) {
+        elements.resumeDialogMessage.textContent = 'Launch failed — ' + launchResult.message
+      } else if (launchResult.copied) {
+        closeResumeDialog()
+        showToast('Command copied to clipboard', 'copied')
+      } else {
+        elements.resumeDialogMessage.textContent =
+          launchResult.message || 'Failed to launch terminal.'
+      }
+    } catch (error) {
+      stopLaunchAnimation(launchAnimationTimer)
+      elements.resumeDialogMessage.textContent = 'Error: ' + error.message
+    }
+  }
+
+  elements.resumeConfirmButton.addEventListener('click', function () {
+    void resumeSelectedSession()
+  })
+  elements.resumeCancelButton.addEventListener('click', closeResumeDialog)
+  elements.resumeOverlay.addEventListener('click', function (event) {
+    if (event.target === elements.resumeOverlay) closeResumeDialog()
+  })
+  elements.alwaysConfirmCheckbox.checked = shouldConfirmResume()
+  elements.alwaysConfirmCheckbox.addEventListener('change', function () {
+    localStorage.setItem(
+      CONFIRM_RESUME_PREFERENCE,
+      elements.alwaysConfirmCheckbox.checked ? 'true' : 'false'
+    )
+  })
+
+  // ---------------------------------------------------------------------------
+  // CLAUDE.md drawer
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Checks whether a CLAUDE.md file exists for the project and shows or hides the
+   * instructions tag accordingly. Called whenever the selected project changes.
+   */
+  async function refreshClaudeInstructionsAvailability(project) {
+    elements.instructionsTag.style.display = 'none'
+    clearTimeout(claudeInstructionsSaveTimer)
+    try {
+      const instructions = await requestJson('/api/claude-md/' + encodeURIComponent(project.id))
+      if (selectedProject && selectedProject.id === project.id && instructions.content !== null) {
+        elements.instructionsTag.style.display = 'inline-flex'
+      }
+    } catch {
+      if (selectedProject && selectedProject.id === project.id) {
+        elements.instructionsTag.style.display = 'none'
+      }
+    }
+  }
+
+  /**
+   * Fetches the project's CLAUDE.md and opens the editor drawer.
+   * Captures the project reference before the async fetch so a project change
+   * mid-flight cannot populate the wrong drawer content.
+   */
+  async function openClaudeInstructionsDrawer() {
+    if (!selectedProject) return
+    // Capture the project so a slow response cannot populate a newly selected one.
+    const project = selectedProject
+    const instructions = await requestJson('/api/claude-md/' + encodeURIComponent(project.id))
+    if (!selectedProject || selectedProject.id !== project.id) return
+
+    elements.instructionsPath.textContent = instructions.path || '(no CLAUDE.md found)'
+    elements.instructionsEditor.value = instructions.content || ''
+    elements.instructionsEditor.disabled = instructions.content === null
+    elements.instructionsSaveStatus.textContent = ''
+    claudeInstructionsProjectId = project.id
+    elements.instructionsDrawer.classList.add('open')
+    if (instructions.content !== null) elements.instructionsEditor.focus()
+  }
+
+  function closeClaudeInstructionsDrawer() {
+    clearTimeout(claudeInstructionsSaveTimer)
+    claudeInstructionsProjectId = null
+    elements.instructionsDrawer.classList.remove('open')
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lost & Found panel
+  // ---------------------------------------------------------------------------
+
+  /** Opens the Lost & Found panel and immediately triggers a diagnostic scan. */
+  function openDiagnosticsDrawer() {
+    elements.diagnosticsDrawer.classList.add('open')
+    elements.diagnosticsBody.innerHTML = '<div class="lf-loading">Scanning…</div>'
+    void renderDiagnosticsPanel()
+  }
+
+  function closeDiagnosticsDrawer() {
+    elements.diagnosticsDrawer.classList.remove('open')
+  }
+
+  /** Fetches and renders the diagnostics report into the Lost & Found panel body. */
+  async function renderDiagnosticsPanel() {
+    let report
+    try {
+      report = await requestJson('/api/diagnostics')
+    } catch {
+      elements.diagnosticsBody.innerHTML =
+        '<div class="lf-loading">Failed to load diagnostics.</div>'
+      return
+    }
+
+    const sections = []
+
+    if (report.expiring && report.expiring.length > 0) {
+      const rows = report.expiring
+        .map(function (s) {
+          return (
+            '<div class="lf-item">' +
+            '<div class="lf-item-name">' +
+            escapeHtml(s.name || s.id) +
+            '</div>' +
+            '<div class="lf-item-meta lf-item-warn">Expires soon · ' +
+            escapeHtml(s.projectPath || '') +
+            '</div>' +
+            '</div>'
+          )
+        })
+        .join('')
+      sections.push(
+        '<div class="lf-section">' +
+          '<div class="lf-section-title">Expiring (' +
+          report.expiring.length +
+          ')</div>' +
+          rows +
+          '</div>'
+      )
+    }
+
+    if (report.pathMissing && report.pathMissing.length > 0) {
+      const rows = report.pathMissing
+        .map(function (s) {
+          return (
+            '<div class="lf-item">' +
+            '<div class="lf-item-name">' +
+            escapeHtml(s.name || s.id) +
+            '</div>' +
+            '<div class="lf-item-meta lf-item-err">Path missing · ' +
+            escapeHtml(s.projectPath || '') +
+            '</div>' +
+            '</div>'
+          )
+        })
+        .join('')
+      sections.push(
+        '<div class="lf-section">' +
+          '<div class="lf-section-title">Missing paths (' +
+          report.pathMissing.length +
+          ')</div>' +
+          rows +
+          '</div>'
+      )
+    }
+
+    if (report.orphanedTranscripts && report.orphanedTranscripts.length > 0) {
+      const rows = report.orphanedTranscripts
+        .map(function (t) {
+          return (
+            '<div class="lf-item">' +
+            '<div class="lf-item-name lf-item-mono">' +
+            escapeHtml(t.sessionId) +
+            '</div>' +
+            '<div class="lf-item-meta">' +
+            escapeHtml(t.projectPath || '') +
+            '</div>' +
+            '</div>'
+          )
+        })
+        .join('')
+      sections.push(
+        '<div class="lf-section">' +
+          '<div class="lf-section-title">Orphaned transcripts (' +
+          report.orphanedTranscripts.length +
+          ')</div>' +
+          rows +
+          '</div>'
+      )
+    }
+
+    if (report.brokenIndices && report.brokenIndices.length > 0) {
+      const rows = report.brokenIndices
+        .map(function (item) {
+          return (
+            '<div class="lf-item">' +
+            '<div class="lf-item-name">' +
+            escapeHtml(item.projectId) +
+            '</div>' +
+            '<div class="lf-item-meta lf-item-err">' +
+            escapeHtml(item.reason) +
+            '</div>' +
+            '</div>'
+          )
+        })
+        .join('')
+      sections.push(
+        '<div class="lf-section">' +
+          '<div class="lf-section-title">Broken indices (' +
+          report.brokenIndices.length +
+          ')</div>' +
+          rows +
+          '</div>'
+      )
+    }
+
+    if (report.staleLocks && report.staleLocks.length > 0) {
+      const rows = report.staleLocks
+        .map(function (item) {
+          return (
+            '<div class="lf-item">' +
+            '<div class="lf-item-name">' +
+            escapeHtml(item.projectId) +
+            '</div>' +
+            '<div class="lf-item-meta lf-item-warn">' +
+            escapeHtml(item.reason) +
+            '</div>' +
+            '</div>'
+          )
+        })
+        .join('')
+      sections.push(
+        '<div class="lf-section">' +
+          '<div class="lf-section-title">Stale locks (' +
+          report.staleLocks.length +
+          ')</div>' +
+          rows +
+          '</div>'
+      )
+    }
+
+    const total =
+      (report.expiring ? report.expiring.length : 0) +
+      (report.pathMissing ? report.pathMissing.length : 0) +
+      (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0)
+
+    elements.diagnosticsSubtitle.textContent =
+      total + ' issue' + (total === 1 ? '' : 's') + ' found'
+    elements.diagnosticsBody.innerHTML =
+      sections.length > 0 ? sections.join('') : '<div class="lf-empty">No issues found.</div>'
+  }
+
+  /**
+   * Saves the current CLAUDE.md editor content to the server.
+   * Guards against a delayed auto-save writing to the wrong project if the
+   * user switched selection between the keystroke and the debounce firing.
+   */
+  async function saveClaudeInstructions() {
+    // A delayed autosave must never write after the drawer changes projects.
+    if (
+      !claudeInstructionsProjectId ||
+      claudeInstructionsProjectId !== (selectedProject && selectedProject.id)
+    ) {
+      return
+    }
+    clearTimeout(claudeInstructionsSaveTimer)
+
+    try {
+      await requestJson('/api/claude-md/' + encodeURIComponent(claudeInstructionsProjectId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: elements.instructionsEditor.value }),
+      })
+      elements.instructionsSaveStatus.textContent = 'saved'
+      elements.instructionsSaveStatus.className = 'save-status saved'
+    } catch (error) {
+      elements.instructionsSaveStatus.textContent = 'error: ' + error.message
+    }
+  }
+
+  elements.instructionsTag.addEventListener('click', function (event) {
+    event.preventDefault()
+    void openClaudeInstructionsDrawer()
+  })
+  elements.instructionsCloseButton.addEventListener('click', closeClaudeInstructionsDrawer)
+  elements.instructionsFooterCloseButton.addEventListener('click', closeClaudeInstructionsDrawer)
+  elements.instructionsDrawer.addEventListener('click', function (event) {
+    if (event.target === elements.instructionsDrawer) closeClaudeInstructionsDrawer()
+  })
+  elements.diagnosticsButton.addEventListener('click', openDiagnosticsDrawer)
+  elements.diagnosticsCloseButton.addEventListener('click', closeDiagnosticsDrawer)
+  elements.diagnosticsDrawer.addEventListener('click', function (event) {
+    if (event.target === elements.diagnosticsDrawer) closeDiagnosticsDrawer()
+  })
+  elements.instructionsEditor.addEventListener('input', function () {
+    elements.instructionsSaveStatus.textContent = 'unsaved'
+    elements.instructionsSaveStatus.className = 'save-status'
+    clearTimeout(claudeInstructionsSaveTimer)
+    claudeInstructionsSaveTimer = setTimeout(function () {
+      void saveClaudeInstructions()
+    }, AUTO_SAVE_DELAY_MS)
+  })
+  elements.instructionsSaveButton.addEventListener('click', function () {
+    void saveClaudeInstructions()
+  })
+
+  // ---------------------------------------------------------------------------
+  // New session
+  // ---------------------------------------------------------------------------
+
+  /** Asks the server to open a new Claude Code session in the project directory. */
+  async function startNewSession(project) {
+    project = project || selectedProject
+    if (!project) return
+    try {
+      const result = await requestJson('/api/new-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id }),
+      })
+      if (result.launched) {
+        showToast('New session started in terminal')
+      } else if (result.copied) {
+        showToast('Launch failed — command copied to clipboard', 'copied')
+      } else {
+        showToast('Launch failed: ' + (result.message || 'unknown error'), 'err')
+      }
+    } catch (error) {
+      showToast('Error: ' + error.message, 'err')
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Context menu
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Positions and opens the shared context menu below anchorEl.
+   * The menu is positioned left-clamped so it never overflows the viewport edge.
+   */
+  function openContextMenu(anchorEl, items) {
+    const menu = elements.contextMenu
+    menu.innerHTML = items
+      .map(function (item) {
+        return (
+          '<div class="ctx-item" data-action="' +
+          escapeHtml(item.action) +
+          '">' +
+          escapeHtml(item.label) +
+          '</div>'
+        )
+      })
+      .join('')
+    const rect = anchorEl.getBoundingClientRect()
+    const menuWidth = 160
+    const left = Math.min(rect.left, window.innerWidth - menuWidth - 8)
+    menu.style.top = rect.bottom + 4 + 'px'
+    menu.style.left = left + 'px'
+    menu.classList.add('open')
+  }
+
+  function closeContextMenu() {
+    elements.contextMenu.classList.remove('open')
+    ctxProject = null
+    ctxSession = null
+  }
+
+  elements.contextMenu.addEventListener('click', function (event) {
+    const item = event.target.closest('.ctx-item')
+    if (!item) return
+    const action = item.dataset.action
+    const project = ctxProject
+    const session = ctxSession
+    closeContextMenu()
+
+    if (action === 'project-new-session' && project) {
+      void startNewSession(project)
+    } else if (action === 'project-copy-path' && project) {
+      navigator.clipboard.writeText(project.path).then(function () {
+        showToast('Path copied')
+      })
+    } else if (action === 'session-resume' && session) {
+      selectSession(session)
+      if (shouldConfirmResume()) openResumeDialog(session)
+      else void resumeSelectedSession()
+    } else if (action === 'session-rename' && session) {
+      renamingSessionId = session.id
+      renderSessions()
+    } else if (action === 'session-archive' && session) {
+      void toggleSessionArchivedState(session)
+    } else if (action === 'session-copy-id' && session) {
+      navigator.clipboard.writeText(session.id).then(function () {
+        showToast('ID copied: ' + session.id.slice(0, 8) + '…')
+      })
+    }
+  })
+
+  document.addEventListener('click', function (event) {
+    if (
+      elements.contextMenu.classList.contains('open') &&
+      !elements.contextMenu.contains(event.target)
+    ) {
+      closeContextMenu()
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Search and global keyboard shortcuts
+  // ---------------------------------------------------------------------------
+
+  /** Shows the search bar, hides the header hints, and focuses the input. */
+  function openSearch() {
+    elements.headerHints.style.display = 'none'
+    elements.searchWrapper.style.display = 'flex'
+    elements.searchInput.value = ''
+    searchQuery = ''
+    elements.searchInput.focus()
+  }
+
+  /**
+   * Switches the search bar into deep-search mode and queries /api/search/deep.
+   * While loading, the project and session lists show empty state. Results appear
+   * as transcript-matched sessions with hit counts and text snippets.
+   * Exit with exitInlineDeepSearch() or Escape.
+   */
+  async function runInlineDeepSearch(query) {
+    deepSearchActive = true
+    deepSearchLoading = true
+    deepSearchQueryTerm = query
+    deepSearchMatches = []
+    elements.searchDeepBtn.classList.add('active')
+    elements.searchWrapper.classList.add('deep-mode')
+    elements.searchModeLabel.style.display = 'flex'
+    synchronizeSelectedProjectWithView()
+    renderProjects()
+    renderSessions()
+    try {
+      const data = await requestJson('/api/search/deep?q=' + encodeURIComponent(query))
+      deepSearchMatches = data.matches || []
+    } catch (error) {
+      showToast('Deep search failed: ' + error.message, 'err')
+      deepSearchMatches = []
+    } finally {
+      deepSearchLoading = false
+      synchronizeSelectedProjectWithView()
+      renderProjects()
+      renderSessions()
+    }
+  }
+
+  /** Clears deep-search state and restores normal project/session listing. */
+  function exitInlineDeepSearch() {
+    deepSearchActive = false
+    deepSearchMatches = []
+    deepSearchLoading = false
+    deepSearchQueryTerm = ''
+    elements.searchDeepBtn.classList.remove('active')
+    elements.searchWrapper.classList.remove('deep-mode')
+    elements.searchModeLabel.style.display = 'none'
+    synchronizeSelectedProjectWithView()
+    renderProjects()
+    renderSessions()
+  }
+
+  /** Hides the search bar, restores header hints, clears query, and exits deep-search if active. */
+  function closeSearch() {
+    elements.searchWrapper.style.display = 'none'
+    elements.headerHints.style.display = 'flex'
+    searchQuery = ''
+    exitInlineDeepSearch()
+  }
+
+  elements.searchInput.addEventListener('input', function () {
+    searchQuery = elements.searchInput.value
+    if (deepSearchActive) exitInlineDeepSearch(); else { synchronizeSelectedProjectWithView(); renderProjects(); renderSessions() }
+  })
+  elements.searchInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      if (searchQuery.trim().length >= 2) void runInlineDeepSearch(searchQuery.trim())
+      return
+    }
+    if (event.key === 'Escape') {
+      if (deepSearchActive) exitInlineDeepSearch()
+      else closeSearch()
+    }
+  })
+  elements.searchDeepBtn.addEventListener('click', function () {
+    if (searchQuery.trim().length >= 2) void runInlineDeepSearch(searchQuery.trim())
+  })
+  elements.searchClearButton.addEventListener('click', closeSearch)
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && elements.contextMenu.classList.contains('open')) {
+      closeContextMenu()
+      return
+    }
+
+    if (elements.resumeOverlay.classList.contains('open')) {
+      if (event.key === 'Escape') closeResumeDialog()
+      if (event.key === 'Enter') void resumeSelectedSession()
+      return
+    }
+    if (elements.instructionsDrawer.classList.contains('open')) {
+      if (event.key === 'Escape') closeClaudeInstructionsDrawer()
+      return
+    }
+    if (elements.diagnosticsDrawer.classList.contains('open')) {
+      if (event.key === 'Escape') closeDiagnosticsDrawer()
+      return
+    }
+    if (elements.searchWrapper.style.display !== 'none') {
+      if (event.key === 'Escape') closeSearch()
+      return
+    }
+    // Don't fire navigation shortcuts when focus is inside an input/textarea
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
+
+    if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault()
+      openSearch()
+    }
+    if (event.key === 'Enter' && selectedSession && selectedProject) {
+      if (shouldConfirmResume()) openResumeDialog(selectedSession)
+      else void resumeSelectedSession()
+    }
+
+    // j / k — navigate sessions up/down
+    if (event.key === 'j' || (event.key === 'ArrowDown' && !event.altKey)) {
+      event.preventDefault()
+      const visibleSessions = deriveVisibleSessions()
+      if (visibleSessions.length === 0) return
+      const currentIndex = selectedSession
+        ? visibleSessions.findIndex(function (s) { return s.id === selectedSession.id })
+        : -1
+      const next = visibleSessions[Math.min(visibleSessions.length - 1, currentIndex + 1)]
+      if (next) selectSession(next)
+      return
+    }
+    if (event.key === 'k' || (event.key === 'ArrowUp' && !event.altKey)) {
+      event.preventDefault()
+      const visibleSessions = deriveVisibleSessions()
+      if (visibleSessions.length === 0) return
+      const currentIndex = selectedSession
+        ? visibleSessions.findIndex(function (s) { return s.id === selectedSession.id })
+        : 1
+      const prev = visibleSessions[Math.max(0, currentIndex - 1)]
+      if (prev) selectSession(prev)
+      return
+    }
+
+    // [ / ] or h / l — navigate projects
+    if (event.key === '[' || event.key === 'h') {
+      const visibleProjects = deriveVisibleProjects()
+      const currentIndex = selectedProject
+        ? visibleProjects.findIndex(function (p) { return p.id === selectedProject.id })
+        : 0
+      const prev = visibleProjects[Math.max(0, currentIndex - 1)]
+      if (prev && prev.id !== (selectedProject && selectedProject.id)) selectProject(prev)
+      return
+    }
+    if (event.key === ']' || event.key === 'l') {
+      const visibleProjects = deriveVisibleProjects()
+      const currentIndex = selectedProject
+        ? visibleProjects.findIndex(function (p) { return p.id === selectedProject.id })
+        : -1
+      const next = visibleProjects[Math.min(visibleProjects.length - 1, currentIndex + 1)]
+      if (next && next.id !== (selectedProject && selectedProject.id)) selectProject(next)
+      return
+    }
+
+    // a — archive / unarchive selected session
+    if (event.key === 'a' && selectedSession && selectedProject) {
+      void toggleSessionArchivedState(selectedSession)
+      return
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Data refresh and live updates
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Fetches /api/usage and updates the header usage bar.
+   * Guards against concurrent in-flight requests with the usageRefreshInProgress flag.
+   */
+  async function refreshUsageSummary() {
+    if (usageRefreshInProgress) return
+    usageRefreshInProgress = true
+    try {
+      liveUsage = await requestJson('/api/usage')
+      renderUsageSummary()
+    } catch (error) {
+      console.error('[ccm] failed to refresh usage:', error)
+    } finally {
+      usageRefreshInProgress = false
+    }
+  }
+
+  /**
+   * Fetches projects, active session IDs, and a lightweight diagnostics summary in parallel.
+   * Updates global state, shows the diagnostics footer button if issues exist, and re-renders
+   * both panels. On first call, auto-selects the session from the URL hash (deep-link support).
+   */
+  async function refreshProjectData() {
+    try {
+      const [loadedProjects, activeData, diagnosticsData] = await Promise.all([
+        requestJson('/api/projects'),
+        requestJson('/api/active'),
+        requestJson('/api/diagnostics').catch(function () {
+          return null
+        }),
+      ])
+      projects = loadedProjects
+      activeSessionIds = new Set(activeData.sessionIds || [])
+
+      if (diagnosticsData) {
+        const issueCount =
+          (diagnosticsData.expiring ? diagnosticsData.expiring.length : 0) +
+          (diagnosticsData.pathMissing ? diagnosticsData.pathMissing.length : 0) +
+          (diagnosticsData.orphanedTranscripts ? diagnosticsData.orphanedTranscripts.length : 0) +
+          (diagnosticsData.brokenIndices ? diagnosticsData.brokenIndices.length : 0) +
+          (diagnosticsData.staleLocks ? diagnosticsData.staleLocks.length : 0)
+        if (issueCount > 0) {
+          elements.diagnosticsButton.textContent =
+            '⚠ ' + issueCount + ' issue' + (issueCount === 1 ? '' : 's')
+          elements.diagnosticsButton.style.display = ''
+        } else {
+          elements.diagnosticsButton.style.display = 'none'
+        }
+      }
+
+      elements.footerStatus.textContent = projects.length + ' projects'
+      elements.footerStatus.className = 'ftr-status'
+
+      if (selectedProject) {
+        selectedProject =
+          projects.find(function (project) {
+            return project.id === selectedProject.id
+          }) || null
+        if (!selectedProject) {
+          selectedSession = null
+          renamingSessionId = null
+        }
+      }
+
+      synchronizeSelectedProjectWithView()
+      renderProjects()
+      renderSessions()
+
+      // Deep-link: on first load, auto-select session if URL has a session hash
+      if (!deepLinkProcessed) {
+        deepLinkProcessed = true
+        const sessionHash = location.hash.slice(1)
+        if (sessionHash && !selectedSession) {
+          for (var dlpi = 0; dlpi < projects.length; dlpi++) {
+            var dlSessions = projects[dlpi].sessions
+            for (var dlsi = 0; dlsi < dlSessions.length; dlsi++) {
+              if (dlSessions[dlsi].id === sessionHash) {
+                selectProject(projects[dlpi])
+                selectSession(dlSessions[dlsi])
+                break
+              }
+            }
+            if (selectedSession) break
+          }
+        }
+      }
+    } catch (error) {
+      elements.footerStatus.textContent = 'Error loading projects'
+      elements.footerStatus.className = 'ftr-status err'
+      console.error('[ccm] failed to refresh project data:', error)
+    }
+  }
+
+  /**
+   * Opens a Server-Sent Events connection to /events for live project updates.
+   * Reconnects automatically after SSE_RECONNECT_DELAY_MS when the stream drops.
+   * Each "change" event triggers a full project + usage refresh.
+   */
+  function connectLiveUpdates() {
+    if (liveUpdatesSource) liveUpdatesSource.close()
+
+    liveUpdatesSource = new EventSource('/events')
+    liveUpdatesSource.addEventListener('change', function () {
+      void refreshProjectData()
+      void refreshUsageSummary()
+    })
+    liveUpdatesSource.addEventListener('error', function () {
+      if (liveUpdatesSource) liveUpdatesSource.close()
+      liveUpdatesSource = null
+      setTimeout(connectLiveUpdates, SSE_RECONNECT_DELAY_MS)
+    })
+  }
+
+  void refreshUsageSummary()
+  void refreshProjectData()
+  setInterval(function () {
+    void refreshUsageSummary()
+  }, USAGE_POLL_INTERVAL_MS)
+  connectLiveUpdates()
+})()
