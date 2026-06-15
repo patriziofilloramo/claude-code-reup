@@ -38,7 +38,7 @@ function buildCliHelp(): string {
     b('  Setup & Config'),
     row('ccm config', 'Open configuration panel'),
     row('ccm usage [action]', 'Usage monitoring', 'on / off / status'),
-    row('ccm sync [action]', 'Cross-device session sync', 'link / unlink / status'),
+    row('ccm sync', 'Manage cross-device session sync', 'link / unlink [path]'),
     row('ccm --theme <name>', 'Set active theme', 'dark / light / terminal'),
     row('ccm completion <sh>', 'Print shell completion script'),
     '',

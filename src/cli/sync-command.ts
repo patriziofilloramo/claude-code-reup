@@ -60,12 +60,14 @@ export async function runSyncCommand(args: string[]): Promise<void> {
     case 'unlink':
       await unlinkSync(rest)
       return
-    case 'status':
-    case undefined:
-      await showSyncStatus()
+    case undefined: {
+      const { runConfigApp } = await import('../tui/ConfigApp.js')
+      releaseTerminalInput()
+      await runConfigApp({ initialTab: 'Sync' })
       return
+    }
     default:
-      failCommand('usage: ccm sync [link|unlink|status] [path]')
+      failCommand('usage: ccm sync [link|unlink] [path]')
   }
 }
 
@@ -299,38 +301,6 @@ async function unlinkProject(
       `  note: ${join(projectPath, APP.cloudMemoryDir)} still exists — remove manually if no longer needed.`,
     ].join('\n')
   )
-}
-
-// ---------------------------------------------------------------------------
-// status
-// ---------------------------------------------------------------------------
-
-async function showSyncStatus(): Promise<void> {
-  const projects = await loadProjects()
-  const shared = projects.filter((p) => p.isShared)
-
-  if (shared.length === 0) {
-    writeOutput(
-      `${projects.length} project(s) found, none using cloud sync.\n` +
-        `Run \`ccm sync link [path]\` to share sessions across devices.`
-    )
-    return
-  }
-
-  const lines = [`${shared.length}/${projects.length} project(s) using shared storage:`, '']
-  for (const p of shared) {
-    const status = p.cloudOffline ? '⚠ OFFLINE' : p.cloudPath ? '✓ online' : '✓ linked'
-    lines.push(`  ⊙  ${p.path}`)
-    if (p.cloudPath) {
-      lines.push(`       → ${p.cloudPath}  [${status}]`)
-    } else {
-      lines.push(`       → (junction — run \`ccm sync link ${p.path}\` to re-register)`)
-    }
-    if (p.cloudOffline) {
-      lines.push(`       ℹ sessions written while offline will sync when cloud returns`)
-    }
-  }
-  writeOutput(lines.join('\n'))
 }
 
 // ---------------------------------------------------------------------------

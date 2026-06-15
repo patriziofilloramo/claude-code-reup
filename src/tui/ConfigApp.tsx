@@ -5,6 +5,7 @@ import { COLORS } from '../config/theme.js'
 import type { ThemeName } from '../config/theme-tokens.js'
 import { linkProjectForTUI, unlinkProjectForTUI } from '../cli/sync-command.js'
 import { loadProjects } from '../core/project/project-discovery.js'
+import { syncStatusLabel } from '../core/session/session-model.js'
 import type { Project } from '../core/session/session-model.js'
 import type { AutoCleanup } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
@@ -32,9 +33,12 @@ const COMPLETION_CMD =
       ? 'eval "$(ccm completion zsh)"'
       : 'eval "$(ccm completion bash)"'
 
-export function ConfigApp({ onClose }: { onClose?: () => void } = {}) {
+export function ConfigApp({
+  onClose,
+  initialTab,
+}: { onClose?: () => void; initialTab?: Tab } = {}) {
   const { exit } = useApp()
-  const [tabIndex, setTabIndex] = useState(0)
+  const [tabIndex, setTabIndex] = useState(initialTab ? TABS.indexOf(initialTab) : 0)
   const [cursor, setCursor] = useState(0)
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
@@ -423,12 +427,10 @@ function SyncTab({
 
   return (
     <Box flexDirection="column" gap={1}>
-      {/* Cloud icon legend */}
+      {/* Legend */}
       <Box flexDirection="column">
-        <Text bold color={COLORS.text}>
-          Cloud icon legend
-        </Text>
-        <Box gap={1} marginTop={1}>
+        <Text bold color={COLORS.text}>Legend</Text>
+        <Box gap={1}>
           <Text color={COLORS.ok}>☁</Text>
           <Text color={COLORS.textSub}>online — sessions syncing to cloud</Text>
         </Box>
@@ -454,8 +456,10 @@ function SyncTab({
           {linkable.map((p, i) => {
             const focused = cursor === i
             return (
-              <Box key={p.id} gap={1}>
-                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ' '}</Text>
+              <Box key={p.id}>
+                <Box width={2} flexShrink={0}>
+                  <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ''}</Text>
+                </Box>
                 <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
                   {p.path}
                 </Text>
@@ -482,19 +486,16 @@ function SyncTab({
               : p.unlinkedDevices?.length
                 ? COLORS.orange
                 : COLORS.ok
-            const statusLabel = p.cloudOffline
-              ? 'offline'
-              : p.unlinkedDevices?.length
-                ? `${p.unlinkedDevices.length} device(s) not linked`
-                : 'online'
             return (
               <Box key={p.id} gap={1}>
-                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ' '}</Text>
+                <Box width={2} flexShrink={0}>
+                  <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ''}</Text>
+                </Box>
                 <Text color={iconColor}>☁</Text>
                 <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
                   {p.path}
                 </Text>
-                <Text color={COLORS.dim}>{statusLabel}</Text>
+                <Text color={COLORS.dim}>{syncStatusLabel(p)}</Text>
               </Box>
             )
           })}
@@ -511,9 +512,9 @@ function SyncTab({
   )
 }
 
-export function runConfigApp(): Promise<void> {
+export function runConfigApp(options: { initialTab?: Tab } = {}): Promise<void> {
   return new Promise<void>((resolve) => {
-    const { waitUntilExit } = render(<ConfigApp />)
+    const { waitUntilExit } = render(<ConfigApp initialTab={options.initialTab} />)
     waitUntilExit()
       .then(() => resolve())
       .catch(() => resolve())
