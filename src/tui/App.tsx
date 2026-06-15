@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
+import { join } from 'node:path'
+
 import { APP } from '../config/app.js'
 import { COLORS } from '../config/theme.js'
 import { getActiveSessions } from '../core/active-sessions.js'
+import { getProjectDirectory } from '../core/claude-paths.js'
+import { formatHandoff, readTranscriptHandoffContext } from '../core/session-handoff.js'
 import { readLiveUsageSummary } from '../core/live-usage.js'
 import type { LiveUsageSummary } from '../core/live-usage.js'
 import { loadProjects } from '../core/project-discovery.js'
 import type { Project, Session } from '../core/session-model.js'
 import { setSessionArchived } from '../core/session-metadata.js'
 import { copyToClipboard, openDirectory } from '../utils/system.js'
-import type { Density } from '../core/user-prefs.js'
-import { readUserPrefs, writeUserPrefs } from '../core/user-prefs.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
 import AppFooter from './components/AppFooter.js'
 import AppHeader from './components/AppHeader.js'
@@ -77,7 +79,6 @@ function App({ onResume }: AppProps) {
   const [isSessionActionMenuOpen, setIsSessionActionMenuOpen] = useState(false)
   const [resumeCardSession, setResumeCardSession] = useState<Session | null>(null)
   const [isDeepSearchOpen, setIsDeepSearchOpen] = useState(false)
-  const [density, setDensity] = useState<Density>('compact')
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
@@ -89,11 +90,10 @@ function App({ onResume }: AppProps) {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    Promise.all([loadProjects(), getActiveSessions(), readUserPrefs()])
-      .then(([loadedProjects, activeIds, prefs]) => {
+    Promise.all([loadProjects(), getActiveSessions()])
+      .then(([loadedProjects, activeIds]) => {
         setProjects(loadedProjects)
         setActiveSessionIds(activeIds)
-        setDensity(prefs.density)
         setIsLoading(false)
       })
       .catch((error) => {
@@ -337,6 +337,15 @@ function App({ onResume }: AppProps) {
           .then(() => flashMessage('session ID copied'))
           .catch(() => flashMessage('clipboard unavailable'))
         break
+      case 'handoff': {
+        const s = focusedSession
+        const transcriptPath = join(getProjectDirectory(selectedProject?.id ?? ''), `${s.id}.jsonl`)
+        readTranscriptHandoffContext(transcriptPath)
+          .then((ctx) => copyToClipboard(formatHandoff(s, ctx)))
+          .then(() => flashMessage('handoff packet copied to clipboard'))
+          .catch(() => flashMessage('handoff failed — transcript not found'))
+        break
+      }
     }
   }
 
@@ -350,12 +359,6 @@ function App({ onResume }: AppProps) {
       }
       return next
     })
-  }
-
-  function toggleDensity(): void {
-    const next: Density = density === 'compact' ? 'comfortable' : 'compact'
-    setDensity(next)
-    void writeUserPrefs({ density: next })
   }
 
   // ---------------------------------------------------------------------------
@@ -415,11 +418,6 @@ function App({ onResume }: AppProps) {
       keybinding: 'a',
     },
     {
-      description: `Switch to ${density === 'compact' ? 'comfortable' : 'compact'} density`,
-      key: 'density',
-      keybinding: 'd',
-    },
-    {
       description: 'Focus sessions panel',
       key: 'focus-sessions',
       keybinding: 'tab / →',
@@ -476,9 +474,6 @@ function App({ onResume }: AppProps) {
         break
       case 'toggle-archived':
         setShowArchivedSessions((v) => !v)
-        break
-      case 'density':
-        toggleDensity()
         break
       case 'focus-sessions':
         setFocusedPanel('sessions')
@@ -581,10 +576,6 @@ function App({ onResume }: AppProps) {
     // s: toggle bulk selection on focused session
     if (!isLoading && input === 's' && focusedPanel === 'sessions' && focusedSession) {
       toggleBulkSelection(focusedSession)
-      return
-    }
-    if (!isLoading && input === 'd') {
-      toggleDensity()
       return
     }
     if (key.tab || key.rightArrow) {
@@ -764,7 +755,6 @@ function App({ onResume }: AppProps) {
           <SessionList
             activeSessionIds={activeSessionIds}
             bulkSelectedIds={bulkSelectedIds}
-            density={density}
             isFocused={focusedPanel === 'sessions'}
             project={selectedProject}
             remotelyActiveSessionIds={remotelyActiveSessionIds}

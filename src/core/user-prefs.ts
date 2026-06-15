@@ -1,60 +1,61 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
-export type Density = 'compact' | 'comfortable'
+import type { ThemeName } from '../config/theme-tokens.js'
+import { getCcmDirectory } from './claude-paths.js'
 
 export interface UserPrefs {
-  density: Density
+  theme: ThemeName
 }
 
 const DEFAULT_PREFS: UserPrefs = {
-  density: 'compact',
+  theme: 'dark',
 }
 
-export const PREF_SPECS: Record<
-  keyof UserPrefs,
-  { description: string; values: string[] }
-> = {
-  density: {
-    description: 'Session list spacing in the TUI',
-    values: ['compact', 'comfortable'],
+export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: string[] }> = {
+  theme: {
+    description: 'Color theme for TUI and web UI',
+    values: ['dark', 'light', 'terminal'],
   },
 }
 
 function prefsPath(): string {
-  return join(homedir(), '.ccm', 'prefs.json')
+  return join(getCcmDirectory(), 'prefs.json')
 }
 
-export async function readUserPrefs(): Promise<UserPrefs> {
+export function readUserPrefsSync(): UserPrefs {
   try {
-    const raw = await readFile(prefsPath(), 'utf8')
-    const parsed = JSON.parse(raw) as Partial<UserPrefs>
-    return { ...DEFAULT_PREFS, ...parsed }
+    const raw = readFileSync(prefsPath(), 'utf8')
+    return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<UserPrefs>) }
   } catch {
     return { ...DEFAULT_PREFS }
   }
 }
 
+export async function readUserPrefs(): Promise<UserPrefs> {
+  return readUserPrefsSync()
+}
+
+export function writeUserPrefsSync(prefs: UserPrefs): void {
+  mkdirSync(getCcmDirectory(), { recursive: true })
+  writeFileSync(prefsPath(), JSON.stringify(prefs, null, 2) + '\n', 'utf8')
+}
+
 export async function writeUserPrefs(prefs: UserPrefs): Promise<void> {
-  const p = prefsPath()
-  await mkdir(dirname(p), { recursive: true })
-  await writeFile(p, JSON.stringify(prefs, null, 2) + '\n', 'utf8')
+  writeUserPrefsSync(prefs)
 }
 
 export async function setUserPref<K extends keyof UserPrefs>(
   key: K,
   value: UserPrefs[K]
 ): Promise<void> {
-  const current = await readUserPrefs()
-  await writeUserPrefs({ ...current, [key]: value })
+  writeUserPrefsSync({ ...readUserPrefsSync(), [key]: value })
 }
 
 export async function resetUserPrefs(key?: keyof UserPrefs): Promise<void> {
   if (!key) {
-    await writeUserPrefs({ ...DEFAULT_PREFS })
+    writeUserPrefsSync({ ...DEFAULT_PREFS })
     return
   }
-  const current = await readUserPrefs()
-  await writeUserPrefs({ ...current, [key]: DEFAULT_PREFS[key] })
+  writeUserPrefsSync({ ...readUserPrefsSync(), [key]: DEFAULT_PREFS[key] })
 }

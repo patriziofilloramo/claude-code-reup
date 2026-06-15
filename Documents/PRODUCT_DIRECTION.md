@@ -164,3 +164,99 @@ surface.
 
 Keep completed work and near-term tasks in [`ROADMAP.md`](../ROADMAP.md). This
 document should change only when the product's direction changes.
+
+---
+
+## Naming Brief (for research)
+
+### Current state
+
+| Identifier | Value | Status |
+|---|---|---|
+| CLI command | `ccm` | In use, works |
+| npm package | `claude-ccm` | **Taken by an unrelated package** |
+| Project / repo name | `ccm` / `claude-sessions-manager` | Informal, not published |
+
+The project needs a definitive name before any public release. The name must
+be valid and available both as an **npm package** and as a **GitHub repository**.
+The CLI command invoked by the user (`ccm` today) may change along with the name,
+or may remain `ccm` even if the package name differs — both options are valid.
+
+### What the tool is
+
+A **local-first session manager for Claude Code** (Anthropic's AI coding CLI).
+It provides:
+
+- A TUI (terminal UI) and a web UI to browse, inspect, and resume Claude Code sessions
+- Health signals for each session (interrupted, expiring, context drift)
+- Usage / rate-limit visibility before you commit to resuming
+- Cross-device sync via OS junctions / symlinks (no cloud account required)
+- A composable CLI for scripting (`ccm inbox`, `ccm doctor`, `ccm list`, etc.)
+
+Target users: individual developers who use Claude Code daily and manage multiple
+projects / sessions. The tool is never user-facing to end customers — it is a
+developer productivity tool.
+
+### Naming goals
+
+A good name for this tool should:
+
+1. **Be short** — ideally 2–8 characters or two short words. The CLI command
+   that users type daily must be fast to type (3–4 chars preferred).
+2. **Suggest session continuity or context** — not just "Claude wrapper".
+   Words or roots around: session, resume, context, handoff, pick up, inbox,
+   queue, orbit, lens, relay, trace, mark, anchor, dock, scout, helm, pilot.
+3. **Not infringe on Anthropic / Claude branding** — the name should not
+   start with "claude" (likely to conflict with Anthropic's own tooling going
+   forward). Using "ccm" as the command is acceptable but not a hard requirement.
+4. **Sound like a developer tool** — lowercase, terse, Unix-flavoured.
+   Not marketing language. Examples of the right register: `tmux`, `fzf`,
+   `zoxide`, `rg`, `bat`, `gh`, `mise`, `atuin`, `navi`.
+5. **Be unique enough in the Claude / AI tooling ecosystem** that searches
+   for the name surface this tool, not something else.
+
+### What to check for each candidate name
+
+For every candidate name the researcher proposes, verify:
+
+- [ ] `npm` registry: `https://www.npmjs.com/package/<name>` — available?
+- [ ] `npm` scoped: `https://www.npmjs.com/package/@<scope>/<name>` — if unscoped is taken
+- [ ] GitHub: `https://github.com/<name>` and `https://github.com/topics/<name>`
+- [ ] Homebrew: `https://formulae.brew.sh/formula/<name>` — any conflict?
+- [ ] General web search for `<name> npm` and `<name> cli` — any confusion risk?
+
+The CLI command name and the npm package name may differ (e.g. the binary
+could stay `ccm` while the package publishes as `session-helm`). Note which
+is the package name and which is the proposed command.
+
+### Names already in the Claude / AI tools space (avoid or note conflicts)
+
+Known npm packages to avoid clashing with:
+
+- `claude` — Anthropic SDK
+- `claude-ccm` — taken (unrelated)
+- `ccresume`, `blackcrab`, `claude-code-viewer` — competing tools
+- Anything prefixed `@anthropic-ai/` — reserved for Anthropic
+
+### Candidate name patterns to explore
+
+The researcher should explore (but is not limited to) these patterns:
+
+- **Two-letter or three-letter commands**: `csm`, `csx`, `csk`, `cpx`, `cre`
+- **Short compound words**: `sesskit`, `resumark`, `contex`, `inboxd`
+- **Single evocative words**: `handoff`, `sessio`, `pickit`, `requeue`, `orbctl`
+- **Portmanteaux**: `codemarks`, `sesslog`, `claudex` (avoid claude-prefix)
+- **Metaphor-driven**: tools that "dock", "anchor", "orbit", "helm" a session
+- **Action-first**: resume-focused words — `repick`, `recall`, `recon`, `recontext`
+
+### Deliverable expected from the researcher
+
+A ranked shortlist of **5–10 candidate names**, each with:
+
+1. Proposed **npm package name** (available, confirmed)
+2. Proposed **CLI command** (may differ from package name)
+3. **Availability status** for npm, GitHub, Homebrew, and web search
+4. **One-sentence rationale** for why this name fits the tool's identity
+5. Any **risks or caveats** (trademark-adjacent, confusable with something else, etc.)
+
+The final choice will be made by the project owner after reviewing the shortlist.

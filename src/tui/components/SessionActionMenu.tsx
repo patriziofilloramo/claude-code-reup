@@ -5,7 +5,7 @@ import { COLORS } from '../../config/theme.js'
 import type { Session } from '../../core/session-model.js'
 import { primaryStatus } from '../../core/session-signals.js'
 
-export type SessionActionCommand = 'resume' | 'select' | 'archive' | 'copy-id'
+export type SessionActionCommand = 'resume' | 'select' | 'archive' | 'copy-id' | 'handoff'
 
 interface Action {
   directKey: string | null
@@ -19,6 +19,7 @@ function buildActions(session: Session, isBulkSelected: boolean): Action[] {
     { directKey: null,  keyLabel: '↵', description: 'Resume session',                              command: 'resume'  },
     { directKey: 's',   keyLabel: 's', description: isBulkSelected ? 'Deselect' : 'Select for bulk', command: 'select'  },
     { directKey: 'A',   keyLabel: 'A', description: session.signals.archived ? 'Unarchive' : 'Archive', command: 'archive' },
+    { directKey: 'h',   keyLabel: 'h', description: 'Copy handoff packet',                          command: 'handoff' },
     { directKey: 'c',   keyLabel: 'c', description: 'Copy session ID',                              command: 'copy-id' },
   ]
 }

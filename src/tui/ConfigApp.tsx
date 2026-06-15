@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
 import { COLORS } from '../config/theme.js'
-import { readUserPrefs, setUserPref, type Density } from '../core/user-prefs.js'
+import type { ThemeName } from '../config/theme-tokens.js'
+import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,
   removeUsageStatusLine,
@@ -14,7 +15,7 @@ type Tab = (typeof TABS)[number]
 
 // Highest cursor index per tab (-1 = no navigable items)
 const TAB_CURSOR_MAX: Record<Tab, number> = {
-  Interface: 1,    // 0 = compact, 1 = comfortable
+  Interface: 2,    // 0 = dark, 1 = light, 2 = terminal
   Integrations: 1, // 0 = usage statusline, 1 = shell completion
   Features: -1,
 }
@@ -30,13 +31,13 @@ export function ConfigApp() {
   const { exit } = useApp()
   const [tabIndex, setTabIndex] = useState(0)
   const [cursor, setCursor] = useState(0)
-  const [density, setDensity] = useState<Density>('compact')
+  const [theme, setTheme] = useState<ThemeName>('dark')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    void readUserPrefs().then(p => setDensity(p.density))
+    void readUserPrefs().then(p => setTheme(p.theme))
     void isUsageStatusLineConfigured().then(setUsageConfigured)
   }, [])
 
@@ -67,10 +68,11 @@ export function ConfigApp() {
 
   async function handleActivate() {
     if (currentTab === 'Interface') {
-      const next: Density = cursor === 0 ? 'compact' : 'comfortable'
-      await setUserPref('density', next)
-      setDensity(next)
-      setStatusMsg({ text: `Saved: density = ${next}`, ok: true })
+      const themes: ThemeName[] = ['dark', 'light', 'terminal']
+      const next = themes[cursor] ?? 'dark'
+      await setUserPref('theme', next)
+      setTheme(next)
+      setStatusMsg({ text: `Theme set to ${next} — restart ccm to apply`, ok: true })
       return
     }
 
@@ -135,7 +137,7 @@ export function ConfigApp() {
       {/* Content */}
       <Box flexDirection="column" minHeight={12} paddingX={2}>
         {currentTab === 'Interface' && (
-          <InterfaceTab cursor={cursor} density={density} />
+          <InterfaceTab cursor={cursor} theme={theme} />
         )}
         {currentTab === 'Integrations' && (
           <IntegrationsTab busy={busy} cursor={cursor} usageConfigured={usageConfigured} />
@@ -170,19 +172,21 @@ export function ConfigApp() {
   )
 }
 
-function InterfaceTab({ cursor, density }: { cursor: number; density: Density }) {
-  const options: { value: Density; label: string; desc: string }[] = [
-    { value: 'compact', label: 'compact', desc: 'Single-line session rows, more visible at once' },
-    { value: 'comfortable', label: 'comfortable', desc: 'Two-line rows with extra breathing room' },
+function InterfaceTab({ cursor, theme }: { cursor: number; theme: ThemeName }) {
+  const options: { value: ThemeName; label: string; desc: string }[] = [
+    { value: 'dark',     label: 'dark',     desc: 'Dark background — default' },
+    { value: 'light',    label: 'light',    desc: 'Light background — high contrast in bright rooms' },
+    { value: 'terminal', label: 'terminal', desc: 'Phosphor green on near-black — CRT aesthetic' },
   ]
 
   return (
     <Box flexDirection="column">
-      <Text bold color={COLORS.text}>Session list density</Text>
+      <Text bold color={COLORS.text}>Color theme</Text>
+      <Text color={COLORS.dim}>Takes effect when ccm is restarted. The web UI switches live.</Text>
       <Box flexDirection="column" marginTop={1}>
         {options.map((opt, i) => {
           const focused = i === cursor
-          const active = opt.value === density
+          const active = opt.value === theme
           return (
             <Box flexDirection="column" key={opt.value} marginBottom={1}>
               <Box gap={1}>

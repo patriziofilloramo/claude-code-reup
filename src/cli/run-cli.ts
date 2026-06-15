@@ -18,9 +18,8 @@ Usage:
   ccm resume [session]  Pick a session, or resume by full ID or unambiguous prefix
   ccm search <query>    Search sessions by metadata; add --deep to search content
   ccm usage [action]    Show observed usage or configure its feed; toggle on/off
-  ccm link [path]       Link a project to shared session storage (picker if no path)
-  ccm unlink [path]     Restore a project to local session storage
   ccm memory [action]   Manage shared session storage across devices
+                        (link / unlink / status)
   ccm config [cmd]      Read or write user preferences
   ccm completion <shell> Print shell completion setup
   ccm --theme <name>    Set the active theme (dark, light, terminal)
@@ -82,18 +81,6 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
     case 'handoff':
       await createHandoff(commandArguments)
       return
-
-    case 'link': {
-      const { runMemoryCommand } = await import('./memory-command.js')
-      await runMemoryCommand(['link', ...commandArguments])
-      return
-    }
-
-    case 'unlink': {
-      const { runMemoryCommand } = await import('./memory-command.js')
-      await runMemoryCommand(['unlink', ...commandArguments])
-      return
-    }
 
     case 'memory': {
       const { runMemoryCommand } = await import('./memory-command.js')

@@ -26,7 +26,9 @@ export function colorsFromTheme(t: ThemeTokens) {
   } as const
 }
 
-export const COLORS = colorsFromTheme(resolveTheme(process.env['CCM_THEME'] ?? getStoredThemeName()))
+export const COLORS = colorsFromTheme(
+  resolveTheme(process.env['CCM_THEME'] ?? getStoredThemeName()),
+)
 
 export const SIZES = {
   projectPanelWidth: 30,

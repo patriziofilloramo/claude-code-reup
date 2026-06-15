@@ -5,12 +5,9 @@ import type { Project, Session } from '../../core/session-model.js'
 import { primaryStatus } from '../../core/session-signals.js'
 import { relativeTime } from '../../utils/time.js'
 
-export type Density = 'compact' | 'comfortable'
-
 interface SessionListProps {
   activeSessionIds: Set<string>
   bulkSelectedIds: Set<string>
-  density: Density
   isFocused: boolean
   project: Project | null
   remotelyActiveSessionIds: Set<string>
@@ -58,7 +55,6 @@ function statusBadgeForSession(session: Session): StatusBadge | null {
 export default function SessionList({
   activeSessionIds,
   bulkSelectedIds,
-  density,
   isFocused,
   project,
   remotelyActiveSessionIds,
@@ -124,7 +120,7 @@ export default function SessionList({
           : null
 
         return (
-          <Box key={session.id} marginBottom={density === 'comfortable' ? 1 : 0} paddingX={1}>
+          <Box key={session.id} marginBottom={0} paddingX={1}>
             <Box flexShrink={0}>
               {showArrow ? <Text color={arrowColor}>▶ </Text> : null}
               <Text color={badge?.color ?? COLORS.dim}>{badge?.text ?? ' '} </Text>
