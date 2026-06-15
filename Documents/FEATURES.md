@@ -8,11 +8,13 @@ marketing copy, competitive comparisons, and prioritisation discussions.
 ## What makes Swoop different
 
 Most tools in this space are session _browsers_: they show you a list, let you
-pick one, and open it. Swoop is a session _continuity inbox_: before you commit
-to resuming, it tells you what was happening, whether the context is still
-valid, and whether any session needs attention right now. The intelligence layer
-— health signals, branch drift detection, usage awareness, and a recovery path
-for corrupt indices — is what no other tool in this space ships.
+pick one, and open it. Claude Code itself also has a capable native picker with
+global search in the resume flow. Swoop's role is broader: it is a local
+continuity control plane. Before you commit to resuming, it tells you what was
+happening, whether the context is still valid, whether any session needs
+attention right now, and which action is safest next. The intelligence layer -
+health signals, branch drift detection, usage awareness, and a recovery path for
+corrupt indices - is what no other tool in this space ships.
 
 ---
 
@@ -39,14 +41,17 @@ reviewed competitor.
 
 ---
 
-### Search
+### Search and navigation
 
-Ahead of every reviewed competitor, and the only tool in this space whose
-search works across projects by default rather than within one.
+Global session search itself is not unique: Claude Code's native resume flow can
+already search across projects. Swoop's advantage is the power-user navigator
+around that search: global project/session context, structured filters, deep
+transcript search, aliases, adaptive ID prefixes, shell completion, and health
+signals shown inline.
 
 | Feature                     | Detail                                                                                                                                                                                                                                                               |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Global by default**       | Search spans all projects from any directory. No need to know which project a session belongs to.                                                                                                                                                                    |
+| **Global view and search**  | Search spans all projects from any directory and keeps projects and sessions visible together. No need to know which project a session belongs to before scanning the work.                                                                                          |
 | **Scope qualifiers**        | `project:`, `branch:`, `status:`, `is:active`, `is:archived` narrow any free-text query. Qualifiers combine with AND semantics. Plain text queries are unaffected.                                                                                                   |
 | **Alias search**            | User-assigned session aliases are indexed alongside the session name, ID, and path. Renaming a session for readability also makes it findable.                                                                                                                       |
 | **Deep transcript search**  | Scans the full content of every session transcript, not just metadata. Available via `swoop search --deep`, the TUI `tab` key while searching, and the web UI ⌕ button.                                                                                              |
@@ -54,9 +59,9 @@ search works across projects by default rather than within one.
 | **Adaptive ID prefixes**    | `swoop list` shows the shortest globally unambiguous session-ID prefix for each session (minimum 8 chars). Any prefix from this column can be passed directly to `swoop resume` or `swoop handoff`; ambiguous prefixes are refused.                                  |
 
 **Unique to Swoop:** qualifier-based scoping, alias search, ranked shell
-completion with privacy guarantees, and adaptive ID prefixes. `claude-history`
-has fast fuzzy search but no qualifiers, no aliases, no shell completion, and
-no cross-project scope.
+completion with privacy guarantees, adaptive ID prefixes, and search results
+combined with health/usage context. `claude-history` has fast fuzzy search but
+no qualifiers, no aliases, no shell completion, and no operational state layer.
 
 ---
 
@@ -92,7 +97,6 @@ session intelligence.
 | **Two-panel layout**              | Projects on the left, sessions on the right. Arrow keys and Tab switch panels.                                                                                          |
 | **Session preview / Resume card** | `p` opens a compact pre-resume summary: status, signals, last activity, branch, message count, model — enough to answer "should I resume?" without opening Claude Code. |
 | **Command palette**               | `Ctrl+K` opens a full command list with keybindings and a live text filter. All contextual actions are reachable without memorising keys.                               |
-| **Density toggle**                | `d` switches between comfortable and compact row density. Persisted to user preferences.                                                                                |
 | **Bulk archive**                  | `space` toggles session selection (◆ marker). `A` archives all selected. Active sessions are silently skipped and the count is reported. `esc` clears selection.        |
 | **Project action menu**           | `space` in the project panel opens a context menu: new session, browse sessions, open in file manager, copy path.                                                       |
 | **New session from project**      | `n` launches `claude` in the selected project directory and exits Swoop. Also reachable from the command palette and project action menu.                               |
@@ -125,6 +129,28 @@ the reviewed landscape that ships both a web UI and session intelligence.
 | **Branch drift badge**             | Shown inline on session rows when the recorded branch differs from current git HEAD.                                                        |
 | **Status badges**                  | Each session row shows its derived `primaryStatus` badge.                                                                                   |
 | **Cloud indicator**                | Projects with linked shared storage show a cloud icon in the project list.                                                                  |
+
+---
+
+### VS Code surface _(discovery roadmap)_
+
+VS Code is the next surface to investigate, not yet a shipped feature. The goal
+is not to build a dashboard clone. The extension should bring Swoop's attention
+signals, usage state, and safe resume actions into the editor workflow.
+
+Potential high-value shapes:
+
+- Quick Pick for `Swoop: Resume Session` with health, project, branch, and last
+  activity inline
+- Activity Bar tree view with projects, sessions, attention badges, active
+  state, and aliases
+- Status Bar item for live account limits and active-session state
+- Session detail view with resume card, branch drift, path, usage, and safe
+  actions
+- Integrated-terminal resume in the recorded project directory
+
+Promote this only if it clearly beats a simple native picker workflow for at
+least one common VS Code use case.
 
 ---
 
@@ -231,13 +257,14 @@ Assessed against the four tools reviewed in the mid-2026 article
 | CLAUDE.md editor                                    |       ✓        |   —    |    —    |       —        |    —     |
 | TUI interface                                       |       ✓        |   —    |    —    |       ✓        |    ✓     |
 | Web interface                                       |       ✓        |   —    |    ✓    |       —        |    —     |
+| VS Code extension                                   |  _(research)_  |   —    |    —    |       —        |    —     |
 | Credential / secret warning before share            |  _(roadmap)_   |   ✓    |    —    |       —        |    —     |
 | Files-touched list in session preview               |  _(roadmap)_   |   ✓    |    —    |       —        |    —     |
 | Timeline replay / step-by-step code diff            | ✗ out of scope |   ✓    |    —    |       —        |    —     |
 | Cross-tool (Cursor, Codex, OpenCode)                | ✗ out of scope |   ✓    |    ✓    |       —        |    —     |
 | Zero configuration                                  |       ✓        |   —    | partial |       —        |    ✓     |
 | No API key required for core features               |       ✓        |   ?    |    ?    |       ✓        |    ✓     |
-| No cloud, no account, no telemetry                  |       ✓        |   —    |    —    |       ✓        |    ✓     |
+| No Swoop cloud, no account, no telemetry            |       ✓        |   —    |    —    |       ✓        |    ✓     |
 
 `✓` = shipped · `—` = absent · `?` = unknown · `*(roadmap)*` = planned · `✗` = intentionally out of scope
 
@@ -262,6 +289,6 @@ competitive positioning:
   second, and requires no Electron overhead or separate app install. Mantra
   requires a dedicated desktop install.
 
-- **Cloud sync / accounts / team features** — Local-first is a design
-  constraint, not a gap. Shared session storage (`swoop sync link`) lets sessions
-  travel with a project via any cloud folder the user already syncs.
+- **Swoop-hosted cloud sync / accounts / team features** — Local-first is a
+  design constraint, not a gap. Shared session storage (`swoop sync link`) lets
+  sessions travel with a project via any cloud folder the user already syncs.

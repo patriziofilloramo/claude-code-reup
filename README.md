@@ -2,12 +2,11 @@
 
 # Swoop
 
-**Your continuity inbox for Claude Code.**
+**Your local control plane for Claude Code work.**
 
-Browse every local session, understand what needs attention, and resume the
-right thread from any project.
+See what is running, what needs attention, and what is safe to resume next.
 
-`TUI` · `Local web UI` · `Cross-platform` · `No cloud`
+`TUI` · `Local web UI` · `Cross-platform` · `Local-first`
 
 [Quick start](#quick-start) · [Features](#features) ·
 [How it works](#how-it-works) · [Safety](#safety--privacy)
@@ -20,21 +19,22 @@ right thread from any project.
 
 ## Why Swoop?
 
-Claude Code already includes a capable session picker. `swoop` complements it
-when you work across many projects and need more context before resuming.
+Claude Code already includes a capable session picker, including global search
+from its resume flow. `swoop` complements it when you work across many projects
+and need more context before acting.
 
 It gives you one local view of your Claude Code sessions, including branch
 context, activity state, session health signals, aliases, and locally archived
 sessions.
 
 Use it when the question is not only _"Which session was it?"_, but also
-_"What happened there, and should I resume it?"_
+_"What is happening, what needs attention, and should I resume it now?"_
 
 ---
 
 ## Features
 
-- **Global local-session view** — browse Claude Code sessions across projects from any directory.
+- **Local operations view** — scan projects, sessions, health, active state, and context from one place.
 - **Terminal and web interfaces** — use the keyboard-first TUI or the local browser dashboard.
 - **Useful session context** — see branch, last activity, message count, and active-session indicators.
 - **Model and context visibility** — see the latest recorded model and context-input size per session.
@@ -410,9 +410,9 @@ the native-installer design, and [ROADMAP.md](ROADMAP.md) for planned work.
 
 ## Roadmap
 
-`swoop` is evolving from a session browser into a continuity inbox for Claude Code
-work. Planned areas include prominent usage visibility and focused interface
-polish.
+`swoop` is evolving from a session browser into a local control plane for
+Claude Code work. Planned areas include deeper pre-resume intelligence and a
+focused investigation into a native VS Code extension.
 
 See [ROADMAP.md](ROADMAP.md) for current milestones.
 

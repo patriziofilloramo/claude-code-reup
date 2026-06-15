@@ -2,22 +2,24 @@
 
 ## Mission
 
-> **Make resuming the right Claude Code session fast, confident, and safe —
-> with zero configuration and no cloud.**
+> **Make Claude Code work observable, prioritised, and safe to resume —
+> with zero configuration and no Swoop cloud.**
 
-Swoop is the intelligence layer between your sessions and your decision to resume
-one. It is not a session browser, not a transcript viewer, and not a GUI for
-Claude Code. It is a tool that answers one question before you commit to
-resuming: _"What was happening there, and should I pick it up now?"_
+Swoop is the local control plane between your Claude Code sessions and your
+next action. It is not just a session browser, not a transcript viewer, and not
+a replacement for Claude Code's own picker. It answers the question that comes
+before resuming: _"What was happening, what needs attention, and what should I
+do next?"_
 
 The experience benchmark: a developer who closed their laptop mid-task should
-be able to open Swoop, find the session, understand its state, and resume it in
-under ten seconds — with confidence, not guesswork.
+be able to open Swoop, understand the state of their Claude Code work, and
+resume or clean up the right item in under ten seconds - with confidence, not
+guesswork.
 
 ## Design Constraints (non-negotiable)
 
 - **Zero configuration.** Works out of the box with a `swoop` invocation.
-- **No cloud, no account, no telemetry.**
+- **No Swoop-operated cloud, no account, no telemetry.**
 - **Fast to open habitually** — sub-second TUI start, no loading spinners.
 - **No API key required for core features.**
 - **Light.** Adding a feature that makes the tool heavier requires a feature
@@ -25,13 +27,19 @@ under ten seconds — with confidence, not guesswork.
 
 ## Positioning
 
-Claude Code already has a native session picker. Swoop should not compete by
-being another list of sessions.
+Claude Code already has a capable native session picker and can search across
+projects from its resume flow. Swoop should not compete by claiming "global
+session search" as its main reason to exist.
+
+Swoop's navigator can still be better for power users: it is faster to scan,
+shows projects and sessions together, exposes IDs and aliases, supports deep
+search and filters, and works as TUI, web UI, and scriptable CLI. That is a real
+UX advantage, but it is not the primary product hook.
 
 Swoop's strongest role is:
 
-> A local continuity inbox that finds sessions across projects, explains their
-> state, and helps users resume the right work safely.
+> A local Claude Code control plane that shows what is running, what needs
+> attention, what is safe to resume, and what should be cleaned up next.
 
 The product should answer:
 
@@ -39,18 +47,23 @@ The product should answer:
 2. Which session needs attention?
 3. Is its original project context still valid?
 4. Is it safe and useful to resume now?
+5. Am I about to hit context or account limits?
+6. Can I act without leaving my current surface (terminal, browser, VS Code, or script)?
 
 ## Competitive Landscape (as of mid-2026)
 
 | Tool               | Approach                     | What Swoop does that they don't                        |
 | ------------------ | ---------------------------- | ------------------------------------------------------ |
+| Claude Code native | Built-in picker/resume flow  | Health signals, inbox, usage, diagnostics, automation  |
 | Blackcrab          | GUI grid, multi-session view | Health signals, usage visibility, handoff              |
 | ccresume           | Minimal CUI picker           | Everything beyond pick-and-resume                      |
 | claude-code-viewer | Web with live streaming      | Lighter, local-first, no API key, session intelligence |
 
-Swoop's moat is **intelligence, not UI**. No competitor surfaces session health,
-rate limit state, or a pre-resume context summary. That is where effort should
-concentrate.
+Swoop's moat is **operational intelligence plus surface choice**. Intelligence
+means session health, context drift, rate-limit state, recovery paths, and
+pre-resume summaries. Surface choice means the same local facts are useful from
+the terminal, web, scripts, and eventually VS Code. A prettier picker alone is
+not defensible; a reliable local operations console is.
 
 ## Product Principles
 
@@ -63,6 +76,34 @@ concentrate.
 - Cross-platform without hiding platform-specific limitations.
 
 ## Differentiating Capabilities
+
+### Multi-Surface Control Plane
+
+Swoop should make the same local session intelligence available where developers
+already work:
+
+- TUI for fast keyboard-first navigation
+- Web UI for an always-open dashboard
+- CLI for scripting and automation
+- VS Code extension for integrated-editor workflows
+
+The shared core should remain local-first and UI-agnostic. New surfaces should
+consume the same discovery, health, usage, and resume primitives rather than
+reimplementing session parsing.
+
+### Power-User Navigator
+
+The navigator is still a product strength, even though Claude Code has native
+global resume/search. It should be positioned as a denser, more informative
+operations view rather than as "global sessions exist here and not there".
+
+Keep investing where it is clearly better than the native picker:
+
+- scan many projects and sessions at once
+- show health, usage, branch, model, aliases, and active-state inline
+- support deep transcript search and structured filters
+- make IDs/prefixes, handoff, archive, cleanup, and diagnostics one action away
+- preserve a fast, keyboard-first path for daily use
 
 ### Resume Card
 
@@ -117,8 +158,7 @@ Power-user commands can make Swoop valuable beyond its interfaces:
 ```text
 swoop inbox
 swoop doctor
-swoop find <query>
-swoop last <project>
+swoop search <query>
 swoop list
 swoop handoff <session>
 ```
@@ -132,13 +172,13 @@ focus must not silently change search semantics.
 
 ## Explicit Non-Goals
 
-- Cloud synchronization, accounts, or team features
+- Swoop-hosted cloud synchronization, accounts, or team features
 - Generic support for every AI coding tool
 - Embedded terminals or an Electron wrapper
 - Full billing or cost-accounting dashboards
 - Automatic git branch/worktree modification
 - Rewriting or repairing Claude-owned transcript files
-- A full transcript editor or browser IDE
+- A full transcript editor or IDE replacement
 
 ## Priority Order for New Work
 
@@ -150,17 +190,28 @@ When choosing what to build next, apply this filter in order:
    → High priority. This is the intelligence moat.
 3. **Does it make an existing workflow faster without adding complexity?**
    → Medium priority. Worth doing if the gain is clear and the surface stays clean.
-4. **Is it UI polish, navigation convenience, or parity with a competitor?**
+4. **Does it put existing intelligence into a surface where developers already work?**
+   → Medium priority. VS Code can qualify if it exposes Swoop's signals and actions, not
+   if it only duplicates the native picker.
+5. **Is it UI polish, navigation convenience, or parity with a competitor?**
    → Low priority. Only if it costs little and doesn't add cognitive surface.
 
-The Resume Card (see above) is the highest-priority unbuilt feature. Nothing
-in the UI layer should block its implementation.
+The Resume Card remains the highest-priority unbuilt shared capability. The
+next discovery track is the VS Code extension, because it may be the strongest
+new surface for that same intelligence. Nothing in the UI layer should block
+the shared core needed by both.
 
 ## Delivery Guidance
 
 Prefer small features that improve confidence before resume. Avoid forcing
 feature parity between TUI and web when a capability naturally belongs in one
 surface.
+
+For VS Code work, investigate before building. The first milestone should prove
+whether a native extension can offer something better than both Claude Code's
+native picker and the existing TUI/web UI. A simple dashboard clone is not
+enough; the extension should expose attention, usage, health, and resume actions
+inside the editor workflow.
 
 Keep completed work and near-term tasks in [`ROADMAP.md`](../ROADMAP.md). This
 document should change only when the product's direction changes.

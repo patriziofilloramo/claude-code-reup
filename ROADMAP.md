@@ -299,6 +299,65 @@ Anthropic API. They are tracked here and will be re-evaluated when the API stabi
 
 ---
 
+## Milestone 11 — VS Code extension discovery
+
+Investigate whether a native VS Code extension can become a standout Swoop
+surface. The goal is not to clone the TUI or web dashboard. The extension must
+make Swoop's local intelligence useful inside the editor workflow, where many
+Claude Code users already spend most of their time.
+
+### Product questions
+
+- [ ] Which VS Code surface is strongest for Swoop: Activity Bar tree view,
+      Explorer side panel, Quick Pick, Status Bar, webview, or a combination?
+- [ ] Can a sidebar project/session list make attention, active state, branch
+      drift, usage, and resume actions clearer than the native Claude Code
+      picker?
+- [ ] Should `Swoop: Resume Session` use Quick Pick as the primary fast path,
+      with a richer sidebar for browsing and cleanup?
+- [ ] Can live usage limits and active-session state fit naturally in the
+      Status Bar without becoming noisy?
+- [ ] Which actions belong in VS Code first: resume in integrated terminal,
+      open project, reveal touched files, inbox, doctor, handoff, archive?
+
+### Technical questions
+
+- [ ] Verify VS Code extension API constraints for filesystem reads, watching
+      `~/.claude/projects`, launching integrated terminals, and opening local
+      files/folders.
+- [ ] Decide whether the extension should shell out to an installed `swoop`
+      binary or consume a shared core package directly.
+- [ ] If shelling out, define a stable JSON contract for session list, inbox,
+      usage, and diagnostics commands.
+- [ ] If sharing core code, evaluate whether to extract an internal
+      `@swoop/core` workspace before writing extension UI.
+- [ ] Confirm packaging size, startup cost, and cross-platform behavior on
+      Windows, macOS, and Linux.
+
+### MVP candidate
+
+- [ ] `Swoop: Resume Session` Quick Pick with health badges, project, branch,
+      last activity, and active/attention state inline.
+- [ ] Activity Bar view with projects grouped above sessions, matching the TUI
+      navigator but tuned for editor scanning.
+- [ ] Status Bar item for live account limits and active-session state.
+- [ ] Session detail panel showing resume card, path, branch drift, usage, and
+      safe actions.
+- [ ] Integrated-terminal resume that preserves the recorded project directory.
+
+### Go / no-go criteria
+
+- [ ] It must clearly beat a simple call to Claude Code's native picker for at
+      least one common workflow.
+- [ ] It must reuse Swoop's existing local intelligence rather than creating a
+      second parser or divergent data model.
+- [ ] It must stay local-first: no telemetry, no account, no Swoop cloud
+      service, and no API key for core features.
+- [ ] It must not block the CLI/TUI/web experience or add heavy dependencies to
+      the existing package.
+
+---
+
 ## Backlog
 
 ### Nice-to-have (validated by competitive analysis, mid-2026)
@@ -334,37 +393,11 @@ must never activate automatically or affect the default experience.
 Ideas that need more investigation before committing to a milestone. May be promoted, deferred,
 or dropped after evaluation.
 
-### VSCode extension — command-palette-style session switcher
+### VS Code implementation
 
-A native VSCode extension exposing Swoop features via `Ctrl+P` / `Ctrl+Shift+P`. The core library
-(`src/core/`) is already cleanly separated from the TUI and Web consumers — the extension would
-be a third consumer of the same layer, requiring no architectural restructuring.
-
-Proposed shape:
-
-- `Ctrl+P` → Quick Pick populated with all sessions (fuzzy search, health signals inline as
-  description text, `⚠` / `●` / `◌` icons in the detail column)
-- Select a session → `claude --resume <id>` in the integrated terminal
-- Command palette entries for `Swoop: Open Inbox`, `Swoop: Cleanup`, `Swoop: Sync Status`, etc.
-- Status bar item showing active-session context usage (reuses existing usage capture infra)
-
-Why it's meaningful: developers who already live in VSCode get the full session intelligence
-without switching to a terminal or browser tab. The Quick Pick UX is more discoverable than the
-TUI for occasional users.
-
-What needs investigation:
-
-- [ ] VSCode extension API constraints (filesystem access, child process spawning — likely fine
-      since it's all local reads and a terminal `spawn`)
-- [ ] Extension packaging: does bundling the `src/core/` layer into a `.vsix` add too much weight,
-      or should the extension shell out to a locally installed `swoop` binary instead?
-- [ ] Whether a dedicated `@swoop/core` package makes the shared layer cleaner to consume from three
-      different entry points (TUI, Web, VSCode) — see architecture note below
-
-Architecture note: long-term, the cleanest shape is a `@swoop/core` internal package (or
-workspace) that TUI, Web, and VSCode all import from. The current single-repo layout already
-achieves this in practice; formalising it is a low-risk refactor that would make the extension
-path straightforward.
+Promote from Milestone 11 discovery only after the extension has a clear MVP
+that beats a simple native picker workflow. See the Milestone 11 go/no-go
+criteria.
 
 ### Live session panel — the "always-open" use case
 
