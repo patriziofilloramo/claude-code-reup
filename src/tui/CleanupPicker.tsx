@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
 import { COLORS } from '../config/theme.js'
-import type { CleanupCandidate } from '../core/cleanup.js'
-import { REASON_LABELS } from '../core/cleanup.js'
+import type { CleanupCandidate } from '../core/session/cleanup.js'
+import { REASON_LABELS } from '../core/session/cleanup.js'
 import { relativeTime } from '../utils/time.js'
 
 interface CleanupPickerProps {

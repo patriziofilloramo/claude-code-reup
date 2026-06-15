@@ -5,7 +5,7 @@ import {
   formatUsageSummary,
   renderUsageSummary,
 } from '../../src/cli/usage-command.js'
-import type { LiveUsageSnapshot, LiveUsageSummary } from '../../src/core/live-usage.js'
+import type { LiveUsageSnapshot, LiveUsageSummary } from '../../src/core/usage/live-usage.js'
 
 const SNAPSHOT: LiveUsageSnapshot = {
   agentName: 'reviewer',

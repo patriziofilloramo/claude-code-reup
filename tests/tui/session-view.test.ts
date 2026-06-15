@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Project, Session } from '../../src/core/session-model.js'
+import type { Project, Session } from '../../src/core/session/session-model.js'
 import {
   calculateMaximumVisibleSessions,
   createVisibleWindow,

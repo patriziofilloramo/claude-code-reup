@@ -9,7 +9,7 @@ import {
   shortestUniqueIdPrefix,
 } from '../../src/cli/list-command.js'
 import type { ListOptions, ListedSession } from '../../src/cli/list-command.js'
-import type { Project, Session } from '../../src/core/session-model.js'
+import type { Project, Session } from '../../src/core/session/session-model.js'
 
 const GENERATED_AT = '2026-06-10T15:00:00.000Z'
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'

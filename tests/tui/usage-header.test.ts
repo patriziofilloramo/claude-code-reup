@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { COLORS } from '../../src/config/theme.js'
-import type { LiveUsageSummary } from '../../src/core/live-usage.js'
+import type { LiveUsageSummary } from '../../src/core/usage/live-usage.js'
 import { formatUsageDisplay } from '../../src/tui/components/AppHeader.js'
 
 describe('TUI usage header', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isValidSessionId } from '../../src/core/session-model.js'
+import { isValidSessionId } from '../../src/core/session/session-model.js'
 
 describe('isValidSessionId', () => {
   it('accepts a well-formed lowercase UUID', () => {

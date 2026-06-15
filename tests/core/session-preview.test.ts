@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { extractSessionPreview } from '../../src/core/session-preview.js'
+import { extractSessionPreview } from '../../src/core/session/session-preview.js'
 
 // ---------------------------------------------------------------------------
 // Fixtures

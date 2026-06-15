@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 
 import { COLORS, SIZES } from '../../config/theme.js'
-import type { Project } from '../../core/session-model.js'
+import type { Project } from '../../core/session/session-model.js'
 
 interface ProjectListProps {
   isFocused: boolean

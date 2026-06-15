@@ -36,11 +36,11 @@ import {
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { APP } from '../config/app.js'
-import { getLiveSessionRecords } from './active-sessions.js'
-import { getCcmDirectory, getClaudeProjectsDirectory } from './claude-paths.js'
-import { pathsReferToSameLocation } from './path-comparison.js'
-import { log } from '../utils/logger.js'
+import { APP } from '../../config/app.js'
+import { getLiveSessionRecords } from '../session/active-sessions.js'
+import { getCcmDirectory, getClaudeProjectsDirectory } from '../project/claude-paths.js'
+import { pathsReferToSameLocation } from '../project/path-comparison.js'
+import { log } from '../../utils/logger.js'
 import { syncRegistry } from './sync-registry.js'
 import type { ProjectSyncInfo } from './sync-registry.js'
 
@@ -92,8 +92,8 @@ export function stopSyncLoop(): void {
  * @returns Number of cloud-linked projects initialised.
  */
 export async function initCloudSync(): Promise<number> {
-  const { loadProjects } = await import('./project-discovery.js')
-  const { invalidateProjectCache } = await import('./project-cache.js')
+  const { loadProjects } = await import('../project/project-discovery.js')
+  const { invalidateProjectCache } = await import('../project/project-cache.js')
 
   const projects = await loadProjects()
   const liveSessions = await getLiveSessionRecords()
@@ -201,7 +201,7 @@ async function setupProjectSync(
 // ---------------------------------------------------------------------------
 
 async function runSyncCycle(): Promise<void> {
-  const { invalidateProjectCache } = await import('./project-cache.js')
+  const { invalidateProjectCache } = await import('../project/project-cache.js')
   const liveSessions = await getLiveSessionRecords()
   let changed = false
 

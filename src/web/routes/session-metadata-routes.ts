@@ -1,13 +1,13 @@
 import type { Hono } from 'hono'
 
-import { loadProjectById } from '../../core/project-discovery.js'
-import { isValidSessionId } from '../../core/session-model.js'
+import { loadProjectById } from '../../core/project/project-discovery.js'
+import { isValidSessionId } from '../../core/session/session-model.js'
 import {
   ActiveSessionDeletionError,
   deleteSession,
   setSessionAlias,
   setSessionArchived,
-} from '../../core/session-metadata.js'
+} from '../../core/session/session-metadata.js'
 import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 

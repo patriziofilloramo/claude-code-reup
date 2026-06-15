@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Session } from '../../src/core/session-model.js'
+import type { Session } from '../../src/core/session/session-model.js'
 import { formatSessionSummary, formatTokenCount } from '../../src/tui/components/SessionList.js'
 
 describe('TUI session list', () => {

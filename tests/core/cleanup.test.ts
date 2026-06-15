@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { findAutoArchiveCandidates, findCleanupCandidates } from '../../src/core/cleanup.js'
-import type { Project, Session } from '../../src/core/session-model.js'
+import { findAutoArchiveCandidates, findCleanupCandidates } from '../../src/core/session/cleanup.js'
+import type { Project, Session } from '../../src/core/session/session-model.js'
 
 describe('cleanup candidate selection', () => {
   it('limits unattended archiving to high-confidence candidates', () => {

@@ -4,8 +4,8 @@ import type { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 
 import { APP } from '../../config/app.js'
-import { getClaudeDirectory } from '../../core/claude-paths.js'
-import { invalidateProjectCache } from '../../core/project-cache.js'
+import { getClaudeDirectory } from '../../core/project/claude-paths.js'
+import { invalidateProjectCache } from '../../core/project/project-cache.js'
 import { log } from '../../utils/logger.js'
 
 /** Registers filesystem-backed live-update notifications for browser clients. */

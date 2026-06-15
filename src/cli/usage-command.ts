@@ -6,13 +6,13 @@ import {
   recordUsageCaptureError,
   writeLiveUsageSnapshot,
   writeRawCapture,
-} from '../core/live-usage.js'
-import type { LiveUsageSnapshot, LiveUsageSummary, UsageLimitWindow } from '../core/live-usage.js'
+} from '../core/usage/live-usage.js'
+import type { LiveUsageSnapshot, LiveUsageSummary, UsageLimitWindow } from '../core/usage/live-usage.js'
 import {
   isUsageStatusLineConfigured,
   removeUsageStatusLine,
   setupUsageStatusLine,
-} from '../core/usage-statusline-integration.js'
+} from '../core/usage/usage-statusline-integration.js'
 import { APP } from '../config/app.js'
 import { relativeTime } from '../utils/time.js'
 import { failCommand, writeOutput } from './output.js'

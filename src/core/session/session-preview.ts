@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { getProjectDirectory } from './claude-paths.js'
+import { getProjectDirectory } from '../project/claude-paths.js'
 
 // ---------------------------------------------------------------------------
 // Types

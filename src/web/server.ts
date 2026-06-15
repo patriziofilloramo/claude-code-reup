@@ -54,7 +54,7 @@ function openBrowser(url: string): void {
 
 /** Starts the loopback-only web server and opens its browser client. */
 export async function startWeb(commandArguments: string[]): Promise<void> {
-  const { initCloudSync } = await import('../core/cloud-sync.js')
+  const { initCloudSync } = await import('../core/sync/cloud-sync.js')
   await initCloudSync()
   const requestedPort = parseRequestedPort(commandArguments)
   const configuredPort = process.env[APP.portEnvVar]

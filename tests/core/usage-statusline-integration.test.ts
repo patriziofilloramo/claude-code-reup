@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import {
   removeUsageStatusLine,
   setupUsageStatusLine,
-} from '../../src/core/usage-statusline-integration.js'
+} from '../../src/core/usage/usage-statusline-integration.js'
 
 describe('usage status-line integration', () => {
   let originalClaudeDirectory: string | undefined

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import {
   normalizePathForComparison,
   pathsReferToSameLocation,
-} from '../../src/core/path-comparison.js'
+} from '../../src/core/project/path-comparison.js'
 
 describe('filesystem path comparison', () => {
   it('ignores trailing separators and normalizes path segments', () => {

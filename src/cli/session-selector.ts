@@ -1,5 +1,5 @@
-import type { Project, Session } from '../core/session-model.js'
-import { isValidSessionId } from '../core/session-model.js'
+import type { Project, Session } from '../core/session/session-model.js'
+import { isValidSessionId } from '../core/session/session-model.js'
 
 export interface SelectedSession {
   project: Project

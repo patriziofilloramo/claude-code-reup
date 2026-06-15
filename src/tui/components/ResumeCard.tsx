@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
 
 import { COLORS } from '../../config/theme.js'
-import { getSessionLockInfo } from '../../core/active-sessions.js'
-import type { SessionLockInfo } from '../../core/active-sessions.js'
-import type { Session } from '../../core/session-model.js'
-import { primaryStatus } from '../../core/session-signals.js'
-import { loadSessionPreview, sessionTranscriptPath } from '../../core/session-preview.js'
-import type { SessionPreview } from '../../core/session-preview.js'
+import { getSessionLockInfo } from '../../core/session/active-sessions.js'
+import type { SessionLockInfo } from '../../core/session/active-sessions.js'
+import type { Session } from '../../core/session/session-model.js'
+import { primaryStatus } from '../../core/session/session-signals.js'
+import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
+import type { SessionPreview } from '../../core/session/session-preview.js'
 import { relativeTime } from '../../utils/time.js'
 
 // ---------------------------------------------------------------------------

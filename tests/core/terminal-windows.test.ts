@@ -24,7 +24,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 vi.mock('which', () => ({ default: mockWhich }))
 vi.mock('clipboardy', () => ({ default: { write: mockClipboardyWrite } }))
 
-import { launchWindows } from '../../src/core/terminal-windows.js'
+import { launchWindows } from '../../src/core/terminal/terminal-windows.js'
 
 // Helpers -----------------------------------------------------------------
 

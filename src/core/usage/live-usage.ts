@@ -2,9 +2,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { APP } from '../config/app.js'
+import { APP } from '../../config/app.js'
 import { clearAccountUsageCache, readAccountUsage } from './account-usage.js'
-import { getCcmDirectory, getClaudeDirectory, getClaudeStatePath } from './claude-paths.js'
+import { getCcmDirectory, getClaudeDirectory, getClaudeStatePath } from '../project/claude-paths.js'
 
 /** Bump when the snapshot JSON shape changes in a backwards-incompatible way. */
 const USAGE_SCHEMA_VERSION = 1

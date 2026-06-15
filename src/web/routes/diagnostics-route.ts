@@ -1,6 +1,6 @@
 import type { Hono } from 'hono'
 
-import { buildDiagnosticsReport } from '../../core/diagnostics.js'
+import { buildDiagnosticsReport } from '../../core/health/diagnostics.js'
 import { log } from '../../utils/logger.js'
 import { apiRoute } from './route-helper.js'
 

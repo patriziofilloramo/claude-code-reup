@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 
-import { getCcmDirectory } from './claude-paths.js'
+import { getCcmDirectory } from '../project/claude-paths.js'
 
 const DEVICE_ID_FILENAME = 'device-id'
 

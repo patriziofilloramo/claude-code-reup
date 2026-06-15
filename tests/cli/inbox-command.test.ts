@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatInbox } from '../../src/cli/inbox-command.js'
-import type { Project, Session } from '../../src/core/session-model.js'
+import type { Project, Session } from '../../src/core/session/session-model.js'
 
 function createSession(id: string, name: string, overrides: Partial<Session> = {}): Session {
   return {

@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 
-import { APP } from '../config/app.js'
+import { APP } from '../../config/app.js'
 import type { Session, SessionContextMetrics } from './session-model.js'
 import { computeSignalsFromLines } from './session-signals.js'
 

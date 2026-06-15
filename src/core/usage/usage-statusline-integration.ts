@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
-import { APP } from '../config/app.js'
-import { getCcmDirectory, getClaudeDirectory } from './claude-paths.js'
+import { APP } from '../../config/app.js'
+import { getCcmDirectory, getClaudeDirectory } from '../project/claude-paths.js'
 import { clearLiveUsageSnapshots } from './live-usage.js'
 
 const INTEGRATION_SCHEMA_VERSION = 1

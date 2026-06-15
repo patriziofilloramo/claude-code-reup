@@ -2,10 +2,10 @@ import { readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getActiveSessions } from './active-sessions.js'
-import { getProjectDirectory } from './claude-paths.js'
-import { invalidateProjectCache } from './project-cache.js'
+import { getProjectDirectory } from '../project/claude-paths.js'
+import { invalidateProjectCache } from '../project/project-cache.js'
 import type { Project } from './session-model.js'
-import { withProjectSidecarLock } from './project-sidecar-lock.js'
+import { withProjectSidecarLock } from '../project/project-sidecar-lock.js'
 
 interface SessionSidecarMetadata {
   alias?: string

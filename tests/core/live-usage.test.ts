@@ -9,7 +9,7 @@ import {
   readLiveUsageSummary,
   recordUsageCaptureError,
   writeLiveUsageSnapshot,
-} from '../../src/core/live-usage.js'
+} from '../../src/core/usage/live-usage.js'
 
 describe('live usage', () => {
   let originalClaudeDirectory: string | undefined

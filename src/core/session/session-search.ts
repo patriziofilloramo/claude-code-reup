@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 
-import { getProjectDirectory } from './claude-paths.js'
+import { getProjectDirectory } from '../project/claude-paths.js'
 import type { Project, Session } from './session-model.js'
 
 // ---------------------------------------------------------------------------

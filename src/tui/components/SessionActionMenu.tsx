@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 
 import { COLORS } from '../../config/theme.js'
-import type { Session } from '../../core/session-model.js'
-import { primaryStatus } from '../../core/session-signals.js'
+import type { Session } from '../../core/session/session-model.js'
+import { primaryStatus } from '../../core/session/session-signals.js'
 
 export type SessionActionCommand =
   | 'resume'

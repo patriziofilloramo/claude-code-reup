@@ -4,7 +4,7 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { getOrCreateDeviceId } from '../../src/core/device-id.js'
+import { getOrCreateDeviceId } from '../../src/core/sync/device-id.js'
 
 describe('getOrCreateDeviceId', () => {
   let claudeDirectory: string

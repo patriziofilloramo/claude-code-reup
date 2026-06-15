@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises'
 import os from 'node:os'
 import { join } from 'node:path'
 
-import { APP } from '../config/app.js'
+import { APP } from '../../config/app.js'
 
 // -----------------------------------------------------------------------------
 // Claude data locations

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 
 import { COLORS } from '../../config/theme.js'
-import type { Project } from '../../core/session-model.js'
+import type { Project } from '../../core/session/session-model.js'
 
 export type ProjectActionCommand =
   | 'new-session'

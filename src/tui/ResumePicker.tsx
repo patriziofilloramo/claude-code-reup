@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
 import { COLORS } from '../config/theme.js'
-import type { RankedSession } from '../core/session-ranking.js'
-import { filterSessionCandidates } from '../core/session-ranking.js'
+import type { RankedSession } from '../core/session/session-ranking.js'
+import { filterSessionCandidates } from '../core/session/session-ranking.js'
 import { relativeTime } from '../utils/time.js'
 import { createVisibleWindow } from './session-view.js'
 

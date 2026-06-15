@@ -1,8 +1,8 @@
 import { Box, Text, useStdout } from 'ink'
 
 import { COLORS } from '../../config/theme.js'
-import type { Project, Session } from '../../core/session-model.js'
-import { primaryStatus } from '../../core/session-signals.js'
+import type { Project, Session } from '../../core/session/session-model.js'
+import { primaryStatus } from '../../core/session/session-signals.js'
 import { relativeTime } from '../../utils/time.js'
 
 interface SessionListProps {

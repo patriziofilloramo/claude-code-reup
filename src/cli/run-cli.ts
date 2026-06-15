@@ -216,16 +216,16 @@ function acceptsNoArguments(command: string, commandArguments: string[]): boolea
 // -----------------------------------------------------------------------------
 
 async function runTerminalInterface(): Promise<void> {
-  const { initCloudSync, stopSyncLoop } = await import('../core/cloud-sync.js')
+  const { initCloudSync, stopSyncLoop } = await import('../core/sync/cloud-sync.js')
   await runWithSyncSpinner(initCloudSync)
 
   const { readUserPrefsSync } = await import('../core/user-prefs.js')
   const { autoCleanupOnStart } = readUserPrefsSync()
   if (autoCleanupOnStart !== 'off') {
-    const { getActiveSessions } = await import('../core/active-sessions.js')
-    const { findAutoArchiveCandidates, findCleanupCandidates } = await import('../core/cleanup.js')
-    const { loadProjects } = await import('../core/project-discovery.js')
-    const { setSessionArchived } = await import('../core/session-metadata.js')
+    const { getActiveSessions } = await import('../core/session/active-sessions.js')
+    const { findAutoArchiveCandidates, findCleanupCandidates } = await import('../core/session/cleanup.js')
+    const { loadProjects } = await import('../core/project/project-discovery.js')
+    const { setSessionArchived } = await import('../core/session/session-metadata.js')
 
     const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
     const candidates = findCleanupCandidates(projects, activeSessionIds)

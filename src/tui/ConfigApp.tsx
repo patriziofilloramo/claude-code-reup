@@ -4,15 +4,15 @@ import { Box, Text, render, useApp, useInput } from 'ink'
 import { COLORS } from '../config/theme.js'
 import type { ThemeName } from '../config/theme-tokens.js'
 import { linkProjectForTUI, unlinkProjectForTUI } from '../cli/sync-command.js'
-import { loadProjects } from '../core/project-discovery.js'
-import type { Project } from '../core/session-model.js'
+import { loadProjects } from '../core/project/project-discovery.js'
+import type { Project } from '../core/session/session-model.js'
 import type { AutoCleanup } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,
   removeUsageStatusLine,
   setupUsageStatusLine,
-} from '../core/usage-statusline-integration.js'
+} from '../core/usage/usage-statusline-integration.js'
 
 const TABS = ['Interface', 'Integrations', 'Features', 'Sync'] as const
 type Tab = (typeof TABS)[number]

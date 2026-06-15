@@ -9,13 +9,13 @@ import {
   replaceLinkWithDirectory,
   repointLink,
   syncBidirectional,
-} from '../core/cloud-sync.js'
-import { encodeProjectPath, getClaudeProjectsDirectory } from '../core/claude-paths.js'
-import { getOrCreateDeviceId } from '../core/device-id.js'
-import { getLiveSessionRecords } from '../core/active-sessions.js'
-import { pathsReferToSameLocation } from '../core/path-comparison.js'
-import { loadProjects } from '../core/project-discovery.js'
-import type { Project } from '../core/session-model.js'
+} from '../core/sync/cloud-sync.js'
+import { encodeProjectPath, getClaudeProjectsDirectory } from '../core/project/claude-paths.js'
+import { getOrCreateDeviceId } from '../core/sync/device-id.js'
+import { getLiveSessionRecords } from '../core/session/active-sessions.js'
+import { pathsReferToSameLocation } from '../core/project/path-comparison.js'
+import { loadProjects } from '../core/project/project-discovery.js'
+import type { Project } from '../core/session/session-model.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { failCommand, writeOutput } from './output.js'
 

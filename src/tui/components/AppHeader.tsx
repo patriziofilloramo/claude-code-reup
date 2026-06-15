@@ -1,7 +1,7 @@
 import { Box, Text, useStdout } from 'ink'
 
 import { COLORS } from '../../config/theme.js'
-import type { LiveUsageSummary, UsageLimitWindow } from '../../core/live-usage.js'
+import type { LiveUsageSummary, UsageLimitWindow } from '../../core/usage/live-usage.js'
 import { relativeTime } from '../../utils/time.js'
 
 const USAGE_BAR_WIDTH = 10

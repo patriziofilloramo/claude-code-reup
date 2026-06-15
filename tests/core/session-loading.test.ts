@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 
-import { loadProjects } from '../../src/core/project-discovery.js'
+import { loadProjects } from '../../src/core/project/project-discovery.js'
 
 const PROJECT_ID = 'project-fixture'
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'

@@ -4,7 +4,7 @@ import {
   getCachedProjects,
   invalidateProjectCache,
   setCachedProjects,
-} from '../../src/core/project-cache.js'
+} from '../../src/core/project/project-cache.js'
 
 describe('project cache', () => {
   it('returns cached projects until explicitly invalidated', () => {

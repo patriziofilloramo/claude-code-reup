@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
 
-import { loadProjects } from '../../core/project-discovery.js'
-import { searchTranscripts } from '../../core/session-search.js'
+import { loadProjects } from '../../core/project/project-discovery.js'
+import { searchTranscripts } from '../../core/session/session-search.js'
 import { log } from '../../utils/logger.js'
 import { projectDisplayName } from '../api-model.js'
 import type { ApiDeepSearchHit } from '../api-model.js'

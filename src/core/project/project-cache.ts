@@ -1,4 +1,4 @@
-import type { Project } from './session-model.js'
+import type { Project } from '../session/session-model.js'
 
 interface ProjectCacheEntry {
   projectsDirectory: string

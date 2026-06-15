@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { selectResumeTarget } from '../../src/cli/resume-command.js'
-import type { Project, Session } from '../../src/core/session-model.js'
+import type { Project, Session } from '../../src/core/session/session-model.js'
 
 const FIRST_ID = '00000000-0000-0000-0000-000000000001'
 const SECOND_ID = '11111111-1111-1111-1111-111111111111'

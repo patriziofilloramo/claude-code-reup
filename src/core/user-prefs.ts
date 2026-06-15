@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { ThemeName } from '../config/theme-tokens.js'
-import { getCcmDirectory } from './claude-paths.js'
+import { getCcmDirectory } from './project/claude-paths.js'
 
 export type AutoCleanup = 'off' | 'on' | 'auto'
 

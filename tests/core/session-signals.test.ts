@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeSignalsFromLines, primaryStatus } from '../../src/core/session-signals.js'
+import { computeSignalsFromLines, primaryStatus } from '../../src/core/session/session-signals.js'
 
 const DAY_MS = 24 * 60 * 60 * 1_000
 

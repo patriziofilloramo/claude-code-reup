@@ -1,5 +1,5 @@
-import type { Project, Session } from '../core/session-model.js'
-import { primaryStatus } from '../core/session-signals.js'
+import type { Project, Session } from '../core/session/session-model.js'
+import { primaryStatus } from '../core/session/session-signals.js'
 
 /** Reserves one body row for the selected session's optional detail line. */
 export function calculateMaximumVisibleSessions(

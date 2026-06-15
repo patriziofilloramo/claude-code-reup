@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { buildDiagnosticsReport } from '../../src/core/diagnostics.js'
+import { buildDiagnosticsReport } from '../../src/core/health/diagnostics.js'
 
 const INDEXED_SESSION_ID = '00000000-0000-0000-0000-000000000001'
 const ORPHANED_SESSION_ID = '11111111-1111-1111-1111-111111111111'

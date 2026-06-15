@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatDoctorReport } from '../../src/cli/doctor-command.js'
-import type { DiagnosticsReport } from '../../src/core/diagnostics.js'
+import type { DiagnosticsReport } from '../../src/core/health/diagnostics.js'
 
 function emptyReport(): DiagnosticsReport {
   return {

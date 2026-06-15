@@ -7,8 +7,8 @@
  * source of truth for every JSON response shape the server produces.
  */
 
-import type { Project, Session, SessionStatus } from '../core/session-model.js'
-import { primaryStatus } from '../core/session-signals.js'
+import type { Project, Session, SessionStatus } from '../core/session/session-model.js'
+import { primaryStatus } from '../core/session/session-signals.js'
 
 // ---------------------------------------------------------------------------
 // Core entity types

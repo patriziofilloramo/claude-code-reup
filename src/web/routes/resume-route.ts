@@ -1,8 +1,8 @@
 import type { Hono } from 'hono'
 
-import { loadProjectById } from '../../core/project-discovery.js'
-import { isValidSessionId } from '../../core/session-model.js'
-import { launchNewSession, launchResume } from '../../core/terminal.js'
+import { loadProjectById } from '../../core/project/project-discovery.js'
+import { isValidSessionId } from '../../core/session/session-model.js'
+import { launchNewSession, launchResume } from '../../core/terminal/terminal.js'
 import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 

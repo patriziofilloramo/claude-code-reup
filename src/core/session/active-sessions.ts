@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { getClaudeDirectory } from './claude-paths.js'
+import { getClaudeDirectory } from '../project/claude-paths.js'
 import { isValidSessionId } from './session-model.js'
 
 // -----------------------------------------------------------------------------

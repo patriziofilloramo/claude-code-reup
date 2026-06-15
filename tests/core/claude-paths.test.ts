@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { decodeProjectDirectoryName } from '../../src/core/claude-paths.js'
+import { decodeProjectDirectoryName } from '../../src/core/project/claude-paths.js'
 
 describe('decodeProjectDirectoryName', () => {
   if (process.platform === 'win32') {

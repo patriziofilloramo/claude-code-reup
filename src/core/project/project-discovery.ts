@@ -3,8 +3,8 @@ import { access, lstat, readdir, readFile, readlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
-import { APP } from '../config/app.js'
-import { log } from '../utils/logger.js'
+import { APP } from '../../config/app.js'
+import { log } from '../../utils/logger.js'
 import {
   encodeProjectPath,
   getClaudeProjectsDirectory,
@@ -12,13 +12,13 @@ import {
 } from './claude-paths.js'
 import { normalizePathForComparison, pathsReferToSameLocation } from './path-comparison.js'
 import { getCachedProjects, setCachedProjects } from './project-cache.js'
-import { getLiveSessionRecords, type SessionLockRecord } from './active-sessions.js'
-import type { Project, Session, SessionContextMetrics, SessionSignals } from './session-model.js'
-import { isValidSessionId } from './session-model.js'
-import { mergeProjectSidecarMetadata } from './session-metadata.js'
-import { calculateExpiryDays } from './session-signals.js'
-import { parseSessionTranscript } from './session-transcript.js'
-import { syncRegistry } from './sync-registry.js'
+import { getLiveSessionRecords, type SessionLockRecord } from '../session/active-sessions.js'
+import type { Project, Session, SessionContextMetrics, SessionSignals } from '../session/session-model.js'
+import { isValidSessionId } from '../session/session-model.js'
+import { mergeProjectSidecarMetadata } from '../session/session-metadata.js'
+import { calculateExpiryDays } from '../session/session-signals.js'
+import { parseSessionTranscript } from '../session/session-transcript.js'
+import { syncRegistry } from '../sync/sync-registry.js'
 
 const execFileAsync = promisify(execFile)
 

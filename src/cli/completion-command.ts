@@ -1,6 +1,6 @@
-import { getActiveSessions } from '../core/active-sessions.js'
-import { loadProjects } from '../core/project-discovery.js'
-import { rankSessionCandidates } from '../core/session-ranking.js'
+import { getActiveSessions } from '../core/session/active-sessions.js'
+import { loadProjects } from '../core/project/project-discovery.js'
+import { rankSessionCandidates } from '../core/session/session-ranking.js'
 import { readCurrentWorkingDirectory } from '../utils/process.js'
 import { failCommand, writeOutput } from './output.js'
 

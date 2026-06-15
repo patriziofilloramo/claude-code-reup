@@ -1,5 +1,5 @@
-import { buildDiagnosticsReport } from '../core/diagnostics.js'
-import type { DiagnosticsReport } from '../core/diagnostics.js'
+import { buildDiagnosticsReport } from '../core/health/diagnostics.js'
+import type { DiagnosticsReport } from '../core/health/diagnostics.js'
 import { writeOutput } from './output.js'
 
 /** Prints non-destructive health checks for Claude Code's local session data. */

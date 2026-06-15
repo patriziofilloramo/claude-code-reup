@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { render } from 'ink'
 
 import type { ListedSession } from '../cli/list-command.js'
-import type { ContentMatch } from '../core/session-search.js'
-import type { Project } from '../core/session-model.js'
+import type { ContentMatch } from '../core/session/session-search.js'
+import type { Project } from '../core/session/session-model.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
 import { SearchResultsPicker } from './SearchResultsPicker.js'
 

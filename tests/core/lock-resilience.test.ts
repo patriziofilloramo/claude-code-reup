@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, open, readFile, rm, unlink, utimes, writeFile } from 'n
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { setSessionArchived } from '../../src/core/session-metadata.js'
+import { setSessionArchived } from '../../src/core/session/session-metadata.js'
 
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'
 const PROJECT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
@@ -71,9 +71,9 @@ describe('lock resilience', () => {
     // Resetting the module cache gives each writer its own in-process queue, so
     // coordination must happen through the cross-process file lock.
     vi.resetModules()
-    const writerA = await import('../../src/core/session-metadata.js')
+    const writerA = await import('../../src/core/session/session-metadata.js')
     vi.resetModules()
-    const writerB = await import('../../src/core/session-metadata.js')
+    const writerB = await import('../../src/core/session/session-metadata.js')
 
     await Promise.all([
       writerA.setSessionAlias(PROJECT_ID, SESSION_ID, 'concurrent alias'),

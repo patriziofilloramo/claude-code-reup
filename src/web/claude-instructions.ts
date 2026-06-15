@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { loadProjectById } from '../core/project-discovery.js'
+import { loadProjectById } from '../core/project/project-discovery.js'
 
 export interface ClaudeInstructions {
   content: string | null

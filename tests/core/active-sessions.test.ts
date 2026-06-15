@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { getActiveSessions } from '../../src/core/active-sessions.js'
+import { getActiveSessions } from '../../src/core/session/active-sessions.js'
 
 const LIVE_SESSION_ID = '11111111-1111-4111-8111-111111111111'
 const DEAD_SESSION_ID = '22222222-2222-4222-8222-222222222222'

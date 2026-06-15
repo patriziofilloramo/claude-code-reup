@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { APP } from '../../src/config/app.js'
-import { readAccountUsage } from '../../src/core/account-usage.js'
+import { readAccountUsage } from '../../src/core/usage/account-usage.js'
 
 describe('account usage', () => {
   let originalClaudeDirectory: string | undefined

@@ -13,7 +13,7 @@ import {
   replaceLinkWithDirectory,
   stopSyncLoop,
   syncBidirectional,
-} from '../../src/core/cloud-sync.js'
+} from '../../src/core/sync/cloud-sync.js'
 
 describe('stopSyncLoop', () => {
   it('does not throw when called before initCloudSync', () => {

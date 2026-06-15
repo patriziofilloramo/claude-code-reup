@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { APP } from '../config/app.js'
-import { getCcmDirectory, getClaudeDirectory } from './claude-paths.js'
+import { APP } from '../../config/app.js'
+import { getCcmDirectory, getClaudeDirectory } from '../project/claude-paths.js'
 import type { UsageLimitWindow } from './live-usage.js'
 
 const ACCOUNT_USAGE_CACHE_FILE_NAME = 'account-usage.json'

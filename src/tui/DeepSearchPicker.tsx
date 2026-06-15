@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
-import { getActiveSessions } from '../core/active-sessions.js'
+import { getActiveSessions } from '../core/session/active-sessions.js'
 import { COLORS } from '../config/theme.js'
-import type { ContentMatch } from '../core/session-search.js'
-import type { Project } from '../core/session-model.js'
+import type { ContentMatch } from '../core/session/session-search.js'
+import type { Project } from '../core/session/session-model.js'
 import { relativeTime } from '../utils/time.js'
 import { createVisibleWindow } from './session-view.js'
 
@@ -55,7 +55,7 @@ function DeepSearchPicker({
     setSelectedIndex(0)
 
     async function run() {
-      const { searchTranscripts } = await import('../core/session-search.js')
+      const { searchTranscripts } = await import('../core/session/session-search.js')
       const [matches, ids] = await Promise.all([
         searchTranscripts(query, projects, (scanned, total) => {
           if (!cancelled) setProgress({ scanned, total })

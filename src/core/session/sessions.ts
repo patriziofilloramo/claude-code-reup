@@ -9,8 +9,8 @@ export { getActiveSessions } from './active-sessions.js'
 export {
   decodeProjectDirectoryName as dirToPath,
   getClaudeDirectory as getClaudeDir,
-} from './claude-paths.js'
-export { loadProjectById, loadProjects } from './project-discovery.js'
+} from '../project/claude-paths.js'
+export { loadProjectById, loadProjects } from '../project/project-discovery.js'
 export { isValidSessionId } from './session-model.js'
 export type {
   Project,
@@ -21,4 +21,4 @@ export type {
 } from './session-model.js'
 export { setSessionAlias, setSessionArchived } from './session-metadata.js'
 export { computeSignalsFromLines, primaryStatus } from './session-signals.js'
-export { relativeTime } from '../utils/time.js'
+export { relativeTime } from '../../utils/time.js'

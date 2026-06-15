@@ -1,12 +1,12 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { getClaudeProjectsDirectory, resolveProjectPath } from './claude-paths.js'
-import { loadProjects } from './project-discovery.js'
-import { inspectProjectSidecarLock } from './project-sidecar-lock.js'
-import { isValidSessionId } from './session-model.js'
-import type { Project, Session, SessionStatus } from './session-model.js'
-import { primaryStatus } from './session-signals.js'
+import { getClaudeProjectsDirectory, resolveProjectPath } from '../project/claude-paths.js'
+import { loadProjects } from '../project/project-discovery.js'
+import { inspectProjectSidecarLock } from '../project/project-sidecar-lock.js'
+import { isValidSessionId } from '../session/session-model.js'
+import type { Project, Session, SessionStatus } from '../session/session-model.js'
+import { primaryStatus } from '../session/session-signals.js'
 
 const SESSION_TRANSCRIPT_PATTERN =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i
