@@ -16,7 +16,7 @@ describe('live usage', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-usage-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-usage-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
   })
@@ -152,7 +152,7 @@ describe('live usage', () => {
   })
 
   it('uses current account limits when the newest status-line payload omits them', async () => {
-    await configureCapture('ccm-capture')
+    await configureCapture('swoop-capture')
     await writeFile(
       join(temporaryClaudeDirectory, '.credentials.json'),
       JSON.stringify({ claudeAiOauth: { accessToken: 'test-token' } })
@@ -270,7 +270,7 @@ describe('live usage', () => {
   })
 
   it('reports live, stale, failed, and misconfigured capture states truthfully', async () => {
-    await configureCapture('ccm-capture')
+    await configureCapture('swoop-capture')
     const snapshot = parseStatusLineUsage(
       { session_id: 'health-check' },
       '2026-06-10T10:00:00.000Z'
@@ -299,7 +299,7 @@ describe('live usage', () => {
     await clearUsageCaptureError()
     await writeFile(
       join(temporaryClaudeDirectory, 'settings.json'),
-      JSON.stringify({ statusLine: { command: 'ccm-capture', type: 'command' } })
+      JSON.stringify({ statusLine: { command: 'swoop-capture', type: 'command' } })
     )
     await expect(readLiveUsageSummary()).resolves.toMatchObject({
       captureIssue: expect.stringContaining('refresh configuration'),
@@ -339,7 +339,7 @@ describe('live usage', () => {
     if (!snapshot) throw new Error('fixture did not parse')
     await writeLiveUsageSnapshot(snapshot)
 
-    const usageDirectory = join(temporaryClaudeDirectory, 'ccm', 'usage')
+    const usageDirectory = join(temporaryClaudeDirectory, 'swoop', 'usage')
     await mkdir(usageDirectory, { recursive: true })
     await writeFile(
       join(usageDirectory, 'corrupt.json'),
@@ -351,7 +351,7 @@ describe('live usage', () => {
   })
 
   async function configureCapture(installedCommand: string): Promise<void> {
-    await mkdir(join(temporaryClaudeDirectory, 'ccm'), { recursive: true })
+    await mkdir(join(temporaryClaudeDirectory, 'swoop'), { recursive: true })
     await Promise.all([
       writeFile(
         join(temporaryClaudeDirectory, 'settings.json'),
@@ -360,7 +360,7 @@ describe('live usage', () => {
         })
       ),
       writeFile(
-        join(temporaryClaudeDirectory, 'ccm', 'statusline-integration.json'),
+        join(temporaryClaudeDirectory, 'swoop', 'statusline-integration.json'),
         JSON.stringify({ installedCommand })
       ),
     ])

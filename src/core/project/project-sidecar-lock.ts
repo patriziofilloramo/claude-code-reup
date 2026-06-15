@@ -25,7 +25,7 @@ export async function withProjectSidecarLock<T>(
   projectDirectory: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  const lockPath = join(projectDirectory, 'ccm.json.lock')
+  const lockPath = join(projectDirectory, 'swoop.json.lock')
   const acquisitionDeadline = Date.now() + LOCK_ACQUISITION_TIMEOUT_MS
   let lockAcquired = false
 
@@ -60,7 +60,7 @@ export async function withProjectSidecarLock<T>(
     }
   }
 
-  if (!lockAcquired) throw new Error(`ccm: sidecar lock timeout (${lockPath})`)
+  if (!lockAcquired) throw new Error(`swoop: sidecar lock timeout (${lockPath})`)
 
   try {
     return await operation()

@@ -19,7 +19,7 @@ describe('completion command', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
-  it('preserves CCM relevance ordering in shells that sort completion results', () => {
+  it('preserves Swoop relevance ordering in shells that sort completion results', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     printCompletionScript(['bash'])
@@ -27,7 +27,7 @@ describe('completion command', () => {
     expect(String(log.mock.calls[0][0])).not.toContain('mapfile')
 
     printCompletionScript(['zsh'])
-    expect(String(log.mock.calls[1][0])).toContain('compadd -V ccm-sessions')
+    expect(String(log.mock.calls[1][0])).toContain('compadd -V swoop-sessions')
   })
 
   it('rejects unsupported shells', () => {
@@ -35,7 +35,7 @@ describe('completion command', () => {
 
     printCompletionScript(['fish'])
 
-    expect(error).toHaveBeenCalledWith('ccm: usage: ccm completion <powershell|bash|zsh>')
+    expect(error).toHaveBeenCalledWith('swoop: usage: swoop completion <powershell|bash|zsh>')
     expect(process.exitCode).toBe(1)
   })
 })

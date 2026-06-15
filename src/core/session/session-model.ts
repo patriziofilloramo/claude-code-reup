@@ -1,5 +1,5 @@
 /**
- * Independent facts derived from transcript analysis, CCM metadata, and path checks.
+ * Independent facts derived from transcript analysis, Swoop metadata, and path checks.
  * Multiple signals can apply to the same session simultaneously.
  *
  * When `analysisComplete` is false, transcript-derived values are `null` rather
@@ -40,18 +40,18 @@ export interface Project {
   sessions: Session[]
   /**
    * True when the project's storage directory is linked to a cloud location
-   * (either via a .ccm-link file or a legacy NTFS junction / symlink).
+   * (either via a .swoop-link file or a legacy NTFS junction / symlink).
    * Used to show the cloud shared-storage indicator in the UI.
    */
   isShared: boolean
   /**
    * Absolute path to the cloud directory that sessions are synced with.
-   * Set when a .ccm-link file is present; undefined for local-only projects
+   * Set when a .swoop-link file is present; undefined for local-only projects
    * or legacy junctions that have not yet been migrated.
    */
   cloudPath?: string
   /**
-   * True when the cloud junction target is temporarily unreachable and ccm
+   * True when the cloud junction target is temporarily unreachable and swoop
    * has switched the project to a local backup directory. Sessions written
    * while offline will be merged back to the cloud when it comes online.
    * Shown as grey cloud in the UI so the user knows sync is paused.
@@ -59,7 +59,7 @@ export interface Project {
   cloudOffline?: boolean
   /**
    * Device names that wrote a presence file to the cloud directory while not
-   * linked (i.e. they opened the project without running `ccm sync link`).
+   * linked (i.e. they opened the project without running `swoop sync link`).
    * Populated from {cloudDir}/device-presence/ on each discovery pass.
    * Shown as orange cloud in the UI to prompt the user to link that device.
    */

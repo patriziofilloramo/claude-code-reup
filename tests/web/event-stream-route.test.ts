@@ -13,14 +13,14 @@ describe('event stream route', () => {
     source = await readFile(ROUTE_PATH, 'utf8')
   })
 
-  it('observes transcript, index, active-session, and CCM sidecar changes', () => {
+  it('observes transcript, index, active-session, and Swoop sidecar changes', () => {
     expect(isRelevantClaudeFile('projects/example/session.jsonl')).toBe(true)
     expect(isRelevantClaudeFile('projects/example/sessions-index.json')).toBe(true)
-    expect(isRelevantClaudeFile('projects/example/ccm.json')).toBe(true)
-    expect(isRelevantClaudeFile('ccm/usage/session.json')).toBe(true)
-    expect(isRelevantClaudeFile('ccm/account-usage.json')).toBe(true)
-    expect(isRelevantClaudeFile('ccm/usage-capture-error.json')).toBe(true)
-    expect(isRelevantClaudeFile('ccm/statusline-integration.json')).toBe(true)
+    expect(isRelevantClaudeFile('projects/example/swoop.json')).toBe(true)
+    expect(isRelevantClaudeFile('swoop/usage/session.json')).toBe(true)
+    expect(isRelevantClaudeFile('swoop/account-usage.json')).toBe(true)
+    expect(isRelevantClaudeFile('swoop/usage-capture-error.json')).toBe(true)
+    expect(isRelevantClaudeFile('swoop/statusline-integration.json')).toBe(true)
     expect(isRelevantClaudeFile('settings.json')).toBe(true)
     expect(isRelevantClaudeFile('sessions/process.json')).toBe(true)
     expect(isRelevantClaudeFile('projects/example/notes.txt')).toBe(false)

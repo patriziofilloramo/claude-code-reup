@@ -66,7 +66,7 @@ export function analyzeTranscriptForHandoff(lines: string[]): TranscriptHandoffC
 export function formatHandoff(session: Session, context: TranscriptHandoffContext): string {
   const title = session.alias ?? session.name
   const lines = [
-    `# CCM Handoff: ${title}`,
+    `# Swoop Handoff: ${title}`,
     '',
     `- Session: \`${session.id}\``,
     `- Project: \`${session.projectPath}\``,

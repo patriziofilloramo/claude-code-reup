@@ -29,17 +29,17 @@ const TAB_CURSOR_MAX: Record<Tab, number> = {
 const SHELLS = [
   {
     label: 'PowerShell',
-    cmd: 'ccm completion powershell | Out-String | Invoke-Expression',
+    cmd: 'swoop completion powershell | Out-String | Invoke-Expression',
     profile: '$PROFILE',
   },
   {
     label: 'Bash',
-    cmd: 'eval "$(ccm completion bash)"',
+    cmd: 'eval "$(swoop completion bash)"',
     profile: '~/.bashrc or ~/.bash_profile',
   },
   {
     label: 'Zsh',
-    cmd: 'eval "$(ccm completion zsh)"',
+    cmd: 'eval "$(swoop completion zsh)"',
     profile: '~/.zshrc',
   },
 ] as const
@@ -128,7 +128,7 @@ export function ConfigApp({
       const next = themes[cursor] ?? 'dark'
       await setUserPref('theme', next)
       setTheme(next)
-      setStatusMsg({ text: `Theme set to ${next} — restart ccm to apply`, ok: true })
+      setStatusMsg({ text: `Theme set to ${next} — restart swoop to apply`, ok: true })
       return
     }
 
@@ -199,7 +199,7 @@ export function ConfigApp({
               const msg = err instanceof Error ? err.message : String(err)
               if (msg.includes('existing') && msg.includes('--replace')) {
                 setStatusMsg({
-                  text: 'An existing status line is set — run: ccm usage setup --replace',
+                  text: 'An existing status line is set — run: swoop usage setup --replace',
                   ok: false,
                 })
               } else {
@@ -229,7 +229,7 @@ export function ConfigApp({
       {/* Header */}
       <Box gap={1} paddingX={1} paddingTop={1}>
         <Text bold color={COLORS.accent}>
-          ccm
+          swoop
         </Text>
         <Text color={COLORS.muted}>config</Text>
       </Box>
@@ -296,7 +296,7 @@ export function ConfigApp({
         </Text>
         <Text color={COLORS.muted}>
           <Text color={COLORS.text}>{onClose ? 'esc / q' : 'q'}</Text>
-          {onClose ? ' back to ccm' : ' quit'}
+          {onClose ? ' back to swoop' : ' quit'}
         </Text>
       </Box>
     </Box>
@@ -315,7 +315,9 @@ function InterfaceTab({ cursor, theme }: { cursor: number; theme: ThemeName }) {
       <Text bold color={COLORS.text}>
         Color theme
       </Text>
-      <Text color={COLORS.dim}>Takes effect when ccm is restarted. The web UI switches live.</Text>
+      <Text color={COLORS.dim}>
+        Takes effect when swoop is restarted. The web UI switches live.
+      </Text>
       <Box flexDirection="column" marginTop={1}>
         {options.map((opt, i) => {
           const focused = i === cursor
@@ -447,10 +449,10 @@ function FeaturesTab({
         <Box paddingLeft={3}>
           <Text color={COLORS.dim}>
             {autoCleanupOnStart === 'on' &&
-              'Shows cleanup picker before opening ccm — you choose what to archive.'}
+              'Shows cleanup picker before opening swoop — you choose what to archive.'}
             {autoCleanupOnStart === 'auto' &&
               'Archives high-confidence cleanup candidates automatically on startup.'}
-            {autoCleanupOnStart === 'off' && 'No automatic cleanup. Run `ccm cleanup` manually.'}
+            {autoCleanupOnStart === 'off' && 'No automatic cleanup. Run `swoop cleanup` manually.'}
           </Text>
         </Box>
         {autoCleanupOnStart !== 'off' && (

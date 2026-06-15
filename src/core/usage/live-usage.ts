@@ -4,13 +4,17 @@ import { join } from 'node:path'
 
 import { APP } from '../../config/app.js'
 import { clearAccountUsageCache, readAccountUsage } from './account-usage.js'
-import { getCcmDirectory, getClaudeDirectory, getClaudeStatePath } from '../project/claude-paths.js'
+import {
+  getSwoopDirectory,
+  getClaudeDirectory,
+  getClaudeStatePath,
+} from '../project/claude-paths.js'
 
 /** Bump when the snapshot JSON shape changes in a backwards-incompatible way. */
 const USAGE_SCHEMA_VERSION = 1
-/** Filename for the last collector error stored in the CCM directory. */
+/** Filename for the last collector error stored in the Swoop directory. */
 const CAPTURE_ERROR_FILE_NAME = 'usage-capture-error.json'
-/** Filename for the statusline integration marker in the CCM directory. */
+/** Filename for the statusline integration marker in the Swoop directory. */
 const INTEGRATION_FILE_NAME = 'statusline-integration.json'
 /** Maximum rename attempts when another process holds a file lock (Windows EACCES/EPERM). */
 const MAX_RENAME_RETRIES = 5
@@ -219,7 +223,7 @@ export async function readLiveUsageSummary(now = Date.now()): Promise<LiveUsageS
 
 /** Stores one privacy-safe collector error so silent failures remain diagnosable. */
 export async function recordUsageCaptureError(error: unknown): Promise<void> {
-  await writeJsonAtomically(join(getCcmDirectory(), CAPTURE_ERROR_FILE_NAME), {
+  await writeJsonAtomically(join(getSwoopDirectory(), CAPTURE_ERROR_FILE_NAME), {
     message: error instanceof Error ? error.message : String(error),
     occurredAt: new Date().toISOString(),
   } satisfies UsageCaptureError)
@@ -227,7 +231,7 @@ export async function recordUsageCaptureError(error: unknown): Promise<void> {
 
 /** Clears an earlier collector error after the next successful capture. */
 export async function clearUsageCaptureError(): Promise<void> {
-  await unlink(join(getCcmDirectory(), CAPTURE_ERROR_FILE_NAME)).catch(() => {})
+  await unlink(join(getSwoopDirectory(), CAPTURE_ERROR_FILE_NAME)).catch(() => {})
 }
 
 /**
@@ -294,15 +298,15 @@ export async function clearLiveUsageSnapshots(): Promise<void> {
 
 /** Writes the raw status-line payload for post-capture inspection. */
 export async function writeRawCapture(rawJson: string): Promise<void> {
-  const path = join(getCcmDirectory(), 'usage-last-raw.json')
-  await mkdir(getCcmDirectory(), { recursive: true })
+  const path = join(getSwoopDirectory(), 'usage-last-raw.json')
+  await mkdir(getSwoopDirectory(), { recursive: true })
   await writeFile(path, rawJson, 'utf8')
 }
 
 /** Reads back the last raw status-line payload, or null if none exists. */
 export async function readRawCapture(): Promise<string | null> {
   try {
-    return await readFile(join(getCcmDirectory(), 'usage-last-raw.json'), 'utf8')
+    return await readFile(join(getSwoopDirectory(), 'usage-last-raw.json'), 'utf8')
   } catch {
     return null
   }
@@ -312,7 +316,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
   let marker: unknown
   try {
     marker = JSON.parse(
-      (await readFile(join(getCcmDirectory(), INTEGRATION_FILE_NAME), 'utf8')).replace(
+      (await readFile(join(getSwoopDirectory(), INTEGRATION_FILE_NAME), 'utf8')).replace(
         /^\uFEFF/,
         ''
       )
@@ -324,7 +328,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
     return {
       configured: false,
       issue:
-        'cannot read the CCM usage integration marker; run `ccm usage setup --replace` to repair it',
+        'cannot read the Swoop usage integration marker; run `swoop usage setup --replace` to repair it',
       markerPresent: true,
     }
   }
@@ -333,7 +337,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
     return {
       configured: false,
       issue:
-        'the CCM usage integration marker is invalid; run `ccm usage setup --replace` to repair it',
+        'the Swoop usage integration marker is invalid; run `swoop usage setup --replace` to repair it',
       markerPresent: true,
     }
   }
@@ -348,7 +352,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
       return {
         configured: false,
         issue:
-          'Claude Code is not using the CCM status line; run `ccm usage setup --replace` to restore it',
+          'Claude Code is not using the Swoop status line; run `swoop usage setup --replace` to restore it',
         markerPresent: true,
       }
     }
@@ -359,7 +363,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
       return {
         configured: false,
         issue:
-          'the CCM status line refresh configuration is incomplete; run `ccm usage setup` to repair it',
+          'the Swoop status line refresh configuration is incomplete; run `swoop usage setup` to repair it',
         markerPresent: true,
       }
     }
@@ -367,7 +371,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
   } catch {
     return {
       configured: false,
-      issue: 'cannot verify the Claude Code status line; run `ccm usage setup` to repair it',
+      issue: 'cannot verify the Claude Code status line; run `swoop usage setup` to repair it',
       markerPresent: true,
     }
   }
@@ -376,7 +380,7 @@ async function readUsageCaptureIntegrationState(): Promise<UsageCaptureIntegrati
 async function readUsageCaptureError(): Promise<UsageCaptureError | null> {
   try {
     const value = JSON.parse(
-      await readFile(join(getCcmDirectory(), CAPTURE_ERROR_FILE_NAME), 'utf8')
+      await readFile(join(getSwoopDirectory(), CAPTURE_ERROR_FILE_NAME), 'utf8')
     )
     return isRecord(value) &&
       isTimestamp(value['occurredAt']) &&
@@ -471,7 +475,7 @@ function stableSessionKey(sessionId: string): string {
 }
 
 function getUsageDirectory(): string {
-  return join(getCcmDirectory(), 'usage')
+  return join(getSwoopDirectory(), 'usage')
 }
 
 async function renameWithContentionRetry(
@@ -495,7 +499,7 @@ async function renameWithContentionRetry(
 }
 
 async function writeJsonAtomically(path: string, value: unknown): Promise<void> {
-  await mkdir(getCcmDirectory(), { recursive: true })
+  await mkdir(getSwoopDirectory(), { recursive: true })
   const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`
   try {
     await writeFile(temporaryPath, JSON.stringify(value), { encoding: 'utf8', mode: 0o600 })

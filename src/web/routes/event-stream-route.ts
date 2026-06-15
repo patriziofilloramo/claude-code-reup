@@ -41,12 +41,12 @@ export function isRelevantClaudeFile(fileName: string | null): boolean {
   return (
     fileName?.endsWith('.jsonl') === true ||
     fileName?.endsWith('sessions-index.json') === true ||
-    fileName?.endsWith('ccm.json') === true ||
+    fileName?.endsWith('swoop.json') === true ||
     fileName === 'settings.json' ||
-    /^ccm[/\\](account-usage|statusline-integration|usage-capture-error)\.json$/i.test(
+    /^swoop[/\\](account-usage|statusline-integration|usage-capture-error)\.json$/i.test(
       fileName ?? ''
     ) ||
-    /^ccm[/\\]usage[/\\].*\.json$/i.test(fileName ?? '') ||
+    /^swoop[/\\]usage[/\\].*\.json$/i.test(fileName ?? '') ||
     /^sessions[/\\].*\.json$/i.test(fileName ?? '')
   )
 }

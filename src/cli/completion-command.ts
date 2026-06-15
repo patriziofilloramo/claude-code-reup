@@ -8,58 +8,58 @@ type SupportedShell = 'bash' | 'powershell' | 'zsh'
 
 const COMPLETION_SCRIPTS: Record<SupportedShell, string> = {
   bash: [
-    '_ccm_complete() {',
+    '_swoop_complete() {',
     '  local current="${COMP_WORDS[COMP_CWORD]}"',
     '  if [[ "$COMP_CWORD" -eq 2 && ("${COMP_WORDS[1]}" == "resume" || "${COMP_WORDS[1]}" == "handoff") ]]; then',
     '    compopt -o nosort 2>/dev/null || true',
-    '    COMPREPLY=( $(ccm __complete-session-ids "$current") )',
+    '    COMPREPLY=( $(swoop __complete-session-ids "$current") )',
     '  fi',
     '}',
-    'complete -F _ccm_complete ccm',
+    'complete -F _swoop_complete swoop',
   ].join('\n'),
-  powershell: String.raw`Register-ArgumentCompleter -Native -CommandName ccm, ccm.cmd -ScriptBlock {
+  powershell: String.raw`Register-ArgumentCompleter -Native -CommandName swoop, swoop.cmd -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
   if ($elements.Count -ge 2 -and $elements[1] -in @('resume', 'handoff')) {
-    $ccmCommand = Get-Command ccm.cmd -ErrorAction SilentlyContinue
-    if (-not $ccmCommand) { $ccmCommand = Get-Command ccm -ErrorAction SilentlyContinue }
-    if ($ccmCommand) {
-      & $ccmCommand __complete-session-ids $wordToComplete | ForEach-Object {
+    $swoopCommand = Get-Command swoop.cmd -ErrorAction SilentlyContinue
+    if (-not $swoopCommand) { $swoopCommand = Get-Command swoop -ErrorAction SilentlyContinue }
+    if ($swoopCommand) {
+      & $swoopCommand __complete-session-ids $wordToComplete | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
       }
     }
   }
 }`,
-  zsh: String.raw`_ccm_complete() {
+  zsh: String.raw`_swoop_complete() {
   if (( CURRENT == 3 )) && [[ "$words[2]" == "resume" || "$words[2]" == "handoff" ]]; then
-    compadd -V ccm-sessions -- $(ccm __complete-session-ids "$words[CURRENT]")
+    compadd -V swoop-sessions -- $(swoop __complete-session-ids "$words[CURRENT]")
   fi
 }
-compdef _ccm_complete ccm`,
+compdef _swoop_complete swoop`,
 }
 
 const ACTIVATION_INSTRUCTIONS: Record<SupportedShell, string[]> = {
   bash: [
     'Paste the script above into your terminal to activate for this session.',
     'For persistent completion, add this line to ~/.bashrc or ~/.bash_profile:',
-    '  eval "$(ccm completion bash)"',
+    '  eval "$(swoop completion bash)"',
   ],
   zsh: [
     'Paste the script above into your terminal to activate for this session.',
     'For persistent completion, add this line to ~/.zshrc:',
-    '  eval "$(ccm completion zsh)"',
+    '  eval "$(swoop completion zsh)"',
   ],
   powershell: [
     'Paste the script above into your PowerShell session to activate for this session.',
     'For persistent completion, add this line to your $PROFILE:',
-    '  ccm completion powershell | Out-String | Invoke-Expression',
+    '  swoop completion powershell | Out-String | Invoke-Expression',
   ],
 }
 
 /** Prints a shell-native completion registration script to stdout with activation instructions on stderr. */
 export function printCompletionScript(commandArguments: string[]): void {
   if (commandArguments.length !== 1 || !isSupportedShell(commandArguments[0])) {
-    failCommand('usage: ccm completion <powershell|bash|zsh>')
+    failCommand('usage: swoop completion <powershell|bash|zsh>')
     return
   }
 
@@ -67,7 +67,7 @@ export function printCompletionScript(commandArguments: string[]): void {
   writeOutput(COMPLETION_SCRIPTS[shell])
 
   // Activation instructions are only useful when the user reads stdout directly.
-  // Suppress them when stdout is piped/captured (eval "$(ccm completion bash)", etc.)
+  // Suppress them when stdout is piped/captured (eval "$(swoop completion bash)", etc.)
   // so the extra output doesn't confuse scripts that source the result.
   if (process.stdout.isTTY) {
     const lines = ACTIVATION_INSTRUCTIONS[shell]

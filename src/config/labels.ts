@@ -11,8 +11,8 @@
 
 export const LABELS = {
   // ── Application ──────────────────────────────────────────────────────────
-  appName: 'ccm',
-  appTitle: 'ccm — session manager for Claude Code',
+  appName: 'swoop',
+  appTitle: 'Swoop — session manager for Claude Code',
   appTagline: 'claude code session manager',
 
   // ── CLI help ─────────────────────────────────────────────────────────────
@@ -58,19 +58,19 @@ export const LABELS = {
 
   // ── Inbox command ─────────────────────────────────────────────────────────
   inboxClear: 'Inbox clear. No active sessions or sessions needing attention.',
-  inboxTitle: 'CCM Inbox',
+  inboxTitle: 'Swoop Inbox',
 
   // ── Doctor command ────────────────────────────────────────────────────────
-  doctorTitle: 'CCM Doctor',
+  doctorTitle: 'Swoop Doctor',
   noIssuesFound: 'No issues found.',
   brokenIndices: 'Broken session indices',
-  brokenIndicesExplan: 'Claude Code owns these files; CCM falls back to readable transcripts.',
+  brokenIndicesExplan: 'Claude Code owns these files; Swoop falls back to readable transcripts.',
   staleLocks: 'Stale sidecar locks',
   orphanedTranscripts: 'Orphaned transcripts',
   missingPaths: 'Missing session paths',
 
   // ── Handoff & resume ──────────────────────────────────────────────────────
-  handoffUsage: 'usage: ccm handoff [session-id-or-prefix]',
+  handoffUsage: 'usage: swoop handoff [session-id-or-prefix]',
   transcriptNotFound: 'transcript not found for session',
   cannotReadTranscript: 'cannot read transcript for session',
   selectorRequired: 'a session selector is required outside an interactive terminal',
@@ -80,9 +80,9 @@ export const LABELS = {
   terminatedBySignal: 'claude terminated by signal',
 
   // ── Search command ────────────────────────────────────────────────────────
-  searchUsage: 'usage: ccm search [--deep] <query>',
-  searchRequiresTTY: 'ccm search requires an interactive terminal',
-  searchFailed: 'search failed — run with CCM_DEBUG=1 for details',
+  searchUsage: 'usage: swoop search [--deep] <query>',
+  searchRequiresTTY: 'swoop search requires an interactive terminal',
+  searchFailed: 'search failed — run with SWOOP_DEBUG=1 for details',
 
   // ── Config command ────────────────────────────────────────────────────────
   configUIDesc: 'Open interactive settings UI',
@@ -90,13 +90,13 @@ export const LABELS = {
   configSetDesc: 'Save a setting',
   configResetDesc: 'Reset one or all settings to defaults',
   unknownConfigSubcommand: 'unknown config subcommand: ',
-  configSetUsage: 'usage: ccm config set <key> <value>',
+  configSetUsage: 'usage: swoop config set <key> <value>',
   unknownConfigKey: 'unknown key: ',
 
   // ── Sync command ─────────────────────────────────────────────────────────
-  syncWarning: 'ccm sync is experimental — use at your own risk.',
-  syncUsage: 'usage: ccm sync [link|unlink|status] [path]',
-  linkUsage: 'usage: ccm sync link [project-path]',
+  syncWarning: 'swoop sync is experimental — use at your own risk.',
+  syncUsage: 'usage: swoop sync [link|unlink|status] [path]',
+  linkUsage: 'usage: swoop sync link [project-path]',
   allLinked: 'all projects are already synced to cloud storage',
   pathRequired: 'a project path is required outside an interactive terminal',
   noCloudDetected: 'no cloud storage detected — showing all projects',
@@ -167,7 +167,7 @@ export const LABELS = {
   // ── TUI: launch & resume ──────────────────────────────────────────────────
   launchingVerb: 'launching',
   newSessionVerb: 'starting new session in',
-  resumePickerTitle: 'CCM RESUME',
+  resumePickerTitle: 'Swoop RESUME',
   sessionsCountLabel: 'sessions',
 } as const
 

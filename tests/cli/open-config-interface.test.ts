@@ -30,7 +30,7 @@ describe('openConfigInterface', () => {
   it('opens the requested tab after releasing terminal input', async () => {
     setTTYState(true, true)
 
-    await openConfigInterface({ commandName: 'ccm sync', initialTab: 'Sync' })
+    await openConfigInterface({ commandName: 'swoop sync', initialTab: 'Sync' })
 
     expect(releaseTerminalInput).toHaveBeenCalledOnce()
     expect(runConfigApp).toHaveBeenCalledWith({ initialTab: 'Sync' })
@@ -42,13 +42,13 @@ describe('openConfigInterface', () => {
     const writeError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await openConfigInterface({
-      commandName: 'ccm config',
-      nonInteractiveAlternative: 'use `ccm config get` in scripts',
+      commandName: 'swoop config',
+      nonInteractiveAlternative: 'use `swoop config get` in scripts',
     })
 
     expect(process.exitCode).toBe(1)
     expect(writeError).toHaveBeenCalledWith(
-      'ccm: ccm config requires an interactive terminal; use `ccm config get` in scripts'
+      'swoop: swoop config requires an interactive terminal; use `swoop config get` in scripts'
     )
     expect(releaseTerminalInput).not.toHaveBeenCalled()
     expect(runConfigApp).not.toHaveBeenCalled()

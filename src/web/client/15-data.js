@@ -13,7 +13,7 @@ async function refreshUsageSummary() {
     liveUsage = await requestJson('/api/usage')
     renderUsageSummary()
   } catch (error) {
-    console.error('[ccm] failed to refresh usage:', error)
+    console.error('[swoop] failed to refresh usage:', error)
   } finally {
     usageRefreshInProgress = false
   }
@@ -91,7 +91,7 @@ async function refreshProjectData() {
   } catch (error) {
     elements.footerStatus.textContent = 'Error loading projects'
     elements.footerStatus.className = 'ftr-status err'
-    console.error('[ccm] failed to refresh project data:', error)
+    console.error('[swoop] failed to refresh project data:', error)
   }
 }
 

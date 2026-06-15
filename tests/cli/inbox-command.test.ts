@@ -46,7 +46,7 @@ describe('formatInbox', () => {
 
     const output = formatInbox(projects, new Set([active.id]))
 
-    expect(output).toContain('CCM Inbox (2)')
+    expect(output).toContain('Swoop Inbox (2)')
     expect(output).toContain('Active work')
     expect(output).toContain('Interrupted work')
     expect(output).not.toContain('Archived work')

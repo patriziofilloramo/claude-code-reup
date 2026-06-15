@@ -7,7 +7,7 @@
  * Only applied to src/tui/ — the CLI uses console.log/failCommand which are
  * harder to distinguish from technical logging without full type info.
  *
- * False-positive escape hatch: add eslint-disable-next-line ccm/no-raw-ui-strings
+ * False-positive escape hatch: add eslint-disable-next-line swoop/no-raw-ui-strings
  * for the rare case where a raw string is intentional (e.g. a single symbol).
  */
 
@@ -22,7 +22,7 @@ const rule = {
     docs: {
       description:
         'Require user-facing strings to come from LABELS (src/config/labels.ts) instead of raw literals.',
-      url: 'https://github.com/your-org/ccm#i18n',
+      url: 'https://github.com/your-org/swoop#i18n',
     },
     messages: {
       rawUiString: 'Raw UI string "{{text}}" — use LABELS.xxx from src/config/labels.ts instead.',

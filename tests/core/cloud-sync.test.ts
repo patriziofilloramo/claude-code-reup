@@ -32,7 +32,7 @@ describe('syncBidirectional', () => {
   let root: string
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'ccm-sync-test-'))
+    root = await mkdtemp(join(tmpdir(), 'swoop-sync-test-'))
     dirA = join(root, 'a')
     dirB = join(root, 'b')
     await mkdir(dirA, { recursive: true })
@@ -104,13 +104,13 @@ describe('syncBidirectional', () => {
     )
   })
 
-  it('skips the legacy .ccm-link marker', async () => {
-    await writeFile(join(dirA, '.ccm-link'), '/cloud/path', 'utf8')
+  it('skips the legacy .swoop-link marker', async () => {
+    await writeFile(join(dirA, '.swoop-link'), '/cloud/path', 'utf8')
     await writeFile(join(dirA, 'session.jsonl'), 'data', 'utf8')
 
     await syncBidirectional(dirA, dirB)
 
-    await expect(readFile(join(dirB, '.ccm-link'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(dirB, '.swoop-link'), 'utf8')).rejects.toThrow()
     expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('data')
   })
 
@@ -139,7 +139,7 @@ describe('mirrorDirectory', () => {
   let source: string
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'ccm-mirror-test-'))
+    root = await mkdtemp(join(tmpdir(), 'swoop-mirror-test-'))
     source = join(root, 'source')
     destination = join(root, 'destination')
     await mkdir(source, { recursive: true })
@@ -165,7 +165,7 @@ describe('transactional link replacement', () => {
   let root: string
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'ccm-link-test-'))
+    root = await mkdtemp(join(tmpdir(), 'swoop-link-test-'))
   })
 
   afterEach(async () => {

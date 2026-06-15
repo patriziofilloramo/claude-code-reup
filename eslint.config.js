@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint'
 
 import noRawUiStrings from './src/config/eslint-rules/no-raw-ui-strings.js'
 
-const ccmPlugin = { rules: { 'no-raw-ui-strings': noRawUiStrings } }
+const swoopPlugin = { rules: { 'no-raw-ui-strings': noRawUiStrings } }
 
 export default tseslint.config(
   eslintJs.configs.recommended,
@@ -46,11 +46,11 @@ export default tseslint.config(
   },
   {
     files: ['src/tui/**/*.{ts,tsx}'],
-    plugins: { ccm: ccmPlugin },
+    plugins: { swoop: swoopPlugin },
     rules: {
       // Warn when raw string literals appear in JSX text nodes.
       // Fix: use LABELS.xxx from src/config/labels.ts.
-      'ccm/no-raw-ui-strings': 'warn',
+      'swoop/no-raw-ui-strings': 'warn',
     },
   },
   {

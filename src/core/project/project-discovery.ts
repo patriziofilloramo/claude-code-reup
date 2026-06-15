@@ -175,12 +175,12 @@ async function loadProjectDirectory(
  *      real local directory.
  *   2. NTFS junction / symlink detection via lstat: pre-startup state and
  *      fresh installs.
- *   3. Legacy .ccm-link file: projects not yet migrated to junction model.
+ *   3. Legacy .swoop-link file: projects not yet migrated to junction model.
  */
 async function readLinkState(
   projectDirectory: string
 ): Promise<{ isShared: boolean; cloudPath?: string; cloudOffline?: boolean }> {
-  // 1. Registry — always wins when populated (ccm is running)
+  // 1. Registry — always wins when populated (swoop is running)
   const regEntry = syncRegistry.get(projectDirectory)
   if (regEntry) {
     return {
@@ -202,7 +202,7 @@ async function readLinkState(
     /* not a junction */
   }
 
-  // 3. Legacy .ccm-link (will be migrated to junction on next initCloudSync)
+  // 3. Legacy .swoop-link (will be migrated to junction on next initCloudSync)
   try {
     const cloudPath = (await readFile(join(projectDirectory, APP.cloudLinkFile), 'utf8')).trim()
     if (cloudPath) return { isShared: true, cloudPath }

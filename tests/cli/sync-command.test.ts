@@ -13,7 +13,7 @@ describe('sync command safety', () => {
   let temporaryRoot: string
 
   beforeEach(async () => {
-    temporaryRoot = await mkdtemp(join(tmpdir(), 'ccm-sync-command-test-'))
+    temporaryRoot = await mkdtemp(join(tmpdir(), 'swoop-sync-command-test-'))
     projectPath = join(temporaryRoot, 'active-project')
     originalClaudeConfigDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = join(temporaryRoot, 'claude')
@@ -79,7 +79,7 @@ describe('sync command interface', () => {
 
     expect(process.exitCode).toBe(1)
     expect(writeError).toHaveBeenCalledWith(
-      'ccm: ccm sync requires an interactive terminal; use `ccm sync link <path>` or `ccm sync unlink <path>` in scripts'
+      'swoop: swoop sync requires an interactive terminal; use `swoop sync link <path>` or `swoop sync unlink <path>` in scripts'
     )
   })
 })

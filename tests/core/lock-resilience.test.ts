@@ -13,7 +13,7 @@ describe('lock resilience', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-lock-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-lock-test-'))
     originalClaudeConfigDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
     await mkdir(join(temporaryClaudeDirectory, 'projects', PROJECT_ID), { recursive: true })
@@ -26,7 +26,7 @@ describe('lock resilience', () => {
   })
 
   it('recovers from an empty lock file (writer crashed before writing PID)', async () => {
-    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'ccm.json.lock')
+    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'swoop.json.lock')
     await writeFile(lockPath, '') // simulate crash between O_EXCL creation and PID write
     const staleTimestamp = new Date(Date.now() - 10_000)
     await utimes(lockPath, staleTimestamp, staleTimestamp)
@@ -34,7 +34,7 @@ describe('lock resilience', () => {
   })
 
   it('does not steal a fresh empty lock from a live writer', async () => {
-    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'ccm.json.lock')
+    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'swoop.json.lock')
     const lockFile = await open(lockPath, 'wx')
 
     const liveWriter = (async () => {
@@ -50,7 +50,7 @@ describe('lock resilience', () => {
   })
 
   it('waits for an abandoned empty lock to cross the stale threshold before recovering', async () => {
-    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'ccm.json.lock')
+    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'swoop.json.lock')
     await writeFile(lockPath, '')
     const almostStaleTimestamp = new Date(Date.now() - 4_900)
     await utimes(lockPath, almostStaleTimestamp, almostStaleTimestamp)
@@ -61,7 +61,7 @@ describe('lock resilience', () => {
   })
 
   it('recovers from a lock with an impossible PID (dead process)', async () => {
-    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'ccm.json.lock')
+    const lockPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'swoop.json.lock')
     // PID 2147483647 (INT32_MAX) is well beyond any OS limit and always ESRCH
     await writeFile(lockPath, '2147483647')
     await expect(setSessionArchived(PROJECT_ID, SESSION_ID, true)).resolves.toBeUndefined()
@@ -81,7 +81,7 @@ describe('lock resilience', () => {
     ])
 
     const metadataContent = await readFile(
-      join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'ccm.json'),
+      join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'swoop.json'),
       'utf8'
     )
     const metadata = JSON.parse(metadataContent) as {

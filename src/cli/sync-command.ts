@@ -63,15 +63,15 @@ export async function runSyncCommand(args: string[]): Promise<void> {
       return
     case undefined: {
       await openConfigInterface({
-        commandName: 'ccm sync',
+        commandName: 'swoop sync',
         initialTab: 'Sync',
         nonInteractiveAlternative:
-          'use `ccm sync link <path>` or `ccm sync unlink <path>` in scripts',
+          'use `swoop sync link <path>` or `swoop sync unlink <path>` in scripts',
       })
       return
     }
     default:
-      failCommand('usage: ccm sync [link|unlink] [path]')
+      failCommand('usage: swoop sync [link|unlink] [path]')
   }
 }
 
@@ -81,16 +81,16 @@ export async function runSyncCommand(args: string[]): Promise<void> {
 
 async function linkSync(args: string[]): Promise<void> {
   if (args.length > 1) {
-    failCommand('usage: ccm sync link [project-path]')
+    failCommand('usage: swoop sync link [project-path]')
     return
   }
 
   writeOutput(
     [
-      '⚠  ccm sync is experimental — use at your own risk.',
+      '⚠  swoop sync is experimental — use at your own risk.',
       '   Sessions are moved into the cloud directory via a filesystem junction.',
       '   Back up ~/.claude/projects/<id> before proceeding.',
-      '   Run `ccm sync unlink <path>` to safely restore to local-only storage.',
+      '   Run `swoop sync unlink <path>` to safely restore to local-only storage.',
       '',
     ].join('\n')
   )
@@ -145,7 +145,7 @@ async function linkProjectSafe(projectPath: string, projects: Project[]): Promis
  *
  * After linking, Claude Code writes sessions directly to cloud storage.
  * Other devices with access to the same cloud directory (via pCloud, OneDrive,
- * etc.) see those sessions without needing ccm installed.
+ * etc.) see those sessions without needing swoop installed.
  */
 async function linkProject(
   projectPath: string,
@@ -202,8 +202,8 @@ async function linkProject(
     [
       `✓ linked: ${projectPath}`,
       `  sessions write directly to ${cloudDir}`,
-      `  CLAUDE.md updated — other devices will be prompted to run ccm sync`,
-      `  start ccm to enable offline backup and conflict detection`,
+      `  CLAUDE.md updated — other devices will be prompted to run swoop sync`,
+      `  start swoop to enable offline backup and conflict detection`,
     ].join('\n')
   )
 }
@@ -214,13 +214,13 @@ async function linkProject(
 
 async function unlinkSync(args: string[]): Promise<void> {
   if (args.length > 1) {
-    failCommand('usage: ccm sync unlink [project-path]')
+    failCommand('usage: swoop sync unlink [project-path]')
     return
   }
 
   writeOutput(
     [
-      '⚠  ccm sync is experimental — use at your own risk.',
+      '⚠  swoop sync is experimental — use at your own risk.',
       '   Sessions will be copied from the cloud directory back to local storage.',
       '',
     ].join('\n')
@@ -242,7 +242,7 @@ async function unlinkSync(args: string[]): Promise<void> {
     const picked = await runProjectPicker(
       linked,
       undefined,
-      'CCM SYNC UNLINK',
+      'Swoop SYNC UNLINK',
       'select a project to unlink'
     )
     releaseTerminalInput()
@@ -290,7 +290,7 @@ async function unlinkProject(
     const cloudTarget = (await readlink(localDir)).replace(/^\\\\\?\\/, '')
     await replaceLinkWithDirectory(localDir, cloudTarget, cloudTarget)
   } else if (localStat?.isDirectory()) {
-    // Offline-mode local dir: remove the legacy .ccm-link marker if present
+    // Offline-mode local dir: remove the legacy .swoop-link marker if present
     await rm(join(localDir, APP.cloudLinkFile), { force: true })
   }
 
@@ -311,14 +311,14 @@ async function unlinkProject(
 // CLAUDE.md cross-device sync section
 // ---------------------------------------------------------------------------
 
-const CCM_MARKER_START = '<!-- ccm:sync:start -->'
-const CCM_MARKER_END = '<!-- ccm:sync:end -->'
+const SWOOP_MARKER_START = '<!-- swoop:sync:start -->'
+const SWOOP_MARKER_END = '<!-- swoop:sync:end -->'
 
 /**
- * Writes (or replaces) the ccm sync section in the project's CLAUDE.md.
+ * Writes (or replaces) the swoop sync section in the project's CLAUDE.md.
  *
  * The section instructs the Claude Code agent (on any device) to:
- *   1. Detect whether this device has run `ccm sync link` by checking a marker file
+ *   1. Detect whether this device has run `swoop sync link` by checking a marker file
  *      inside the cloud directory (already accessible — no extra permissions).
  *   2. If not linked → write a presence file so Device B can detect it, then warn.
  *   3. If linked → read shared memories from the cloud directory.
@@ -338,8 +338,8 @@ async function injectClaudeMdSection(
   const memoryDir = join(cloudDir, 'memory')
 
   const section = [
-    CCM_MARKER_START,
-    '## CCM: Cross-device Sync',
+    SWOOP_MARKER_START,
+    '## Swoop: Cross-device Sync',
     '',
     `Cloud storage for this project: \`${cloudDir}\``,
     `Linked from device: \`${deviceId}\``,
@@ -353,15 +353,15 @@ async function injectClaudeMdSection(
     `4. **File missing** — this device is not set up for sync:`,
     `   - If \`${ignoredDir}\\HOSTNAME\` exists, skip the warning silently.`,
     `   - Write \`${presenceDir}\\HOSTNAME.json\` with \`{"device":"HOSTNAME","lastSeen":"<today date>"}\` using real values.`,
-    `   - Tell the user: "⚠ Questo device non è configurato per il sync cross-device ccm.`,
-    `     Esegui \`ccm sync link \\"${projectPath}\\"\` per condividere sessioni e memoria tra dispositivi,`,
+    `   - Tell the user: "⚠ Questo device non è configurato per il sync cross-device swoop.`,
+    `     Esegui \`swoop sync link \\"${projectPath}\\"\` per condividere sessioni e memoria tra dispositivi,`,
     `     oppure dimmi \\"ignora sync\\" per non mostrare più questo avviso."`,
     `   - If the user replies "ignora sync", write \`ignored\` to \`${ignoredDir}\\HOSTNAME\`,`,
     `     delete \`${presenceDir}\\HOSTNAME.json\` if it exists, then confirm the warning is disabled.`,
     `   - Append important shared context to \`${memoryDir}\\shared.md\`.`,
     `     Use append-only writes and format entries as \`## HOSTNAME — <date>\\n<notes>\`.`,
     '',
-    CCM_MARKER_END,
+    SWOOP_MARKER_END,
   ].join('\n')
 
   let existing = ''
@@ -371,13 +371,14 @@ async function injectClaudeMdSection(
     /* file does not exist yet */
   }
 
-  const startIdx = existing.indexOf(CCM_MARKER_START)
-  const endIdx = existing.indexOf(CCM_MARKER_END)
+  const startIdx = existing.indexOf(SWOOP_MARKER_START)
+  const endIdx = existing.indexOf(SWOOP_MARKER_END)
 
   let updated: string
   if (startIdx !== -1 && endIdx !== -1) {
     // Replace existing section
-    updated = existing.slice(0, startIdx) + section + existing.slice(endIdx + CCM_MARKER_END.length)
+    updated =
+      existing.slice(0, startIdx) + section + existing.slice(endIdx + SWOOP_MARKER_END.length)
   } else {
     // Append new section (with blank line separator if file has content)
     updated = existing ? existing.trimEnd() + '\n\n' + section + '\n' : section + '\n'
@@ -387,7 +388,7 @@ async function injectClaudeMdSection(
 }
 
 /**
- * Removes the ccm sync section from the project's CLAUDE.md on unlink.
+ * Removes the swoop sync section from the project's CLAUDE.md on unlink.
  * Leaves the rest of the file intact.
  */
 /**
@@ -417,12 +418,12 @@ async function removeClaudeMdSection(projectPath: string): Promise<void> {
     return // file doesn't exist, nothing to remove
   }
 
-  const startIdx = content.indexOf(CCM_MARKER_START)
-  const endIdx = content.indexOf(CCM_MARKER_END)
+  const startIdx = content.indexOf(SWOOP_MARKER_START)
+  const endIdx = content.indexOf(SWOOP_MARKER_END)
   if (startIdx === -1 || endIdx === -1) return
 
   const before = content.slice(0, startIdx).trimEnd()
-  const after = content.slice(endIdx + CCM_MARKER_END.length).trimStart()
+  const after = content.slice(endIdx + SWOOP_MARKER_END.length).trimStart()
   const updated = before && after ? before + '\n\n' + after : before || after
 
   if (updated.trim()) {

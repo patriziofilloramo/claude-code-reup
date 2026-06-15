@@ -126,7 +126,7 @@ export function parseListOptions(commandArguments: string[]): ListOptionResult {
 export async function runListCommand(commandArguments: string[]): Promise<void> {
   const parsedOptions = parseListOptions(commandArguments)
   if ('error' in parsedOptions) {
-    failCommand(`${parsedOptions.error}\nUsage: ccm list [query] [options]`)
+    failCommand(`${parsedOptions.error}\nUsage: swoop list [query] [options]`)
     return
   }
 

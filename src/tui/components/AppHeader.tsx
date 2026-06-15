@@ -43,7 +43,7 @@ export default function AppHeader({ usage, version }: AppHeaderProps) {
     >
       <Box gap={2}>
         <Text bold color={COLORS.accent}>
-          ccm
+          swoop
         </Text>
         {compact ? null : <Text color={COLORS.muted}>claude code session manager</Text>}
         <Text color={COLORS.border}>v{version}</Text>

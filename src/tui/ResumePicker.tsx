@@ -101,7 +101,7 @@ export function ResumePicker({
     <Box flexDirection="column">
       <Box gap={1} paddingX={1}>
         <Text bold color={COLORS.accent}>
-          CCM RESUME
+          Swoop RESUME
         </Text>
         <Text color={COLORS.dim}>{matchingCandidates.length} sessions</Text>
       </Box>

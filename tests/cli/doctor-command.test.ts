@@ -15,7 +15,7 @@ function emptyReport(): DiagnosticsReport {
 
 describe('formatDoctorReport', () => {
   it('prints a clear healthy result', () => {
-    expect(formatDoctorReport(emptyReport())).toBe('CCM Doctor\n\nNo issues found.')
+    expect(formatDoctorReport(emptyReport())).toBe('Swoop Doctor\n\nNo issues found.')
   })
 
   it('groups non-destructive diagnostics by issue type', () => {
@@ -26,7 +26,7 @@ describe('formatDoctorReport', () => {
       reason: 'index contains invalid JSON',
     })
     report.staleLocks.push({
-      path: '/claude/projects/project/ccm.json.lock',
+      path: '/claude/projects/project/swoop.json.lock',
       projectId: 'project',
       reason: 'owner process 999 is not running',
     })
@@ -38,10 +38,10 @@ describe('formatDoctorReport', () => {
 
     const output = formatDoctorReport(report)
 
-    expect(output).toContain('CCM Doctor · 3 issues')
+    expect(output).toContain('Swoop Doctor · 3 issues')
     expect(output).toContain('Broken session indices (1)')
     expect(output).toContain('Stale sidecar locks (1)')
     expect(output).toContain('Orphaned transcripts (1)')
-    expect(output).toContain('CCM falls back to readable transcripts')
+    expect(output).toContain('Swoop falls back to readable transcripts')
   })
 })

@@ -13,7 +13,7 @@ describe('web routes', () => {
   let originalClaudeDirectory: string | undefined
 
   beforeEach(async () => {
-    claudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-routes-test-'))
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-routes-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = claudeDirectory
   })

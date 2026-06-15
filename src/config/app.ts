@@ -1,5 +1,5 @@
 /**
- * Central runtime configuration for ccm.
+ * Central runtime configuration for swoop.
  *
  * All tunable values live here so they can be found and changed in one place.
  * Browser-only values (poll intervals visible in the client) stay in the
@@ -21,11 +21,11 @@ export const APP = {
   /** Overrides the default ~/.claude config directory path. */
   claudeConfigEnvVar: 'CLAUDE_CONFIG_DIR',
   /** Set to any non-empty string to enable debug logging. */
-  debugEnvVar: 'CCM_DEBUG',
+  debugEnvVar: 'SWOOP_DEBUG',
   /** Set to any non-empty string to suppress auto-opening the browser. */
-  noOpenEnvVar: 'CCM_NO_OPEN',
+  noOpenEnvVar: 'SWOOP_NO_OPEN',
   /** Override the default web server port (see defaultPort below). */
-  portEnvVar: 'CCM_PORT',
+  portEnvVar: 'SWOOP_PORT',
 
   // ── Web server ──────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ export const APP = {
   defaultPort: 3333,
   /**
    * How many consecutive ports to try before giving up when the preferred
-   * port is already in use. With the default of 20, ccm tries 3333–3352.
+   * port is already in use. With the default of 20, swoop tries 3333–3352.
    */
   portSearchRange: 20,
 
@@ -105,7 +105,7 @@ export const APP = {
   // ── Cloud sync ──────────────────────────────────────────────────────────────
 
   /**
-   * Subdirectory name created inside the project root by `ccm sync link` to hold
+   * Subdirectory name created inside the project root by `swoop sync link` to hold
    * the shared session files that are kept in sync with local storage.
    */
   cloudMemoryDir: '.claude-memory',
@@ -114,7 +114,7 @@ export const APP = {
    * directory the project is linked to. Its presence means local-first sync
    * is active; its absence means local-only storage.
    */
-  cloudLinkFile: '.ccm-link',
+  cloudLinkFile: '.swoop-link',
   /**
    * How often (ms) the background offline-guard loop checks whether the cloud
    * junction target is reachable and transitions between online/offline modes.
@@ -122,9 +122,9 @@ export const APP = {
    */
   cloudSyncIntervalMs: 30_000,
   /**
-   * Path segment appended to getCcmDirectory() (~/.claude/ccm/) to locate the
+   * Path segment appended to getSwoopDirectory() (~/.claude/swoop/) to locate the
    * local backup root. Each linked project gets its own subdirectory here:
-   *   ~/.claude/ccm/<cloudSyncBackupDir>/<projectId>/
+   *   ~/.claude/swoop/<cloudSyncBackupDir>/<projectId>/
    * The backup is kept in sync with the cloud dir and used as an offline
    * fallback when the junction target (pCloud, etc.) becomes unreachable.
    */

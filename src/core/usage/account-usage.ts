@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP } from '../../config/app.js'
-import { getCcmDirectory, getClaudeDirectory } from '../project/claude-paths.js'
+import { getSwoopDirectory, getClaudeDirectory } from '../project/claude-paths.js'
 import type { UsageLimitWindow } from './live-usage.js'
 
 const ACCOUNT_USAGE_CACHE_FILE_NAME = 'account-usage.json'
@@ -69,7 +69,7 @@ async function refreshAccountUsage(
       headers: {
         authorization: `Bearer ${accessToken}`,
         'anthropic-beta': OAUTH_BETA_HEADER,
-        'user-agent': `claude-ccm/${APP.version}`,
+        'user-agent': `claude-code-swoop/${APP.version}`,
       },
       signal: AbortSignal.timeout(APP.accountUsageRequestTimeoutMs),
     })
@@ -146,7 +146,7 @@ async function readCachedAccountUsage(): Promise<AccountUsageSnapshot | null> {
 async function writeCachedAccountUsage(snapshot: AccountUsageSnapshot): Promise<void> {
   const cachePath = getAccountUsageCachePath()
   const temporaryPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`
-  await mkdir(getCcmDirectory(), { recursive: true })
+  await mkdir(getSwoopDirectory(), { recursive: true })
   try {
     await writeFile(temporaryPath, JSON.stringify(snapshot), { encoding: 'utf8', mode: 0o600 })
     await renameWithContentionRetry(temporaryPath, cachePath)
@@ -156,7 +156,7 @@ async function writeCachedAccountUsage(snapshot: AccountUsageSnapshot): Promise<
 }
 
 function getAccountUsageCachePath(): string {
-  return join(getCcmDirectory(), ACCOUNT_USAGE_CACHE_FILE_NAME)
+  return join(getSwoopDirectory(), ACCOUNT_USAGE_CACHE_FILE_NAME)
 }
 
 async function renameWithContentionRetry(

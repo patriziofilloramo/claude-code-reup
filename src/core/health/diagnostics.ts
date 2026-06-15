@@ -90,7 +90,7 @@ async function inspectProjectDirectory(
   const [indexResult, fileNames, lockInspection] = await Promise.all([
     inspectSessionIndex(projectDirectory, projectId),
     listFileNames(projectDirectory),
-    inspectProjectSidecarLock(join(projectDirectory, 'ccm.json.lock')),
+    inspectProjectSidecarLock(join(projectDirectory, 'swoop.json.lock')),
   ])
 
   if (indexResult.broken) report.brokenIndices.push(indexResult.broken)
@@ -108,7 +108,7 @@ async function inspectProjectDirectory(
   }
   if (lockInspection.state === 'abandoned' || lockInspection.state === 'unknown') {
     report.staleLocks.push({
-      path: join(projectDirectory, 'ccm.json.lock'),
+      path: join(projectDirectory, 'swoop.json.lock'),
       projectId,
       reason: lockInspection.reason,
     })

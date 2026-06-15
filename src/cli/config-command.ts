@@ -3,10 +3,10 @@ import { openConfigInterface } from './open-config-interface.js'
 import { failCommand } from './output.js'
 
 const USAGE = `Usage:
-  ccm config                    Open interactive settings UI
-  ccm config get [key]          Show one or all values
-  ccm config set <key> <value>  Save a setting
-  ccm config reset [key]        Reset one or all settings to defaults
+  swoop config                    Open interactive settings UI
+  swoop config get [key]          Show one or all values
+  swoop config set <key> <value>  Save a setting
+  swoop config reset [key]        Reset one or all settings to defaults
 
 Keys:
 ${Object.entries(PREF_SPECS)
@@ -19,8 +19,8 @@ export async function runConfigCommand(args: string[]): Promise<void> {
   switch (subcommand) {
     case undefined: {
       await openConfigInterface({
-        commandName: 'ccm config',
-        nonInteractiveAlternative: 'use `ccm config get`, `set`, or `reset` in scripts',
+        commandName: 'swoop config',
+        nonInteractiveAlternative: 'use `swoop config get`, `set`, or `reset` in scripts',
       })
       return
     }
@@ -61,7 +61,7 @@ async function handleGet(key?: string): Promise<void> {
 
 async function handleSet(key?: string, value?: string): Promise<void> {
   if (!key || value === undefined) {
-    failCommand('usage: ccm config set <key> <value>')
+    failCommand('usage: swoop config set <key> <value>')
     return
   }
 

@@ -28,10 +28,10 @@ describe('CLI help', () => {
     const help = renderMainHelp(false)
 
     expect(help).toContain('Configuration')
-    expect(help).toContain('ccm completion <shell>')
+    expect(help).toContain('swoop completion <shell>')
     expect(help).toContain('Experimental')
-    expect(help).toContain('ccm sync [link|unlink] [path]')
-    expect(help).not.toContain('ccm --theme')
+    expect(help).toContain('swoop sync [link|unlink] [path]')
+    expect(help).not.toContain('swoop --theme')
   })
 
   it.each(PUBLIC_COMMANDS)('provides help for the public %s command', async (command) => {
@@ -40,7 +40,7 @@ describe('CLI help', () => {
     await runCli([command, '--help'])
 
     expect(log).toHaveBeenCalledOnce()
-    expect(String(log.mock.calls[0][0])).toContain(`ccm ${command}`)
+    expect(String(log.mock.calls[0][0])).toContain(`swoop ${command}`)
     expect(process.exitCode).toBeUndefined()
   })
 
@@ -62,8 +62,8 @@ describe('CLI help', () => {
 
     await runCli(['config', '--help'])
 
-    expect(renderMainHelp(false)).not.toContain('ccm --theme')
-    expect(String(log.mock.calls[0][0])).toContain('ccm --theme <dark|light|terminal>')
+    expect(renderMainHelp(false)).not.toContain('swoop --theme')
+    expect(String(log.mock.calls[0][0])).toContain('swoop --theme <dark|light|terminal>')
   })
 
   it('rejects unknown help topics cleanly', () => {
@@ -71,7 +71,7 @@ describe('CLI help', () => {
 
     runHelpCommand(['unknown'])
 
-    expect(error).toHaveBeenCalledWith('ccm: no help topic for: unknown')
+    expect(error).toHaveBeenCalledWith('swoop: no help topic for: unknown')
     expect(process.exitCode).toBe(1)
   })
 })

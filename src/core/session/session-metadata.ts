@@ -25,7 +25,7 @@ export class ActiveSessionDeletionError extends Error {
 
 /**
  * Serialises writes originating inside this process. The filesystem lock used
- * inside each queued operation coordinates independent CCM processes.
+ * inside each queued operation coordinates independent Swoop processes.
  */
 const projectWriteQueues = new Map<string, Promise<void>>()
 
@@ -35,10 +35,10 @@ const projectWriteQueues = new Map<string, Promise<void>>()
 
 async function readProjectSidecar(projectDirectory: string): Promise<ProjectSidecarMetadata> {
   try {
-    const sidecarPath = join(projectDirectory, 'ccm.json')
+    const sidecarPath = join(projectDirectory, 'swoop.json')
     return JSON.parse(await readFile(sidecarPath, 'utf8')) as ProjectSidecarMetadata
   } catch {
-    // A missing or malformed sidecar is equivalent to having no CCM metadata.
+    // A missing or malformed sidecar is equivalent to having no Swoop metadata.
     return {}
   }
 }
@@ -69,8 +69,8 @@ async function writeProjectSidecarAtomically(
   projectDirectory: string,
   metadata: ProjectSidecarMetadata
 ): Promise<void> {
-  const sidecarPath = join(projectDirectory, 'ccm.json')
-  // PID-qualified temp paths prevent independent CCM processes from writing
+  const sidecarPath = join(projectDirectory, 'swoop.json')
+  // PID-qualified temp paths prevent independent Swoop processes from writing
   // the same temporary file before either reaches the atomic rename.
   const temporarySidecarPath = `${sidecarPath}.${process.pid}.tmp`
 
@@ -97,7 +97,7 @@ function sessionMetadataEntry(
 // Public metadata API
 // -----------------------------------------------------------------------------
 
-/** Merges CCM-owned aliases and archive state into a discovered project. */
+/** Merges Swoop-owned aliases and archive state into a discovered project. */
 export async function mergeProjectSidecarMetadata(
   projectDirectory: string,
   project: Project
@@ -123,7 +123,7 @@ export async function mergeProjectSidecarMetadata(
   }
 }
 
-/** Sets or clears the CCM-only display alias for a session. */
+/** Sets or clears the Swoop-only display alias for a session. */
 export async function setSessionAlias(
   projectId: string,
   sessionId: string,
@@ -138,7 +138,7 @@ export async function setSessionAlias(
 }
 
 /**
- * Permanently deletes a session transcript and removes it from the CCM sidecar.
+ * Permanently deletes a session transcript and removes it from the Swoop sidecar.
  * The `.jsonl` file is owned by Claude Code — this is a destructive operation.
  */
 export async function deleteSession(projectId: string, sessionId: string): Promise<void> {
@@ -160,7 +160,7 @@ export async function deleteSession(projectId: string, sessionId: string): Promi
   invalidateProjectCache()
 }
 
-/** Updates whether CCM hides the session; Claude-owned data is never modified. */
+/** Updates whether Swoop hides the session; Claude-owned data is never modified. */
 export async function setSessionArchived(
   projectId: string,
   sessionId: string,

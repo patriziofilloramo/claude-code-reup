@@ -20,7 +20,7 @@ const PICKER_CHROME_ROWS = 6
 function ProjectPicker({
   projects,
   note,
-  title = 'CCM SYNC LINK',
+  title = 'Swoop SYNC LINK',
   subtitle = 'select a project to link',
   onSelect,
 }: {

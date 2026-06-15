@@ -73,7 +73,7 @@ function CleanupPicker({ candidates, onConfirm, onAbort }: CleanupPickerProps) {
       {/* Header */}
       <Box gap={1} marginBottom={1}>
         <Text bold color={COLORS.accent}>
-          ccm cleanup
+          swoop cleanup
         </Text>
         <Text color={COLORS.muted}>—</Text>
         <Text color={COLORS.muted}>

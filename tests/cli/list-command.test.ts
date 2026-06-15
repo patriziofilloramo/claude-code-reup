@@ -26,7 +26,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     id: SESSION_ID,
     messageCount: 4,
     name: 'Build the CLI',
-    projectPath: '/workspace/ccm',
+    projectPath: '/workspace/swoop',
     signals: {
       analysisComplete: true,
       archived: false,
@@ -54,7 +54,7 @@ function defaultOptions(overrides: Partial<ListOptions> = {}): ListOptions {
 function listedSessions(): ListedSession[] {
   const project: Project = {
     id: 'encoded-project',
-    path: '/workspace/ccm',
+    path: '/workspace/swoop',
     sessions: [
       createSession({ alias: 'CLI foundation', gitBranch: 'feat/milestone-4-cli' }),
       createSession({
@@ -92,8 +92,8 @@ describe('list command', () => {
           id: SESSION_ID,
           primaryStatus: 'ok',
           projectId: 'encoded-project',
-          projectName: 'ccm',
-          projectPath: '/workspace/ccm',
+          projectName: 'swoop',
+          projectPath: '/workspace/swoop',
         }),
       ],
     })
@@ -107,7 +107,7 @@ describe('list command', () => {
         '--active',
         '--attention',
         '--project',
-        'ccm',
+        'swoop',
         '--status',
         'interrupted',
         '--limit',
@@ -121,7 +121,7 @@ describe('list command', () => {
         attentionOnly: true,
         json: true,
         limit: 5,
-        projectQuery: 'ccm',
+        projectQuery: 'swoop',
         query: 'release helper',
         status: 'interrupted',
       },
@@ -152,7 +152,7 @@ describe('list command', () => {
     expect(
       filterListedSessions(
         sessions,
-        defaultOptions({ attentionOnly: true, projectQuery: 'CCM', query: 'api', limit: 1 })
+        defaultOptions({ attentionOnly: true, projectQuery: 'Swoop', query: 'api', limit: 1 })
       ).map((session) => session.name)
     ).toEqual(['Interrupted API'])
     expect(
@@ -170,7 +170,7 @@ describe('list command', () => {
     expect(output).toContain('PROJECT')
     expect(output).toContain('SESSION')
     expect(output).toContain('● active')
-    expect(output).toContain('ccm')
+    expect(output).toContain('swoop')
     expect(output).toContain('CLI foundation')
     expect(output).toContain(SESSION_ID.slice(0, 8))
     expect(output).not.toContain('\u001b[')

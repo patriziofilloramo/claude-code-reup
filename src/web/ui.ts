@@ -8,8 +8,8 @@ const styles = readFileSync(join(assetDirectory, 'styles.css'), 'utf8')
 const template = readFileSync(join(assetDirectory, 'ui.html'), 'utf8')
 
 const baseHtml = template
-  .replace('<!-- CCM:STYLES -->', `<style>\n${styles}</style>`)
-  .replace('<!-- CCM:SCRIPT -->', `<script>\n${clientScript}</script>`)
+  .replace('<!-- SWOOP:STYLES -->', `<style>\n${styles}</style>`)
+  .replace('<!-- SWOOP:SCRIPT -->', `<script>\n${clientScript}</script>`)
 
 /** Assembles the complete browser application HTML with the given theme applied. */
 export function buildHtml(themeName: string): string {

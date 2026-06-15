@@ -45,7 +45,7 @@ function buildProjectRowHtml(project) {
         : project.unlinkedDevices && project.unlinkedDevices.length > 0
           ? '<span class="p-cloud p-cloud--unlinked" title="Device(s) not linked: ' +
             escapeHtml(project.unlinkedDevices.join(', ')) +
-            ' — run ccm sync link on those devices">☁</span>'
+            ' — run swoop sync link on those devices">☁</span>'
           : '<span class="p-cloud p-cloud--ok" title="Shared storage — writes directly to cloud">☁</span>'
       : '') +
     (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +

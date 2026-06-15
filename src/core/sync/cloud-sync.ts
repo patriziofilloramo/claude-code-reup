@@ -1,19 +1,19 @@
 /**
  * Cloud sync — junction-first architecture.
  *
- * When a project is linked via `ccm sync link`, its Claude Code session directory
+ * When a project is linked via `swoop sync link`, its Claude Code session directory
  * (~/.claude/projects/<id>/) is replaced with an NTFS junction (Windows) or
  * symlink (Unix) pointing directly at the cloud storage directory inside the
  * project (e.g. P:\Projects\...\.claude-memory\). Claude Code writes through
  * the junction into cloud storage; the cloud provider (pCloud, Dropbox, …)
- * replicates those writes to every other device automatically — no ccm
+ * replicates those writes to every other device automatically — no swoop
  * required on the other device.
  *
- * Offline resilience: ccm maintains a local backup at ~/.claude/ccm/sync/<id>/
- * that mirrors the cloud dir. When the junction target goes offline, ccm:
+ * Offline resilience: swoop maintains a local backup at ~/.claude/swoop/sync/<id>/
+ * that mirrors the cloud dir. When the junction target goes offline, swoop:
  *   1. Removes the junction and creates a real local directory from the backup.
  *   2. Claude Code continues writing sessions normally (no data loss).
- *   3. When the cloud comes back, ccm merges the offline sessions into the cloud
+ *   3. When the cloud comes back, swoop merges the offline sessions into the cloud
  *      dir and restores the junction.
  *
  * The syncRegistry (src/core/sync/sync-registry.ts) is updated on every transition
@@ -38,7 +38,7 @@ import { join } from 'node:path'
 
 import { APP } from '../../config/app.js'
 import { getLiveSessionRecords } from '../session/active-sessions.js'
-import { getCcmDirectory, getClaudeProjectsDirectory } from '../project/claude-paths.js'
+import { getSwoopDirectory, getClaudeProjectsDirectory } from '../project/claude-paths.js'
 import { pathsReferToSameLocation } from '../project/path-comparison.js'
 import { log } from '../../utils/logger.js'
 import { syncRegistry } from './sync-registry.js'
@@ -83,7 +83,7 @@ export function stopSyncLoop(): void {
 }
 
 /**
- * Discovers all linked projects, migrates any .ccm-link files to junctions,
+ * Discovers all linked projects, migrates any .swoop-link files to junctions,
  * initialises the local backup for every linked project, and starts the
  * background offline-guard loop.
  *
@@ -98,7 +98,7 @@ export async function initCloudSync(): Promise<number> {
   const projects = await loadProjects()
   const liveSessions = await getLiveSessionRecords()
   const projectsDir = getClaudeProjectsDirectory()
-  const backupRoot = join(getCcmDirectory(), APP.cloudSyncBackupDir)
+  const backupRoot = join(getSwoopDirectory(), APP.cloudSyncBackupDir)
 
   for (const project of projects) {
     if (!project.isShared) continue
@@ -107,7 +107,7 @@ export async function initCloudSync(): Promise<number> {
 
     try {
       // Determine the actual filesystem representation: junction or real directory.
-      // readLinkState sets cloudPath for both junctions (via readlink) and .ccm-link
+      // readLinkState sets cloudPath for both junctions (via readlink) and .swoop-link
       // files (via readFile), so we must check lstat to distinguish the two cases.
       const pathStat = await lstat(junctionPath).catch(() => null)
       const isJunction = pathStat?.isSymbolicLink() ?? false
@@ -129,7 +129,7 @@ export async function initCloudSync(): Promise<number> {
           log.debug(`cloud-sync: migration deferred while project is active: ${project.path}`)
           continue
         }
-        // Real directory with a .ccm-link file: migrate to junction.
+        // Real directory with a .swoop-link file: migrate to junction.
         await migrateLinkFileToJunction(junctionPath, project.cloudPath)
         await setupProjectSync(
           project.id,
@@ -284,21 +284,21 @@ async function refreshBackup(state: SyncState): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Migration: .ccm-link → junction
+// Migration: .swoop-link → junction
 // ---------------------------------------------------------------------------
 
 /**
- * Converts a .ccm-link local-first directory back to an NTFS junction.
+ * Converts a .swoop-link local-first directory back to an NTFS junction.
  * Sessions are merged into the cloud dir first so no data is lost.
  */
 async function migrateLinkFileToJunction(junctionPath: string, cloudDir: string): Promise<void> {
   await syncBidirectional(junctionPath, cloudDir)
   await replaceDirectoryWithLink(junctionPath, cloudDir)
-  log.debug(`cloud-sync: migrated .ccm-link → junction: ${junctionPath} → ${cloudDir}`)
+  log.debug(`cloud-sync: migrated .swoop-link → junction: ${junctionPath} → ${cloudDir}`)
 }
 
 // ---------------------------------------------------------------------------
-// Bidirectional sync (exported for ccm sync link/unlink)
+// Bidirectional sync (exported for swoop sync link/unlink)
 // ---------------------------------------------------------------------------
 
 /**
@@ -556,7 +556,7 @@ function bufferStartsWith(candidate: Buffer, prefix: Buffer): boolean {
 }
 
 function temporarySiblingPath(path: string, purpose: string): string {
-  return `${path}.ccm-${purpose}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `${path}.swoop-${purpose}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function hasLiveSessionForPath(

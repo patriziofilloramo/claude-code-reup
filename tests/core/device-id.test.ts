@@ -11,7 +11,7 @@ describe('getOrCreateDeviceId', () => {
   let originalClaudeDirectory: string | undefined
 
   beforeEach(async () => {
-    claudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-device-id-test-'))
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-device-id-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = claudeDirectory
   })
@@ -33,18 +33,18 @@ describe('getOrCreateDeviceId', () => {
     expect(second).toBe(first)
   })
 
-  it('writes the id file under the ccm subdirectory', async () => {
+  it('writes the id file under the swoop subdirectory', async () => {
     await getOrCreateDeviceId()
-    const stored = await readFile(join(claudeDirectory, 'ccm', 'device-id'), 'utf8')
+    const stored = await readFile(join(claudeDirectory, 'swoop', 'device-id'), 'utf8')
     expect(stored.trim()).toBe(hostname())
   })
 
   it('reads an existing id file without overwriting it', async () => {
     const customId = 'my-custom-device'
-    const ccmDir = join(claudeDirectory, 'ccm')
-    await mkdir(ccmDir, { recursive: true })
+    const swoopDirectory = join(claudeDirectory, 'swoop')
+    await mkdir(swoopDirectory, { recursive: true })
     const { writeFile } = await import('node:fs/promises')
-    await writeFile(join(ccmDir, 'device-id'), customId, 'utf8')
+    await writeFile(join(swoopDirectory, 'device-id'), customId, 'utf8')
 
     const id = await getOrCreateDeviceId()
     expect(id).toBe(customId)

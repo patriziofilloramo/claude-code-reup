@@ -10,10 +10,10 @@ describe('user preferences', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-prefs-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-prefs-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
-    await mkdir(join(temporaryClaudeDirectory, 'ccm'), { recursive: true })
+    await mkdir(join(temporaryClaudeDirectory, 'swoop'), { recursive: true })
   })
 
   afterEach(async () => {
@@ -24,7 +24,7 @@ describe('user preferences', () => {
 
   it('falls back to safe defaults for unsupported persisted values', async () => {
     await writeFile(
-      join(temporaryClaudeDirectory, 'ccm', 'prefs.json'),
+      join(temporaryClaudeDirectory, 'swoop', 'prefs.json'),
       JSON.stringify({ autoCleanupOnStart: 'delete-everything', theme: '"><script>' })
     )
 

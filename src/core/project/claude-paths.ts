@@ -18,9 +18,9 @@ export function getClaudeProjectsDirectory(): string {
   return join(getClaudeDirectory(), 'projects')
 }
 
-/** Returns the CCM-private data directory inside Claude Code's config root. */
-export function getCcmDirectory(): string {
-  return join(getClaudeDirectory(), 'ccm')
+/** Returns the Swoop-private data directory inside Claude Code's config root. */
+export function getSwoopDirectory(): string {
+  return join(getClaudeDirectory(), 'swoop')
 }
 
 /** Returns Claude Code's adjacent local application-state file. */

@@ -12,10 +12,10 @@ import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 
 /**
- * Registers CCM sidecar mutation endpoints for session aliases and archive state.
+ * Registers Swoop sidecar mutation endpoints for session aliases and archive state.
  *
  * All endpoints are guarded: they require a localhost origin because they write
- * to CCM's `ccm.json` sidecar files on the server filesystem.
+ * to Swoop's `swoop.json` sidecar files on the server filesystem.
  */
 export function registerSessionMetadataRoutes(app: Hono): void {
   // ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   // ---------------------------------------------------------------------------
   // DELETE /api/sessions/:projectId/:sessionId
-  // Permanently removes the .jsonl transcript and CCM sidecar entry.
+  // Permanently removes the .jsonl transcript and Swoop sidecar entry.
   // ---------------------------------------------------------------------------
 
   app.delete(

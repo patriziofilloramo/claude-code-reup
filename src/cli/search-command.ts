@@ -15,12 +15,12 @@ export async function runSearchCommand(args: string[]): Promise<void> {
     .trim()
 
   if (!query) {
-    failCommand('usage: ccm search [--deep] <query>')
+    failCommand('usage: swoop search [--deep] <query>')
     return
   }
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    failCommand('ccm search requires an interactive terminal')
+    failCommand('swoop search requires an interactive terminal')
     return
   }
 
@@ -57,7 +57,7 @@ export async function runSearchCommand(args: string[]): Promise<void> {
     }
   } catch (error) {
     log.debug('search: failed:', error)
-    failCommand('search failed — run with CCM_DEBUG=1 for details')
+    failCommand('search failed — run with SWOOP_DEBUG=1 for details')
   }
 }
 

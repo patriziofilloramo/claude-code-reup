@@ -1,4 +1,4 @@
-# ccm Architecture
+# swoop Architecture
 
 This document describes the architecture implemented in the current codebase.
 Product plans belong in [`ROADMAP.md`](../ROADMAP.md); user instructions belong
@@ -17,42 +17,42 @@ in [`README.md`](../README.md). Native installer behavior is specified in
 
 The executable entry point is `src/index.ts`.
 
-| Command                  | Behavior                                              |
-| ------------------------ | ----------------------------------------------------- |
-| `ccm`                    | Starts the Ink terminal UI                            |
-| `ccm web`                | Starts the local Hono server and opens the browser UI |
-| `ccm list [query]`       | Prints a filtered table; `--json` emits full records  |
-| `ccm inbox`              | Prints active and actionable sessions                 |
-| `ccm doctor`             | Runs non-destructive local-data diagnostics           |
-| `ccm handoff <session>`  | Prints a transcript-supported continuation packet     |
-| `ccm resume [session]`   | Opens a picker, or resumes a full ID/unique prefix    |
-| `ccm usage [action]`     | Reads observed usage or configures its local feed     |
-| `ccm config`             | Opens the configuration TUI or manages preferences    |
-| `ccm completion <shell>` | Prints opt-in shell completion registration           |
-| `ccm sync [action]`      | Manages experimental shared session storage           |
-| `ccm help [command]`     | Prints general or command-specific help               |
-| `ccm --help`             | Prints supported commands                             |
-| `ccm --version`          | Prints the current version                            |
+| Command                    | Behavior                                              |
+| -------------------------- | ----------------------------------------------------- |
+| `swoop`                    | Starts the Ink terminal UI                            |
+| `swoop web`                | Starts the local Hono server and opens the browser UI |
+| `swoop list [query]`       | Prints a filtered table; `--json` emits full records  |
+| `swoop inbox`              | Prints active and actionable sessions                 |
+| `swoop doctor`             | Runs non-destructive local-data diagnostics           |
+| `swoop handoff <session>`  | Prints a transcript-supported continuation packet     |
+| `swoop resume [session]`   | Opens a picker, or resumes a full ID/unique prefix    |
+| `swoop usage [action]`     | Reads observed usage or configures its local feed     |
+| `swoop config`             | Opens the configuration TUI or manages preferences    |
+| `swoop completion <shell>` | Prints opt-in shell completion registration           |
+| `swoop sync [action]`      | Manages experimental shared session storage           |
+| `swoop help [command]`     | Prints general or command-specific help               |
+| `swoop --help`             | Prints supported commands                             |
+| `swoop --version`          | Prints the current version                            |
 
 The `repair` command is reserved but not implemented.
 
 Machine-readable commands reserve stdout exclusively for their result. Debug,
 warning, and error logs use stderr so piping JSON into tools such as `jq`
-remains safe even when `CCM_DEBUG=1`.
+remains safe even when `SWOOP_DEBUG=1`.
 
-`ccm list` parses free-text and structured filters once, then applies the same
+`swoop list` parses free-text and structured filters once, then applies the same
 selection pipeline to its human table and JSON output. Archived sessions are
 excluded unless `--archived` is requested. Colour is emitted only for a TTY,
 and state text/symbols keep redirected output understandable without colour.
 Its human table calculates ID prefixes against every discovered session, so a
 prefix remains safe to use even when filters hide a colliding session.
 
-`ccm resume` and `ccm handoff` share the same global prefix-selection rules:
+`swoop resume` and `swoop handoff` share the same global prefix-selection rules:
 prefixes must contain at least eight characters and resolve to exactly one
-session. Without a selector, interactive `ccm resume` opens a compact global
+session. Without a selector, interactive `swoop resume` opens a compact global
 picker. The picker and shell completion share one relevance ranking: sessions
 associated with the current working directory first, then active sessions and
-recent activity. Shell completion is opt-in because CCM does not modify shell
+recent activity. Shell completion is opt-in because Swoop does not modify shell
 profiles automatically; its internal completion endpoint returns IDs only.
 
 ## Source Layout
@@ -89,7 +89,7 @@ Core responsibilities are intentionally separated:
 | `project-discovery.ts`            | Project/session discovery and filesystem annotations      |
 | `session-transcript.ts`           | JSONL metadata extraction                                 |
 | `session-signals.ts`              | Transcript-derived signals and display status             |
-| `session-metadata.ts`             | CCM sidecar reads, merges, and queued writes              |
+| `session-metadata.ts`             | Swoop sidecar reads, merges, and queued writes            |
 | `project-sidecar-lock.ts`         | Cross-process sidecar lock protocol                       |
 | `active-sessions.ts`              | Live Claude process detection                             |
 | `diagnostics.ts`                  | Shared non-destructive data-health checks                 |
@@ -118,7 +118,7 @@ For each project:
 2. Otherwise scan root session JSONL files and derive metadata.
 3. Resolve the canonical path from transcript metadata where available.
 4. Check every unique session path for existence.
-5. Merge local CCM metadata from `ccm.json`.
+5. Merge local Swoop metadata from `swoop.json`.
 6. Sort sessions and projects by most recent update.
 
 The index fast path avoids JSONL analysis. Signals requiring transcript analysis
@@ -129,7 +129,7 @@ are therefore `null`, not falsely reported as clean.
 Transcript discovery also records the latest observed Claude model, distinct
 model history, context-input tokens, and response-output tokens. These values
 live under `Session.context` and are serialized consistently to the web API and
-`ccm list --json`.
+`swoop list --json`.
 
 `latestContextTokens` sums input, cache-creation, and cache-read tokens from the
 latest assistant response. It excludes output tokens to match Claude Code's
@@ -143,23 +143,23 @@ documented in [`USAGE_VISIBILITY.md`](USAGE_VISIBILITY.md).
 
 ## Live Usage
 
-`ccm usage setup` installs a user-level Claude Code status-line command only
+`swoop usage setup` installs a user-level Claude Code status-line command only
 after an explicit request. Existing status lines require `--replace`; their exact
-JSON value is saved under `~/.claude/ccm/statusline-integration.json` and
-restored by `ccm usage remove`.
+JSON value is saved under `~/.claude/swoop/statusline-integration.json` and
+restored by `swoop usage remove`.
 
 After explicit setup, account limits are refreshed from Claude Code's
 authenticated read-only account usage endpoint at most once every 30 seconds.
-CCM reads the locally managed OAuth token only in memory and atomically caches
+Swoop reads the locally managed OAuth token only in memory and atomically caches
 only aggregate percentages, reset times, and the usage-credit flag under
-`~/.claude/ccm/account-usage.json`.
+`~/.claude/swoop/account-usage.json`.
 
 The status-line collector separately receives Claude Code's documented session
 JSON over stdin, keeps only aggregate model/agent/context/rate-limit fields, and
-atomically writes one hashed per-session snapshot under `~/.claude/ccm/usage/`.
+atomically writes one hashed per-session snapshot under `~/.claude/swoop/usage/`.
 Separate files avoid cross-session write contention. These sources feed:
 
-- `ccm usage` and `ccm usage --json`
+- `swoop usage` and `swoop usage --json`
 - TUI header polling
 - Web `/api/usage` and filesystem-backed live refresh
 
@@ -168,7 +168,7 @@ on startup and every five seconds afterward. Summaries expose account-limit and
 session-payload freshness independently. Recent account data may be served from
 cache after a failed refresh; status-line limits are a last-resort fallback.
 
-CCM validates the installed refresh configuration and records one privacy-safe
+Swoop validates the installed refresh configuration and records one privacy-safe
 last error so a stopped collector cannot silently freeze the UI. Claude for VS
 Code does not currently execute the terminal status-line integration. Removal
 restores prior settings and deletes snapshots and capture diagnostics.
@@ -194,30 +194,30 @@ message count. The current git branch is resolved independently for each unique
 session path so worktrees do not produce false drift warnings. Malformed lines
 are skipped.
 
-## CCM Sidecar
+## Swoop Sidecar
 
 Aliases and local archive state are stored per Claude project:
 
 ```text
-~/.claude/projects/<project-id>/ccm.json
+~/.claude/projects/<project-id>/swoop.json
 ```
 
 Writes are coordinated at two levels:
 
-- A per-process promise queue serializes writes in one CCM process.
-- An advisory `ccm.json.lock` created with `O_EXCL` serializes separate CCM
+- A per-process promise queue serializes writes in one Swoop process.
+- An advisory `swoop.json.lock` created with `O_EXCL` serializes separate Swoop
   processes.
 
 The lock detects dead owners and stale invalid lock files. The updated sidecar
 is written to a PID-specific temporary file and atomically renamed into place.
 
-Archiving only hides a session in CCM. It is not a transcript backup.
+Archiving only hides a session in Swoop. It is not a transcript backup.
 
 ## Active Sessions
 
 `active-sessions.ts` reads Claude Code session process records under
 `~/.claude/sessions/` and verifies their PIDs. The TUI polls this state; the web
-client requests it independently. This allows separate CCM processes to observe
+client requests it independently. This allows separate Swoop processes to observe
 the same active Claude sessions.
 
 ## Terminal UI
@@ -278,7 +278,7 @@ CLAUDE.md filesystem handling. `routes.ts` remains the single readable map of
 the HTTP surface.
 
 SSE invalidates the short-lived metadata cache before notifying clients about
-relevant transcript, index, active-session, and CCM sidecar changes. A slow
+relevant transcript, index, active-session, and Swoop sidecar changes. A slow
 periodic refresh also keeps external git branch changes and missed filesystem
 events eventually consistent. The TUI uses the same slow project refresh.
 
@@ -304,9 +304,9 @@ step; domain thresholds remain next to the logic they govern.
 | Variable            | Purpose                               |
 | ------------------- | ------------------------------------- |
 | `CLAUDE_CONFIG_DIR` | Override Claude Code's data directory |
-| `CCM_PORT`          | Preferred web port                    |
-| `CCM_NO_OPEN`       | Prevent automatic browser opening     |
-| `CCM_DEBUG`         | Enable debug logging                  |
+| `SWOOP_PORT`        | Preferred web port                    |
+| `SWOOP_NO_OPEN`     | Prevent automatic browser opening     |
+| `SWOOP_DEBUG`       | Enable debug logging                  |
 
 ## Verification
 

@@ -14,7 +14,7 @@ const TOAST_DURATION_MS = 2400
 /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */
 const USAGE_POLL_INTERVAL_MS = 5000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
-const CONFIRM_RESUME_PREFERENCE = 'ccm:confirmResume'
+const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
 
 const FILTER_LABELS = {
   active: 'Active',

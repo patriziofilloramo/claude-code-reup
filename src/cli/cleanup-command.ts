@@ -6,7 +6,7 @@ import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { writeOutput } from './output.js'
 
 const CLEANUP_HELP = `
-ccm cleanup — review and archive stale sessions
+swoop cleanup — review and archive stale sessions
 
   Identifies candidates using built-in rules (safe mode — no AI required):
     empty      0 messages — session was never used
@@ -18,8 +18,8 @@ ccm cleanup — review and archive stale sessions
   Presents an interactive picker; nothing is archived without your confirmation.
 
 Usage:
-  ccm cleanup            Interactive picker
-  ccm cleanup --dry-run  Preview candidates without archiving
+  swoop cleanup            Interactive picker
+  swoop cleanup --dry-run  Preview candidates without archiving
 `.trim()
 
 export async function runCleanupCommand(args: string[]): Promise<void> {
@@ -45,7 +45,7 @@ export async function runCleanupCommand(args: string[]): Promise<void> {
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     writeOutput(summariseCandidates(candidates))
-    writeOutput('Run `ccm cleanup` in an interactive terminal to review and archive.')
+    writeOutput('Run `swoop cleanup` in an interactive terminal to review and archive.')
     return
   }
 
@@ -75,6 +75,6 @@ function formatDryRun(candidates: ReturnType<typeof findCleanupCandidates>): str
     lines.push(`  ${c.projectPath}`)
     lines.push('')
   }
-  lines.push('Run `ccm cleanup` to review interactively.')
+  lines.push('Run `swoop cleanup` to review interactively.')
   return lines.join('\n').trimEnd()
 }

@@ -64,7 +64,7 @@ export async function startWeb(commandArguments: string[]): Promise<void> {
 
   serve({ fetch: buildApp().fetch, hostname: '127.0.0.1', port })
 
-  log.info(`ccm web  →  ${url}`)
+  log.info(`swoop web  →  ${url}`)
   log.info('Press Ctrl+C to stop.')
 
   if (!process.env[APP.noOpenEnvVar]) openBrowser(url)

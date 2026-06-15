@@ -1,4 +1,4 @@
-# CCM Roadmap
+# Swoop Roadmap
 
 ## Open bugs
 
@@ -9,9 +9,8 @@
       practical risk is low, but the pattern is still fragile. Needs dedicated testing on a clean
       Windows environment before any public release. See `terminal.windows.ts`.
 
-- [ ] **Package name `claude-ccm` is taken on npm** — an unrelated package exists. Needs a
-      scoped name or a different name before any publish. Blocked by the publish decision
-      (currently not publishing).
+- [x] **Public product and package naming resolved** — the product is **Swoop**, the CLI command is
+      `swoop`, and the available npm package name is `claude-code-swoop`.
 
 - [x] **Web layout breaks on small screens** — resolved: two-breakpoint responsive pass.
       640–899 px: left panel shrinks (min-width 160 px), header keyboard hints hidden.
@@ -42,7 +41,7 @@
 - [x] Fix path-missing: `access()` per unique `session.projectPath`, not just canonical project
 - [x] `null` vs `false/0` for fast-path unanalysed fields (`interrupted`, `lastToolFailed`,
       `compactionCount` are `null` when `analysisComplete: false`)
-- [x] CCM sidecar `ccm.json` with per-process serialised atomic write queue
+- [x] Swoop sidecar `swoop.json` with per-process serialised atomic write queue
 - [x] Archive and alias backend + web UI + TUI toggle (`a` key)
 - [x] Alias rename web UI (inline edit on selected row)
 - [x] Body validation for archive/alias API endpoints
@@ -71,17 +70,17 @@
 
 ## Milestone 4 — Handoff & CLI ✓ done
 
-- [x] `ccm handoff <session>` — compact Markdown continuation packet from transcript-supported facts
-- [x] `ccm inbox` — terminal summary of active and non-archived sessions needing attention
-- [x] `ccm doctor` — non-destructive diagnosis of stale locks, broken indices, orphaned transcripts,
+- [x] `swoop handoff <session>` — compact Markdown continuation packet from transcript-supported facts
+- [x] `swoop inbox` — terminal summary of active and non-archived sessions needing attention
+- [x] `swoop doctor` — non-destructive diagnosis of stale locks, broken indices, orphaned transcripts,
       and missing session paths; shared with web Lost & Found
-- [x] `ccm list --json` — stable, machine-readable session dump with project, activity, and signals
-- [x] Extend `ccm list`: compact human table by default, full JSON with `--json`, global free-text
+- [x] `swoop list --json` — stable, machine-readable session dump with project, activity, and signals
+- [x] Extend `swoop list`: compact human table by default, full JSON with `--json`, global free-text
       search, and composable active/attention/archived/project/status/limit filters
 - [x] Make compact list ID prefixes directly usable: globally unique adaptive prefixes, safe
       prefix resume, and opt-in PowerShell/Bash/Zsh session-ID completion
 - [x] Rank shell-completion suggestions by current project, active state, and recent activity
-- [x] Open a compact global, searchable picker when interactive `ccm resume` has no selector
+- [x] Open a compact global, searchable picker when interactive `swoop resume` has no selector
 
 ---
 
@@ -95,7 +94,7 @@ Anthropic API (plan name, credit spending detail, routine allowances) are tracke
 - [x] Research and document authoritative data sources, trust boundaries, and privacy rules in
       [`Documents/USAGE_VISIBILITY.md`](Documents/USAGE_VISIBILITY.md)
 - [x] Extract transcript-supported model history, latest model, latest context-input tokens, and
-      latest output tokens; expose them in web, TUI, and `ccm list --json`
+      latest output tokens; expose them in web, TUI, and `swoop list --json`
 - [x] Add an explicit, reversible account-limit integration that refreshes 5-hour and 7-day
       percentages/reset times, keeps credentials in memory only, and uses status-line observations
       as a fallback without silently replacing an existing status line
@@ -117,11 +116,12 @@ Anthropic API (plan name, credit spending detail, routine allowances) are tracke
 
 - [x] **Global search by default** across projects and sessions in both TUI and web; match project
       name/path, session name/alias/ID, and branch, then navigate directly to the selected result
-- [x] **Configuration foundation**: `ccm config get/set/reset` CLI, `~/.ccm/prefs.json` persisted
+- [x] **Configuration foundation**: `swoop config get/set/reset` CLI,
+      `~/.claude/swoop/prefs.json` persisted
       per-user preferences, zero-config defaults, extensible for future keys
-- [x] **Configuration TUI**: `ccm config` with keyboard-navigable Interface, Integrations, and
+- [x] **Configuration TUI**: `swoop config` with keyboard-navigable Interface, Integrations, and
       Features tabs; integrations show their exact effect and remain reversible
-- [x] Manage live usage and shell-completion integrations through `ccm config`, while preserving
+- [x] Manage live usage and shell-completion integrations through `swoop config`, while preserving
       the existing explicit setup/remove commands
 - [x] Add explicit search scopes/qualifiers (`project:`, `branch:`, `status:`, `is:active`,
       `is:archived`); search semantics unchanged for plain-text queries
@@ -171,7 +171,7 @@ milestones faster to implement. No visible behaviour changes — this is purely 
       cloud-sync circular dependency
 - [x] **Test coverage gaps** — added `tests/core/cloud-sync.test.ts` covering `stopSyncLoop`
       idempotency, bidirectional copy, append-only propagation, conflict detection, recursive descent,
-      skip `.ccm-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
+      skip `.swoop-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
       existing); also fixed a `syncBidirectional` bug where A-only subdirectories were silently
       skipped instead of being created in B; total test count: 194 (was 180)
 
@@ -186,9 +186,9 @@ No server, no auth — the cloud provider handles transfer.
 
 > ⚠ Experimental: see `CHANGELOG.md` for known risks and the backup procedure.
 
-- [x] `ccm sync link [path]` — creates a per-project NTFS junction pointing the Claude Code
+- [x] `swoop sync link [path]` — creates a per-project NTFS junction pointing the Claude Code
       project directory at a shared cloud folder; backs up existing local sessions first
-- [x] `ccm sync unlink [path]` — restores the local directory; sessions written while linked
+- [x] `swoop sync unlink [path]` — restores the local directory; sessions written while linked
       remain accessible through the shared folder
 - [x] **Sync registry** (`syncRegistry`) — in-memory `Map` of junction paths to cloud state;
       avoids circular imports between discovery, sync, and memory modules
@@ -197,11 +197,11 @@ No server, no auth — the cloud provider handles transfer.
       while the cloud drive is unmounted; restores on reconnect
 - [x] **Cloud indicator in TUI and web** — `☁` icon coloured green (online), grey (cloud
       offline / sync paused), or orange (one or more devices used the project without
-      running `ccm sync link`)
+      running `swoop sync link`)
 - [x] **Offline guard** — new sessions are blocked when a project's cloud storage is
       unreachable; flash message informs the user and resumes automatically on reconnect
-- [x] `ccm sync link [path]` / `ccm sync unlink [path]` — inject / remove a
-      `<!-- ccm:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
+- [x] `swoop sync link [path]` / `swoop sync unlink [path]` — inject / remove a
+      `<!-- swoop:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
       Claude Code on any device to: detect whether the device is linked, write a presence
       file when it is not, warn once, and silently skip after the user dismisses the warning
 - [x] **Cross-device CLAUDE.md protocol** — all check files live inside the shared cloud
@@ -209,7 +209,7 @@ No server, no auth — the cloud provider handles transfer.
       project to run the protocol; no extra permissions required
 - [x] **Unlinked-device detection** — linked devices scan `{cloudDir}/device-presence/` on
       each discovery pass and surface device names as `unlinkedDevices[]` on the `Project`
-      object; orange cloud indicator prompts the user to run `ccm sync link` on that device
+      object; orange cloud indicator prompts the user to run `swoop sync link` on that device
 - [x] **Append-only shared memory** — unlinked devices append context to
       `{cloudDir}/memory/shared.md` under a `## HOSTNAME — date` header; avoids pCloud
       conflict copies that would arise from concurrent rewrites
@@ -223,17 +223,18 @@ Improvements shipped after M9:
 - [x] **Command registry** (`src/tui/commands.ts`) — single `COMMANDS` array with `visibleWhen`
       named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
       HelpOverlay and CommandPalette both derive from the same source of truth
-- [x] **`ccm sync`** — renamed from `ccm memory` throughout: file, exports, CLI dispatch, help
+- [x] **`swoop sync`** — renamed from the earlier memory-command prototype throughout: file,
+      exports, CLI dispatch, help
       text, documentation, and all user-facing strings; `memory` kept as a backwards-compat alias
-- [x] **Sync tab in `ccm config`** — interactive cursor navigation over unsynced and synced
+- [x] **Sync tab in `swoop config`** — interactive cursor navigation over unsynced and synced
       projects; Enter to link/unlink inline without leaving the TUI; uses `linkProjectForTUI` /
       `unlinkProjectForTUI` wrappers that suppress console output during TUI operation
 - [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
       archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
 - [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
       with title (consistent across all tabs); Features tab describes each state in plain text
-- [x] **`ccm --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
-      from `ccm config` line
+- [x] **`swoop --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
+      from `swoop config` line
 - [x] **Density toggle removed** — `d` key and comfortable/compact density removed from TUI;
       two stale label keys (`cmdDensityComfortable`, `cmdDensityCompact`) remain in `labels.ts`
       and should be cleaned up
@@ -246,13 +247,13 @@ Make installation feel native and require no repository clone, build step, or
 manual shell setup. Detailed behavior is defined in
 [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
 
-- [ ] Resolve the public product/package name before producing signed artifacts
+- [x] Resolve the public product/package name before producing signed artifacts
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
-- [ ] Add the installed `ccm` launcher to the current user's `PATH`
+- [ ] Add the installed `swoop` launcher to the current user's `PATH`
 - [ ] Windows installer: offer pre-selected PowerShell completion integration
       for Windows PowerShell 5.1 and PowerShell 7
 - [ ] Install shell completion as a managed, idempotent, reversible integration;
-      back up profiles before first modification and remove only CCM-owned blocks
+      back up profiles before first modification and remove only Swoop-owned blocks
 - [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments
 - [ ] Publish checksums and document artifact provenance/signing
@@ -266,8 +267,8 @@ manual shell setup. Detailed behavior is defined in
 - [x] Unified design-token schema (`ThemeTokens` interface in `src/config/theme-tokens.ts`) covering
       every value used by TUI and web; a theme is a plain object satisfying the interface
 - [x] Three themes shipped: **Dark** (default), **Light**, **Terminal** (phosphor/CRT)
-- [x] `ccm --theme <name>` CLI — saves preference and applies immediately
-- [x] Theme selection in `ccm config` Interface tab (keyboard-navigable, live preview)
+- [x] `swoop --theme <name>` CLI — saves preference and applies immediately
+- [x] Theme selection in `swoop config` Interface tab (keyboard-navigable, live preview)
 - [x] Web theme cycle button in footer (◐ dark → ○ light → █ terminal → repeat); persisted via
       `/api/theme` and injected as CSS custom properties at serve time
 - [x] Matrix rain Easter egg — triggered by holding the Terminal theme logo ≥ 3 s in the web UI;
@@ -302,7 +303,7 @@ Anthropic API. They are tracked here and will be re-evaluated when the API stabi
 
 ### Nice-to-have (validated by competitive analysis, mid-2026)
 
-- [ ] **Credential/secret warning in `ccm handoff`** — Before emitting the handoff Markdown packet,
+- [ ] **Credential/secret warning in `swoop handoff`** — Before emitting the handoff Markdown packet,
       scan the session transcript for common secret patterns: `sk-...`, `ANTHROPIC_API_KEY=`,
       `Bearer ...`, `.env` style assignments, and long hex/base64 tokens. Print a warning count
       and require explicit `--force` (or confirmation prompt) before outputting. Never modify
@@ -317,11 +318,11 @@ Anthropic API. They are tracked here and will be re-evaluated when the API stabi
 
 ### Advanced — requires API key / opt-in
 
-These features intentionally sit outside the core tool. CCM's design goal is zero-config,
+These features intentionally sit outside the core tool. Swoop's design goal is zero-config,
 lightweight, and local-first. Anything here requires an explicit user action to enable and
 must never activate automatically or affect the default experience.
 
-- [ ] **AI session renaming** — `ccm rename-sessions [project]` reads the first ~10 messages of
+- [ ] **AI session renaming** — `swoop rename-sessions [project]` reads the first ~10 messages of
       each un-aliased session, calls the Claude API to suggest a concise meaningful name, then
       shows a preview table before writing anything. `--apply` to commit. Requires
       `ANTHROPIC_API_KEY`. Estimate token cost upfront. Never overwrites existing aliases.
@@ -335,7 +336,7 @@ or dropped after evaluation.
 
 ### VSCode extension — command-palette-style session switcher
 
-A native VSCode extension exposing CCM features via `Ctrl+P` / `Ctrl+Shift+P`. The core library
+A native VSCode extension exposing Swoop features via `Ctrl+P` / `Ctrl+Shift+P`. The core library
 (`src/core/`) is already cleanly separated from the TUI and Web consumers — the extension would
 be a third consumer of the same layer, requiring no architectural restructuring.
 
@@ -344,7 +345,7 @@ Proposed shape:
 - `Ctrl+P` → Quick Pick populated with all sessions (fuzzy search, health signals inline as
   description text, `⚠` / `●` / `◌` icons in the detail column)
 - Select a session → `claude --resume <id>` in the integrated terminal
-- Command palette entries for `CCM: Open Inbox`, `CCM: Cleanup`, `CCM: Sync Status`, etc.
+- Command palette entries for `Swoop: Open Inbox`, `Swoop: Cleanup`, `Swoop: Sync Status`, etc.
 - Status bar item showing active-session context usage (reuses existing usage capture infra)
 
 Why it's meaningful: developers who already live in VSCode get the full session intelligence
@@ -356,11 +357,11 @@ What needs investigation:
 - [ ] VSCode extension API constraints (filesystem access, child process spawning — likely fine
       since it's all local reads and a terminal `spawn`)
 - [ ] Extension packaging: does bundling the `src/core/` layer into a `.vsix` add too much weight,
-      or should the extension shell out to a locally installed `ccm` binary instead?
-- [ ] Whether a dedicated `@ccm/core` package makes the shared layer cleaner to consume from three
+      or should the extension shell out to a locally installed `swoop` binary instead?
+- [ ] Whether a dedicated `@swoop/core` package makes the shared layer cleaner to consume from three
       different entry points (TUI, Web, VSCode) — see architecture note below
 
-Architecture note: long-term, the cleanest shape is a `@ccm/core` internal package (or
+Architecture note: long-term, the cleanest shape is a `@swoop/core` internal package (or
 workspace) that TUI, Web, and VSCode all import from. The current single-repo layout already
 achieves this in practice; formalising it is a low-risk refactor that would make the extension
 path straightforward.
@@ -374,7 +375,7 @@ see what Claude is doing right now.
 Proposed additions to the web right-panel (using existing SSE + usage capture infrastructure):
 
 - [ ] **Live context bar** — context window % for the currently active session, updated in real time
-      via the SSE channel. Colour-coded to match the `ccm usage` bar thresholds
+      via the SSE channel. Colour-coded to match the `swoop usage` bar thresholds
 - [ ] **Rate limit mini-display** — inline 5h and 7d percentage next to the active session indicator,
       replacing the current static `●` dot with a subtle meter
 - [ ] **Last-tool trace** — the most recent tool call name/type from the active session's transcript,
@@ -391,7 +392,7 @@ dashboard that makes context exhaustion and rate limits impossible to miss.
 
 | Item                             | Reason                                               |
 | -------------------------------- | ---------------------------------------------------- |
-| npm publish                      | Local stable version first; package name unresolved  |
+| npm publish                      | Local stable version first; package name selected    |
 | Server-based cloud sync / auth   | Local-first only; OS-level junctions via pCloud etc. |
 | Required/free-form config files  | Zero-config remains a design constraint              |
 | Support for non-Claude-Code CLIs | Claude Code only                                     |

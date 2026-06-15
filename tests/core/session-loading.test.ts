@@ -19,7 +19,7 @@ describe('session loading', () => {
   let originalClaudeDirectory: string | undefined
 
   beforeEach(async () => {
-    claudeDirectory = await mkdtemp(join(tmpdir(), 'ccm-loading-test-'))
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-loading-test-'))
     projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = claudeDirectory
@@ -32,7 +32,7 @@ describe('session loading', () => {
     await rm(claudeDirectory, { force: true, recursive: true })
   })
 
-  it('derives session metadata from JSONL and merges CCM sidecar metadata', async () => {
+  it('derives session metadata from JSONL and merges Swoop sidecar metadata', async () => {
     const projectPath = join(claudeDirectory, 'workspace')
     await mkdir(projectPath)
     await writeFile(
@@ -62,7 +62,7 @@ describe('session loading', () => {
       ].join('\n')
     )
     await writeFile(
-      join(projectDirectory, 'ccm.json'),
+      join(projectDirectory, 'swoop.json'),
       JSON.stringify({ sessions: { [SESSION_ID]: { alias: 'Core refactor', archived: true } } })
     )
 
@@ -327,10 +327,10 @@ describe('session loading', () => {
   async function createGitRepository(directory: string, branch: string): Promise<void> {
     await mkdir(directory)
     await executeFile('git', ['init', '-q'], { cwd: directory })
-    await executeFile('git', ['config', 'user.email', 'ccm-tests@example.invalid'], {
+    await executeFile('git', ['config', 'user.email', 'swoop-tests@example.invalid'], {
       cwd: directory,
     })
-    await executeFile('git', ['config', 'user.name', 'ccm tests'], { cwd: directory })
+    await executeFile('git', ['config', 'user.name', 'swoop tests'], { cwd: directory })
     await executeFile('git', ['commit', '--allow-empty', '-q', '-m', 'initial'], { cwd: directory })
     await executeFile('git', ['checkout', '-q', '-b', branch], { cwd: directory })
   }

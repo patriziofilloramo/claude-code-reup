@@ -118,12 +118,12 @@ function metricChip(label: string, percent: number, note = ''): string {
   return ansi(ANSI.dim, label) + ' ' + bar + pct + notePart
 }
 
-/** Compact ANSI summary shown by `ccm usage` — matches the TUI/web inline style. */
+/** Compact ANSI summary shown by `swoop usage` — matches the TUI/web inline style. */
 export function renderUsageSummary(summary: LiveUsageSummary): string {
   const INDENT = '  '
   const { snapshot } = summary
 
-  const title = ansi(ANSI.bold + ANSI.cyan, 'ccm') + ansi(ANSI.dim, ' · usage')
+  const title = ansi(ANSI.bold + ANSI.cyan, 'swoop') + ansi(ANSI.dim, ' · usage')
 
   // Header line: title · optional agent · staleness note
   const agentPart = snapshot?.agentName ? ansi(ANSI.dim, '  / ' + snapshot.agentName) : ''
@@ -167,7 +167,7 @@ export function formatStatusLineUsage(snapshot: LiveUsageSnapshot): string {
       ? `7d ${roundedPercentage(snapshot.rateLimits.sevenDay.usedPercentage)}`
       : '',
   ].filter(Boolean)
-  return labels.length > 0 ? `ccm | ${labels.join(' | ')}` : 'ccm | usage captured'
+  return labels.length > 0 ? `swoop | ${labels.join(' | ')}` : 'swoop | usage captured'
 }
 
 async function toggleUsage(): Promise<void> {
@@ -190,10 +190,10 @@ async function setupUsage(actionArguments: string[]): Promise<void> {
       writeOutput('Usage capture is already configured.')
       return
     }
-    const refreshMessage = `CCM refreshes account limits every ${APP.accountUsageRefreshMs / 1_000} seconds and uses Claude's status line for session details.`
+    const refreshMessage = `Swoop refreshes account limits every ${APP.accountUsageRefreshMs / 1_000} seconds and uses Claude's status line for session details.`
     writeOutput(
       result.replacedExisting
-        ? `Usage capture configured. The previous status line will be restored by \`ccm usage remove\`. ${refreshMessage}`
+        ? `Usage capture configured. The previous status line will be restored by \`swoop usage remove\`. ${refreshMessage}`
         : `Usage capture configured. ${refreshMessage}`
     )
   } catch (error) {
@@ -234,7 +234,7 @@ async function captureUsageFromStatusLine(): Promise<void> {
   } catch (error) {
     // Never disrupt Claude Code, but keep the failure inspectable.
     await recordUsageCaptureError(error).catch(() => {})
-    writeOutput('ccm | usage capture failed')
+    writeOutput('swoop | usage capture failed')
   }
 }
 
@@ -325,5 +325,5 @@ function readStdin(): Promise<string> {
 }
 
 function failUsage(): void {
-  failCommand('usage: ccm usage [--json|toggle|setup [--replace]|remove]')
+  failCommand('usage: swoop usage [--json|toggle|setup [--replace]|remove]')
 }
