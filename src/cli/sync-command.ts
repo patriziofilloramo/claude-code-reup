@@ -3,33 +3,61 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { APP } from '../config/app.js'
-import {
-  createLinkAt,
-  removeLinkAt,
-  syncBidirectional,
-} from '../core/cloud-sync.js'
-import { encodeProjectPath, getCcmDirectory, getClaudeProjectsDirectory } from '../core/claude-paths.js'
+import { createLinkAt, removeLinkAt, syncBidirectional } from '../core/cloud-sync.js'
+import { encodeProjectPath, getClaudeProjectsDirectory } from '../core/claude-paths.js'
 import { getOrCreateDeviceId } from '../core/device-id.js'
 import { loadProjects } from '../core/project-discovery.js'
 import type { Project } from '../core/session-model.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { failCommand, writeOutput } from './output.js'
 
-export async function runMemoryCommand(args: string[]): Promise<void> {
+type OutputFn = (msg: string) => void
+
+// ---------------------------------------------------------------------------
+// TUI-friendly wrappers (silent — no writeOutput side effects)
+// ---------------------------------------------------------------------------
+
+export async function linkProjectForTUI(
+  projectPath: string,
+  knownProjects: Project[]
+): Promise<{ ok: boolean; message: string }> {
+  const collected: string[] = []
+  try {
+    await linkProject(resolve(projectPath), knownProjects, (m) => collected.push(m))
+    return { ok: true, message: collected[collected.length - 1] ?? 'linked' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function unlinkProjectForTUI(
+  projectPath: string,
+  knownProjects: Project[]
+): Promise<{ ok: boolean; message: string }> {
+  const collected: string[] = []
+  try {
+    await unlinkProject(resolve(projectPath), knownProjects, (m) => collected.push(m))
+    return { ok: true, message: collected[collected.length - 1] ?? 'unlinked' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function runSyncCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args
   switch (action) {
     case 'link':
-      await linkMemory(rest)
+      await linkSync(rest)
       return
     case 'unlink':
-      await unlinkMemory(rest)
+      await unlinkSync(rest)
       return
     case 'status':
     case undefined:
-      await showMemoryStatus()
+      await showSyncStatus()
       return
     default:
-      failCommand('usage: ccm memory [link|unlink|status] [path]')
+      failCommand('usage: ccm sync [link|unlink|status] [path]')
   }
 }
 
@@ -37,23 +65,28 @@ export async function runMemoryCommand(args: string[]): Promise<void> {
 // link
 // ---------------------------------------------------------------------------
 
-async function linkMemory(args: string[]): Promise<void> {
-  if (args.length > 1) { failCommand('usage: ccm link [project-path]'); return }
+async function linkSync(args: string[]): Promise<void> {
+  if (args.length > 1) {
+    failCommand('usage: ccm sync link [project-path]')
+    return
+  }
 
-  writeOutput([
-    '⚠  ccm memory is experimental — use at your own risk.',
-    '   Sessions are moved into the cloud directory via a filesystem junction.',
-    '   Back up ~/.claude/projects/<id> before proceeding.',
-    '   Run `ccm unlink <path>` to safely restore to local-only storage.',
-    '',
-  ].join('\n'))
+  writeOutput(
+    [
+      '⚠  ccm sync is experimental — use at your own risk.',
+      '   Sessions are moved into the cloud directory via a filesystem junction.',
+      '   Back up ~/.claude/projects/<id> before proceeding.',
+      '   Run `ccm sync unlink <path>` to safely restore to local-only storage.',
+      '',
+    ].join('\n')
+  )
 
   const projects = await loadProjects()
 
   if (args.length === 0) {
     const linkable = projects.filter((p) => !p.isShared)
     if (linkable.length === 0) {
-      writeOutput('all projects are already linked to cloud storage')
+      writeOutput('all projects are already synced to cloud storage')
       return
     }
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -61,15 +94,15 @@ async function linkMemory(args: string[]): Promise<void> {
       return
     }
     const roots = await detectCloudRoots()
-    const cloudProjects = roots.length > 0
-      ? linkable.filter((p) => isUnderCloudRoot(p.path, roots))
-      : []
+    const cloudProjects =
+      roots.length > 0 ? linkable.filter((p) => isUnderCloudRoot(p.path, roots)) : []
     const pickerProjects = cloudProjects.length > 0 ? cloudProjects : linkable
-    const note = cloudProjects.length === 0 && roots.length === 0
-      ? 'no cloud storage detected — showing all projects'
-      : cloudProjects.length === 0
-        ? 'no projects found in cloud folders — showing all projects'
-        : undefined
+    const note =
+      cloudProjects.length === 0 && roots.length === 0
+        ? 'no cloud storage detected — showing all projects'
+        : cloudProjects.length === 0
+          ? 'no projects found in cloud folders — showing all projects'
+          : undefined
     const { runProjectPicker } = await import('../tui/ProjectPicker.js')
     const picked = await runProjectPicker(pickerProjects, note)
     releaseTerminalInput()
@@ -100,7 +133,11 @@ async function linkProjectSafe(projectPath: string, projects: Project[]): Promis
  * Other devices with access to the same cloud directory (via pCloud, OneDrive,
  * etc.) see those sessions without needing ccm installed.
  */
-async function linkProject(projectPath: string, projects: Project[]): Promise<void> {
+async function linkProject(
+  projectPath: string,
+  projects: Project[],
+  out: OutputFn = writeOutput
+): Promise<void> {
   const project = projects.find((p) => samePath(p.path, projectPath))
   const cloudDir = join(projectPath, APP.cloudMemoryDir)
 
@@ -108,7 +145,7 @@ async function linkProject(projectPath: string, projects: Project[]): Promise<vo
     const desc = project.cloudPath
       ? `already linked — sessions sync with ${project.cloudPath}`
       : 'already linked (junction in place)'
-    writeOutput(desc)
+    out(desc)
     return
   }
 
@@ -123,17 +160,14 @@ async function linkProject(projectPath: string, projects: Project[]): Promise<vo
     // Existing junction to a different target — update it
     const existing = (await readlink(localDir)).replace(/^\\\\\?\\/, '')
     if (samePath(existing, cloudDir)) {
-      writeOutput(`already linked — ${projectPath}`)
+      out(`already synced — ${projectPath}`)
       return
     }
     // Different target: sync existing → new cloud, then re-point
     await syncBidirectional(existing, cloudDir).catch(() => {})
     await removeLinkAt(localDir)
     await createLinkAt(localDir, cloudDir)
-    writeOutput([
-      `✓ re-linked: ${projectPath}`,
-      `  sessions now write to ${cloudDir}`,
-    ].join('\n'))
+    out([`✓ re-linked: ${projectPath}`, `  sessions now write to ${cloudDir}`].join('\n'))
     return
   }
 
@@ -149,33 +183,40 @@ async function linkProject(projectPath: string, projects: Project[]): Promise<vo
   await writeLinkedMarker(cloudDir, deviceId)
   await injectClaudeMdSection(projectPath, cloudDir, deviceId)
 
-  writeOutput([
-    `✓ linked: ${projectPath}`,
-    `  sessions write directly to ${cloudDir}`,
-    `  CLAUDE.md updated — other devices will be prompted to run ccm link`,
-    `  start ccm to enable offline backup and automatic conflict merge`,
-  ].join('\n'))
+  out(
+    [
+      `✓ linked: ${projectPath}`,
+      `  sessions write directly to ${cloudDir}`,
+      `  CLAUDE.md updated — other devices will be prompted to run ccm sync`,
+      `  start ccm to enable offline backup and conflict detection`,
+    ].join('\n')
+  )
 }
 
 // ---------------------------------------------------------------------------
 // unlink
 // ---------------------------------------------------------------------------
 
-async function unlinkMemory(args: string[]): Promise<void> {
-  if (args.length > 1) { failCommand('usage: ccm unlink [project-path]'); return }
+async function unlinkSync(args: string[]): Promise<void> {
+  if (args.length > 1) {
+    failCommand('usage: ccm sync unlink [project-path]')
+    return
+  }
 
-  writeOutput([
-    '⚠  ccm memory is experimental — use at your own risk.',
-    '   Sessions will be copied from the cloud directory back to local storage.',
-    '',
-  ].join('\n'))
+  writeOutput(
+    [
+      '⚠  ccm sync is experimental — use at your own risk.',
+      '   Sessions will be copied from the cloud directory back to local storage.',
+      '',
+    ].join('\n')
+  )
 
   const projects = await loadProjects()
 
   if (args.length === 0) {
     const linked = projects.filter((p) => p.isShared)
     if (linked.length === 0) {
-      writeOutput('no projects are using shared storage')
+      writeOutput('no projects are using cloud sync')
       return
     }
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -183,7 +224,12 @@ async function unlinkMemory(args: string[]): Promise<void> {
       return
     }
     const { runProjectPicker } = await import('../tui/ProjectPicker.js')
-    const picked = await runProjectPicker(linked, undefined, 'CCM MEMORY UNLINK', 'select a project to unlink')
+    const picked = await runProjectPicker(
+      linked,
+      undefined,
+      'CCM SYNC UNLINK',
+      'select a project to unlink'
+    )
     releaseTerminalInput()
     if (!picked) return
     for (const project of picked) await unlinkProjectSafe(project.path, projects)
@@ -206,11 +252,15 @@ async function unlinkProjectSafe(projectPath: string, projects: Project[]): Prom
  * The junction is removed and replaced with a real local directory populated
  * from the cloud dir (so existing sessions are preserved locally).
  */
-async function unlinkProject(projectPath: string, projects: Project[]): Promise<void> {
+async function unlinkProject(
+  projectPath: string,
+  projects: Project[],
+  out: OutputFn = writeOutput
+): Promise<void> {
   const project = projects.find((p) => samePath(p.path, projectPath))
 
   if (!project?.isShared) {
-    writeOutput(`not linked — ${projectPath} already uses local-only storage`)
+    out(`not linked — ${projectPath} already uses local-only storage`)
     return
   }
 
@@ -233,41 +283,39 @@ async function unlinkProject(projectPath: string, projects: Project[]): Promise<
   await removeLinkedMarker(cloudDir, deviceId)
   await removeClaudeMdSection(projectPath)
 
-  writeOutput([
-    `✓ unlinked: ${projectPath}`,
-    `  sessions remain in local storage.`,
-    `  note: ${join(projectPath, APP.cloudMemoryDir)} still exists — remove manually if no longer needed.`,
-  ].join('\n'))
+  out(
+    [
+      `✓ unlinked: ${projectPath}`,
+      `  sessions remain in local storage.`,
+      `  note: ${join(projectPath, APP.cloudMemoryDir)} still exists — remove manually if no longer needed.`,
+    ].join('\n')
+  )
 }
 
 // ---------------------------------------------------------------------------
 // status
 // ---------------------------------------------------------------------------
 
-async function showMemoryStatus(): Promise<void> {
+async function showSyncStatus(): Promise<void> {
   const projects = await loadProjects()
   const shared = projects.filter((p) => p.isShared)
 
   if (shared.length === 0) {
     writeOutput(
-      `${projects.length} project(s) found, none using shared storage.\n` +
-        `Run \`ccm memory link [path]\` to share sessions across devices.`
+      `${projects.length} project(s) found, none using cloud sync.\n` +
+        `Run \`ccm sync link [path]\` to share sessions across devices.`
     )
     return
   }
 
   const lines = [`${shared.length}/${projects.length} project(s) using shared storage:`, '']
   for (const p of shared) {
-    const status = p.cloudOffline
-      ? '⚠ OFFLINE'
-      : p.cloudPath
-        ? '✓ online'
-        : '✓ linked'
+    const status = p.cloudOffline ? '⚠ OFFLINE' : p.cloudPath ? '✓ online' : '✓ linked'
     lines.push(`  ⊙  ${p.path}`)
     if (p.cloudPath) {
       lines.push(`       → ${p.cloudPath}  [${status}]`)
     } else {
-      lines.push(`       → (junction — run \`ccm link ${p.path}\` to re-register)`)
+      lines.push(`       → (junction — run \`ccm sync link ${p.path}\` to re-register)`)
     }
     if (p.cloudOffline) {
       lines.push(`       ℹ sessions written while offline will sync when cloud returns`)
@@ -287,7 +335,7 @@ const CCM_MARKER_END = '<!-- ccm:sync:end -->'
  * Writes (or replaces) the ccm sync section in the project's CLAUDE.md.
  *
  * The section instructs the Claude Code agent (on any device) to:
- *   1. Detect whether this device has run `ccm link` by checking a marker file
+ *   1. Detect whether this device has run `ccm sync link` by checking a marker file
  *      inside the cloud directory (already accessible — no extra permissions).
  *   2. If not linked → write a presence file so Device B can detect it, then warn.
  *   3. If linked → read shared memories from the cloud directory.
@@ -298,7 +346,7 @@ const CCM_MARKER_END = '<!-- ccm:sync:end -->'
 async function injectClaudeMdSection(
   projectPath: string,
   cloudDir: string,
-  deviceId: string,
+  deviceId: string
 ): Promise<void> {
   const claudeMdPath = join(projectPath, 'CLAUDE.md')
   const linkedDir = join(cloudDir, 'linked')
@@ -315,35 +363,30 @@ async function injectClaudeMdSection(
     '',
     '**At the start of every session (new or resumed):**',
     '',
-    '1. Run `hostname` in Bash to get this device\'s name (call it HOSTNAME)',
+    "1. Run `hostname` in Bash to get this device's name (call it HOSTNAME)",
     `2. Check if \`${linkedDir}\\HOSTNAME\` exists (use your Read tool with the actual hostname)`,
     `3. **File exists** — sync is configured on this device:`,
     `   Read all \`.md\` files in \`${memoryDir}\` for shared context from other devices.`,
     `4. **File missing** — this device is not set up for sync:`,
-    `   a. Check if \`${ignoredDir}\\HOSTNAME\` exists`,
-    `      - If the file exists: skip the warning silently`,
-    `   b. Write \`${presenceDir}\\HOSTNAME.json\` with:`,
-    `      \`{"device":"HOSTNAME","lastSeen":"<today date>"}\``,
-    `      (replace HOSTNAME and date with real values)`,
-    `   c. Tell the user:`,
-    `      "⚠ Questo device non è configurato per il sync cross-device ccm.`,
-    `      Esegui \`ccm link \\"${projectPath}\\"\` per condividere sessioni e memoria`,
-    `      tra dispositivi, oppure dimmi \\"ignora sync\\" per non mostrare più questo avviso."`,
-    `   d. If the user replies "ignora sync":`,
-    `      Write \`ignored\` to \`${ignoredDir}\\HOSTNAME\`,`,
-    `      delete \`${presenceDir}\\HOSTNAME.json\` if it exists,`,
-    `      then confirm: "Avviso sync disattivato su questo device."`,
-    `   e. During the session, if you learn important context (user goals, decisions,`,
-    `      preferences, key facts about the project), append them to \`${memoryDir}\\shared.md\`.`,
-    `      Use append-only writes — never overwrite. Format: "## HOSTNAME — <date>\\n<notes>"`,
-    `      This lets linked devices benefit from context gathered here even without a full link.`,
+    `   - If \`${ignoredDir}\\HOSTNAME\` exists, skip the warning silently.`,
+    `   - Write \`${presenceDir}\\HOSTNAME.json\` with \`{"device":"HOSTNAME","lastSeen":"<today date>"}\` using real values.`,
+    `   - Tell the user: "⚠ Questo device non è configurato per il sync cross-device ccm.`,
+    `     Esegui \`ccm sync link \\"${projectPath}\\"\` per condividere sessioni e memoria tra dispositivi,`,
+    `     oppure dimmi \\"ignora sync\\" per non mostrare più questo avviso."`,
+    `   - If the user replies "ignora sync", write \`ignored\` to \`${ignoredDir}\\HOSTNAME\`,`,
+    `     delete \`${presenceDir}\\HOSTNAME.json\` if it exists, then confirm the warning is disabled.`,
+    `   - Append important shared context to \`${memoryDir}\\shared.md\`.`,
+    `     Use append-only writes and format entries as \`## HOSTNAME — <date>\\n<notes>\`.`,
+    '',
     CCM_MARKER_END,
   ].join('\n')
 
   let existing = ''
   try {
     existing = await readFile(claudeMdPath, 'utf8')
-  } catch { /* file does not exist yet */ }
+  } catch {
+    /* file does not exist yet */
+  }
 
   const startIdx = existing.indexOf(CCM_MARKER_START)
   const endIdx = existing.indexOf(CCM_MARKER_END)
@@ -388,7 +431,7 @@ async function removeClaudeMdSection(projectPath: string): Promise<void> {
   try {
     content = await readFile(claudeMdPath, 'utf8')
   } catch {
-    return  // file doesn't exist, nothing to remove
+    return // file doesn't exist, nothing to remove
   }
 
   const startIdx = content.indexOf(CCM_MARKER_START)
@@ -411,7 +454,9 @@ async function removeClaudeMdSection(projectPath: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function pathExists(p: string): Promise<boolean> {
-  return access(p).then(() => true).catch(() => false)
+  return access(p)
+    .then(() => true)
+    .catch(() => false)
 }
 
 async function detectCloudRoots(): Promise<string[]> {
@@ -423,20 +468,24 @@ async function detectCloudRoots(): Promise<string[]> {
     if (v) roots.push(v)
   }
 
-  const dropboxInfo = process.platform === 'win32'
-    ? join(process.env['LOCALAPPDATA'] ?? home, 'Dropbox', 'info.json')
-    : join(home, '.dropbox', 'info.json')
+  const dropboxInfo =
+    process.platform === 'win32'
+      ? join(process.env['LOCALAPPDATA'] ?? home, 'Dropbox', 'info.json')
+      : join(home, '.dropbox', 'info.json')
   try {
     const info = JSON.parse(await readFile(dropboxInfo, 'utf8')) as Record<string, unknown>
     for (const account of Object.values(info)) {
       const p = (account as Record<string, unknown>)?.['path']
       if (typeof p === 'string') roots.push(p)
     }
-  } catch { /* not installed */ }
+  } catch {
+    /* not installed */
+  }
 
-  const pcloudCandidates = process.platform === 'win32'
-    ? [join(home, 'pCloud Drive'), 'P:\\']
-    : [join(home, 'pCloud Drive'), join(home, 'pCloudDrive')]
+  const pcloudCandidates =
+    process.platform === 'win32'
+      ? [join(home, 'pCloud Drive'), 'P:\\']
+      : [join(home, 'pCloud Drive'), join(home, 'pCloudDrive')]
   for (const p of pcloudCandidates) {
     if (await pathExists(p)) roots.push(p)
   }
@@ -445,9 +494,10 @@ async function detectCloudRoots(): Promise<string[]> {
     if (await pathExists(p)) roots.push(p)
   }
 
-  const icloud = process.platform === 'win32'
-    ? join(home, 'iCloudDrive')
-    : join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs')
+  const icloud =
+    process.platform === 'win32'
+      ? join(home, 'iCloudDrive')
+      : join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs')
   if (await pathExists(icloud)) roots.push(icloud)
 
   return [...new Set(roots.map((r) => r.replace(/[/\\]+$/, '')))]
@@ -468,8 +518,8 @@ function isUnderCloudRoot(projectPath: string, roots: string[]): boolean {
 // ---------------------------------------------------------------------------
 
 function samePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/[/\\]+$/, '')
+  const normalise = (path: string) => path.replace(/[/\\]+$/, '')
   return process.platform === 'linux'
-    ? norm(a) === norm(b)
-    : norm(a).toLowerCase() === norm(b).toLowerCase()
+    ? normalise(a) === normalise(b)
+    : normalise(a).toLowerCase() === normalise(b).toLowerCase()
 }

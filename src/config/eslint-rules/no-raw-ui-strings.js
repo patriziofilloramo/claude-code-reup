@@ -25,8 +25,7 @@ const rule = {
       url: 'https://github.com/your-org/ccm#i18n',
     },
     messages: {
-      rawUiString:
-        'Raw UI string "{{text}}" — use LABELS.xxx from src/config/labels.ts instead.',
+      rawUiString: 'Raw UI string "{{text}}" — use LABELS.xxx from src/config/labels.ts instead.',
     },
     schema: [],
   },

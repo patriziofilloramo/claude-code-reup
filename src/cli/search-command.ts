@@ -9,7 +9,10 @@ import { createListedSessions, filterListedSessions } from './list-command.js'
 
 export async function runSearchCommand(args: string[]): Promise<void> {
   const isDeep = args.includes('--deep')
-  const query = args.filter((a) => !a.startsWith('--')).join(' ').trim()
+  const query = args
+    .filter((a) => !a.startsWith('--'))
+    .join(' ')
+    .trim()
 
   if (!query) {
     failCommand('usage: ccm search [--deep] <query>')
@@ -60,7 +63,11 @@ export async function runSearchCommand(args: string[]): Promise<void> {
 
 function tryChdir(projectPath: string | undefined): void {
   if (!projectPath) return
-  try { process.chdir(projectPath) } catch { /* best-effort */ }
+  try {
+    process.chdir(projectPath)
+  } catch {
+    /* best-effort */
+  }
 }
 
 function launchClaude(sessionId: string): void {

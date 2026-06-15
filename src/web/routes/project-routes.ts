@@ -31,7 +31,7 @@ export function registerProjectRoutes(app: Hono): void {
     apiRoute(async (context) => {
       const projects = await loadProjects()
       return context.json(projects.map(serializeProject))
-    }),
+    })
   )
 
   // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ export function registerProjectRoutes(app: Hono): void {
       }
 
       return context.json(hits)
-    }),
+    })
   )
 
   // ---------------------------------------------------------------------------
@@ -78,12 +78,7 @@ export function registerProjectRoutes(app: Hono): void {
         return context.json({ error: 'project not found' }, 404)
       }
 
-      const transcriptPath = join(
-        getClaudeDirectory(),
-        'projects',
-        projectId,
-        `${sessionId}.jsonl`,
-      )
+      const transcriptPath = join(getClaudeDirectory(), 'projects', projectId, `${sessionId}.jsonl`)
 
       try {
         const raw = await readFile(transcriptPath, 'utf8')
@@ -98,7 +93,7 @@ export function registerProjectRoutes(app: Hono): void {
         // File missing or unreadable — treat as 404 rather than a 500.
         return context.json({ error: 'session not found' }, 404)
       }
-    }),
+    })
   )
 
   // ---------------------------------------------------------------------------
@@ -110,7 +105,7 @@ export function registerProjectRoutes(app: Hono): void {
     apiRoute(async (context) => {
       const activeIds = await getActiveSessions()
       return context.json({ sessionIds: [...activeIds] })
-    }),
+    })
   )
 
   log.debug('project routes registered')
@@ -131,7 +126,7 @@ function sessionMatchesQuery(
   session: Session,
   project: Project,
   projectName: string,
-  normalizedQuery: string,
+  normalizedQuery: string
 ): boolean {
   const candidates = [
     project.id,

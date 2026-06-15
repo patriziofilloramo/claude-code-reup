@@ -9,12 +9,12 @@ interface SearchBarProps {
 export default function SearchBar({ query }: SearchBarProps) {
   return (
     <Box gap={1}>
-      <Text bold color={COLORS.accent}>/</Text>
+      <Text bold color={COLORS.accent}>
+        /
+      </Text>
       <Text color={COLORS.text}>{query}</Text>
       <Text color={COLORS.accent}>█</Text>
-      {query.length === 0 && (
-        <Text color={COLORS.dim}>e.g. fix auth, branch:main, is:active</Text>
-      )}
+      {query.length === 0 && <Text color={COLORS.dim}>e.g. fix auth, branch:main, is:active</Text>}
     </Box>
   )
 }

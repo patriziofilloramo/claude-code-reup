@@ -20,10 +20,10 @@ interface Action {
 }
 
 const ACTIONS: Action[] = [
-  { directKey: 'n', keyLabel: 'n', description: 'New session',          command: 'new-session'    },
-  { directKey: null, keyLabel: '→', description: 'Browse sessions',     command: 'browse-sessions' },
+  { directKey: 'n', keyLabel: 'n', description: 'New session', command: 'new-session' },
+  { directKey: null, keyLabel: '→', description: 'Browse sessions', command: 'browse-sessions' },
   { directKey: 'o', keyLabel: 'o', description: 'Open in file manager', command: 'open-directory' },
-  { directKey: 'c', keyLabel: 'c', description: 'Copy path',            command: 'copy-path'      },
+  { directKey: 'c', keyLabel: 'c', description: 'Copy path', command: 'copy-path' },
 ]
 
 interface ProjectActionMenuProps {
@@ -38,7 +38,10 @@ export default function ProjectActionMenu({ project, onExecute, onClose }: Proje
   const projectLabel = project.path.split(/[/\\]/).filter(Boolean).slice(-2).join('/')
 
   useInput((input, key) => {
-    if (key.escape || input === '\x1b') { onClose(); return }
+    if (key.escape || input === '\x1b') {
+      onClose()
+      return
+    }
 
     if (key.upArrow) {
       setFocusedIndex((i) => Math.max(0, i - 1))
@@ -68,8 +71,12 @@ export default function ProjectActionMenu({ project, onExecute, onClose }: Proje
     <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
       {/* Project context */}
       <Box flexDirection="column" marginBottom={1}>
-        <Text bold color={COLORS.text}>{projectLabel}</Text>
-        <Text color={COLORS.muted} wrap="truncate">{project.path}</Text>
+        <Text bold color={COLORS.text}>
+          {projectLabel}
+        </Text>
+        <Text color={COLORS.muted} wrap="truncate">
+          {project.path}
+        </Text>
       </Box>
 
       {/* Action list */}
@@ -86,9 +93,7 @@ export default function ProjectActionMenu({ project, onExecute, onClose }: Proje
               <Box flexShrink={0} width={3}>
                 <Text color={isFocused ? COLORS.accent : COLORS.dim}>{action.keyLabel}</Text>
               </Box>
-              <Text color={isFocused ? COLORS.text : COLORS.textSub}>
-                {action.description}
-              </Text>
+              <Text color={isFocused ? COLORS.text : COLORS.textSub}>{action.description}</Text>
             </Box>
           )
         })}

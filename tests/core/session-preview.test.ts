@@ -87,9 +87,7 @@ describe('extractSessionPreview', () => {
   it('strips <system-reminder> injections from goal and response', () => {
     const lines = [
       userText('<system-reminder>internal context</system-reminder> Implement the API router.'),
-      assistantText(
-        'Done. <system-reminder>more internal</system-reminder> I added the routes.'
-      ),
+      assistantText('Done. <system-reminder>more internal</system-reminder> I added the routes.'),
     ]
     const preview = extractSessionPreview(lines)
     expect(preview.goal).toBe('Implement the API router.')
@@ -147,10 +145,16 @@ describe('extractSessionPreview', () => {
 
   it('deduplicates touched files and returns the most recently touched first', () => {
     const lines = [
-      assistantWithTools('first pass', [editTool('t1', '/proj/a.ts'), editTool('t2', '/proj/b.ts')]),
+      assistantWithTools('first pass', [
+        editTool('t1', '/proj/a.ts'),
+        editTool('t2', '/proj/b.ts'),
+      ]),
       toolResult('t1'),
       toolResult('t2'),
-      assistantWithTools('second pass', [editTool('t3', '/proj/a.ts'), editTool('t4', '/proj/c.ts')]),
+      assistantWithTools('second pass', [
+        editTool('t3', '/proj/a.ts'),
+        editTool('t4', '/proj/c.ts'),
+      ]),
       toolResult('t3'),
       toolResult('t4'),
     ]
@@ -164,10 +168,7 @@ describe('extractSessionPreview', () => {
 
   it('caps touched files at 8 entries', () => {
     const tools = Array.from({ length: 12 }, (_, i) => editTool(`t${i}`, `/proj/file${i}.ts`))
-    const lines = [
-      assistantWithTools('many edits', tools),
-      ...tools.map((t) => toolResult(t.id)),
-    ]
+    const lines = [assistantWithTools('many edits', tools), ...tools.map((t) => toolResult(t.id))]
     expect(extractSessionPreview(lines).touchedFiles).toHaveLength(8)
   })
 
@@ -175,9 +176,9 @@ describe('extractSessionPreview', () => {
     // Sentence boundary at position 152 (63% of 240 limit) — above the 55% threshold.
     const longGoal = 'x'.repeat(150) + '. ' + 'y'.repeat(300)
     const preview = extractSessionPreview([userText(longGoal)])
-    expect(preview.goal).toMatch(/\.$/)           // ends at sentence boundary
+    expect(preview.goal).toMatch(/\.$/) // ends at sentence boundary
     expect(preview.goal!.length).toBeLessThanOrEqual(240)
-    expect(preview.goal).not.toMatch(/…$/)        // not a hard-cut ellipsis
+    expect(preview.goal).not.toMatch(/…$/) // not a hard-cut ellipsis
   })
 
   it('falls back to hard truncation with ellipsis when no sentence boundary found', () => {
@@ -191,7 +192,7 @@ describe('extractSessionPreview', () => {
     const lines = [
       userText('the real goal'),
       assistantWithTools('doing work', [editTool('t1', '/proj/x.ts')]),
-      toolResult('t1'),          // pure tool result, not a new goal
+      toolResult('t1'), // pure tool result, not a new goal
     ]
     expect(extractSessionPreview(lines).goal).toBe('the real goal')
   })

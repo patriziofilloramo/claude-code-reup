@@ -31,7 +31,12 @@ interface RowData {
   active: boolean
 }
 
-export function SearchResultsPicker({ query, sessions, onSelect, onDeepSearch }: SearchResultsPickerProps) {
+export function SearchResultsPicker({
+  query,
+  sessions,
+  onSelect,
+  onDeepSearch,
+}: SearchResultsPickerProps) {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -49,34 +54,52 @@ export function SearchResultsPicker({ query, sessions, onSelect, onDeepSearch }:
 
   const [visibleRows, visibleSelected] = createVisibleWindow(rowData, selectedIndex, maxVisible)
 
-  const widths = rowData.length === 0
-    ? { state: 8, project: 7, session: 7, updated: 7, id: 9 }
-    : {
-        state: 8,
-        project: Math.max(7, ...rowData.map((r) => r.project.length)),
-        session: Math.max(7, ...rowData.map((r) => r.session.length)),
-        updated: Math.max(7, ...rowData.map((r) => r.updated.length)),
-        id: Math.max(9, ...rowData.map((r) => r.id.length)),
-      }
+  const widths =
+    rowData.length === 0
+      ? { state: 8, project: 7, session: 7, updated: 7, id: 9 }
+      : {
+          state: 8,
+          project: Math.max(7, ...rowData.map((r) => r.project.length)),
+          session: Math.max(7, ...rowData.map((r) => r.session.length)),
+          updated: Math.max(7, ...rowData.map((r) => r.updated.length)),
+          id: Math.max(9, ...rowData.map((r) => r.id.length)),
+        }
 
   useInput((input, key) => {
-    if (key.escape || input === 'q') { exit(); return }
-    if (key.upArrow) { setSelectedIndex((i) => Math.max(0, i - 1)); return }
+    if (key.escape || input === 'q') {
+      exit()
+      return
+    }
+    if (key.upArrow) {
+      setSelectedIndex((i) => Math.max(0, i - 1))
+      return
+    }
     if (key.downArrow) {
       setSelectedIndex((i) => Math.min(Math.max(0, sessions.length - 1), i + 1))
       return
     }
-    if (key.tab && onDeepSearch) { onDeepSearch(query); return }
+    if (key.tab && onDeepSearch) {
+      onDeepSearch(query)
+      return
+    }
     if (key.return) {
       const session = sessions[Math.min(selectedIndex, Math.max(0, sessions.length - 1))]
-      if (session) { onSelect(session); exit() }
+      if (session) {
+        onSelect(session)
+        exit()
+      }
     }
   })
 
   return (
     <Box flexDirection="column">
       <Box gap={2} marginBottom={1} paddingX={1}>
-        <Text>search: <Text bold color={COLORS.accent}>{query}</Text></Text>
+        <Text>
+          search:{' '}
+          <Text bold color={COLORS.accent}>
+            {query}
+          </Text>
+        </Text>
         <Text color={COLORS.muted}>
           {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
         </Text>
@@ -105,7 +128,9 @@ export function SearchResultsPicker({ query, sessions, onSelect, onDeepSearch }:
             const stateColor = row.active ? COLORS.ok : COLORS.dim
             return (
               <Box key={row.fullId} paddingX={1}>
-                <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '▶ ' : '  '}</Text>
+                <Text color={isSelected ? COLORS.accent : COLORS.dim}>
+                  {isSelected ? '▶ ' : '  '}
+                </Text>
                 <Text color={stateColor}>{stateText.padEnd(widths.state + 2)}</Text>
                 <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.muted}>
                   {row.project.padEnd(widths.project + 2)}
@@ -129,12 +154,20 @@ export function SearchResultsPicker({ query, sessions, onSelect, onDeepSearch }:
         gap={2}
         paddingX={1}
       >
-        <Text color={COLORS.muted}><Text color={COLORS.text}>enter</Text> resume</Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>enter</Text> resume
+        </Text>
         {onDeepSearch && (
-          <Text color={COLORS.muted}><Text color={COLORS.text}>tab</Text> deep search</Text>
+          <Text color={COLORS.muted}>
+            <Text color={COLORS.text}>tab</Text> deep search
+          </Text>
         )}
-        <Text color={COLORS.muted}><Text color={COLORS.text}>↑↓</Text> navigate</Text>
-        <Text color={COLORS.muted}><Text color={COLORS.text}>esc</Text> quit</Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>↑↓</Text> navigate
+        </Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>esc</Text> quit
+        </Text>
       </Box>
     </Box>
   )
@@ -143,7 +176,7 @@ export function SearchResultsPicker({ query, sessions, onSelect, onDeepSearch }:
 export function runSearchResultsPicker(
   query: string,
   sessions: ListedSession[],
-  onDeepSearch?: (query: string) => void,
+  onDeepSearch?: (query: string) => void
 ): Promise<ListedSession | null> {
   return new Promise((resolve) => {
     let selected: ListedSession | null = null
@@ -151,7 +184,9 @@ export function runSearchResultsPicker(
       <SearchResultsPicker
         query={query}
         sessions={sessions}
-        onSelect={(s) => { selected = s }}
+        onSelect={(s) => {
+          selected = s
+        }}
         onDeepSearch={onDeepSearch}
       />
     )

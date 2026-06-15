@@ -20,7 +20,7 @@ const PICKER_CHROME_ROWS = 6
 function ProjectPicker({
   projects,
   note,
-  title = 'CCM MEMORY LINK',
+  title = 'CCM SYNC LINK',
   subtitle = 'select a project to link',
   onSelect,
 }: {
@@ -48,7 +48,11 @@ function ProjectPicker({
   ]
 
   const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - PICKER_CHROME_ROWS)
-  const [visibleItems, visibleSelectedIndex] = createVisibleWindow(items, selectedIndex, maximumVisibleRows)
+  const [visibleItems, visibleSelectedIndex] = createVisibleWindow(
+    items,
+    selectedIndex,
+    maximumVisibleRows
+  )
 
   useEffect(() => setSelectedIndex(0), [query])
 
@@ -56,17 +60,33 @@ function ProjectPicker({
     const esc = key.escape || input === '\x1b'
 
     if (isSearchOpen) {
-      if (esc) { setIsSearchOpen(false); setQuery(''); return }
-      if (key.backspace || key.delete) { setQuery((q) => q.slice(0, -1)); return }
+      if (esc) {
+        setIsSearchOpen(false)
+        setQuery('')
+        return
+      }
+      if (key.backspace || key.delete) {
+        setQuery((q) => q.slice(0, -1))
+        return
+      }
       if (!key.upArrow && !key.downArrow && !key.return && input && !key.ctrl && !key.meta) {
         setQuery((q) => q + input)
         return
       }
     }
 
-    if (esc || input === 'q') { exit(); return }
-    if (input === '/') { setIsSearchOpen(true); return }
-    if (key.upArrow) { setSelectedIndex((i) => Math.max(0, i - 1)); return }
+    if (esc || input === 'q') {
+      exit()
+      return
+    }
+    if (input === '/') {
+      setIsSearchOpen(true)
+      return
+    }
+    if (key.upArrow) {
+      setSelectedIndex((i) => Math.max(0, i - 1))
+      return
+    }
     if (key.downArrow) {
       setSelectedIndex((i) => Math.min(Math.max(0, items.length - 1), i + 1))
       return
@@ -87,8 +107,12 @@ function ProjectPicker({
   return (
     <Box flexDirection="column">
       <Box gap={1} paddingX={1}>
-        <Text bold color={COLORS.accent}>{title}</Text>
-        <Text color={COLORS.dim}>{filtered.length} project{filtered.length !== 1 ? 's' : ''}</Text>
+        <Text bold color={COLORS.accent}>
+          {title}
+        </Text>
+        <Text color={COLORS.dim}>
+          {filtered.length} project{filtered.length !== 1 ? 's' : ''}
+        </Text>
       </Box>
       <Box paddingX={1}>
         <Text color={note ? COLORS.warn : COLORS.muted} wrap="truncate">
@@ -97,11 +121,17 @@ function ProjectPicker({
       </Box>
       <Box flexDirection="column" marginY={1}>
         {items.length === 0 ? (
-          <Box paddingX={1}><Text color={COLORS.muted}>No projects match.</Text></Box>
+          <Box paddingX={1}>
+            <Text color={COLORS.muted}>No projects match.</Text>
+          </Box>
         ) : (
           visibleItems.map((item, index) =>
             item.kind === 'all' ? (
-              <AllRow key="all" isSelected={index === visibleSelectedIndex} count={filtered.length} />
+              <AllRow
+                key="all"
+                isSelected={index === visibleSelectedIndex}
+                count={filtered.length}
+              />
             ) : (
               <ProjectPickerRow
                 key={item.project.id}
@@ -122,10 +152,18 @@ function ProjectPicker({
         gap={2}
         paddingX={1}
       >
-        <Text color={COLORS.muted}><Text color={COLORS.ok}>▶ enter</Text> link</Text>
-        <Text color={COLORS.muted}><Text color={COLORS.text}>/</Text> search</Text>
-        <Text color={COLORS.muted}><Text color={COLORS.text}>↑↓</Text> navigate</Text>
-        <Text color={COLORS.muted}><Text color={COLORS.text}>esc</Text> cancel</Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.ok}>▶ enter</Text> link
+        </Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>/</Text> search
+        </Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>↑↓</Text> navigate
+        </Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>esc</Text> cancel
+        </Text>
       </Box>
     </Box>
   )
@@ -139,7 +177,9 @@ function AllRow({ isSelected, count }: { isSelected: boolean; count: number }) {
   return (
     <Box gap={1} paddingX={1}>
       <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
-      <Text bold={isSelected} color={COLORS.ok}>all projects</Text>
+      <Text bold={isSelected} color={COLORS.ok}>
+        all projects
+      </Text>
       <Text color={COLORS.dim}>({count})</Text>
     </Box>
   )
@@ -150,9 +190,13 @@ function ProjectPickerRow({ project, isSelected }: { project: Project; isSelecte
   return (
     <Box gap={1} paddingX={1}>
       <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
-      <Text bold={isSelected} color={COLORS.text} wrap="truncate">{label}</Text>
+      <Text bold={isSelected} color={COLORS.text} wrap="truncate">
+        {label}
+      </Text>
       <Text color={COLORS.dim}>({project.sessions.length})</Text>
-      <Text color={COLORS.border} wrap="truncate">{project.path}</Text>
+      <Text color={COLORS.border} wrap="truncate">
+        {project.path}
+      </Text>
     </Box>
   )
 }
@@ -170,12 +214,20 @@ export function runProjectPicker(
   projects: Project[],
   note?: string,
   title?: string,
-  subtitle?: string,
+  subtitle?: string
 ): Promise<Project[] | null> {
   return new Promise((resolve) => {
     let selection: Project[] | null = null
     const { waitUntilExit } = render(
-      <ProjectPicker projects={projects} note={note} title={title} subtitle={subtitle} onSelect={(p) => { selection = p }} />
+      <ProjectPicker
+        projects={projects}
+        note={note}
+        title={title}
+        subtitle={subtitle}
+        onSelect={(p) => {
+          selection = p
+        }}
+      />
     )
     waitUntilExit()
       .then(() => resolve(selection))

@@ -42,7 +42,7 @@ export function registerSearchRoute(app: Hono): void {
 
       log.debug(`deep-search: "${query}" → ${matches.length} session(s) matched`)
       return context.json({ matches })
-    }),
+    })
   )
 
   log.debug('search routes registered')

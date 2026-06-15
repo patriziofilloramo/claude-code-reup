@@ -42,7 +42,9 @@ export default function AppHeader({ usage, version }: AppHeaderProps) {
       paddingX={1}
     >
       <Box gap={2}>
-        <Text bold color={COLORS.accent}>ccm</Text>
+        <Text bold color={COLORS.accent}>
+          ccm
+        </Text>
         {compact ? null : <Text color={COLORS.muted}>claude code session manager</Text>}
         <Text color={COLORS.border}>v{version}</Text>
       </Box>
@@ -57,7 +59,9 @@ function UsageSummary({ compact, display }: { compact: boolean; display: UsageDi
       <Text color={COLORS.dim}>limits</Text>
       {display.limits.map((limit) => (
         <Box key={limit.label} gap={1}>
-          <Text bold color={limit.color}>{limit.label}</Text>
+          <Text bold color={limit.color}>
+            {limit.label}
+          </Text>
           {compact ? null : (
             <Box>
               <Text color={limit.color}>{limit.barFilled}</Text>
@@ -68,7 +72,9 @@ function UsageSummary({ compact, display }: { compact: boolean; display: UsageDi
           {limit.reset ? <Text color={COLORS.dim}>{limit.reset}</Text> : null}
         </Box>
       ))}
-      {compact ? null : display.statusText ? <Text color={COLORS.muted}>{display.statusText}</Text> : null}
+      {compact ? null : display.statusText ? (
+        <Text color={COLORS.muted}>{display.statusText}</Text>
+      ) : null}
       {display.creditsEnabled ? <Text color={COLORS.ok}>credits on</Text> : null}
     </Box>
   )

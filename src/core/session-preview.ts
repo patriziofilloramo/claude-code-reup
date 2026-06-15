@@ -60,7 +60,7 @@ export function extractSessionPreview(lines: string[]): SessionPreview {
   let goal: string | null = null
   let lastResponse: string | null = null
   const pendingTools = new Map<string, string>() // tool_use_id → tool name
-  const touchedSequence: string[] = []           // ordered by occurrence
+  const touchedSequence: string[] = [] // ordered by occurrence
 
   for (const line of lines) {
     const event = parseEvent(line)

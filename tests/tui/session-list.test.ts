@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Session } from '../../src/core/session-model.js'
-import {
-  formatSessionSummary,
-  formatTokenCount,
-} from '../../src/tui/components/SessionList.js'
+import { formatSessionSummary, formatTokenCount } from '../../src/tui/components/SessionList.js'
 
 describe('TUI session list', () => {
   it('keeps compact context values readable', () => {
@@ -25,8 +22,6 @@ describe('TUI session list', () => {
       )
     ).toBe('just now · 2 msgs · 8.2k ctx')
   })
-
-
 })
 
 function session(overrides: Partial<Session> = {}): Session {

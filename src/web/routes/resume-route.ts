@@ -37,7 +37,7 @@ export function registerResumeRoute(app: Hono): void {
         log.warn('new-session: terminal launch failed, fell back to clipboard:', result.message)
       }
       return context.json(result)
-    }),
+    })
   )
 
   // ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ export function registerResumeRoute(app: Hono): void {
         log.warn('resume: terminal launch failed, fell back to clipboard:', result.message)
       }
       return context.json(result)
-    }),
+    })
   )
 
   log.debug('resume routes registered')

@@ -24,31 +24,31 @@
   --red: #f87171;
 
   /* ── Surface layers ──────────────────────────────────────────────────────── */
-  --surface-raised: #141414;           /* dialogs, drawer panes */
-  --surface-deep: #1a1a1a;             /* toasts, dropdown option backgrounds */
-  --overlay: rgba(0, 0, 0, 0.72);     /* full-screen dim behind modals */
+  --surface-raised: #141414; /* dialogs, drawer panes */
+  --surface-deep: #1a1a1a; /* toasts, dropdown option backgrounds */
+  --overlay: rgba(0, 0, 0, 0.72); /* full-screen dim behind modals */
   --shadow-dlg: 0 8px 40px rgba(0, 0, 0, 0.6); /* floating panel drop shadow */
 
   /* ── Interaction tints ───────────────────────────────────────────────────── */
   /* White-based; flip to black-based for a light theme. */
   --row-hover: rgba(255, 255, 255, 0.025);
   --row-hover-sm: rgba(255, 255, 255, 0.02);
-  --surface-chip: rgba(255, 255, 255, 0.04);  /* tag / badge backgrounds */
-  --surface-btn: rgba(255, 255, 255, 0.06);   /* secondary button fill */
-  --surface-btn-hover: rgba(255, 255, 255, 0.10);
+  --surface-chip: rgba(255, 255, 255, 0.04); /* tag / badge backgrounds */
+  --surface-btn: rgba(255, 255, 255, 0.06); /* secondary button fill */
+  --surface-btn-hover: rgba(255, 255, 255, 0.1);
 
   /* ── RGB channel values ───────────────────────────────────────────────────── */
   /* Enables rgb(var(--*-rgb) / alpha) without a separate token per opacity.   */
   /* Keep each value in sync with its named colour token above.                */
-  --accent-rgb: 34 211 238;   /* == --accent */
-  --amber-rgb: 251 191 36;    /* == --amber  */
-  --red-rgb: 248 113 113;     /* == --red    */
-  --dim-rgb: 42 42 42;        /* == --dim    */
+  --accent-rgb: 34 211 238; /* == --accent */
+  --amber-rgb: 251 191 36; /* == --amber  */
+  --red-rgb: 248 113 113; /* == --red    */
+  --dim-rgb: 42 42 42; /* == --dim    */
 
   /* ── Accent-derived tokens ───────────────────────────────────────────────── */
-  --accent-d: rgb(var(--accent-rgb) / 0.08);  /* subtle accent background tint */
-  --accent-hi: #38e8ff;                         /* lighter hover highlight */
-  --accent-fg: #000000;                         /* foreground on accent backgrounds */
+  --accent-d: rgb(var(--accent-rgb) / 0.08); /* subtle accent background tint */
+  --accent-hi: #38e8ff; /* lighter hover highlight */
+  --accent-fg: #000000; /* foreground on accent backgrounds */
 
   /* ── Typography ──────────────────────────────────────────────────────────── */
   --font:
@@ -1075,7 +1075,9 @@ body {
   font-family: var(--font);
   font-size: 10px;
   padding: 1px 7px;
-  transition: color 0.1s, border-color 0.1s;
+  transition:
+    color 0.1s,
+    border-color 0.1s;
 }
 .new-sess-btn:hover {
   border-color: rgb(var(--accent-rgb) / 0.3);
@@ -1310,7 +1312,7 @@ body {
 
 /* ── Light theme overrides ───────────────────────────────────────────────── */
 
-[data-theme="light"] {
+[data-theme='light'] {
   --bg: #f5f5f5;
   --surface: #ffffff;
   --dim: #e0e0e0;
@@ -1325,7 +1327,7 @@ body {
   --red: #dc2626;
   --surface-raised: #ffffff;
   --surface-deep: #f0f0f0;
-  --overlay: rgba(0, 0, 0, 0.40);
+  --overlay: rgba(0, 0, 0, 0.4);
   --shadow-dlg: 0 8px 40px rgba(0, 0, 0, 0.15);
   --row-hover: rgba(0, 0, 0, 0.04);
   --row-hover-sm: rgba(0, 0, 0, 0.02);
@@ -1342,7 +1344,7 @@ body {
 
 /* ── Terminal / phosphor theme overrides ─────────────────────────────────── */
 
-[data-theme="terminal"] {
+[data-theme='terminal'] {
   --bg: #050a05;
   --surface: #080f08;
   --dim: #0f1f0f;
@@ -1357,7 +1359,7 @@ body {
   --red: #ff3300;
   --surface-raised: #0a140a;
   --surface-deep: #0d1a0d;
-  --overlay: rgba(0, 10, 0, 0.80);
+  --overlay: rgba(0, 10, 0, 0.8);
   --shadow-dlg: 0 8px 40px rgba(0, 255, 65, 0.08);
   --row-hover: rgba(0, 255, 65, 0.03);
   --row-hover-sm: rgba(0, 255, 65, 0.02);
@@ -1373,7 +1375,7 @@ body {
 }
 
 /* Scan-line overlay for the terminal theme — subtle CRT texture */
-[data-theme="terminal"] body::after {
+[data-theme='terminal'] body::after {
   background: repeating-linear-gradient(
     0deg,
     transparent,

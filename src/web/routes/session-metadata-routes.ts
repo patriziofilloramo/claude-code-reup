@@ -2,7 +2,7 @@ import type { Hono } from 'hono'
 
 import { loadProjectById } from '../../core/project-discovery.js'
 import { isValidSessionId } from '../../core/session-model.js'
-import { setSessionAlias, setSessionArchived } from '../../core/session-metadata.js'
+import { deleteSession, setSessionAlias, setSessionArchived } from '../../core/session-metadata.js'
 import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 
@@ -40,7 +40,7 @@ export function registerSessionMetadataRoutes(app: Hono): void {
       await setSessionArchived(projectId, sessionId, body.archived)
       log.debug('archive: set session', sessionId, 'archived =', body.archived)
       return context.json({ ok: true })
-    }),
+    })
   )
 
   // ---------------------------------------------------------------------------
@@ -75,7 +75,31 @@ export function registerSessionMetadataRoutes(app: Hono): void {
       await setSessionAlias(projectId, sessionId, normalizedAlias)
       log.debug('alias: updated session', sessionId, '→', normalizedAlias ?? '(cleared)')
       return context.json({ ok: true })
-    }),
+    })
+  )
+
+  // ---------------------------------------------------------------------------
+  // DELETE /api/sessions/:projectId/:sessionId
+  // Permanently removes the .jsonl transcript and CCM sidecar entry.
+  // ---------------------------------------------------------------------------
+
+  app.delete(
+    '/api/sessions/:projectId/:sessionId',
+    guardedRoute(async (context) => {
+      const { projectId, sessionId } = context.req.param()
+
+      const idError = validateSessionIdentifiers(projectId, sessionId)
+      if (idError) return context.json({ error: idError }, 400)
+
+      const project = await loadProjectById(projectId)
+      if (!project) return context.json({ error: 'project not found' }, 404)
+      if (!project.sessions.some((s) => s.id === sessionId)) {
+        return context.json({ error: 'session not found' }, 404)
+      }
+      await deleteSession(projectId, sessionId)
+      log.debug('delete: removed session', sessionId)
+      return context.json({ ok: true })
+    })
   )
 
   log.debug('session metadata routes registered')

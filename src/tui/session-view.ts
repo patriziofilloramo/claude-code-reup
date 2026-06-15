@@ -116,7 +116,8 @@ export function deriveSearchResults(
     // No qualifiers: preserve original text-search behaviour
     if (!hasQualifiers) {
       if (!parsed.text) return [{ ...project, sessions: visibleSessions }]
-      if (projectMatchesQuery(project, parsed.text)) return [{ ...project, sessions: visibleSessions }]
+      if (projectMatchesQuery(project, parsed.text))
+        return [{ ...project, sessions: visibleSessions }]
       const matchingSessions = visibleSessions.filter((session) =>
         sessionMatchesQuery(session, parsed.text)
       )
@@ -136,7 +137,11 @@ export function deriveSearchResults(
       if (parsed.filterActive && !activeSessionIds.has(session.id)) return false
       if (parsed.filterArchived && !session.signals.archived) return false
       if (parsed.branchTerms.length > 0) {
-        const branch = ((session.gitBranch ?? '') + ' ' + (session.currentBranch ?? '')).toLowerCase()
+        const branch = (
+          (session.gitBranch ?? '') +
+          ' ' +
+          (session.currentBranch ?? '')
+        ).toLowerCase()
         if (!parsed.branchTerms.some((t) => branch.includes(t))) return false
       }
       if (parsed.statusTerms.length > 0) {

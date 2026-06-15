@@ -27,7 +27,10 @@ export async function createHandoff(selector: string | undefined): Promise<void>
     session = picked.session
   } else {
     const selection = selectSession(await loadProjects(), selector)
-    if ('error' in selection) { failCommand(selection.error); return }
+    if ('error' in selection) {
+      failCommand(selection.error)
+      return
+    }
     project = selection.result.project
     session = selection.result.session
   }
@@ -68,6 +71,9 @@ async function pickSessionInteractively(): Promise<{ project: Project; session: 
   if (!picked) return null
 
   const selection = selectSession(projects, picked.sessionId)
-  if ('error' in selection) { failCommand(selection.error); return null }
+  if ('error' in selection) {
+    failCommand(selection.error)
+    return null
+  }
   return selection.result
 }

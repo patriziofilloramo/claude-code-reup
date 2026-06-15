@@ -69,7 +69,9 @@ function DeepSearchPicker({
     }
 
     void run()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [query, projects])
 
   // Each result occupies 2 terminal rows (table row + snippet line)
@@ -92,25 +94,36 @@ function DeepSearchPicker({
   const paired = items.map((match, i) => ({ match, row: rowData[i] as RowData }))
   const [visiblePairs, visibleSelected] = createVisibleWindow(paired, selectedIndex, maxVisible)
 
-  const widths = rowData.length === 0
-    ? { state: 8, project: 7, session: 7, updated: 7, matches: 7, id: 9 }
-    : {
-        state: 8,
-        project: Math.max(7, ...rowData.map((r) => r.project.length)),
-        session: Math.max(7, ...rowData.map((r) => r.session.length)),
-        updated: Math.max(7, ...rowData.map((r) => r.updated.length)),
-        matches: Math.max(7, ...rowData.map((r) => r.matches.length)),
-        id: 9,
-      }
+  const widths =
+    rowData.length === 0
+      ? { state: 8, project: 7, session: 7, updated: 7, matches: 7, id: 9 }
+      : {
+          state: 8,
+          project: Math.max(7, ...rowData.map((r) => r.project.length)),
+          session: Math.max(7, ...rowData.map((r) => r.session.length)),
+          updated: Math.max(7, ...rowData.map((r) => r.updated.length)),
+          matches: Math.max(7, ...rowData.map((r) => r.matches.length)),
+          id: 9,
+        }
 
   const isLoading = results === null
 
   useInput((input, key) => {
     const esc = key.escape || input === '\x1b'
-    if (esc || key.tab) { onBack ? onBack() : exit(); return }
-    if (input === 'q') { exit(); return }
+    if (esc || key.tab) {
+      if (onBack) onBack()
+      else exit()
+      return
+    }
+    if (input === 'q') {
+      exit()
+      return
+    }
     if (isLoading) return
-    if (key.upArrow) { setSelectedIndex((i) => Math.max(0, i - 1)); return }
+    if (key.upArrow) {
+      setSelectedIndex((i) => Math.max(0, i - 1))
+      return
+    }
     if (key.downArrow) {
       setSelectedIndex((i) => Math.min(Math.max(0, items.length - 1), i + 1))
       return
@@ -128,9 +141,16 @@ function DeepSearchPicker({
   return (
     <Box flexDirection="column">
       <Box gap={2} marginBottom={1} paddingX={1}>
-        <Text>deep search: <Text bold color={COLORS.accent}>{query}</Text></Text>
+        <Text>
+          deep search:{' '}
+          <Text bold color={COLORS.accent}>
+            {query}
+          </Text>
+        </Text>
         {isLoading ? (
-          <Text color={COLORS.dim}>scanning {progress.scanned}/{progress.total}…</Text>
+          <Text color={COLORS.dim}>
+            scanning {progress.scanned}/{progress.total}…
+          </Text>
         ) : (
           <Text color={COLORS.muted}>
             {results.length} session{results.length !== 1 ? 's' : ''} found
@@ -167,7 +187,9 @@ function DeepSearchPicker({
             return (
               <Box key={match.session.id} flexDirection="column" paddingX={1}>
                 <Box>
-                  <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '▶ ' : '  '}</Text>
+                  <Text color={isSelected ? COLORS.accent : COLORS.dim}>
+                    {isSelected ? '▶ ' : '  '}
+                  </Text>
                   <Text color={stateColor}>{stateText.padEnd(widths.state + 2)}</Text>
                   <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.muted}>
                     {row.project.padEnd(widths.project + 2)}
@@ -199,12 +221,20 @@ function DeepSearchPicker({
         gap={2}
         paddingX={1}
       >
-        <Text color={COLORS.muted}><Text color={COLORS.text}>enter</Text> resume</Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>enter</Text> resume
+        </Text>
         {onBack && (
-          <Text color={COLORS.muted}><Text color={COLORS.text}>esc · tab</Text> back</Text>
+          <Text color={COLORS.muted}>
+            <Text color={COLORS.text}>esc · tab</Text> back
+          </Text>
         )}
-        <Text color={COLORS.muted}><Text color={COLORS.text}>↑↓</Text> navigate</Text>
-        <Text color={COLORS.muted}><Text color={COLORS.text}>q</Text> quit</Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>↑↓</Text> navigate
+        </Text>
+        <Text color={COLORS.muted}>
+          <Text color={COLORS.text}>q</Text> quit
+        </Text>
       </Box>
     </Box>
   )
@@ -216,7 +246,7 @@ function DeepSearchPicker({
 
 export function runDeepSearchPicker(
   query: string,
-  projects: Project[],
+  projects: Project[]
 ): Promise<ContentMatch | null> {
   return new Promise((resolve) => {
     let selection: ContentMatch | null = null
@@ -224,7 +254,9 @@ export function runDeepSearchPicker(
       <DeepSearchPicker
         query={query}
         projects={projects}
-        onSelect={(m) => { selection = m }}
+        onSelect={(m) => {
+          selection = m
+        }}
       />
     )
     waitUntilExit()

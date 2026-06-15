@@ -92,24 +92,24 @@ ccm web
 
 ## Usage
 
-| Command                  | Description                                     |
-| ------------------------ | ----------------------------------------------- |
-| `ccm`                    | Open the terminal interface                     |
-| `ccm web`                | Open the local browser interface                |
-| `ccm web --port 4000`    | Use a custom port                               |
-| `ccm resume [session]`   | Pick a session, or resume by ID/prefix          |
-| `ccm search <query>`     | Interactive session picker with pre-filled query |
-| `ccm search --deep <q>`  | Full-text search inside transcript content      |
-| `ccm list [query]`       | Print a compact, globally filtered session list |
-| `ccm inbox`              | Show active sessions and sessions at risk       |
+| Command                  | Description                                                                |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `ccm`                    | Open the terminal interface                                                |
+| `ccm web`                | Open the local browser interface                                           |
+| `ccm web --port 4000`    | Use a custom port                                                          |
+| `ccm resume [session]`   | Pick a session, or resume by ID/prefix                                     |
+| `ccm search <query>`     | Interactive session picker with pre-filled query                           |
+| `ccm search --deep <q>`  | Full-text search inside transcript content                                 |
+| `ccm list [query]`       | Print a compact, globally filtered session list                            |
+| `ccm inbox`              | Show active sessions and sessions at risk                                  |
 | `ccm handoff [session]`  | Export a compact Markdown continuation packet (picker if no session given) |
-| `ccm usage`              | Show observed usage and feed freshness          |
-| `ccm usage toggle`       | Enable or disable local usage capture           |
-| `ccm usage setup`        | Enable reversible local usage capture           |
-| `ccm doctor`             | Diagnose local session-data issues              |
-| `ccm completion <shell>` | Print PowerShell, Bash, or Zsh completion setup |
-| `ccm --help`             | Show CLI help                                   |
-| `ccm --version`          | Show the installed version                      |
+| `ccm usage`              | Show observed usage and feed freshness                                     |
+| `ccm usage toggle`       | Enable or disable local usage capture                                      |
+| `ccm usage setup`        | Enable reversible local usage capture                                      |
+| `ccm doctor`             | Diagnose local session-data issues                                         |
+| `ccm completion <shell>` | Print PowerShell, Bash, or Zsh completion setup                            |
+| `ccm --help`             | Show CLI help                                                              |
+| `ccm --version`          | Show the installed version                                                 |
 
 `ccm list` prints a compact table and excludes archived sessions by default.
 Free text searches globally across project/session names and paths, aliases,
@@ -223,31 +223,31 @@ session titles or transcript content.
 
 ### TUI keys
 
-| Key           | Action                          |
-| ------------- | ------------------------------- |
-| `↑` `↓`       | Navigate list                   |
-| `←` `→` `tab` | Switch panel (normal mode)      |
-| `/`           | Search sessions                 |
-| `tab`         | Deep search (while searching)   |
-| `a`           | Toggle archived sessions        |
-| `space`       | Project action menu             |
+| Key           | Action                           |
+| ------------- | -------------------------------- |
+| `↑` `↓`       | Navigate list                    |
+| `←` `→` `tab` | Switch panel (normal mode)       |
+| `/`           | Search sessions                  |
+| `tab`         | Deep search (while searching)    |
+| `a`           | Toggle archived sessions         |
+| `space`       | Project action menu              |
 | `enter`       | Expand project / preview session |
-| `esc`         | Back / quit                     |
-| `q`           | Quit                            |
+| `esc`         | Back / quit                      |
+| `q`           | Quit                             |
 
 ### Web UI
 
 Open with `ccm web`. The browser interface mirrors the TUI feature set with a few additions:
 
-| Feature | How to access |
-| ------- | ------------- |
-| Browse sessions | Click any project in the left panel |
-| Resume session | Double-click a session row, or select and press `enter` |
-| Deep transcript search | Click **⌕ deep search** in the header |
-| Start new session | Select a project, then click **+ new** |
-| Edit CLAUDE.md | Select a project — click the **CLAUDE.md** tag when it appears |
-| Live usage limits | Shown in the header; auto-refreshes every 5 seconds |
-| Keyboard nav | `/` search · `j`/`k` or `↑`/`↓` sessions · `[`/`]` or `h`/`l` projects |
+| Feature                | How to access                                                          |
+| ---------------------- | ---------------------------------------------------------------------- |
+| Browse sessions        | Click any project in the left panel                                    |
+| Resume session         | Double-click a session row, or select and press `enter`                |
+| Deep transcript search | Click **⌕ deep search** in the header                                  |
+| Start new session      | Select a project, then click **+ new**                                 |
+| Edit CLAUDE.md         | Select a project — click the **CLAUDE.md** tag when it appears         |
+| Live usage limits      | Shown in the header; auto-refreshes every 5 seconds                    |
+| Keyboard nav           | `/` search · `j`/`k` or `↑`/`↓` sessions · `[`/`]` or `h`/`l` projects |
 
 ---
 
@@ -256,27 +256,28 @@ Open with `ccm web`. The browser interface mirrors the TUI feature set with a fe
 ### Shared session storage
 
 By default, Claude Code stores session transcripts in `~/.claude/projects/`, which is local to each machine.
-`ccm link` moves a project's sessions into `.claude-memory/` inside the project directory itself, then redirects
+`ccm sync link` moves a project's sessions into `.claude-memory/` inside the project directory itself, then redirects
 Claude Code's storage there via a filesystem junction (Windows) or symlink (macOS/Linux). Any cloud folder that
 syncs the project — OneDrive, pCloud, Dropbox, Google Drive — will carry the sessions along with it.
 
 ```bash
 # Link the current project (interactive picker filtered to cloud folders)
-ccm link
+ccm sync link
 
 # Link a specific project path
-ccm link ~/projects/my-app
+ccm sync link ~/projects/my-app
 
 # See which projects are linked
-ccm memory status
+ccm sync status
 
 # Restore a project to local-only storage
-ccm unlink
+ccm sync unlink
 ```
 
 To use sessions on a second machine:
+
 1. Ensure the project folder is already synced and available locally.
-2. Run `ccm link <path>` on the new machine — if `~/.claude/projects/` has no entry yet,
+2. Run `ccm sync link <path>` on the new machine — if `~/.claude/projects/` has no entry yet,
    CCM computes the expected ID from the path and creates the redirect automatically.
 
 Linked projects show a `☁` indicator in the TUI and web project list.
@@ -285,6 +286,8 @@ Linked projects show a `☁` indicator in the TUI and web project list.
 > provider's sync is healthy before switching machines to avoid losing in-progress sessions.
 > The folder is created inside the project root, so add `.claude-memory/` to `.gitignore`
 > if you do not want session data in version control.
+> CCM propagates append-only extensions automatically. If both machines modify the same file
+> independently, sync stops and preserves both copies until the conflict is resolved.
 
 ---
 

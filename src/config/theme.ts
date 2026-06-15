@@ -27,7 +27,7 @@ export function colorsFromTheme(t: ThemeTokens) {
 }
 
 export const COLORS = colorsFromTheme(
-  resolveTheme(process.env['CCM_THEME'] ?? getStoredThemeName()),
+  resolveTheme(process.env['CCM_THEME'] ?? getStoredThemeName())
 )
 
 export const SIZES = {

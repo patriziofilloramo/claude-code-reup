@@ -40,13 +40,22 @@ export default function ResumeCard({
   }, [projectId, session.id])
 
   useEffect(() => {
-    if (!isActive) { setLockInfo(null); return }
+    if (!isActive) {
+      setLockInfo(null)
+      return
+    }
     void getSessionLockInfo(session.id).then(setLockInfo)
   }, [isActive, session.id])
 
   useInput((input, key) => {
-    if (key.return) { onResume(); return }
-    if (key.escape || input === '\x1b') { onClose(); return }
+    if (key.return) {
+      onResume()
+      return
+    }
+    if (key.escape || input === '\x1b') {
+      onClose()
+      return
+    }
     if (input === 'f' && preview && preview.touchedFiles.length > 0) {
       setFilesExpanded((v) => !v)
       return
@@ -64,17 +73,18 @@ export default function ResumeCard({
   const interrupted =
     session.signals.interrupted === true ||
     session.signals.lastToolFailed === true ||
-    (preview?.pendingToolName != null)
+    preview?.pendingToolName != null
 
   const dividerWidth = Math.max(8, (stdout?.columns ?? 80) - 34 /* project panel */ - 6)
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
-
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Box gap={1} marginBottom={0}>
         <Text color={isActive ? COLORS.ok : COLORS.border}>●</Text>
-        <Text bold color={COLORS.text} wrap="truncate">{displayName}</Text>
+        <Text bold color={COLORS.text} wrap="truncate">
+          {displayName}
+        </Text>
       </Box>
 
       <Box gap={2} marginBottom={1} paddingLeft={2}>
@@ -89,7 +99,9 @@ export default function ResumeCard({
       </Box>
 
       <Box marginBottom={1}>
-        <Text color={COLORS.border} wrap="truncate">{'─'.repeat(dividerWidth)}</Text>
+        <Text color={COLORS.border} wrap="truncate">
+          {'─'.repeat(dividerWidth)}
+        </Text>
       </Box>
 
       {/* ── Live / status signals ────────────────────────────────────────── */}
@@ -106,30 +118,47 @@ export default function ResumeCard({
           ) : null}
           <Box flexDirection="column" marginTop={1} paddingLeft={2}>
             <Text color={COLORS.warn}>resuming here will start a second instance. this means:</Text>
-            <Text color={COLORS.muted}>{'  · both processes write to the same transcript — it will get scrambled'}</Text>
-            <Text color={COLORS.muted}>{'  · neither Claude will see what the other is doing'}</Text>
-            <Text color={COLORS.muted}>{'  · simultaneous file edits can overwrite each other'}</Text>
+            <Text color={COLORS.muted}>
+              {'  · both processes write to the same transcript — it will get scrambled'}
+            </Text>
+            <Text color={COLORS.muted}>
+              {'  · neither Claude will see what the other is doing'}
+            </Text>
+            <Text color={COLORS.muted}>
+              {'  · simultaneous file edits can overwrite each other'}
+            </Text>
           </Box>
         </Box>
       ) : status === 'expiring' ? (
         <Box marginBottom={1}>
-          <Text color={COLORS.danger}>⚠  expiring soon — transcript will be removed shortly</Text>
+          <Text color={COLORS.danger}>⚠ expiring soon — transcript will be removed shortly</Text>
         </Box>
       ) : status === 'path-missing' ? (
         <Box marginBottom={1}>
-          <Text color={COLORS.danger}>⚠  project path not found on this machine</Text>
+          <Text color={COLORS.danger}>⚠ project path not found on this machine</Text>
         </Box>
       ) : null}
 
       {/* ── Content sections ─────────────────────────────────────────────── */}
-      <PreviewSection isLoading={isLoading} label="what you asked for" text={preview?.goal ?? null} />
-      <PreviewSection isLoading={isLoading} label="where claude left off" text={preview?.lastResponse ?? null} />
+      <PreviewSection
+        isLoading={isLoading}
+        label="what you asked for"
+        text={preview?.goal ?? null}
+      />
+      <PreviewSection
+        isLoading={isLoading}
+        label="where claude left off"
+        text={preview?.lastResponse ?? null}
+      />
 
       {/* ── Stopped mid-task ─────────────────────────────────────────────── */}
       {!isLoading && interrupted ? (
         <Box flexDirection="column" marginBottom={1}>
-          <Text color={COLORS.warn}>⚠  Claude stopped mid-task</Text>
-          <Text color={COLORS.muted}>   resuming picks up where it left off — the last step may run again</Text>
+          <Text color={COLORS.warn}>⚠ Claude stopped mid-task</Text>
+          <Text color={COLORS.muted}>
+            {' '}
+            resuming picks up where it left off — the last step may run again
+          </Text>
         </Box>
       ) : null}
 
@@ -140,11 +169,13 @@ export default function ResumeCard({
             {'files in use · '}
             <Text color={COLORS.textSub}>{preview.touchedFiles.length}</Text>
           </Text>
-          {filesExpanded ? preview.touchedFiles.map((f) => (
-            <Text key={f} color={COLORS.accent} wrap="truncate">
-              {'  ' + makeRelative(f, session.projectPath)}
-            </Text>
-          )) : null}
+          {filesExpanded
+            ? preview.touchedFiles.map((f) => (
+                <Text key={f} color={COLORS.accent} wrap="truncate">
+                  {'  ' + makeRelative(f, session.projectPath)}
+                </Text>
+              ))
+            : null}
         </Box>
       ) : null}
 
@@ -208,17 +239,6 @@ function makeRelative(filePath: string, projectPath: string): string {
   const f = filePath.replace(/\\/g, '/')
   const p = projectPath.replace(/\\/g, '/').replace(/\/$/, '')
   return f.startsWith(p + '/') ? f.slice(p.length + 1) : filePath
-}
-
-function humanToolName(toolName: string | null): string {
-  if (!toolName) return 'a task'
-  const lower = toolName.toLowerCase()
-  if (lower.includes('edit')) return 'a file edit'
-  if (lower.includes('write')) return 'a file write'
-  if (lower.includes('read')) return 'a file read'
-  if (lower.includes('bash') || lower.includes('shell') || lower.includes('run')) return 'a shell command'
-  if (lower.includes('notebook')) return 'a notebook edit'
-  return toolName
 }
 
 function shortenPath(p: string): string {

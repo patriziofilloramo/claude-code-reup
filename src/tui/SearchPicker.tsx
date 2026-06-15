@@ -62,7 +62,7 @@ function SearchShell({
 export function runSearchPicker(
   sessions: ListedSession[],
   projects: Project[],
-  initialQuery?: string,
+  initialQuery?: string
 ): Promise<SearchResult | null> {
   return new Promise((resolve) => {
     let result: SearchResult | null = null
@@ -71,7 +71,9 @@ export function runSearchPicker(
         initialQuery={initialQuery}
         sessions={sessions}
         projects={projects}
-        onResult={(r) => { result = r }}
+        onResult={(r) => {
+          result = r
+        }}
       />
     )
     waitUntilExit()

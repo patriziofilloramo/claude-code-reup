@@ -5,8 +5,13 @@ import { promisify } from 'node:util'
 
 import { APP } from '../config/app.js'
 import { log } from '../utils/logger.js'
-import { getClaudeProjectsDirectory, resolveProjectPath } from './claude-paths.js'
+import {
+  encodeProjectPath,
+  getClaudeProjectsDirectory,
+  resolveProjectPath,
+} from './claude-paths.js'
 import { getCachedProjects, setCachedProjects } from './project-cache.js'
+import { getLiveSessionRecords, type SessionLockRecord } from './active-sessions.js'
 import type { Project, Session, SessionContextMetrics, SessionSignals } from './session-model.js'
 import { isValidSessionId } from './session-model.js'
 import { mergeProjectSidecarMetadata } from './session-metadata.js'
@@ -18,6 +23,13 @@ const execFileAsync = promisify(execFile)
 
 const SESSION_TRANSCRIPT_FILE_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i
+
+/**
+ * Sessions whose .jsonl hasn't appeared yet are only injected within this
+ * window. Beyond it, a missing transcript means the lock file is stale
+ * (crashed process or recycled PID — Windows reuses PIDs freely).
+ */
+const LOCK_FILE_GRACE_PERIOD_MS = 2 * 60 * 1000
 
 // -----------------------------------------------------------------------------
 // Public discovery API
@@ -31,10 +43,14 @@ export async function loadProjects(): Promise<Project[]> {
 
   log.debug('loadProjects: scanning', projectsDirectory)
 
-  const projectDirectoryNames = await listProjectDirectoryNames(projectsDirectory)
+  const [projectDirectoryNames, liveSessions] = await Promise.all([
+    listProjectDirectoryNames(projectsDirectory),
+    getLiveSessionRecords(),
+  ])
+
   const discoveredProjects = await Promise.all(
     projectDirectoryNames.map((directoryName) =>
-      loadProjectDirectory(directoryName, projectsDirectory)
+      loadProjectDirectory(directoryName, projectsDirectory, liveSessions)
     )
   )
 
@@ -45,8 +61,25 @@ export async function loadProjects(): Promise<Project[]> {
     )
     .sort(compareProjectsByRecentActivity)
 
-  setCachedProjects(projectsDirectory, projects)
-  return projects
+  // Handle lock records whose cwd doesn't match any scanned project. These
+  // belong to brand-new projects whose directory may not exist yet.
+  // Only recent records qualify — stale lock files from recycled PIDs are rejected.
+  const now = Date.now()
+  const knownPaths = new Set(projects.map((project) => normalisePath(project.path)))
+  const orphanedRecords = liveSessions.filter(
+    (record): record is SessionLockRecord & { cwd: string } =>
+      record.cwd !== null &&
+      !knownPaths.has(normalisePath(record.cwd)) &&
+      isRecentLockRecord(record.startedAt, now)
+  )
+
+  const finalProjects =
+    orphanedRecords.length === 0
+      ? projects
+      : [...projects, ...buildOrphanProjects(orphanedRecords)].sort(compareProjectsByRecentActivity)
+
+  setCachedProjects(projectsDirectory, finalProjects)
+  return finalProjects
 }
 
 /** Resolves one project from the authoritative discovery result. */
@@ -75,28 +108,40 @@ async function listProjectDirectoryNames(projectsDirectory: string): Promise<str
 
 async function loadProjectDirectory(
   directoryName: string,
-  projectsDirectory: string
+  projectsDirectory: string,
+  liveSessions: SessionLockRecord[]
 ): Promise<Project | null> {
   try {
     const projectDirectory = join(projectsDirectory, directoryName)
     const decodedProjectPath = await resolveProjectPath(directoryName)
     const { isShared, cloudPath, cloudOffline } = await readLinkState(projectDirectory)
-    const unlinkedDevices = isShared && cloudPath
-      ? await readUnlinkedDevices(cloudPath)
-      : undefined
+    const unlinkedDevices = isShared && cloudPath ? await readUnlinkedDevices(cloudPath) : undefined
 
     // Detect offline cloud storage before attempting to read sessions.
     // An inaccessible junction target means the drive is unmounted; surfacing
     // the project with cloudOffline=true lets the UI warn the user rather
     // than silently hiding the project.
     if (isShared && !(await isAccessible(projectDirectory))) {
-      return { id: directoryName, isShared: true, cloudOffline: true, path: decodedProjectPath, sessions: [] }
+      return {
+        id: directoryName,
+        isShared: true,
+        cloudOffline: true,
+        path: decodedProjectPath,
+        sessions: [],
+      }
     }
 
     const sessions =
       (await loadIndexedSessions(projectDirectory)) ??
       (await loadTranscriptSessions(projectDirectory, decodedProjectPath))
-    const sessionsWithPathStatus = await annotatePathExistence(sessions)
+
+    const sessionsWithGhosts = await addGhostSessions(
+      sessions,
+      projectDirectory,
+      decodedProjectPath,
+      liveSessions
+    )
+    const sessionsWithPathStatus = await annotatePathExistence(sessionsWithGhosts)
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
 
@@ -147,13 +192,17 @@ async function readLinkState(
       if (cloudPath.startsWith('\\\\?\\')) cloudPath = cloudPath.slice(4)
       return { isShared: true, cloudPath }
     }
-  } catch { /* not a junction */ }
+  } catch {
+    /* not a junction */
+  }
 
   // 3. Legacy .ccm-link (will be migrated to junction on next initCloudSync)
   try {
     const cloudPath = (await readFile(join(projectDirectory, APP.cloudLinkFile), 'utf8')).trim()
     if (cloudPath) return { isShared: true, cloudPath }
-  } catch { /* no marker file */ }
+  } catch {
+    /* no marker file */
+  }
 
   return { isShared: false }
 }
@@ -166,9 +215,7 @@ async function readLinkState(
 async function readUnlinkedDevices(cloudDir: string): Promise<string[] | undefined> {
   try {
     const entries = await readdir(join(cloudDir, 'device-presence'))
-    const devices = entries
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.slice(0, -5))
+    const devices = entries.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5))
     return devices.length > 0 ? devices : undefined
   } catch {
     return undefined
@@ -310,6 +357,115 @@ async function loadTranscriptSessions(
   return parsedSessions
     .filter((session): session is Session => session !== null)
     .sort(compareSessionsByRecentActivity)
+}
+
+// -----------------------------------------------------------------------------
+// Ghost sessions — active lock-file sessions not yet discoverable on disk
+// -----------------------------------------------------------------------------
+
+/**
+ * Prepends ghost sessions for every live lock-file session that is not already
+ * represented by a transcript in this project's directory.
+ *
+ * Two legitimate cases trigger an injection:
+ *  1. The .jsonl exists but has 0 assistant messages (user sent the first
+ *     prompt; parseSessionTranscript returns null for these).
+ *  2. The .jsonl doesn't exist yet — Claude Code creates it lazily. We only
+ *     inject within LOCK_FILE_GRACE_PERIOD_MS to reject stale lock files
+ *     whose PIDs were recycled by the OS.
+ *
+ * Ghost sessions pass through annotatePathExistence and annotateCurrentGitBranches
+ * alongside regular sessions, so they get correct pathExists and currentBranch values.
+ */
+async function addGhostSessions(
+  sessions: Session[],
+  projectDirectory: string,
+  projectPath: string,
+  liveSessions: SessionLockRecord[]
+): Promise<Session[]> {
+  const now = Date.now()
+  const knownIds = new Set(sessions.map((s) => s.id))
+
+  const candidates = liveSessions.filter(
+    (record): record is SessionLockRecord & { cwd: string } =>
+      record.cwd !== null &&
+      normalisePath(record.cwd) === normalisePath(projectPath) &&
+      !knownIds.has(record.sessionId)
+  )
+
+  if (candidates.length === 0) return sessions
+
+  const ghosts: Session[] = []
+  for (const record of candidates) {
+    const jsonlPath = join(projectDirectory, `${record.sessionId}.jsonl`)
+    const jsonlExists = await access(jsonlPath)
+      .then(() => true)
+      .catch(() => false)
+    if (!jsonlExists && !isRecentLockRecord(record.startedAt, now)) continue
+    ghosts.push(buildGhostSession(record))
+  }
+
+  if (ghosts.length === 0) return sessions
+  return [...ghosts, ...sessions].sort(compareSessionsByRecentActivity)
+}
+
+/** Builds a minimal session entry for a live process with no discoverable transcript. */
+function buildGhostSession(record: SessionLockRecord & { cwd: string }): Session {
+  const startedAt =
+    record.startedAt !== null ? new Date(record.startedAt).toISOString() : new Date().toISOString()
+
+  return {
+    id: record.sessionId,
+    name: 'New session',
+    projectPath: record.cwd,
+    created: startedAt,
+    updated: startedAt,
+    messageCount: 0,
+    context: {
+      latestContextTokens: null,
+      latestModel: null,
+      latestOutputTokens: null,
+      models: null,
+    },
+    signals: {
+      analysisComplete: false,
+      archived: false,
+      compactionCount: null,
+      expiresInDays: null,
+      interrupted: null,
+      lastToolFailed: null,
+      pathExists: true,
+    },
+  }
+}
+
+/**
+ * Creates one ghost project per unique cwd for lock records that don't match
+ * any already-scanned project directory. Only called with recent records.
+ */
+function buildOrphanProjects(records: Array<SessionLockRecord & { cwd: string }>): Project[] {
+  const byPath = new Map<string, Array<SessionLockRecord & { cwd: string }>>()
+  for (const r of records) {
+    const key = normalisePath(r.cwd)
+    const group = byPath.get(key) ?? []
+    group.push(r)
+    byPath.set(key, group)
+  }
+
+  return [...byPath.values()].map((recs) => ({
+    id: encodeProjectPath(recs[0].cwd),
+    path: recs[0].cwd,
+    sessions: recs.map(buildGhostSession).sort(compareSessionsByRecentActivity),
+    isShared: false,
+  }))
+}
+
+function isRecentLockRecord(startedAt: number | null, now: number): boolean {
+  return startedAt !== null && now - startedAt < LOCK_FILE_GRACE_PERIOD_MS
+}
+
+function normalisePath(path: string): string {
+  return path.toLowerCase().replace(/[/\\]+$/, '')
 }
 
 // -----------------------------------------------------------------------------

@@ -180,10 +180,12 @@ describe('deriveSearchResults search qualifiers', () => {
   })
 
   it('project: filters by project path substring', () => {
-    const results = deriveSearchResults([releaseProject, docsProject], 'project:documentation', false)
-    expect(results).toEqual([
-      { ...docsProject, sessions: docsProject.sessions },
-    ])
+    const results = deriveSearchResults(
+      [releaseProject, docsProject],
+      'project:documentation',
+      false
+    )
+    expect(results).toEqual([{ ...docsProject, sessions: docsProject.sessions }])
   })
 
   it('status: filters by primaryStatus', () => {
@@ -193,7 +195,12 @@ describe('deriveSearchResults search qualifiers', () => {
 
   it('combines qualifier and text search', () => {
     const activeIds = new Set(['00000000-0000-0000-0000-000000000001'])
-    const results = deriveSearchResults([releaseProject, docsProject], 'is:active release', false, activeIds)
+    const results = deriveSearchResults(
+      [releaseProject, docsProject],
+      'is:active release',
+      false,
+      activeIds
+    )
     expect(results).toEqual([{ ...releaseProject, sessions: [activeSession] }])
   })
 })

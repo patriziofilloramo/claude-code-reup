@@ -20,13 +20,13 @@ export const terminalTheme: ThemeTokens = {
   dim: '#0f1f0f',
   muted: '#1f3d1f',
   muted2: '#3a6b3a',
-  text: '#a0c8a0',      // phosphor mid — readable, not eye-searing
-  strong: '#c8ffc8',    // bright phosphor for emphasis
-  accent: '#00ff41',    // classic matrix green
+  text: '#a0c8a0', // phosphor mid — readable, not eye-searing
+  strong: '#c8ffc8', // bright phosphor for emphasis
+  accent: '#00ff41', // classic matrix green
   green: '#00e532',
-  amber: '#b8ff00',     // phosphor amber-green hybrid
+  amber: '#b8ff00', // phosphor amber-green hybrid
   orange: '#80ff00',
-  red: '#ff3300',       // red phosphor (error state only)
+  red: '#ff3300', // red phosphor (error state only)
 
   // Surface layers
   surfaceRaised: '#0a140a',

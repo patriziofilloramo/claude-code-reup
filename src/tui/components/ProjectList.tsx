@@ -54,10 +54,15 @@ export default function ProjectList({
             </Box>
             {project.isShared ? (
               <Box flexShrink={0} paddingLeft={1}>
-                <Text color={
-                  project.cloudOffline ? COLORS.muted :
-                  (project.unlinkedDevices?.length ? COLORS.orange : COLORS.ok)
-                }>
+                <Text
+                  color={
+                    project.cloudOffline
+                      ? COLORS.muted
+                      : project.unlinkedDevices?.length
+                        ? COLORS.orange
+                        : COLORS.ok
+                  }
+                >
                   {'☁'}
                 </Text>
               </Box>

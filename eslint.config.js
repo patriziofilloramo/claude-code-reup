@@ -23,15 +23,20 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         EventSource: 'readonly',
+        cancelAnimationFrame: 'readonly',
         clearInterval: 'readonly',
         clearTimeout: 'readonly',
         console: 'readonly',
         document: 'readonly',
         fetch: 'readonly',
+        history: 'readonly',
+        location: 'readonly',
         localStorage: 'readonly',
         navigator: 'readonly',
+        requestAnimationFrame: 'readonly',
         setInterval: 'readonly',
         setTimeout: 'readonly',
+        window: 'readonly',
       },
       sourceType: 'script',
     },
@@ -49,6 +54,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js'],
+    ignores: ['dist/**', 'node_modules/**', 'src/web/client/**', '*.config.js'],
   }
 )

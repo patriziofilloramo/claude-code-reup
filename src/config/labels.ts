@@ -26,7 +26,7 @@ export const LABELS = {
   resumeCommandDesc: 'Pick a session, or resume by full ID or unambiguous prefix',
   searchCommandDesc: 'Search sessions by metadata; add --deep to search content',
   usageCommandDesc: 'Show observed usage or configure its feed; toggle on/off',
-  memoryCommandDesc: 'Manage shared session storage across devices (link / unlink / status)',
+  syncCommandDesc: 'Manage cloud sync of sessions across devices (link / unlink / status)',
   configCommandDesc: 'Read or write user preferences',
   completionCommandDesc: 'Print shell completion setup',
   themeCommandDesc: 'Set the active theme (dark, light, terminal)',
@@ -64,8 +64,7 @@ export const LABELS = {
   doctorTitle: 'CCM Doctor',
   noIssuesFound: 'No issues found.',
   brokenIndices: 'Broken session indices',
-  brokenIndicesExplan:
-    'Claude Code owns these files; CCM falls back to readable transcripts.',
+  brokenIndicesExplan: 'Claude Code owns these files; CCM falls back to readable transcripts.',
   staleLocks: 'Stale sidecar locks',
   orphanedTranscripts: 'Orphaned transcripts',
   missingPaths: 'Missing session paths',
@@ -77,8 +76,7 @@ export const LABELS = {
   selectorRequired: 'a session selector is required outside an interactive terminal',
   noResumableSessions: 'no resumable sessions found',
   resumeLoadFailed: 'failed to load sessions for interactive resume',
-  prefixResolveFailed:
-    'cannot resolve a session prefix because session discovery failed',
+  prefixResolveFailed: 'cannot resolve a session prefix because session discovery failed',
   terminatedBySignal: 'claude terminated by signal',
 
   // ── Search command ────────────────────────────────────────────────────────
@@ -95,11 +93,11 @@ export const LABELS = {
   configSetUsage: 'usage: ccm config set <key> <value>',
   unknownConfigKey: 'unknown key: ',
 
-  // ── Memory command ────────────────────────────────────────────────────────
-  memoryWarning: 'ccm memory is experimental — use at your own risk.',
-  memoryUsage: 'usage: ccm memory [link|unlink|status] [path]',
-  linkUsage: 'usage: ccm link [project-path]',
-  allLinked: 'all projects are already linked to cloud storage',
+  // ── Sync command ─────────────────────────────────────────────────────────
+  syncWarning: 'ccm sync is experimental — use at your own risk.',
+  syncUsage: 'usage: ccm sync [link|unlink|status] [path]',
+  linkUsage: 'usage: ccm sync link [project-path]',
+  allLinked: 'all projects are already synced to cloud storage',
   pathRequired: 'a project path is required outside an interactive terminal',
   noCloudDetected: 'no cloud storage detected — showing all projects',
   noCloudProjects: 'no projects found in cloud folders — showing all projects',

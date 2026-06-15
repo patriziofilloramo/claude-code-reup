@@ -22,7 +22,13 @@ interface ResumePickerProps {
 
 const PICKER_CHROME_ROWS = 7
 
-export function ResumePicker({ candidates, currentDirectory, initialQuery, onSelect, onDeepSearch }: ResumePickerProps) {
+export function ResumePicker({
+  candidates,
+  currentDirectory,
+  initialQuery,
+  onSelect,
+  onDeepSearch,
+}: ResumePickerProps) {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const [isSearchOpen, setIsSearchOpen] = useState(initialQuery !== undefined)
@@ -188,7 +194,7 @@ export function runResumePicker(
   candidates: RankedSession[],
   currentDirectory?: string,
   initialQuery?: string,
-  onDeepSearch?: (query: string) => void,
+  onDeepSearch?: (query: string) => void
 ): Promise<ResumePickerSelection | null> {
   return new Promise((resolve) => {
     let selection: ResumePickerSelection | null = null

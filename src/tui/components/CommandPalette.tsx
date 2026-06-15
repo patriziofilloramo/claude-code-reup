@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 
 import { COLORS } from '../../config/theme.js'
+import { GROUP_LABELS, GROUP_ORDER } from '../commands.js'
 
 export interface PaletteCommand {
   description: string
   key: string
   keybinding?: string
   visible?: boolean
+  group?: string
 }
 
 interface CommandPaletteProps {
@@ -18,33 +20,73 @@ interface CommandPaletteProps {
 
 const PALETTE_WIDTH = 52
 
+type DisplayItem =
+  | { kind: 'header'; label: string; first: boolean }
+  | { kind: 'command'; cmd: PaletteCommand; index: number }
+
 export default function CommandPalette({ commands, onClose, onExecute }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const visible = commands.filter((cmd) => cmd.visible !== false)
-  const filtered = query
-    ? visible.filter((cmd) => cmd.description.toLowerCase().includes(query.toLowerCase()))
-    : visible
 
-  const clampedIndex = Math.max(0, Math.min(selectedIndex, filtered.length - 1))
+  // Build displayItems (for rendering) and commandItems (for navigation/execution).
+  const displayItems: DisplayItem[] = []
+  const commandItems: PaletteCommand[] = []
+
+  if (query) {
+    // When filtering: flat list, no group headers.
+    const matched = visible.filter((cmd) =>
+      cmd.description.toLowerCase().includes(query.toLowerCase())
+    )
+    for (const cmd of matched) {
+      displayItems.push({ kind: 'command', cmd, index: commandItems.length })
+      commandItems.push(cmd)
+    }
+  } else {
+    // Browsing: grouped view.
+    let firstGroup = true
+    for (const groupKey of GROUP_ORDER) {
+      const groupCmds = visible.filter((c) => c.group === groupKey)
+      if (groupCmds.length === 0) continue
+
+      displayItems.push({ kind: 'header', label: GROUP_LABELS[groupKey], first: firstGroup })
+      firstGroup = false
+
+      for (const cmd of groupCmds) {
+        displayItems.push({ kind: 'command', cmd, index: commandItems.length })
+        commandItems.push(cmd)
+      }
+    }
+    // Any command without a known group goes at the end, ungrouped.
+    const ungrouped = visible.filter(
+      (c) => !c.group || !(GROUP_ORDER as readonly string[]).includes(c.group)
+    )
+    for (const cmd of ungrouped) {
+      displayItems.push({ kind: 'command', cmd, index: commandItems.length })
+      commandItems.push(cmd)
+    }
+  }
+
+  const clampedIndex = Math.max(0, Math.min(selectedIndex, commandItems.length - 1))
 
   useInput((input, key) => {
-    const escapePressed = key.escape || input === '\x1b'
-    if (escapePressed) {
+    if (key.escape || input === '\x1b') {
       onClose()
       return
     }
+
     if (key.upArrow) {
       setSelectedIndex((i) => Math.max(0, i - 1))
       return
     }
     if (key.downArrow) {
-      setSelectedIndex((i) => Math.min(filtered.length - 1, i + 1))
+      setSelectedIndex((i) => Math.min(commandItems.length - 1, i + 1))
       return
     }
+
     if (key.return) {
-      const cmd = filtered[clampedIndex]
+      const cmd = commandItems[clampedIndex]
       if (cmd) onExecute(cmd.key)
       return
     }
@@ -59,7 +101,7 @@ export default function CommandPalette({ commands, onClose, onExecute }: Command
     }
   })
 
-  const innerWidth = PALETTE_WIDTH - 4 // account for border + paddingX
+  const innerWidth = PALETTE_WIDTH - 4
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
@@ -70,6 +112,7 @@ export default function CommandPalette({ commands, onClose, onExecute }: Command
         paddingX={1}
         width={PALETTE_WIDTH}
       >
+        {/* Search input */}
         <Box gap={1}>
           <Text color={COLORS.dim}>›</Text>
           {query ? (
@@ -78,38 +121,46 @@ export default function CommandPalette({ commands, onClose, onExecute }: Command
             <Text color={COLORS.dim}>search commands…</Text>
           )}
         </Box>
+
         <Box>
           <Text color={COLORS.border}>{'─'.repeat(innerWidth)}</Text>
         </Box>
-        {filtered.length === 0 ? (
+
+        {/* Command list */}
+        {commandItems.length === 0 ? (
           <Box paddingX={1}>
             <Text color={COLORS.dim}>no matching commands</Text>
           </Box>
         ) : (
-          filtered.slice(0, 10).map((cmd, index) => {
-            const isSelected = index === clampedIndex
-            return (
-              <Box key={cmd.key} gap={1}>
-                <Text color={isSelected ? COLORS.accent : COLORS.border}>
-                  {isSelected ? '▶' : ' '}
+          displayItems.slice(0, 16).map((item) =>
+            item.kind === 'header' ? (
+              <Box key={`h-${item.label}`} marginTop={item.first ? 0 : 1} paddingLeft={2}>
+                <Text color={COLORS.dim}>{item.label}</Text>
+              </Box>
+            ) : (
+              <Box key={item.cmd.key} gap={1}>
+                <Text color={item.index === clampedIndex ? COLORS.accent : COLORS.border}>
+                  {item.index === clampedIndex ? '▶' : ' '}
                 </Text>
                 <Box flexGrow={1}>
-                  <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.textSub}>
-                    {cmd.description}
+                  <Text
+                    bold={item.index === clampedIndex}
+                    color={item.index === clampedIndex ? COLORS.text : COLORS.textSub}
+                  >
+                    {item.cmd.description}
                   </Text>
                 </Box>
-                {cmd.keybinding ? (
-                  <Text color={COLORS.dim}>{cmd.keybinding}</Text>
-                ) : null}
+                {item.cmd.keybinding ? <Text color={COLORS.dim}>{item.cmd.keybinding}</Text> : null}
               </Box>
             )
-          })
+          )
         )}
       </Box>
+
       <Box marginTop={1}>
         <Text color={COLORS.muted}>
           <Text color={COLORS.text}>↑↓</Text>
-          {' navigate  '}
+          {' nav  '}
           <Text color={COLORS.text}>enter</Text>
           {' run  '}
           <Text color={COLORS.text}>esc</Text>

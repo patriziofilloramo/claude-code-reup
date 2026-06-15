@@ -28,7 +28,7 @@ export interface ContentMatch {
 export async function searchTranscripts(
   query: string,
   projects: Project[],
-  onProgress?: (scanned: number, total: number) => void,
+  onProgress?: (scanned: number, total: number) => void
 ): Promise<ContentMatch[]> {
   const lowerQuery = query.toLowerCase()
   const results: ContentMatch[] = []
@@ -60,7 +60,7 @@ export async function searchTranscripts(
 
 async function scanFile(
   filePath: string,
-  lowerQuery: string,
+  lowerQuery: string
 ): Promise<{ matchCount: number; snippet: string }> {
   let matchCount = 0
   let snippet = ''

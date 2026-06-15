@@ -105,7 +105,7 @@ export const APP = {
   // ── Cloud sync ──────────────────────────────────────────────────────────────
 
   /**
-   * Subdirectory name created inside the project root by `ccm link` to hold
+   * Subdirectory name created inside the project root by `ccm sync link` to hold
    * the shared session files that are kept in sync with local storage.
    */
   cloudMemoryDir: '.claude-memory',

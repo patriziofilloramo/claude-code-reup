@@ -5,27 +5,50 @@ import type { ResumeTarget } from '../tui/App.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { failCommand } from './output.js'
 
-const CLI_HELP = `
-ccm — session manager for Claude Code
+function buildCliHelp(): string {
+  const tty = process.stdout.isTTY
+  const b = (s: string) => (tty ? `\x1b[1m${s}\x1b[0m` : s)
+  const d = (s: string) => (tty ? `\x1b[2m${s}\x1b[0m` : s)
 
-Usage:
-  ccm                   Open terminal UI (default)
-  ccm web               Open browser UI
-  ccm list [query]      List sessions; use --json for machine-readable output
-  ccm inbox             Show sessions needing attention
-  ccm doctor            Diagnose local session-data issues
-  ccm handoff [session] Print a compact continuation packet (picker if no session given)
-  ccm resume [session]  Pick a session, or resume by full ID or unambiguous prefix
-  ccm search <query>    Search sessions by metadata; add --deep to search content
-  ccm usage [action]    Show observed usage or configure its feed; toggle on/off
-  ccm memory [action]   Manage shared session storage across devices
-                        (link / unlink / status)
-  ccm config [cmd]      Read or write user preferences
-  ccm completion <shell> Print shell completion setup
-  ccm --theme <name>    Set the active theme (dark, light, terminal)
-  ccm --version         Print version
-  ccm --help            Show this help
-`.trim()
+  const CMD = 22 // width of the command column
+
+  function row(cmd: string, desc: string, note?: string): string {
+    const padded = cmd.padEnd(CMD)
+    return `  ${padded}  ${desc}${note ? d(`  (${note})`) : ''}`
+  }
+
+  return [
+    b('ccm') + ' — session manager for Claude Code',
+    '',
+    b('  Interfaces'),
+    row('ccm', 'Open terminal UI', 'default'),
+    row('ccm web', 'Open browser UI'),
+    '',
+    b('  Sessions'),
+    row('ccm list [query]', 'List sessions', '--json for machine-readable'),
+    row('ccm resume [id]', 'Resume by ID or prefix, or pick interactively'),
+    row('ccm search <query>', 'Search by metadata', '--deep to search content'),
+    row('ccm inbox', 'Sessions needing attention'),
+    row('ccm handoff [id]', 'Print a continuation packet for handoff'),
+    '',
+    b('  Health'),
+    row('ccm doctor', 'Diagnose local session-data issues'),
+    row('ccm cleanup', 'Review and archive stale / empty sessions', '--dry-run to preview'),
+    '',
+    b('  Setup & Config'),
+    row('ccm config', 'Open configuration panel'),
+    row('ccm usage [action]', 'Usage monitoring', 'on / off / status'),
+    row('ccm sync [action]', 'Cross-device session sync', 'link / unlink / status'),
+    row('ccm --theme <name>', 'Set active theme', 'dark / light / terminal'),
+    row('ccm completion <sh>', 'Print shell completion script'),
+    '',
+    b('  Meta'),
+    row('ccm --version', 'Print version'),
+    row('ccm --help', 'This help'),
+    '',
+    d('Run ccm <command> --help for per-command options.'),
+  ].join('\n')
+}
 
 const VALID_THEMES = new Set(['dark', 'light', 'terminal'])
 
@@ -44,7 +67,7 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
       return
     }
     const { saveThemeName } = await import('../core/theme-preference.js')
-    saveThemeName(themeName as 'dark' | 'light' | 'terminal')
+    await saveThemeName(themeName as 'dark' | 'light' | 'terminal')
     process.env['CCM_THEME'] = themeName
     args = [...args.slice(0, themeIdx), ...args.slice(themeIdx + 2)]
     if (args.length === 0) {
@@ -63,7 +86,7 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
 
     case '--help':
     case '-h':
-      console.log(CLI_HELP)
+      console.log(buildCliHelp())
       return
 
     case 'list':
@@ -82,9 +105,9 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
       await createHandoff(commandArguments)
       return
 
-    case 'memory': {
-      const { runMemoryCommand } = await import('./memory-command.js')
-      await runMemoryCommand(commandArguments)
+    case 'sync': {
+      const { runSyncCommand } = await import('./sync-command.js')
+      await runSyncCommand(commandArguments)
       return
     }
 
@@ -107,6 +130,12 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
     case 'config': {
       const { runConfigCommand } = await import('./config-command.js')
       await runConfigCommand(commandArguments)
+      return
+    }
+
+    case 'cleanup': {
+      const { runCleanupCommand } = await import('./cleanup-command.js')
+      await runCleanupCommand(commandArguments)
       return
     }
 
@@ -190,6 +219,37 @@ async function runTerminalInterface(): Promise<void> {
   const { initCloudSync, stopSyncLoop } = await import('../core/cloud-sync.js')
   await runWithSyncSpinner(initCloudSync)
 
+  const { readUserPrefsSync } = await import('../core/user-prefs.js')
+  const { autoCleanupOnStart } = readUserPrefsSync()
+  if (autoCleanupOnStart !== 'off') {
+    const { getActiveSessions } = await import('../core/active-sessions.js')
+    const { findCleanupCandidates } = await import('../core/cleanup.js')
+    const { loadProjects } = await import('../core/project-discovery.js')
+    const { deleteSession } = await import('../core/session-metadata.js')
+
+    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const candidates = findCleanupCandidates(projects, activeSessionIds)
+    if (candidates.length > 0) {
+      if (autoCleanupOnStart === 'auto') {
+        await Promise.all(
+          candidates.map((candidate) => deleteSession(candidate.projectId, candidate.session.id))
+        )
+      } else {
+        // 'on' mode — show picker, user selects
+        const { runCleanupPicker } = await import('../tui/CleanupPicker.js')
+        const chosen = await runCleanupPicker(candidates)
+        releaseTerminalInput()
+        if (chosen && chosen.length > 0) {
+          await Promise.all(
+            candidates
+              .filter((c) => chosen.some((ch) => ch.session.id === c.session.id))
+              .map((c) => deleteSession(c.projectId, c.session.id))
+          )
+        }
+      }
+    }
+  }
+
   const { runTUI } = await import('../tui/App.js')
   const resumeTarget = await runTUI()
   stopSyncLoop()
@@ -221,12 +281,12 @@ async function runWithSyncSpinner(fn: () => Promise<number>): Promise<void> {
     process.stderr.write(`\r${FRAMES[frame]} syncing linked projects...`)
   }, 80)
 
-  const syncedCount = await fn()
+  await fn()
 
   clearTimeout(showTimer)
   clearInterval(spinTimer)
   if (visible) {
-    process.stderr.write(`\r\x1b[K`)  // erase the spinner line
+    process.stderr.write(`\r\x1b[K`) // erase the spinner line
   }
 }
 

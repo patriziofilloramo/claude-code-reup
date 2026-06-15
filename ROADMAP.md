@@ -169,8 +169,8 @@ milestones faster to implement. No visible behaviour changes — this is purely 
       (`terminal-{shared,unix,windows}.ts`); resolved post-merge duplicate `initCloudSync` /
       `guardOfflineLinks` calls in `server.ts`; `syncRegistry` breaks the project-discovery →
       cloud-sync circular dependency
-- [x] **Test coverage gaps** — added `tests/core/cloud-sync.test.ts` (9 cases: `stopSyncLoop`
-      idempotency, `syncBidirectional` copy both directions, larger-file merge, recursive descent,
+- [x] **Test coverage gaps** — added `tests/core/cloud-sync.test.ts` covering `stopSyncLoop`
+      idempotency, bidirectional copy, append-only propagation, conflict detection, recursive descent,
       skip `.ccm-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
       existing); also fixed a `syncBidirectional` bug where A-only subdirectories were silently
       skipped instead of being created in B; total test count: 194 (was 180)
@@ -186,9 +186,9 @@ No server, no auth — the cloud provider handles transfer.
 
 > ⚠ Experimental: see `CHANGELOG.md` for known risks and the backup procedure.
 
-- [x] `ccm link [path]` — creates a per-project NTFS junction pointing the Claude Code
+- [x] `ccm sync link [path]` — creates a per-project NTFS junction pointing the Claude Code
       project directory at a shared cloud folder; backs up existing local sessions first
-- [x] `ccm unlink [path]` — restores the local directory; sessions written while linked
+- [x] `ccm sync unlink [path]` — restores the local directory; sessions written while linked
       remain accessible through the shared folder
 - [x] **Sync registry** (`syncRegistry`) — in-memory `Map` of junction paths to cloud state;
       avoids circular imports between discovery, sync, and memory modules
@@ -197,10 +197,10 @@ No server, no auth — the cloud provider handles transfer.
       while the cloud drive is unmounted; restores on reconnect
 - [x] **Cloud indicator in TUI and web** — `☁` icon coloured green (online), grey (cloud
       offline / sync paused), or orange (one or more devices used the project without
-      running `ccm link`)
+      running `ccm sync link`)
 - [x] **Offline guard** — new sessions are blocked when a project's cloud storage is
       unreachable; flash message informs the user and resumes automatically on reconnect
-- [x] `ccm memory link [path]` / `ccm memory unlink [path]` — inject / remove a
+- [x] `ccm sync link [path]` / `ccm sync unlink [path]` — inject / remove a
       `<!-- ccm:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
       Claude Code on any device to: detect whether the device is linked, write a presence
       file when it is not, warn once, and silently skip after the user dismisses the warning
@@ -209,10 +209,34 @@ No server, no auth — the cloud provider handles transfer.
       project to run the protocol; no extra permissions required
 - [x] **Unlinked-device detection** — linked devices scan `{cloudDir}/device-presence/` on
       each discovery pass and surface device names as `unlinkedDevices[]` on the `Project`
-      object; orange cloud indicator prompts the user to run `ccm link` on that device
+      object; orange cloud indicator prompts the user to run `ccm sync link` on that device
 - [x] **Append-only shared memory** — unlinked devices append context to
       `{cloudDir}/memory/shared.md` under a `## HOSTNAME — date` header; avoids pCloud
       conflict copies that would arise from concurrent rewrites
+
+---
+
+## Milestone 9.5 — Config & CLI polish ✓ done
+
+Improvements shipped after M9:
+
+- [x] **Command registry** (`src/tui/commands.ts`) — single `COMMANDS` array with `visibleWhen`
+      named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
+      HelpOverlay and CommandPalette both derive from the same source of truth
+- [x] **`ccm sync`** — renamed from `ccm memory` throughout: file, exports, CLI dispatch, help
+      text, documentation, and all user-facing strings; `memory` kept as a backwards-compat alias
+- [x] **Sync tab in `ccm config`** — interactive cursor navigation over unsynced and synced
+      projects; Enter to link/unlink inline without leaving the TUI; uses `linkProjectForTUI` /
+      `unlinkProjectForTUI` wrappers that suppress console output during TUI operation
+- [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
+      archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
+- [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
+      with title (consistent across all tabs); Features tab describes each state in plain text
+- [x] **`ccm --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
+      from `ccm config` line
+- [x] **Density toggle removed** — `d` key and comfortable/compact density removed from TUI;
+      two stale label keys (`cmdDensityComfortable`, `cmdDensityCompact`) remain in `labels.ts`
+      and should be cleaned up
 
 ---
 
@@ -235,45 +259,29 @@ manual shell setup. Detailed behavior is defined in
 
 ---
 
-## Milestone 9 — Growth: themes and i18n
+## Milestone 9 — Growth: themes and i18n ✓ done
 
-### Theme system — attract developers, retain power users
+### Theme system
 
-The UI must be a competitive differentiator, not just functional. Both the TUI and web interfaces
-should share a single design-token layer so changing a theme requires no code changes — only a
-new token set. The initial three themes are:
+- [x] Unified design-token schema (`ThemeTokens` interface in `src/config/theme-tokens.ts`) covering
+      every value used by TUI and web; a theme is a plain object satisfying the interface
+- [x] Three themes shipped: **Dark** (default), **Light**, **Terminal** (phosphor/CRT)
+- [x] `ccm --theme <name>` CLI — saves preference and applies immediately
+- [x] Theme selection in `ccm config` Interface tab (keyboard-navigable, live preview)
+- [x] Web theme cycle button in footer (◐ dark → ○ light → █ terminal → repeat); persisted via
+      `/api/theme` and injected as CSS custom properties at serve time
+- [x] Matrix rain Easter egg — triggered by holding the Terminal theme logo ≥ 3 s in the web UI;
+      full canvas animation with phosphor-green columns; does not affect the default experience
+- [x] Token schema is self-documenting: `ThemeTokens` interface mirrors CSS custom-property names
+      so community themes require no build changes
 
-- **Dark** (current default) — dense, high-contrast, optimised for long coding sessions
-- **Light** — clean white/grey palette for bright environments and screen sharing
-- **Terminal** — near-black background, phosphor-green text, subtle CRT scan-line effect in the web
-  version. Targets the developer audience that self-identifies with the command line aesthetic.
-  Potential to generate social sharing among developers on first launch.
+### i18n groundwork
 
-  > Design note on "Terminal" vs pure "Matrix": a pixel-accurate Matrix rain animation would be
-  > distracting during real work. The terminal/phosphor look achieves the same cultural signal —
-  > "this was made for people who live in the terminal" — without sacrificing usability. Reserve
-  > the Matrix rain for an Easter egg on an extended key hold (≥ 3 s on a logo element), not the
-  > default experience.
-
-- [ ] Extract all colour and spacing values from `src/config/theme.ts` and `src/web/styles.css`
-      into a unified token schema (`ThemeTokens` interface)
-- [ ] Ship the three themes above; expose `ccm --theme <name>` and a web settings toggle
-- [ ] Document the public token schema so community-contributed themes require no internal changes
-
-### i18n groundwork — lower barrier for non-English contributors
-
-The immediate addressable audience is primarily English-speaking developers. Full translations are
-low priority today, but string centralisation is low-cost and architecturally correct regardless.
-
-Decision: **extract, don't translate yet.**
-
-- [ ] Move all user-facing strings (TUI labels, web UI text, CLI messages, error descriptions) into
-      `src/config/labels.ts` with a simple flat map — no i18n library, no pluralisation engine,
-      no locale detection
-- [ ] Enforce a lint rule that blocks raw string literals in UI rendering paths; strings must come
-      from the labels map
-- [ ] Document the contribution path: adding a language = providing a parallel labels file + a
-      README section in that language. No build complexity required.
+- [x] All TUI user-facing strings centralised to `src/config/labels.ts` (flat map, no library)
+- [x] `no-raw-ui-strings` ESLint rule in `src/config/eslint-rules/`; active at `warn` level on
+      `src/tui/**` via `eslint.config.js`; fix path is `LABELS.xxx`
+- [ ] Extend lint coverage to `src/cli/**` and `src/web/routes/**`
+- [ ] Document contribution path: adding a language = parallel labels file + README section
 
 ---
 
@@ -304,8 +312,8 @@ Anthropic API. They are tracked here and will be re-evaluated when the API stabi
 - [ ] **Files-touched list in resume card** — Populate the "Recently touched files" field in the
       resume card by extracting `tool_use` write/edit/create events from the session JSONL. Show a
       compact deduplicated list capped at ~5 paths with a `+N more` overflow. No diff, no replay —
-      just the file names. Closes a gap all four reviewed tools have: you can see what Claude *said*
-      but not what it *changed*. Priority filter #1 (helps decide whether to resume).
+      just the file names. Closes a gap all four reviewed tools have: you can see what Claude _said_
+      but not what it _changed_. Priority filter #1 (helps decide whether to resume).
 
 ### Advanced — requires API key / opt-in
 
@@ -324,6 +332,38 @@ must never activate automatically or affect the default experience.
 
 Ideas that need more investigation before committing to a milestone. May be promoted, deferred,
 or dropped after evaluation.
+
+### VSCode extension — command-palette-style session switcher
+
+A native VSCode extension exposing CCM features via `Ctrl+P` / `Ctrl+Shift+P`. The core library
+(`src/core/`) is already cleanly separated from the TUI and Web consumers — the extension would
+be a third consumer of the same layer, requiring no architectural restructuring.
+
+Proposed shape:
+
+- `Ctrl+P` → Quick Pick populated with all sessions (fuzzy search, health signals inline as
+  description text, `⚠` / `●` / `◌` icons in the detail column)
+- Select a session → `claude --resume <id>` in the integrated terminal
+- Command palette entries for `CCM: Open Inbox`, `CCM: Cleanup`, `CCM: Sync Status`, etc.
+- Status bar item showing active-session context usage (reuses existing usage capture infra)
+
+Why it's meaningful: developers who already live in VSCode get the full session intelligence
+without switching to a terminal or browser tab. The Quick Pick UX is more discoverable than the
+TUI for occasional users.
+
+What needs investigation:
+
+- [ ] VSCode extension API constraints (filesystem access, child process spawning — likely fine
+      since it's all local reads and a terminal `spawn`)
+- [ ] Extension packaging: does bundling the `src/core/` layer into a `.vsix` add too much weight,
+      or should the extension shell out to a locally installed `ccm` binary instead?
+- [ ] Whether a dedicated `@ccm/core` package makes the shared layer cleaner to consume from three
+      different entry points (TUI, Web, VSCode) — see architecture note below
+
+Architecture note: long-term, the cleanest shape is a `@ccm/core` internal package (or
+workspace) that TUI, Web, and VSCode all import from. The current single-repo layout already
+achieves this in practice; formalising it is a low-risk refactor that would make the extension
+path straightforward.
 
 ### Live session panel — the "always-open" use case
 
@@ -349,10 +389,10 @@ dashboard that makes context exhaustion and rate limits impossible to miss.
 
 ## What is explicitly out of scope
 
-| Item                             | Reason                                              |
-| -------------------------------- | --------------------------------------------------- |
-| npm publish                      | Local stable version first; package name unresolved |
-| Server-based cloud sync / auth   | Local-first only; OS-level junctions via pCloud etc.|
-| Required/free-form config files  | Zero-config remains a design constraint             |
-| Support for non-Claude-Code CLIs | Claude Code only                                    |
-| Backup / restore of transcripts  | Out of scope; archive = hide only                   |
+| Item                             | Reason                                               |
+| -------------------------------- | ---------------------------------------------------- |
+| npm publish                      | Local stable version first; package name unresolved  |
+| Server-based cloud sync / auth   | Local-first only; OS-level junctions via pCloud etc. |
+| Required/free-form config files  | Zero-config remains a design constraint              |
+| Support for non-Claude-Code CLIs | Claude Code only                                     |
+| Backup / restore of transcripts  | Out of scope; archive = hide only                    |

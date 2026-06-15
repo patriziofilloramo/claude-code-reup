@@ -1,9 +1,4 @@
-import {
-  PREF_SPECS,
-  readUserPrefs,
-  resetUserPrefs,
-  setUserPref,
-} from '../core/user-prefs.js'
+import { PREF_SPECS, readUserPrefs, resetUserPrefs, setUserPref } from '../core/user-prefs.js'
 import { failCommand } from './output.js'
 
 const USAGE = `Usage:
@@ -40,9 +35,7 @@ export async function runConfigCommand(args: string[]): Promise<void> {
       console.log(USAGE)
       return
     default:
-      failCommand(
-        `unknown config subcommand: ${subcommand}\n\n${USAGE}`
-      )
+      failCommand(`unknown config subcommand: ${subcommand}\n\n${USAGE}`)
   }
 }
 
@@ -57,9 +50,7 @@ async function handleGet(key?: string): Promise<void> {
   }
 
   if (!(key in PREF_SPECS)) {
-    failCommand(
-      `unknown key: ${key}\nValid keys: ${Object.keys(PREF_SPECS).join(', ')}`
-    )
+    failCommand(`unknown key: ${key}\nValid keys: ${Object.keys(PREF_SPECS).join(', ')}`)
     return
   }
   console.log(prefs[key as keyof typeof prefs])
@@ -72,17 +63,13 @@ async function handleSet(key?: string, value?: string): Promise<void> {
   }
 
   if (!(key in PREF_SPECS)) {
-    failCommand(
-      `unknown key: ${key}\nValid keys: ${Object.keys(PREF_SPECS).join(', ')}`
-    )
+    failCommand(`unknown key: ${key}\nValid keys: ${Object.keys(PREF_SPECS).join(', ')}`)
     return
   }
 
   const spec = PREF_SPECS[key as keyof typeof PREF_SPECS]
   if (spec.values.length > 0 && !spec.values.includes(value)) {
-    failCommand(
-      `invalid value for ${key}: ${value}\nValid values: ${spec.values.join(', ')}`
-    )
+    failCommand(`invalid value for ${key}: ${value}\nValid values: ${spec.values.join(', ')}`)
     return
   }
 
@@ -93,9 +80,7 @@ async function handleSet(key?: string, value?: string): Promise<void> {
 
 async function handleReset(key?: string): Promise<void> {
   if (key && !(key in PREF_SPECS)) {
-    failCommand(
-      `unknown key: ${key}\nValid keys: ${Object.keys(PREF_SPECS).join(', ')}`
-    )
+    failCommand(`unknown key: ${key}\nValid keys: ${Object.keys(PREF_SPECS).join(', ')}`)
     return
   }
 

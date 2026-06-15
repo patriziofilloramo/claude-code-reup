@@ -17,22 +17,22 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const SEGMENTS = [
-  '01-config.js',          // tunable constants, filter labels, risk rank
-  '02-state.js',           // mutable application state (all let variables)
-  '03-elements.js',        // DOM element references
-  '04-format-request.js',  // formatters (relativeTime, escapeHtml…) + HTTP helpers
-  '05-projects.js',        // project list rendering and selection
-  '06-sessions.js',        // session view model, filtering, and selection
-  '07-filter-inspector.js',// filter pills, sort control, session inspector
-  '08-session-list.js',    // session rows, bulk actions, rename flow
-  '09-resume.js',          // resume confirmation dialog and terminal launch
+  '01-config.js', // tunable constants, filter labels, risk rank
+  '02-state.js', // mutable application state (all let variables)
+  '03-elements.js', // DOM element references
+  '04-format-request.js', // formatters (relativeTime, escapeHtml…) + HTTP helpers
+  '05-projects.js', // project list rendering and selection
+  '06-sessions.js', // session view model, filtering, and selection
+  '07-filter-inspector.js', // filter pills, sort control, session inspector
+  '08-session-list.js', // session rows, bulk actions, rename flow
+  '09-resume.js', // resume confirmation dialog and terminal launch
   '10-instructions-drawer.js', // CLAUDE.md editor drawer
-  '11-diagnostics-drawer.js',  // Lost & Found diagnostics drawer
-  '12-new-session.js',     // start-new-session action
-  '13-ctx-menu.js',        // context menu (project and session)
-  '14-search.js',          // search bar, deep-search mode, keyboard shortcuts
-  '15-data.js',            // data refresh, SSE live updates, bootstrap
-  '16-theme.js',           // theme cycling, persistence, Matrix rain easter egg
+  '11-diagnostics-drawer.js', // Lost & Found diagnostics drawer
+  '12-new-session.js', // start-new-session action
+  '13-ctx-menu.js', // context menu (project and session)
+  '14-search.js', // search bar, deep-search mode, keyboard shortcuts
+  '15-data.js', // data refresh, SSE live updates, bootstrap
+  '16-theme.js', // theme cycling, persistence, Matrix rain easter egg
 ]
 
 const ROOT = process.cwd()
@@ -51,9 +51,7 @@ const HEADER = `/**
 
 const FOOTER = `})()\n`
 
-const contents = await Promise.all(
-  SEGMENTS.map((name) => readFile(join(CLIENT_DIR, name), 'utf8'))
-)
+const contents = await Promise.all(SEGMENTS.map((name) => readFile(join(CLIENT_DIR, name), 'utf8')))
 
 const output = HEADER + '\n' + contents.join('') + FOOTER
 await writeFile(OUT_PATH, output)

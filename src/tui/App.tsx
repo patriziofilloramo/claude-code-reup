@@ -12,12 +12,15 @@ import { readLiveUsageSummary } from '../core/live-usage.js'
 import type { LiveUsageSummary } from '../core/live-usage.js'
 import { loadProjects } from '../core/project-discovery.js'
 import type { Project, Session } from '../core/session-model.js'
-import { setSessionArchived } from '../core/session-metadata.js'
+import { deleteSession, setSessionArchived } from '../core/session-metadata.js'
 import { copyToClipboard, openDirectory } from '../utils/system.js'
+import { ConfigApp } from './ConfigApp.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
 import AppFooter from './components/AppFooter.js'
 import AppHeader from './components/AppHeader.js'
 import AppToolbar from './components/AppToolbar.js'
+import { COMMANDS } from './commands.js'
+import type { VisibleWhen } from './commands.js'
 import CommandPalette from './components/CommandPalette.js'
 import type { PaletteCommand } from './components/CommandPalette.js'
 import LaunchScreen from './components/LaunchScreen.js'
@@ -27,6 +30,7 @@ import ProjectList from './components/ProjectList.js'
 import ResumeCard from './components/ResumeCard.js'
 import SessionActionMenu from './components/SessionActionMenu.js'
 import type { SessionActionCommand } from './components/SessionActionMenu.js'
+import HelpOverlay from './components/HelpOverlay.js'
 import SessionList from './components/SessionList.js'
 import {
   calculateMaximumVisibleSessions,
@@ -38,7 +42,7 @@ type FocusedPanel = 'projects' | 'sessions'
 
 export interface ResumeTarget {
   projectPath: string
-  sessionId?: string  // undefined = start new session in the project directory
+  sessionId?: string // undefined = start new session in the project directory
 }
 
 export type LaunchState =
@@ -81,8 +85,11 @@ function App({ onResume }: AppProps) {
   const [isDeepSearchOpen, setIsDeepSearchOpen] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set())
 
   const [launching, setLaunching] = useState<LaunchState | null>(null)
+  const [isConfigOpen, setIsConfigOpen] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [launchSpinnerFrame, setLaunchSpinnerFrame] = useState(0)
 
   // ---------------------------------------------------------------------------
@@ -268,9 +275,7 @@ function App({ onResume }: AppProps) {
       flashMessage(`skipped ${sessions.length - archivable.length} active session(s)`)
     }
     Promise.all(
-      archivable.map((s) =>
-        setSessionArchived(selectedProject.id, s.id, !s.signals.archived)
-      )
+      archivable.map((s) => setSessionArchived(selectedProject.id, s.id, !s.signals.archived))
     )
       .then(() => loadProjects())
       .then((loaded) => setProjects(loaded))
@@ -290,6 +295,34 @@ function App({ onResume }: AppProps) {
       return
     }
     archiveSessions([focusedSession])
+  }
+
+  function deleteSessions(sessions: Session[]): void {
+    if (!selectedProject || sessions.length === 0) return
+    const deletable = sessions.filter((s) => !activeSessionIds.has(s.id))
+    if (deletable.length === 0) {
+      flashMessage('cannot delete — session is active')
+      return
+    }
+    Promise.all(deletable.map((s) => deleteSession(selectedProject.id, s.id)))
+      .then(() => loadProjects())
+      .then((loaded) => setProjects(loaded))
+      .catch(() => flashMessage('delete failed'))
+    setBulkSelectedIds(new Set())
+    setPendingDeleteIds(new Set())
+  }
+
+  function requestDeleteConfirm(sessions: Session[]): void {
+    if (sessions.some((s) => activeSessionIds.has(s.id))) {
+      flashMessage('cannot delete — session is active')
+      return
+    }
+    const ids = new Set(sessions.map((s) => s.id))
+    setPendingDeleteIds(ids)
+    const count = ids.size
+    setStatusMessage(
+      `Delete ${count} session${count === 1 ? '' : 's'} permanently? D confirm · esc cancel`
+    )
   }
 
   function executeProjectAction(command: ProjectActionCommand): void {
@@ -346,6 +379,9 @@ function App({ onResume }: AppProps) {
           .catch(() => flashMessage('handoff failed — transcript not found'))
         break
       }
+      case 'delete':
+        requestDeleteConfirm([focusedSession])
+        break
     }
   }
 
@@ -365,76 +401,45 @@ function App({ onResume }: AppProps) {
   // Command palette
   // ---------------------------------------------------------------------------
 
-  const paletteCommands: PaletteCommand[] = [
-    {
-      description: 'Resume selected session',
-      key: 'resume',
-      keybinding: 'enter',
-      visible: focusedPanel === 'sessions' && !!focusedSession,
-    },
-    {
-      description: 'Preview session details',
-      key: 'preview',
-      keybinding: 'p',
-      visible: focusedPanel === 'sessions' && !!focusedSession,
-    },
-    {
-      description: 'Start new session in this project',
-      key: 'new-session',
-      keybinding: 'n',
-      visible: !!selectedProject,
-    },
-    {
-      description:
-        bulkSelectedIds.size > 0
-          ? `Archive ${bulkSelectedIds.size} selected session(s)`
-          : focusedSession?.signals.archived
-            ? 'Unarchive selected session'
-            : 'Archive selected session',
-      key: 'archive',
-      keybinding: 'A',
-      visible: focusedPanel === 'sessions' && !!focusedSession,
-    },
-    {
-      description: 'Select session for bulk action',
-      key: 'bulk-select',
-      keybinding: 's',
-      visible: focusedPanel === 'sessions' && !!focusedSession,
-    },
-    {
-      description: 'Session actions',
-      key: 'session-actions',
-      keybinding: 'space',
-      visible: focusedPanel === 'sessions' && !!focusedSession,
-    },
-    {
-      description: 'Search sessions',
-      key: 'search',
-      keybinding: '/',
-    },
-    {
-      description: showArchivedSessions ? 'Hide archived sessions' : 'Show archived sessions',
-      key: 'toggle-archived',
-      keybinding: 'a',
-    },
-    {
-      description: 'Focus sessions panel',
-      key: 'focus-sessions',
-      keybinding: 'tab / →',
-      visible: focusedPanel === 'projects',
-    },
-    {
-      description: 'Focus projects panel',
-      key: 'focus-projects',
-      keybinding: '←',
-      visible: focusedPanel === 'sessions',
-    },
-    {
-      description: 'Quit',
-      key: 'quit',
-      keybinding: 'q',
-    },
-  ]
+  // Evaluates a named visibility condition from the COMMANDS registry.
+  // Only dynamic label overrides (text that changes with app state) stay here.
+  function resolveVisibility(cond: VisibleWhen): boolean {
+    switch (cond) {
+      case 'always':
+        return true
+      case 'session-focused':
+        return focusedPanel === 'sessions' && !!focusedSession
+      case 'project-selected':
+        return !!selectedProject
+      case 'in-projects-panel':
+        return focusedPanel === 'projects'
+      case 'in-sessions-panel':
+        return focusedPanel === 'sessions'
+    }
+  }
+
+  const labelOverrides: Partial<Record<string, string>> = {
+    archive:
+      bulkSelectedIds.size > 0
+        ? `Archive ${bulkSelectedIds.size} selected session(s)`
+        : focusedSession?.signals.archived
+          ? 'Unarchive selected session'
+          : 'Archive selected session',
+    delete:
+      bulkSelectedIds.size > 0
+        ? `Delete ${bulkSelectedIds.size} selected session(s) permanently`
+        : 'Delete session permanently',
+    'toggle-archived': showArchivedSessions ? 'Hide archived sessions' : 'Show archived sessions',
+    'new-session': 'Start new session in this project',
+  }
+
+  const paletteCommands: PaletteCommand[] = COMMANDS.map((cmd) => ({
+    key: cmd.id,
+    description: labelOverrides[cmd.id] ?? cmd.label,
+    keybinding: cmd.keybinding,
+    group: cmd.group,
+    visible: resolveVisibility(cmd.visibleWhen),
+  }))
 
   function executePaletteCommand(commandKey: string): void {
     setIsCommandPaletteOpen(false)
@@ -463,6 +468,15 @@ function App({ onResume }: AppProps) {
       case 'archive':
         archiveSelectedSession()
         break
+      case 'delete':
+        if (focusedSession) {
+          const targets =
+            bulkSelectedIds.size > 0
+              ? selectableSessions.filter((s) => bulkSelectedIds.has(s.id))
+              : [focusedSession]
+          requestDeleteConfirm(targets)
+        }
+        break
       case 'bulk-select':
         if (focusedSession) toggleBulkSelection(focusedSession)
         break
@@ -481,6 +495,12 @@ function App({ onResume }: AppProps) {
       case 'focus-projects':
         setFocusedPanel('projects')
         break
+      case 'config':
+        setIsConfigOpen(true)
+        break
+      case 'help':
+        setIsHelpOpen(true)
+        break
       case 'quit':
         exit()
         break
@@ -493,6 +513,8 @@ function App({ onResume }: AppProps) {
 
   useInput((input, key) => {
     if (launching) return
+    if (isConfigOpen) return
+    if (isHelpOpen) return
 
     // Ctrl+K (or raw \x0b on some Windows terminals) toggles command palette
     if ((key.ctrl && input === 'k') || input === '\x0b') {
@@ -521,8 +543,7 @@ function App({ onResume }: AppProps) {
         setSearchQuery((query) => query.slice(0, -1))
         return
       }
-      const isNavKey =
-        key.upArrow || key.downArrow || key.leftArrow || key.rightArrow || key.return
+      const isNavKey = key.upArrow || key.downArrow || key.leftArrow || key.rightArrow || key.return
       if (!isNavKey && input && !key.ctrl && !key.meta) {
         setSearchQuery((query) => query + input)
         return
@@ -530,6 +551,12 @@ function App({ onResume }: AppProps) {
     }
 
     if (escapePressed) {
+      // Cancel pending delete confirmation
+      if (pendingDeleteIds.size > 0) {
+        setPendingDeleteIds(new Set())
+        setStatusMessage(null)
+        return
+      }
       // Clear bulk selection before backing out of panel
       if (bulkSelectedIds.size > 0) {
         setBulkSelectedIds(new Set())
@@ -541,6 +568,14 @@ function App({ onResume }: AppProps) {
     }
     if (input === 'q') {
       exit()
+      return
+    }
+    if (input === 'C') {
+      setIsConfigOpen(true)
+      return
+    }
+    if (input === '?') {
+      setIsHelpOpen(true)
       return
     }
     if (!isLoading && input === 'n' && selectedProject) {
@@ -562,6 +597,19 @@ function App({ onResume }: AppProps) {
     // Capital A: archive focused or all bulk-selected
     if (!isLoading && input === 'A' && focusedPanel === 'sessions') {
       archiveSelectedSession()
+      return
+    }
+    // Capital D: confirm pending delete, or request delete for focused/bulk
+    if (!isLoading && input === 'D' && focusedPanel === 'sessions') {
+      if (pendingDeleteIds.size > 0) {
+        const targets = selectableSessions.filter((s) => pendingDeleteIds.has(s.id))
+        deleteSessions(targets)
+      } else if (bulkSelectedIds.size > 0) {
+        const targets = selectableSessions.filter((s) => bulkSelectedIds.has(s.id))
+        requestDeleteConfirm(targets)
+      } else if (focusedSession) {
+        requestDeleteConfirm([focusedSession])
+      }
       return
     }
     // Space: open context action menu for the focused item
@@ -658,6 +706,14 @@ function App({ onResume }: AppProps) {
         version={APP.version}
       />
     )
+  }
+
+  if (isConfigOpen) {
+    return <ConfigApp onClose={() => setIsConfigOpen(false)} />
+  }
+
+  if (isHelpOpen) {
+    return <HelpOverlay onClose={() => setIsHelpOpen(false)} />
   }
 
   function renderApplicationBody() {

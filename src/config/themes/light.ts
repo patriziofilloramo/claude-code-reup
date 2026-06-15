@@ -11,11 +11,11 @@ export const lightTheme: ThemeTokens = {
   muted2: '#888888',
   text: '#333333',
   strong: '#111111',
-  accent: '#0891b2',    // cyan-600 — legible on white
-  green: '#059669',     // emerald-600
-  amber: '#d97706',     // amber-600
-  orange: '#ea580c',    // orange-600
-  red: '#dc2626',       // red-600
+  accent: '#0891b2', // cyan-600 — legible on white
+  green: '#059669', // emerald-600
+  amber: '#d97706', // amber-600
+  orange: '#ea580c', // orange-600
+  red: '#dc2626', // red-600
 
   // Surface layers
   surfaceRaised: '#ffffff',
@@ -32,7 +32,7 @@ export const lightTheme: ThemeTokens = {
 
   // Accent-derived
   accentD: 'rgb(8 145 178 / 0.08)',
-  accentHi: '#06b6d4',   // cyan-500
+  accentHi: '#06b6d4', // cyan-500
   accentFg: '#ffffff',
 
   // RGB channel values

@@ -8,7 +8,7 @@
 CCM is the intelligence layer between your sessions and your decision to resume
 one. It is not a session browser, not a transcript viewer, and not a GUI for
 Claude Code. It is a tool that answers one question before you commit to
-resuming: *"What was happening there, and should I pick it up now?"*
+resuming: _"What was happening there, and should I pick it up now?"_
 
 The experience benchmark: a developer who closed their laptop mid-task should
 be able to open CCM, find the session, understand its state, and resume it in
@@ -42,11 +42,11 @@ The product should answer:
 
 ## Competitive Landscape (as of mid-2026)
 
-| Tool | Approach | What CCM does that they don't |
-|------|----------|-------------------------------|
-| Blackcrab | GUI grid, multi-session view | Health signals, usage visibility, handoff |
-| ccresume | Minimal CUI picker | Everything beyond pick-and-resume |
-| claude-code-viewer | Web with live streaming | Lighter, local-first, no API key, session intelligence |
+| Tool               | Approach                     | What CCM does that they don't                          |
+| ------------------ | ---------------------------- | ------------------------------------------------------ |
+| Blackcrab          | GUI grid, multi-session view | Health signals, usage visibility, handoff              |
+| ccresume           | Minimal CUI picker           | Everything beyond pick-and-resume                      |
+| claude-code-viewer | Web with live streaming      | Lighter, local-first, no API key, session intelligence |
 
 CCM's moat is **intelligence, not UI**. No competitor surfaces session health,
 rate limit state, or a pre-resume context summary. That is where effort should
@@ -171,11 +171,11 @@ document should change only when the product's direction changes.
 
 ### Current state
 
-| Identifier | Value | Status |
-|---|---|---|
-| CLI command | `ccm` | In use, works |
-| npm package | `claude-ccm` | **Taken by an unrelated package** |
-| Project / repo name | `ccm` / `claude-sessions-manager` | Informal, not published |
+| Identifier          | Value                             | Status                            |
+| ------------------- | --------------------------------- | --------------------------------- |
+| CLI command         | `ccm`                             | In use, works                     |
+| npm package         | `claude-ccm`                      | **Taken by an unrelated package** |
+| Project / repo name | `ccm` / `claude-sessions-manager` | Informal, not published           |
 
 The project needs a definitive name before any public release. The name must
 be valid and available both as an **npm package** and as a **GitHub repository**.

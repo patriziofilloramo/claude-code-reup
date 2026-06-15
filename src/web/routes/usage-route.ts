@@ -22,7 +22,7 @@ export function registerUsageRoute(app: Hono): void {
       const summary = await readLiveUsageSummary()
       log.debug('usage: summary refreshed, freshness =', summary.freshness)
       return context.json(summary)
-    }),
+    })
   )
 
   log.debug('usage route registered')

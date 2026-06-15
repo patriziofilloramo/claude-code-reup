@@ -59,7 +59,7 @@ export interface Project {
   cloudOffline?: boolean
   /**
    * Device names that wrote a presence file to the cloud directory while not
-   * linked (i.e. they opened the project without running `ccm link`).
+   * linked (i.e. they opened the project without running `ccm sync link`).
    * Populated from {cloudDir}/device-presence/ on each discovery pass.
    * Shown as orange cloud in the UI to prompt the user to link that device.
    */

@@ -1,4 +1,4 @@
-import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getProjectDirectory } from './claude-paths.js'
@@ -126,6 +126,25 @@ export async function setSessionAlias(
     if (alias) sessionMetadata.alias = alias
     else delete sessionMetadata.alias
   })
+  invalidateProjectCache()
+}
+
+/**
+ * Permanently deletes a session transcript and removes it from the CCM sidecar.
+ * The `.jsonl` file is owned by Claude Code — this is a destructive operation.
+ */
+export async function deleteSession(projectId: string, sessionId: string): Promise<void> {
+  const projectDirectory = getProjectDirectory(projectId)
+  const jsonlPath = join(projectDirectory, `${sessionId}.jsonl`)
+
+  // Delete the transcript (ignore if already gone)
+  await rm(jsonlPath, { force: true })
+
+  // Remove the sidecar entry to avoid orphaned metadata
+  await enqueueProjectSidecarUpdate(projectDirectory, (metadata) => {
+    if (metadata.sessions) delete metadata.sessions[sessionId]
+  })
+
   invalidateProjectCache()
 }
 

@@ -25,7 +25,7 @@ export function registerClaudeInstructionRoutes(app: Hono): void {
       if (!instructions) return context.json({ error: 'project not found' }, 404)
 
       return context.json(instructions)
-    }),
+    })
   )
 
   // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ export function registerClaudeInstructionRoutes(app: Hono): void {
 
       log.debug('claude-md: saved', savedPath)
       return context.json({ ok: true })
-    }),
+    })
   )
 
   log.debug('claude-md routes registered')

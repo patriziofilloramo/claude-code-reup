@@ -26,10 +26,10 @@ export function registerDiagnosticsRoute(app: Hono): void {
         report.orphanedTranscripts.length,
         'orphaned,',
         report.brokenIndices.length,
-        'broken indices',
+        'broken indices'
       )
       return context.json(report)
-    }),
+    })
   )
 
   log.debug('diagnostics route registered')
