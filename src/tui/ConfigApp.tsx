@@ -389,7 +389,7 @@ function IntegrationsTab({
           Shell completion
         </Text>
         <Box paddingLeft={2}>
-          <Text color={COLORS.dim}>Tab-complete session IDs and commands in your shell</Text>
+          <Text color={COLORS.dim}>Tab-complete session IDs for resume and handoff</Text>
         </Box>
         {SHELLS.map((shell, i) => {
           const shellCursor = i + 1

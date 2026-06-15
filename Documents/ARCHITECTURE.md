@@ -27,7 +27,10 @@ The executable entry point is `src/index.ts`.
 | `ccm handoff <session>`  | Prints a transcript-supported continuation packet     |
 | `ccm resume [session]`   | Opens a picker, or resumes a full ID/unique prefix    |
 | `ccm usage [action]`     | Reads observed usage or configures its local feed     |
+| `ccm config`             | Opens the configuration TUI or manages preferences    |
 | `ccm completion <shell>` | Prints opt-in shell completion registration           |
+| `ccm sync [action]`      | Manages experimental shared session storage           |
+| `ccm help [command]`     | Prints general or command-specific help               |
 | `ccm --help`             | Prints supported commands                             |
 | `ccm --version`          | Prints the current version                            |
 

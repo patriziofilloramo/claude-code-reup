@@ -3,52 +3,8 @@ import { spawn } from 'node:child_process'
 import { APP } from '../config/app.js'
 import type { ResumeTarget } from '../tui/App.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
+import { isHelpRequest, runHelpCommand } from './help-command.js'
 import { failCommand } from './output.js'
-
-function buildCliHelp(): string {
-  const tty = process.stdout.isTTY
-  const b = (s: string) => (tty ? `\x1b[1m${s}\x1b[0m` : s)
-  const d = (s: string) => (tty ? `\x1b[2m${s}\x1b[0m` : s)
-
-  const CMD = 22 // width of the command column
-
-  function row(cmd: string, desc: string, note?: string): string {
-    const padded = cmd.padEnd(CMD)
-    return `  ${padded}  ${desc}${note ? d(`  (${note})`) : ''}`
-  }
-
-  return [
-    b('ccm') + ' — session manager for Claude Code',
-    '',
-    b('  Interfaces'),
-    row('ccm', 'Open terminal UI', 'default'),
-    row('ccm web', 'Open browser UI'),
-    '',
-    b('  Sessions'),
-    row('ccm list [query]', 'List sessions', '--json for machine-readable'),
-    row('ccm resume [id]', 'Resume by ID or prefix, or pick interactively'),
-    row('ccm search <query>', 'Search by metadata', '--deep to search content'),
-    row('ccm inbox', 'Sessions needing attention'),
-    row('ccm handoff [id]', 'Print a continuation packet for handoff'),
-    '',
-    b('  Health'),
-    row('ccm doctor', 'Diagnose local session-data issues'),
-    row('ccm cleanup', 'Review and archive stale / empty sessions', '--dry-run to preview'),
-    '',
-    b('  Setup & Config'),
-    row('ccm config', 'Open configuration panel'),
-    row('ccm usage [action]', 'Usage monitoring', 'on / off / status'),
-    row('ccm sync', 'Manage cross-device session sync', 'link / unlink [path]'),
-    row('ccm --theme <name>', 'Set active theme', 'dark / light / terminal'),
-    row('ccm completion [sh]', 'Shell completion setup', 'powershell / bash / zsh'),
-    '',
-    b('  Meta'),
-    row('ccm --version', 'Print version'),
-    row('ccm --help', 'This help'),
-    '',
-    d('Run ccm <command> --help for per-command options.'),
-  ].join('\n')
-}
 
 const VALID_THEMES = new Set(['dark', 'light', 'terminal'])
 
@@ -78,6 +34,11 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
 
   const [command, ...commandArguments] = args
 
+  if (command && command !== 'help' && isHelpRequest(commandArguments)) {
+    runHelpCommand([command])
+    return
+  }
+
   switch (command) {
     case '--version':
     case '-v':
@@ -86,7 +47,11 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
 
     case '--help':
     case '-h':
-      console.log(buildCliHelp())
+      runHelpCommand([])
+      return
+
+    case 'help':
+      runHelpCommand(commandArguments)
       return
 
     case 'list':

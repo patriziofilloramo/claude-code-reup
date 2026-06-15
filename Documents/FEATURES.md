@@ -146,10 +146,11 @@ useful. Designed to be scriptable and composable with standard shell tools.
 | `ccm doctor`                        | Non-destructive local health check                                                                                                                  |
 | `ccm usage`                         | Show observed usage and data freshness                                                                                                              |
 | `ccm usage setup / remove / toggle` | Manage usage capture integration                                                                                                                    |
-| `ccm sync`                          | Open the interactive cross-device sync panel                                                                                                        |
-| `ccm sync link / unlink`            | Manage cloud sync for a project, with an optional explicit path for scripts                                                                         |
+| `ccm sync`                          | Open the interactive shared-session-storage panel _(experimental)_                                                                                  |
+| `ccm sync link / unlink`            | Manage experimental shared session storage for a project, with an optional explicit path for scripts                                                |
 | `ccm config get/set/reset <key>`    | Read and write persistent user preferences                                                                                                          |
 | `ccm completion <shell>`            | Print PowerShell, Bash, or Zsh completion setup                                                                                                     |
+| `ccm help [command]`                | Show general or command-specific CLI help                                                                                                           |
 | `ccm --help / --version`            | Help and version                                                                                                                                    |
 
 `ccm list` filters combine with AND semantics. `--active`, `--attention`,

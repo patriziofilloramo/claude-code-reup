@@ -107,7 +107,10 @@ ccm web
 | `ccm usage toggle`       | Enable or disable local usage capture                                      |
 | `ccm usage setup`        | Enable reversible local usage capture                                      |
 | `ccm doctor`             | Diagnose local session-data issues                                         |
+| `ccm config`             | Open the interactive configuration panel                                   |
 | `ccm completion <shell>` | Print PowerShell, Bash, or Zsh completion setup                            |
+| `ccm sync`               | Manage shared session storage _(experimental)_                             |
+| `ccm help [command]`     | Show general or command-specific CLI help                                  |
 | `ccm --help`             | Show CLI help                                                              |
 | `ccm --version`          | Show the installed version                                                 |
 
