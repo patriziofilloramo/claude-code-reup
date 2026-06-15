@@ -3,9 +3,9 @@ import { Box, Text, render, useApp, useInput } from 'ink'
 
 import { COLORS } from '../config/theme.js'
 import type { ThemeName } from '../config/theme-tokens.js'
+import { copyToClipboard } from '../utils/system.js'
 import { linkProjectForTUI, unlinkProjectForTUI } from '../cli/sync-command.js'
 import { loadProjects } from '../core/project/project-discovery.js'
-import { syncStatusLabel } from '../core/session/session-model.js'
 import type { Project } from '../core/session/session-model.js'
 import type { AutoCleanup } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
@@ -21,17 +21,38 @@ type Tab = (typeof TABS)[number]
 // Highest cursor index per tab (-1 = no navigable items)
 const TAB_CURSOR_MAX: Record<Tab, number> = {
   Interface: 2, // 0 = dark, 1 = light, 2 = terminal
-  Integrations: 1, // 0 = usage statusline, 1 = shell completion
+  Integrations: 3, // 0 = usage statusline, 1 = powershell, 2 = bash, 3 = zsh
   Features: 0, // 0 = autoCleanupOnStart
   Sync: -1, // info-only
 }
 
-const COMPLETION_CMD =
-  process.platform === 'win32'
-    ? 'ccm completion powershell | Out-String | Invoke-Expression'
-    : (process.env['SHELL'] ?? '').includes('zsh')
-      ? 'eval "$(ccm completion zsh)"'
-      : 'eval "$(ccm completion bash)"'
+const SHELLS = [
+  {
+    label: 'PowerShell',
+    cmd: 'ccm completion powershell | Out-String | Invoke-Expression',
+    profile: '$PROFILE',
+  },
+  {
+    label: 'Bash',
+    cmd: 'eval "$(ccm completion bash)"',
+    profile: '~/.bashrc or ~/.bash_profile',
+  },
+  {
+    label: 'Zsh',
+    cmd: 'eval "$(ccm completion zsh)"',
+    profile: '~/.zshrc',
+  },
+] as const
+
+function detectShell(): 0 | 1 | 2 | null {
+  const shell = process.env['SHELL'] ?? ''
+  if (shell.includes('zsh')) return 2
+  if (shell.includes('bash')) return 1
+  if (process.platform === 'win32') return 0
+  return null
+}
+
+const DETECTED_SHELL = detectShell()
 
 export function ConfigApp({
   onClose,
@@ -44,6 +65,7 @@ export function ConfigApp({
   const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [copiedShellIndex, setCopiedShellIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -189,7 +211,16 @@ export function ConfigApp({
           setBusy(false)
         }
       }
-      // cursor === 1 (shell completion) — info only, no action
+      if (cursor >= 1 && cursor <= 3) {
+        const shell = SHELLS[cursor - 1]!
+        const copiedIdx = cursor
+        copyToClipboard(shell.cmd)
+          .then(() => {
+            setCopiedShellIndex(copiedIdx)
+            setTimeout(() => setCopiedShellIndex(null), 2000)
+          })
+          .catch(() => setStatusMsg({ text: 'clipboard unavailable', ok: false }))
+      }
     }
   }
 
@@ -221,7 +252,12 @@ export function ConfigApp({
       <Box flexDirection="column" minHeight={12} paddingX={2}>
         {currentTab === 'Interface' && <InterfaceTab cursor={cursor} theme={theme} />}
         {currentTab === 'Integrations' && (
-          <IntegrationsTab busy={busy} cursor={cursor} usageConfigured={usageConfigured} />
+          <IntegrationsTab
+            busy={busy}
+            copiedShellIndex={copiedShellIndex}
+            cursor={cursor}
+            usageConfigured={usageConfigured}
+          />
         )}
         {currentTab === 'Features' && (
           <FeaturesTab autoCleanupOnStart={autoCleanupOnStart} cursor={cursor} />
@@ -306,10 +342,12 @@ function InterfaceTab({ cursor, theme }: { cursor: number; theme: ThemeName }) {
 
 function IntegrationsTab({
   busy,
+  copiedShellIndex,
   cursor,
   usageConfigured,
 }: {
   busy: boolean
+  copiedShellIndex: number | null
   cursor: number
   usageConfigured: boolean | null
 }) {
@@ -347,26 +385,40 @@ function IntegrationsTab({
 
       {/* Shell completion */}
       <Box flexDirection="column" marginTop={1}>
-        <Box gap={1}>
-          <Text color={cursor === 1 ? COLORS.accent : COLORS.dim}>{cursor === 1 ? '▶' : ' '}</Text>
-          <Text bold color={cursor === 1 ? COLORS.text : COLORS.textSub}>
-            Shell completion
-          </Text>
-          <Text color={COLORS.dim}>○ manual setup</Text>
+        <Text bold color={COLORS.text}>
+          Shell completion
+        </Text>
+        <Box paddingLeft={2}>
+          <Text color={COLORS.dim}>Tab-complete session IDs and commands in your shell</Text>
         </Box>
-        <Box paddingLeft={3}>
-          <Text color={COLORS.dim}>Tab-complete session IDs and commands in your terminal</Text>
-        </Box>
-        <Box paddingLeft={3}>
-          <Text color={cursor === 1 ? COLORS.muted : COLORS.dim}>{COMPLETION_CMD}</Text>
-        </Box>
-        <Box paddingLeft={3}>
-          <Text color={COLORS.dim}>
-            {process.platform === 'win32'
-              ? 'Add to $PROFILE for permanent setup'
-              : 'Add to your shell profile for permanent setup'}
-          </Text>
-        </Box>
+        {SHELLS.map((shell, i) => {
+          const shellCursor = i + 1
+          const focused = cursor === shellCursor
+          const detected = DETECTED_SHELL === i
+          return (
+            <Box key={shell.label} flexDirection="column" marginTop={1}>
+              <Box gap={1}>
+                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ' '}</Text>
+                <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+                  {shell.label}
+                </Text>
+                {detected && <Text color={COLORS.ok}>● detected</Text>}
+              </Box>
+              {focused && (
+                <Box flexDirection="column" paddingLeft={3}>
+                  <Text color={COLORS.muted}>{shell.cmd}</Text>
+                  {copiedShellIndex === shellCursor ? (
+                    <Text color={COLORS.ok}>command copied — paste in your terminal</Text>
+                  ) : (
+                    <Text color={COLORS.dim}>
+                      enter to copy · add to {shell.profile} for permanent setup
+                    </Text>
+                  )}
+                </Box>
+              )}
+            </Box>
+          )
+        })}
       </Box>
     </Box>
   )
@@ -411,6 +463,13 @@ function FeaturesTab({
   )
 }
 
+function projectSyncStatusLabel(project: Project): string {
+  if (project.cloudOffline) return 'offline'
+  if (project.unlinkedDevices?.length)
+    return `${project.unlinkedDevices.length} device(s) not linked`
+  return 'online'
+}
+
 function SyncTab({
   busy,
   cursor,
@@ -429,7 +488,9 @@ function SyncTab({
     <Box flexDirection="column" gap={1}>
       {/* Legend */}
       <Box flexDirection="column">
-        <Text bold color={COLORS.text}>Legend</Text>
+        <Text bold color={COLORS.text}>
+          Legend
+        </Text>
         <Box gap={1}>
           <Text color={COLORS.ok}>☁</Text>
           <Text color={COLORS.textSub}>online — sessions syncing to cloud</Text>
@@ -495,7 +556,7 @@ function SyncTab({
                 <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
                   {p.path}
                 </Text>
-                <Text color={COLORS.dim}>{syncStatusLabel(p)}</Text>
+                <Text color={COLORS.dim}>{projectSyncStatusLabel(p)}</Text>
               </Box>
             )
           })}

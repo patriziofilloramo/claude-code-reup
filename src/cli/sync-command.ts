@@ -18,6 +18,7 @@ import { loadProjects } from '../core/project/project-discovery.js'
 import type { Project } from '../core/session/session-model.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { failCommand, writeOutput } from './output.js'
+import { openConfigInterface } from './open-config-interface.js'
 
 type OutputFn = (msg: string) => void
 
@@ -61,9 +62,12 @@ export async function runSyncCommand(args: string[]): Promise<void> {
       await unlinkSync(rest)
       return
     case undefined: {
-      const { runConfigApp } = await import('../tui/ConfigApp.js')
-      releaseTerminalInput()
-      await runConfigApp({ initialTab: 'Sync' })
+      await openConfigInterface({
+        commandName: 'ccm sync',
+        initialTab: 'Sync',
+        nonInteractiveAlternative:
+          'use `ccm sync link <path>` or `ccm sync unlink <path>` in scripts',
+      })
       return
     }
     default:

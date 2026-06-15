@@ -16,7 +16,7 @@
  *   3. When the cloud comes back, ccm merges the offline sessions into the cloud
  *      dir and restores the junction.
  *
- * The syncRegistry (src/core/sync-registry.ts) is updated on every transition
+ * The syncRegistry (src/core/sync/sync-registry.ts) is updated on every transition
  * so project-discovery can annotate projects with their online/offline status
  * without importing this module directly (which would create a circular dep).
  */

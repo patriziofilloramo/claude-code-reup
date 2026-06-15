@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { analyzeTranscriptForHandoff, formatHandoff } from '../../src/core/session/session-handoff.js'
+import {
+  analyzeTranscriptForHandoff,
+  formatHandoff,
+} from '../../src/core/session/session-handoff.js'
 import type { Session } from '../../src/core/session/session-model.js'
 
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'

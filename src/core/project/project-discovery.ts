@@ -13,7 +13,12 @@ import {
 import { normalizePathForComparison, pathsReferToSameLocation } from './path-comparison.js'
 import { getCachedProjects, setCachedProjects } from './project-cache.js'
 import { getLiveSessionRecords, type SessionLockRecord } from '../session/active-sessions.js'
-import type { Project, Session, SessionContextMetrics, SessionSignals } from '../session/session-model.js'
+import type {
+  Project,
+  Session,
+  SessionContextMetrics,
+  SessionSignals,
+} from '../session/session-model.js'
 import { isValidSessionId } from '../session/session-model.js'
 import { mergeProjectSidecarMetadata } from '../session/session-metadata.js'
 import { calculateExpiryDays } from '../session/session-signals.js'

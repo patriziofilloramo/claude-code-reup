@@ -40,7 +40,7 @@ function buildCliHelp(): string {
     row('ccm usage [action]', 'Usage monitoring', 'on / off / status'),
     row('ccm sync', 'Manage cross-device session sync', 'link / unlink [path]'),
     row('ccm --theme <name>', 'Set active theme', 'dark / light / terminal'),
-    row('ccm completion <sh>', 'Print shell completion script'),
+    row('ccm completion [sh]', 'Shell completion setup', 'powershell / bash / zsh'),
     '',
     b('  Meta'),
     row('ccm --version', 'Print version'),
@@ -140,6 +140,15 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
     }
 
     case 'completion': {
+      if (commandArguments.length === 0) {
+        const { openConfigInterface } = await import('./open-config-interface.js')
+        await openConfigInterface({
+          commandName: 'ccm completion',
+          initialTab: 'Integrations',
+          nonInteractiveAlternative: 'pass `powershell`, `bash`, or `zsh` explicitly',
+        })
+        return
+      }
       const { printCompletionScript } = await import('./completion-command.js')
       printCompletionScript(commandArguments)
       return
@@ -223,7 +232,8 @@ async function runTerminalInterface(): Promise<void> {
   const { autoCleanupOnStart } = readUserPrefsSync()
   if (autoCleanupOnStart !== 'off') {
     const { getActiveSessions } = await import('../core/session/active-sessions.js')
-    const { findAutoArchiveCandidates, findCleanupCandidates } = await import('../core/session/cleanup.js')
+    const { findAutoArchiveCandidates, findCleanupCandidates } =
+      await import('../core/session/cleanup.js')
     const { loadProjects } = await import('../core/project/project-discovery.js')
     const { setSessionArchived } = await import('../core/session/session-metadata.js')
 

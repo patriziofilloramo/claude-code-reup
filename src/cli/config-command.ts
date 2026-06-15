@@ -1,4 +1,5 @@
 import { PREF_SPECS, readUserPrefs, resetUserPrefs, setUserPref } from '../core/user-prefs.js'
+import { openConfigInterface } from './open-config-interface.js'
 import { failCommand } from './output.js'
 
 const USAGE = `Usage:
@@ -17,8 +18,10 @@ export async function runConfigCommand(args: string[]): Promise<void> {
 
   switch (subcommand) {
     case undefined: {
-      const { runConfigApp } = await import('../tui/ConfigApp.js')
-      await runConfigApp()
+      await openConfigInterface({
+        commandName: 'ccm config',
+        nonInteractiveAlternative: 'use `ccm config get`, `set`, or `reset` in scripts',
+      })
       return
     }
     case 'get':

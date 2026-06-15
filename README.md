@@ -267,8 +267,8 @@ ccm sync link
 # Link a specific project path
 ccm sync link ~/projects/my-app
 
-# See which projects are linked
-ccm sync status
+# Open the interactive sync panel
+ccm sync
 
 # Restore a project to local-only storage
 ccm sync unlink

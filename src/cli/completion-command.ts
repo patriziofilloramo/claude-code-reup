@@ -66,12 +66,17 @@ export function printCompletionScript(commandArguments: string[]): void {
   const shell = commandArguments[0]
   writeOutput(COMPLETION_SCRIPTS[shell])
 
-  const lines = ACTIVATION_INSTRUCTIONS[shell]
-  process.stderr.write('\n# ── Activation ──────────────────────────────────────────────────\n')
-  for (const line of lines) {
-    process.stderr.write(`# ${line}\n`)
+  // Activation instructions are only useful when the user reads stdout directly.
+  // Suppress them when stdout is piped/captured (eval "$(ccm completion bash)", etc.)
+  // so the extra output doesn't confuse scripts that source the result.
+  if (process.stdout.isTTY) {
+    const lines = ACTIVATION_INSTRUCTIONS[shell]
+    process.stderr.write('\n# ── Activation ──────────────────────────────────────────────────\n')
+    for (const line of lines) {
+      process.stderr.write(`# ${line}\n`)
+    }
+    process.stderr.write('# ────────────────────────────────────────────────────────────────\n')
   }
-  process.stderr.write('# ────────────────────────────────────────────────────────────────\n')
 }
 
 /** Prints exact session IDs for the shell completion scripts. */

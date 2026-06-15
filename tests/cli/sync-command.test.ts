@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { linkProjectForTUI } from '../../src/cli/sync-command.js'
+import { linkProjectForTUI, runSyncCommand } from '../../src/cli/sync-command.js'
 
 const ACTIVE_SESSION_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -45,5 +45,41 @@ describe('sync command safety', () => {
       message: 'cannot change sync configuration while this project has an active session',
     })
     await expect(access(join(projectPath, '.claude-memory'))).rejects.toThrow()
+  })
+})
+
+describe('sync command interface', () => {
+  let originalStdinIsTTY: boolean | undefined
+  let originalStdoutIsTTY: boolean | undefined
+
+  beforeEach(() => {
+    originalStdinIsTTY = process.stdin.isTTY
+    originalStdoutIsTTY = process.stdout.isTTY
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', {
+      configurable: true,
+      value: originalStdinIsTTY,
+    })
+    Object.defineProperty(process.stdout, 'isTTY', {
+      configurable: true,
+      value: originalStdoutIsTTY,
+    })
+    process.exitCode = undefined
+    vi.restoreAllMocks()
+  })
+
+  it('fails cleanly outside an interactive terminal instead of starting Ink', async () => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false })
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: false })
+    const writeError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await runSyncCommand([])
+
+    expect(process.exitCode).toBe(1)
+    expect(writeError).toHaveBeenCalledWith(
+      'ccm: ccm sync requires an interactive terminal; use `ccm sync link <path>` or `ccm sync unlink <path>` in scripts'
+    )
   })
 })

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Project, Session } from '../../src/core/session/session-model.js'
-import { filterSessionCandidates, rankSessionCandidates } from '../../src/core/session/session-ranking.js'
+import {
+  filterSessionCandidates,
+  rankSessionCandidates,
+} from '../../src/core/session/session-ranking.js'
 
 describe('session candidate ranking', () => {
   it('prioritizes the current directory, then active sessions, then recent activity', () => {

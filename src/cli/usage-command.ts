@@ -7,7 +7,11 @@ import {
   writeLiveUsageSnapshot,
   writeRawCapture,
 } from '../core/usage/live-usage.js'
-import type { LiveUsageSnapshot, LiveUsageSummary, UsageLimitWindow } from '../core/usage/live-usage.js'
+import type {
+  LiveUsageSnapshot,
+  LiveUsageSummary,
+  UsageLimitWindow,
+} from '../core/usage/live-usage.js'
 import {
   isUsageStatusLineConfigured,
   removeUsageStatusLine,

@@ -90,10 +90,3 @@ const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 export function isValidSessionId(id: string): boolean {
   return SESSION_ID_PATTERN.test(id)
 }
-
-/** Returns a human-readable sync status for a shared project. */
-export function syncStatusLabel(project: Project): string {
-  if (project.cloudOffline) return 'offline'
-  if (project.unlinkedDevices?.length) return `${project.unlinkedDevices.length} device(s) not linked`
-  return 'online'
-}
