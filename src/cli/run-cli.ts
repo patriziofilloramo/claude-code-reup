@@ -23,16 +23,38 @@ Usage:
   ccm memory [action]   Manage shared session storage across devices
   ccm config [cmd]      Read or write user preferences
   ccm completion <shell> Print shell completion setup
+  ccm --theme <name>    Set the active theme (dark, light, terminal)
   ccm --version         Print version
   ccm --help            Show this help
 `.trim()
+
+const VALID_THEMES = new Set(['dark', 'light', 'terminal'])
 
 // -----------------------------------------------------------------------------
 // Command dispatch
 // -----------------------------------------------------------------------------
 
 export async function runCli(commandLineArguments = process.argv.slice(2)): Promise<void> {
-  const [command, ...commandArguments] = commandLineArguments
+  // Handle --theme <name> before command dispatch: save preference and set env var.
+  let args = commandLineArguments
+  const themeIdx = args.indexOf('--theme')
+  if (themeIdx !== -1) {
+    const themeName = args[themeIdx + 1]
+    if (!themeName || !VALID_THEMES.has(themeName)) {
+      failCommand(`invalid or missing theme — valid values: ${[...VALID_THEMES].join(', ')}`)
+      return
+    }
+    const { saveThemeName } = await import('../core/theme-preference.js')
+    saveThemeName(themeName as 'dark' | 'light' | 'terminal')
+    process.env['CCM_THEME'] = themeName
+    args = [...args.slice(0, themeIdx), ...args.slice(themeIdx + 2)]
+    if (args.length === 0) {
+      console.log(`Theme set to: ${themeName}`)
+      return
+    }
+  }
+
+  const [command, ...commandArguments] = args
 
   switch (command) {
     case '--version':

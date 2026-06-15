@@ -134,3 +134,7 @@
   window.matchMedia('(max-width: 639px)').addEventListener('change', function (e) {
     if (!e.matches) document.body.classList.remove('narrow-sessions')
   })
+
+  // Theme toggle button in footer.
+  var themeBtn = document.getElementById('ftr-theme-btn')
+  if (themeBtn) themeBtn.addEventListener('click', cycleTheme)

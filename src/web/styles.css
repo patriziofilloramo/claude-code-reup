@@ -1291,3 +1291,99 @@ body {
     display: none;
   }
 }
+
+/* ── Theme toggle button ─────────────────────────────────────────────────── */
+
+.ftr-theme-btn {
+  background: none;
+  border: none;
+  color: var(--muted2);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  margin-right: 6px;
+  padding: 0;
+}
+.ftr-theme-btn:hover {
+  color: var(--accent);
+}
+
+/* ── Light theme overrides ───────────────────────────────────────────────── */
+
+[data-theme="light"] {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --dim: #e0e0e0;
+  --muted: #b0b0b0;
+  --muted2: #888888;
+  --text: #333333;
+  --strong: #111111;
+  --accent: #0891b2;
+  --green: #059669;
+  --amber: #d97706;
+  --orange: #ea580c;
+  --red: #dc2626;
+  --surface-raised: #ffffff;
+  --surface-deep: #f0f0f0;
+  --overlay: rgba(0, 0, 0, 0.40);
+  --shadow-dlg: 0 8px 40px rgba(0, 0, 0, 0.15);
+  --row-hover: rgba(0, 0, 0, 0.04);
+  --row-hover-sm: rgba(0, 0, 0, 0.02);
+  --surface-chip: rgba(0, 0, 0, 0.05);
+  --surface-btn: rgba(0, 0, 0, 0.07);
+  --surface-btn-hover: rgba(0, 0, 0, 0.12);
+  --accent-rgb: 8 145 178;
+  --amber-rgb: 217 119 6;
+  --red-rgb: 220 38 38;
+  --dim-rgb: 224 224 224;
+  --accent-hi: #06b6d4;
+  --accent-fg: #ffffff;
+}
+
+/* ── Terminal / phosphor theme overrides ─────────────────────────────────── */
+
+[data-theme="terminal"] {
+  --bg: #050a05;
+  --surface: #080f08;
+  --dim: #0f1f0f;
+  --muted: #1f3d1f;
+  --muted2: #3a6b3a;
+  --text: #a0c8a0;
+  --strong: #c8ffc8;
+  --accent: #00ff41;
+  --green: #00e532;
+  --amber: #b8ff00;
+  --orange: #80ff00;
+  --red: #ff3300;
+  --surface-raised: #0a140a;
+  --surface-deep: #0d1a0d;
+  --overlay: rgba(0, 10, 0, 0.80);
+  --shadow-dlg: 0 8px 40px rgba(0, 255, 65, 0.08);
+  --row-hover: rgba(0, 255, 65, 0.03);
+  --row-hover-sm: rgba(0, 255, 65, 0.02);
+  --surface-chip: rgba(0, 255, 65, 0.05);
+  --surface-btn: rgba(0, 255, 65, 0.07);
+  --surface-btn-hover: rgba(0, 255, 65, 0.12);
+  --accent-rgb: 0 255 65;
+  --amber-rgb: 184 255 0;
+  --red-rgb: 255 51 0;
+  --dim-rgb: 15 31 15;
+  --accent-hi: #33ff66;
+  --accent-fg: #000000;
+}
+
+/* Scan-line overlay for the terminal theme — subtle CRT texture */
+[data-theme="terminal"] body::after {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 9997;
+}

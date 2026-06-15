@@ -5,7 +5,7 @@
  * module system, no bundler dependency). This script concatenates the logical
  * segments — each owning a cohesive concern — into one IIFE-wrapped output.
  *
- * Source segments are in src/web/client/ and named 01-*.js … 15-*.js to make
+ * Source segments are in src/web/client/ and named 01-*.js … 16-*.js to make
  * their load order unambiguous. All segments share the enclosing IIFE scope, so
  * variables declared in one segment are visible to segments that follow — the
  * same semantics as the original monolithic file.
@@ -32,6 +32,7 @@ const SEGMENTS = [
   '13-ctx-menu.js',        // context menu (project and session)
   '14-search.js',          // search bar, deep-search mode, keyboard shortcuts
   '15-data.js',            // data refresh, SSE live updates, bootstrap
+  '16-theme.js',           // theme cycling, persistence, Matrix rain easter egg
 ]
 
 const ROOT = process.cwd()

@@ -2,6 +2,10 @@ import eslintJs from '@eslint/js'
 import prettier from 'eslint-config-prettier'
 import tseslint from 'typescript-eslint'
 
+import noRawUiStrings from './src/config/eslint-rules/no-raw-ui-strings.js'
+
+const ccmPlugin = { rules: { 'no-raw-ui-strings': noRawUiStrings } }
+
 export default tseslint.config(
   eslintJs.configs.recommended,
   ...tseslint.configs.recommended,
@@ -33,6 +37,15 @@ export default tseslint.config(
     },
     rules: {
       'no-console': 'off',
+    },
+  },
+  {
+    files: ['src/tui/**/*.{ts,tsx}'],
+    plugins: { ccm: ccmPlugin },
+    rules: {
+      // Warn when raw string literals appear in JSX text nodes.
+      // Fix: use LABELS.xxx from src/config/labels.ts.
+      'ccm/no-raw-ui-strings': 'warn',
     },
   },
   {
