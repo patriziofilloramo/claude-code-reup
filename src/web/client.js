@@ -489,6 +489,9 @@
     renderProjects()
     renderSessions()
     void refreshClaudeInstructionsAvailability(project)
+    if (window.matchMedia('(max-width: 639px)').matches) {
+      document.body.classList.add('narrow-sessions')
+    }
   }
 
   elements.projectList.addEventListener('click', function (event) {
@@ -1826,4 +1829,17 @@
     void refreshUsageSummary()
   }, USAGE_POLL_INTERVAL_MS)
   connectLiveUpdates()
+
+  // Narrow-mode back button: return to the project panel without clearing selection.
+  var backBtn = document.getElementById('back-btn')
+  if (backBtn) {
+    backBtn.addEventListener('click', function () {
+      document.body.classList.remove('narrow-sessions')
+    })
+  }
+
+  // Clear narrow-sessions when the viewport widens past the single-panel breakpoint.
+  window.matchMedia('(max-width: 639px)').addEventListener('change', function (e) {
+    if (!e.matches) document.body.classList.remove('narrow-sessions')
+  })
 })()

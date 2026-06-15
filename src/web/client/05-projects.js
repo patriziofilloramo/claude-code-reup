@@ -125,6 +125,9 @@
     renderProjects()
     renderSessions()
     void refreshClaudeInstructionsAvailability(project)
+    if (window.matchMedia('(max-width: 639px)').matches) {
+      document.body.classList.add('narrow-sessions')
+    }
   }
 
   elements.projectList.addEventListener('click', function (event) {

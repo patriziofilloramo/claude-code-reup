@@ -1207,3 +1207,87 @@ body {
   color: var(--accent);
   flex-shrink: 0;
 }
+
+/* ── Back button (narrow mode only) ─────────────────────────────────────── */
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--muted2);
+  cursor: pointer;
+  display: none;
+  flex-shrink: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 6px 0 0;
+}
+.back-btn:hover {
+  color: var(--text);
+}
+
+/* ── Responsive breakpoints ──────────────────────────────────────────────── */
+
+/* 640–899 px: allow left panel to shrink, hide header keyboard hints */
+@media (max-width: 899px) {
+  .pnl-left {
+    flex-shrink: 1;
+    min-width: 160px;
+    width: 200px;
+  }
+  .hdr-hints {
+    display: none;
+  }
+  .usage-summary {
+    max-width: 36%;
+  }
+}
+
+/* ≤639 px: single-panel mode — one column at a time */
+@media (max-width: 639px) {
+  .pnl-left {
+    border-bottom: 1px solid var(--dim);
+    border-right: none;
+    flex-shrink: 0;
+    min-width: 0;
+    width: 100%;
+  }
+  .pnl-right {
+    display: none;
+    width: 100%;
+  }
+
+  /* When a project is selected, show the session panel and hide the project list */
+  body.narrow-sessions .pnl-left {
+    display: none;
+  }
+  body.narrow-sessions .pnl-right {
+    display: flex;
+  }
+
+  .back-btn {
+    display: block;
+  }
+
+  /* Dialog: prevent overflow on narrow screens */
+  .dlg {
+    min-width: min(400px, calc(100vw - 32px));
+    width: calc(100vw - 32px);
+  }
+
+  /* Filter bar: allow pills to wrap rather than overflow */
+  .filter-bar {
+    flex-wrap: wrap;
+    padding: 4px 8px;
+  }
+
+  /* Footer: hide keyboard-hint items, keep only the status */
+  .ftr-item {
+    display: none;
+  }
+
+  /* Usage summary too wide for the tiny header */
+  .usage-summary {
+    display: none;
+  }
+}

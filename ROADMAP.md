@@ -13,10 +13,10 @@
       scoped name or a different name before any publish. Blocked by the publish decision
       (currently not publishing).
 
-- [ ] **Web layout breaks on small screens** — the project column does not yield space to the
-      session panel at narrow widths, causing overlapping or clipped content. Several other UI
-      elements also misbehave at reduced viewport widths. Needs a responsive layout pass: minimum
-      column widths, flex-shrink rules, and a single-panel mode below a breakpoint (~640 px).
+- [x] **Web layout breaks on small screens** — resolved: two-breakpoint responsive pass.
+      640–899 px: left panel shrinks (min-width 160 px), header keyboard hints hidden.
+      ≤639 px: single-panel mode — one column visible at a time, back button navigates
+      from session panel to project list, dialog overflow fixed, filter bar wraps.
 
 ### Medium
 
