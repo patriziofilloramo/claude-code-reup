@@ -7,6 +7,6 @@ export function getStoredThemeName(): ThemeName {
 }
 
 /** Persists the theme name to the user-prefs file. */
-export function saveThemeName(name: ThemeName): void {
-  void setUserPref('theme', name)
+export async function saveThemeName(name: ThemeName): Promise<void> {
+  await setUserPref('theme', name)
 }

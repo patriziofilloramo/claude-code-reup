@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getClaudeDirectory } from './claude-paths.js'
+import { isValidSessionId } from './session-model.js'
 
 // -----------------------------------------------------------------------------
 // Public types
@@ -78,7 +79,7 @@ async function parseLockFile(filePath: string): Promise<SessionLockRecord | null
     const pid = raw['pid']
     const cwd = raw['cwd']
 
-    if (typeof sessionId !== 'string' || typeof pid !== 'number') {
+    if (typeof sessionId !== 'string' || !isValidSessionId(sessionId) || typeof pid !== 'number') {
       return null
     }
 

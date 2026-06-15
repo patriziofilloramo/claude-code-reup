@@ -7,17 +7,19 @@
  * interpolated into a shell string.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 // vi.hoisted variables are available inside the vi.mock factory (hoisted alongside it).
-const { mockExecFile, mockWhich, mockClipboardyWrite } = vi.hoisted(() => ({
+const { mockExecFile, mockSpawn, mockWhich, mockClipboardyWrite } = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
+  mockSpawn: vi.fn(),
   mockWhich: vi.fn(),
   mockClipboardyWrite: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>()
-  return { ...actual, execFile: mockExecFile }
+  return { ...actual, execFile: mockExecFile, spawn: mockSpawn }
 })
 vi.mock('which', () => ({ default: mockWhich }))
 vi.mock('clipboardy', () => ({ default: { write: mockClipboardyWrite } }))
@@ -46,6 +48,24 @@ function execFileFailsOnCall(n: number): void {
   )
 }
 
+function spawnSucceeds(): void {
+  mockSpawn.mockImplementation(() => {
+    const child = new EventEmitter() as EventEmitter & { unref: () => void }
+    child.unref = vi.fn()
+    queueMicrotask(() => child.emit('spawn'))
+    return child
+  })
+}
+
+function spawnFails(): void {
+  mockSpawn.mockImplementation(() => {
+    const child = new EventEmitter() as EventEmitter & { unref: () => void }
+    child.unref = vi.fn()
+    queueMicrotask(() => child.emit('error', new Error('spawn failed')))
+    return child
+  })
+}
+
 /** Returns the args array from the Nth execFile call (0-indexed). */
 function execCallArgs(n: number): string[] {
   return mockExecFile.mock.calls[n][1] as string[]
@@ -60,11 +80,13 @@ function execCallCmd(n: number): string {
 
 beforeEach(() => {
   mockExecFile.mockReset()
+  mockSpawn.mockReset()
   mockWhich.mockReset()
   mockClipboardyWrite.mockReset().mockResolvedValue(undefined)
   // Default: wt not available
   delete process.env['WT_SESSION']
   mockWhich.mockRejectedValue(new Error('not found'))
+  spawnSucceeds()
 })
 
 afterEach(() => {
@@ -149,29 +171,33 @@ describe('PowerShell path', () => {
 })
 
 // -------------------------------------------------------------------------
-// cmd /c start path
+// Detached cmd path
 // -------------------------------------------------------------------------
 
-describe('cmd start path', () => {
-  it('falls through to cmd when powershell fails', async () => {
-    execFileFailsOnCall(1)  // first call (powershell) fails, second (cmd) succeeds
+describe('detached cmd path', () => {
+  it('falls through to a detached cmd when PowerShell fails', async () => {
+    execFileFailsOnCall(1)
 
     const result = await launchWindows('claude --resume abc-123', undefined)
 
     expect(result).toMatchObject({ launched: true })
-    expect(execCallCmd(1)).toBe('cmd')
-    expect(execCallArgs(1)).toContain('/c')
-    expect(execCallArgs(1)).toContain('start')
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'cmd.exe',
+      ['/k', 'claude', '--resume', 'abc-123'],
+      expect.objectContaining({ detached: true })
+    )
   })
 
-  it('passes workingDirectory as separate /d arg', async () => {
+  it('passes workingDirectory as the process cwd', async () => {
     execFileFailsOnCall(1)
 
-    await launchWindows('claude', 'C:\\My Projects\\App')
+    await launchWindows('claude', 'C:\\My Projects & Tools\\App')
 
-    expect(execCallArgs(1)).toContain('/d')
-    const dIdx = execCallArgs(1).indexOf('/d')
-    expect(execCallArgs(1)[dIdx + 1]).toBe('C:\\My Projects\\App')
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'cmd.exe',
+      ['/k', 'claude'],
+      expect.objectContaining({ cwd: 'C:\\My Projects & Tools\\App' })
+    )
   })
 })
 
@@ -186,6 +212,7 @@ describe('fallback chain', () => {
         callback(new Error('spawn failed'))
       }
     )
+    spawnFails()
 
     const result = await launchWindows('claude --resume abc-123', undefined)
 
@@ -199,12 +226,11 @@ describe('fallback chain', () => {
         callback(new Error('spawn failed'))
       }
     )
+    spawnFails()
 
     await launchWindows('claude', 'C:\\Projects\\App')
 
-    expect(mockClipboardyWrite).toHaveBeenCalledWith(
-      expect.stringContaining('C:\\Projects\\App')
-    )
+    expect(mockClipboardyWrite).toHaveBeenCalledWith(expect.stringContaining('C:\\Projects\\App'))
   })
 
   it('records error messages from each failed attempt', async () => {
@@ -213,10 +239,11 @@ describe('fallback chain', () => {
         callback(new Error('spawn failed'))
       }
     )
+    spawnFails()
 
     const result = await launchWindows('claude', undefined)
 
     expect(result.message).toContain('ps5:')
-    expect(result.message).toContain('start:')
+    expect(result.message).toContain('cmd:')
   })
 })

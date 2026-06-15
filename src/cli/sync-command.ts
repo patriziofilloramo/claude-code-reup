@@ -3,9 +3,17 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { APP } from '../config/app.js'
-import { createLinkAt, removeLinkAt, syncBidirectional } from '../core/cloud-sync.js'
+import {
+  createLinkAt,
+  replaceDirectoryWithLink,
+  replaceLinkWithDirectory,
+  repointLink,
+  syncBidirectional,
+} from '../core/cloud-sync.js'
 import { encodeProjectPath, getClaudeProjectsDirectory } from '../core/claude-paths.js'
 import { getOrCreateDeviceId } from '../core/device-id.js'
+import { getLiveSessionRecords } from '../core/active-sessions.js'
+import { pathsReferToSameLocation } from '../core/path-comparison.js'
 import { loadProjects } from '../core/project-discovery.js'
 import type { Project } from '../core/session-model.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
@@ -149,6 +157,8 @@ async function linkProject(
     return
   }
 
+  await assertProjectPathIsInactive(projectPath)
+
   const projectId = project?.id ?? encodeProjectPath(projectPath)
   const localDir = join(getClaudeProjectsDirectory(), projectId)
 
@@ -164,20 +174,19 @@ async function linkProject(
       return
     }
     // Different target: sync existing → new cloud, then re-point
-    await syncBidirectional(existing, cloudDir).catch(() => {})
-    await removeLinkAt(localDir)
-    await createLinkAt(localDir, cloudDir)
+    await syncBidirectional(existing, cloudDir)
+    await repointLink(localDir, existing, cloudDir)
     out([`✓ re-linked: ${projectPath}`, `  sessions now write to ${cloudDir}`].join('\n'))
     return
   }
 
   if (localStat?.isDirectory()) {
     // Real local dir: copy sessions to cloud, then replace with junction
-    await syncBidirectional(localDir, cloudDir).catch(() => {})
-    await rm(localDir, { recursive: true, force: true })
+    await syncBidirectional(localDir, cloudDir)
+    await replaceDirectoryWithLink(localDir, cloudDir)
+  } else {
+    await createLinkAt(localDir, cloudDir)
   }
-
-  await createLinkAt(localDir, cloudDir)
 
   const deviceId = await getOrCreateDeviceId()
   await writeLinkedMarker(cloudDir, deviceId)
@@ -264,6 +273,8 @@ async function unlinkProject(
     return
   }
 
+  await assertProjectPathIsInactive(project.path)
+
   const cloudDir = join(projectPath, APP.cloudMemoryDir)
   const localDir = join(getClaudeProjectsDirectory(), project.id)
   const localStat = await lstat(localDir).catch(() => null)
@@ -271,9 +282,7 @@ async function unlinkProject(
   if (localStat?.isSymbolicLink()) {
     // Junction: restore as real dir populated with cloud sessions
     const cloudTarget = (await readlink(localDir)).replace(/^\\\\\?\\/, '')
-    await removeLinkAt(localDir)
-    await mkdir(localDir, { recursive: true })
-    await syncBidirectional(localDir, cloudTarget).catch(() => {})
+    await replaceLinkWithDirectory(localDir, cloudTarget, cloudTarget)
   } else if (localStat?.isDirectory()) {
     // Offline-mode local dir: remove the legacy .ccm-link marker if present
     await rm(join(localDir, APP.cloudLinkFile), { force: true })
@@ -518,8 +527,12 @@ function isUnderCloudRoot(projectPath: string, roots: string[]): boolean {
 // ---------------------------------------------------------------------------
 
 function samePath(a: string, b: string): boolean {
-  const normalise = (path: string) => path.replace(/[/\\]+$/, '')
-  return process.platform === 'linux'
-    ? normalise(a) === normalise(b)
-    : normalise(a).toLowerCase() === normalise(b).toLowerCase()
+  return pathsReferToSameLocation(a, b)
+}
+
+async function assertProjectPathIsInactive(projectPath: string): Promise<void> {
+  const liveSessions = await getLiveSessionRecords()
+  if (liveSessions.some((session) => session.cwd !== null && samePath(session.cwd, projectPath))) {
+    throw new Error('cannot change sync configuration while this project has an active session')
+  }
 }

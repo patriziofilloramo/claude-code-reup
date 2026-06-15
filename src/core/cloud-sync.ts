@@ -1,7 +1,7 @@
 /**
  * Cloud sync — junction-first architecture.
  *
- * When a project is linked via `ccm link`, its Claude Code session directory
+ * When a project is linked via `ccm sync link`, its Claude Code session directory
  * (~/.claude/projects/<id>/) is replaced with an NTFS junction (Windows) or
  * symlink (Unix) pointing directly at the cloud storage directory inside the
  * project (e.g. P:\Projects\...\.claude-memory\). Claude Code writes through
@@ -26,14 +26,20 @@ import {
   lstat,
   mkdir,
   readdir,
+  readFile,
   readlink,
+  rename,
   rm,
   stat,
+  symlink,
+  unlink,
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP } from '../config/app.js'
+import { getLiveSessionRecords } from './active-sessions.js'
 import { getCcmDirectory, getClaudeProjectsDirectory } from './claude-paths.js'
+import { pathsReferToSameLocation } from './path-comparison.js'
 import { log } from '../utils/logger.js'
 import { syncRegistry } from './sync-registry.js'
 import type { ProjectSyncInfo } from './sync-registry.js'
@@ -43,8 +49,23 @@ import type { ProjectSyncInfo } from './sync-registry.js'
 // ---------------------------------------------------------------------------
 
 interface SyncState extends ProjectSyncInfo {
-  junctionPath: string
   backupDir: string
+  junctionPath: string
+  projectPath: string
+}
+
+export class CloudSyncConflictError extends Error {
+  constructor(pathA: string, pathB: string) {
+    super(`sync conflict: both copies changed independently (${pathA}, ${pathB})`)
+    this.name = 'CloudSyncConflictError'
+  }
+}
+
+export class CloudSyncUnavailableError extends Error {
+  constructor(directoryPath: string, cause?: unknown) {
+    super(`sync directory is unavailable: ${directoryPath}`, { cause })
+    this.name = 'CloudSyncUnavailableError'
+  }
 }
 
 const syncStates = new Map<string, SyncState>()
@@ -75,6 +96,7 @@ export async function initCloudSync(): Promise<number> {
   const { invalidateProjectCache } = await import('./project-cache.js')
 
   const projects = await loadProjects()
+  const liveSessions = await getLiveSessionRecords()
   const projectsDir = getClaudeProjectsDirectory()
   const backupRoot = join(getCcmDirectory(), APP.cloudSyncBackupDir)
 
@@ -94,11 +116,28 @@ export async function initCloudSync(): Promise<number> {
         // Already a junction — read the target and set up the backup guard.
         let cloudDir = await readlink(junctionPath)
         if (cloudDir.startsWith('\\\\?\\')) cloudDir = cloudDir.slice(4)
-        await setupProjectSync(project.id, junctionPath, cloudDir, backupRoot)
+        if (
+          hasLiveSessionForPath(liveSessions, project.path) &&
+          !(await isCloudAccessible(cloudDir))
+        ) {
+          log.debug(`cloud-sync: offline guard deferred while project is active: ${project.path}`)
+          continue
+        }
+        await setupProjectSync(project.id, project.path, junctionPath, cloudDir, backupRoot)
       } else if (project.cloudPath) {
+        if (hasLiveSessionForPath(liveSessions, project.path)) {
+          log.debug(`cloud-sync: migration deferred while project is active: ${project.path}`)
+          continue
+        }
         // Real directory with a .ccm-link file: migrate to junction.
         await migrateLinkFileToJunction(junctionPath, project.cloudPath)
-        await setupProjectSync(project.id, junctionPath, project.cloudPath, backupRoot)
+        await setupProjectSync(
+          project.id,
+          project.path,
+          junctionPath,
+          project.cloudPath,
+          backupRoot
+        )
       }
     } catch (error) {
       log.debug(`cloud-sync: init failed for ${project.id}: ${error}`)
@@ -107,7 +146,9 @@ export async function initCloudSync(): Promise<number> {
 
   if (syncStates.size > 0) {
     invalidateProjectCache()
-    syncTimer = setInterval(() => { void runSyncCycle() }, APP.cloudSyncIntervalMs)
+    syncTimer = setInterval(() => {
+      void runSyncCycle()
+    }, APP.cloudSyncIntervalMs)
   }
 
   return syncStates.size
@@ -124,15 +165,17 @@ export async function initCloudSync(): Promise<number> {
  */
 async function setupProjectSync(
   projectId: string,
+  projectPath: string,
   junctionPath: string,
   cloudDir: string,
-  backupRoot: string,
+  backupRoot: string
 ): Promise<void> {
   const backupDir = join(backupRoot, projectId)
   const online = await isCloudAccessible(cloudDir)
 
   const state: SyncState = {
     junctionPath,
+    projectPath,
     cloudDir,
     backupDir,
     isOnline: online,
@@ -159,25 +202,43 @@ async function setupProjectSync(
 
 async function runSyncCycle(): Promise<void> {
   const { invalidateProjectCache } = await import('./project-cache.js')
+  const liveSessions = await getLiveSessionRecords()
   let changed = false
 
   for (const [, state] of syncStates) {
     const wasOnline = state.isOnline
     const nowOnline = await isCloudAccessible(state.cloudDir)
+    const projectIsActive = hasLiveSessionForPath(liveSessions, state.projectPath)
 
     if (wasOnline && !nowOnline) {
-      await activateOfflineMode(state).catch((e) => {
+      if (projectIsActive) {
+        log.debug(
+          `cloud-sync: offline transition deferred while project is active: ${state.projectPath}`
+        )
+        continue
+      }
+      try {
+        await activateOfflineMode(state)
+        state.isOnline = false
+        changed = true
+      } catch (e) {
         log.debug(`cloud-sync: offline transition failed for ${state.junctionPath}: ${e}`)
-      })
-      state.isOnline = false
-      changed = true
+      }
     } else if (!wasOnline && nowOnline) {
-      await deactivateOfflineMode(state).catch((e) => {
+      if (projectIsActive) {
+        log.debug(
+          `cloud-sync: online transition deferred while project is active: ${state.projectPath}`
+        )
+        continue
+      }
+      try {
+        await deactivateOfflineMode(state)
+        state.isOnline = true
+        state.hasPendingMerge = false
+        changed = true
+      } catch (e) {
         log.debug(`cloud-sync: online restore failed for ${state.junctionPath}: ${e}`)
-      })
-      state.isOnline = true
-      state.hasPendingMerge = false
-      changed = true
+      }
     } else if (nowOnline) {
       await refreshBackup(state).catch((e) => {
         log.debug(`cloud-sync: backup refresh failed for ${state.junctionPath}: ${e}`)
@@ -197,9 +258,7 @@ async function runSyncCycle(): Promise<void> {
  * populated from the backup so Claude Code can continue writing without error.
  */
 async function activateOfflineMode(state: SyncState): Promise<void> {
-  await removeLinkAt(state.junctionPath)
-  await mkdir(state.junctionPath, { recursive: true })
-  await copyDir(state.backupDir, state.junctionPath)
+  await replaceLinkWithDirectory(state.junctionPath, state.backupDir, state.cloudDir)
   state.hasPendingMerge = true
   log.debug(`cloud-sync: offline — local dir at ${state.junctionPath}`)
 }
@@ -211,10 +270,8 @@ async function activateOfflineMode(state: SyncState): Promise<void> {
  */
 async function deactivateOfflineMode(state: SyncState): Promise<void> {
   await syncBidirectional(state.junctionPath, state.cloudDir)
-  await mkdir(state.backupDir, { recursive: true })
-  await copyDir(state.cloudDir, state.backupDir)
-  await rm(state.junctionPath, { recursive: true, force: true })
-  await createLinkAt(state.junctionPath, state.cloudDir)
+  await mirrorDirectory(state.cloudDir, state.backupDir)
+  await replaceDirectoryWithLink(state.junctionPath, state.cloudDir)
   log.debug(`cloud-sync: online — junction restored at ${state.junctionPath}`)
 }
 
@@ -223,8 +280,7 @@ async function deactivateOfflineMode(state: SyncState): Promise<void> {
  * current. Picks up sessions written by other devices via the cloud provider.
  */
 async function refreshBackup(state: SyncState): Promise<void> {
-  await mkdir(state.backupDir, { recursive: true })
-  await copyDir(state.cloudDir, state.backupDir)
+  await mirrorDirectory(state.cloudDir, state.backupDir)
 }
 
 // ---------------------------------------------------------------------------
@@ -237,56 +293,63 @@ async function refreshBackup(state: SyncState): Promise<void> {
  */
 async function migrateLinkFileToJunction(junctionPath: string, cloudDir: string): Promise<void> {
   await syncBidirectional(junctionPath, cloudDir)
-  await rm(junctionPath, { recursive: true, force: true })
-  await createLinkAt(junctionPath, cloudDir)
+  await replaceDirectoryWithLink(junctionPath, cloudDir)
   log.debug(`cloud-sync: migrated .ccm-link → junction: ${junctionPath} → ${cloudDir}`)
 }
 
 // ---------------------------------------------------------------------------
-// Bidirectional sync (exported for ccm link/unlink)
+// Bidirectional sync (exported for ccm sync link/unlink)
 // ---------------------------------------------------------------------------
 
 /**
  * Bidirectional recursive sync between two directories.
  *
- * For each file present in either location the larger copy wins — safe for
- * Claude Code's append-only JSONL transcripts and conservative for memory
- * markdown files (more content = more Claude writes). Subdirectories are
- * synced recursively (covers memory/, etc.).
+ * Missing files are copied in either direction. When both copies exist, an
+ * exact prefix relationship proves that one is an append-only extension of
+ * the other, so the longer copy is propagated. Independent edits are reported
+ * as conflicts and both originals are preserved.
  *
  * Reachability is probed via readdir() rather than access(): pCloud drives
  * can return access() success even when the network volume is unmounted.
  */
 export async function syncBidirectional(dirA: string, dirB: string): Promise<void> {
-  let entriesB: string[]
-  try {
-    await mkdir(dirB, { recursive: true })
-    entriesB = await readdir(dirB)
-  } catch {
-    log.debug(`cloud-sync: unreachable: ${dirB}`)
-    return
-  }
-
-  await mkdir(dirA, { recursive: true })
-  const entriesA = await readdir(dirA).catch((): string[] => [])
+  const [entriesA, entriesB] = await Promise.all([
+    readDirectoryOrThrow(dirA),
+    readDirectoryOrThrow(dirB),
+  ])
   const allNames = new Set([...entriesA, ...entriesB])
 
   await Promise.all(
     [...allNames].map(async (name) => {
-      if (name === APP.cloudLinkFile) return  // skip legacy marker if still present
+      if (name === APP.cloudLinkFile) return // skip legacy marker if still present
 
       const pathA = join(dirA, name)
       const pathB = join(dirB, name)
-      const [statA, statB] = await Promise.all([
-        stat(pathA).catch(() => null),
-        stat(pathB).catch(() => null),
-      ])
+      const [statA, statB] = await Promise.all([lstatIfPresent(pathA), lstatIfPresent(pathB)])
 
-      if (statA?.isDirectory() || statB?.isDirectory()) {
-        await syncBidirectional(pathA, pathB)
-      } else {
-        await syncOneFile(pathA, pathB, statA, statB)
+      if (statA?.isSymbolicLink() || statB?.isSymbolicLink()) {
+        throw new CloudSyncConflictError(pathA, pathB)
       }
+
+      if (statA?.isDirectory() && statB?.isDirectory()) {
+        await syncBidirectional(pathA, pathB)
+        return
+      }
+      if (statA?.isDirectory() && !statB) {
+        await mkdir(pathB)
+        await syncBidirectional(pathA, pathB)
+        return
+      }
+      if (!statA && statB?.isDirectory()) {
+        await mkdir(pathA)
+        await syncBidirectional(pathA, pathB)
+        return
+      }
+      if (statA?.isDirectory() || statB?.isDirectory()) {
+        throw new CloudSyncConflictError(pathA, pathB)
+      }
+
+      await syncOneFile(pathA, pathB, statA, statB)
     })
   )
 }
@@ -295,24 +358,36 @@ async function syncOneFile(
   pathA: string,
   pathB: string,
   statA: Awaited<ReturnType<typeof stat>> | null,
-  statB: Awaited<ReturnType<typeof stat>> | null,
+  statB: Awaited<ReturnType<typeof stat>> | null
 ): Promise<void> {
   if (statA?.isFile() && !statB) {
-    await copyFile(pathA, pathB).catch((e) => log.debug(`cloud-sync: A→B ${pathA}: ${e}`))
+    await copyFileAtomically(pathA, pathB)
     return
   }
   if (!statA && statB?.isFile()) {
-    await copyFile(pathB, pathA).catch((e) => log.debug(`cloud-sync: B→A ${pathB}: ${e}`))
+    await copyFileAtomically(pathB, pathA)
     return
   }
-  if (statA?.isFile() && statB?.isFile() && statA.size !== statB.size) {
-    const [src, dst] = statA.size > statB.size ? [pathA, pathB] : [pathB, pathA]
-    await copyFile(src, dst).catch((e) => log.debug(`cloud-sync: sync ${src}: ${e}`))
+  if (!statA?.isFile() || !statB?.isFile()) {
+    throw new CloudSyncConflictError(pathA, pathB)
   }
+
+  const [contentA, contentB] = await Promise.all([readFile(pathA), readFile(pathB)])
+  if (contentA.equals(contentB)) return
+  if (bufferStartsWith(contentA, contentB)) {
+    await copyFileAtomically(pathA, pathB)
+    return
+  }
+  if (bufferStartsWith(contentB, contentA)) {
+    await copyFileAtomically(pathB, pathA)
+    return
+  }
+
+  throw new CloudSyncConflictError(pathA, pathB)
 }
 
 // ---------------------------------------------------------------------------
-// Filesystem helpers (exported for memory-command)
+// Filesystem helpers (exported for sync-command)
 // ---------------------------------------------------------------------------
 
 /**
@@ -320,29 +395,75 @@ async function syncOneFile(
  * pointing at target. On Windows this requires no elevated privileges.
  */
 export async function createLinkAt(linkPath: string, target: string): Promise<void> {
-  if (process.platform === 'win32') {
-    const { execFile } = await import('node:child_process')
-    const { promisify } = await import('node:util')
-    await promisify(execFile)('cmd', ['/c', 'mklink', '/J', linkPath, target])
-  } else {
-    const { symlink } = await import('node:fs/promises')
-    await symlink(target, linkPath)
-  }
+  await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
 /**
- * Removes a junction (Windows) or symlink (Unix) without deleting the target.
- * Uses `rmdir` on Windows because junctions are directory reparse points —
- * `unlink` and recursive `rm` do not work on them correctly.
+ * Removes a junction or symlink without deleting its target.
  */
 export async function removeLinkAt(linkPath: string): Promise<void> {
-  if (process.platform === 'win32') {
-    const { execFile } = await import('node:child_process')
-    const { promisify } = await import('node:util')
-    await promisify(execFile)('cmd', ['/c', 'rmdir', linkPath])
-  } else {
-    const { unlink } = await import('node:fs/promises')
-    await unlink(linkPath)
+  await unlink(linkPath)
+}
+
+/**
+ * Replaces a real directory with a link while retaining a rollback copy until
+ * the link has been created successfully.
+ */
+export async function replaceDirectoryWithLink(
+  directoryPath: string,
+  target: string
+): Promise<void> {
+  const rollbackPath = temporarySiblingPath(directoryPath, 'rollback')
+  await rename(directoryPath, rollbackPath)
+
+  try {
+    await createLinkAt(directoryPath, target)
+  } catch (error) {
+    await rename(rollbackPath, directoryPath)
+    throw error
+  }
+
+  await rm(rollbackPath, { force: true, recursive: true }).catch((error) => {
+    log.debug(`cloud-sync: rollback cleanup failed for ${rollbackPath}: ${error}`)
+  })
+}
+
+/**
+ * Replaces a link with a fully copied real directory. The original link is
+ * removed only after the staged copy is complete.
+ */
+export async function replaceLinkWithDirectory(
+  linkPath: string,
+  sourceDirectory: string,
+  rollbackTarget: string
+): Promise<void> {
+  const stagedDirectory = temporarySiblingPath(linkPath, 'staged')
+  await mirrorDirectory(sourceDirectory, stagedDirectory)
+
+  try {
+    await removeLinkAt(linkPath)
+    await rename(stagedDirectory, linkPath)
+  } catch (error) {
+    if ((await lstatIfPresent(linkPath)) === null) {
+      await createLinkAt(linkPath, rollbackTarget).catch(() => {})
+    }
+    await rm(stagedDirectory, { force: true, recursive: true })
+    throw error
+  }
+}
+
+/** Re-points a link and restores the original target if creation fails. */
+export async function repointLink(
+  linkPath: string,
+  currentTarget: string,
+  nextTarget: string
+): Promise<void> {
+  await removeLinkAt(linkPath)
+  try {
+    await createLinkAt(linkPath, nextTarget)
+  } catch (error) {
+    await createLinkAt(linkPath, currentTarget)
+    throw error
   }
 }
 
@@ -368,27 +489,81 @@ async function backupHasData(backupDir: string): Promise<boolean> {
   }
 }
 
-async function copyDir(src: string, dst: string): Promise<void> {
-  let entries: string[]
-  try {
-    entries = await readdir(src)
-  } catch {
-    return
-  }
-  await mkdir(dst, { recursive: true })
+export async function mirrorDirectory(
+  sourceDirectory: string,
+  destinationDirectory: string
+): Promise<void> {
+  const sourceEntries = await readDirectoryOrThrow(sourceDirectory)
+  await mkdir(destinationDirectory, { recursive: true })
+  const destinationEntries = await readDirectoryOrThrow(destinationDirectory)
+
   await Promise.all(
-    entries.map(async (name) => {
-      const srcPath = join(src, name)
-      const dstPath = join(dst, name)
-      const s = await stat(srcPath).catch(() => null)
-      if (!s) return
-      if (s.isDirectory()) {
-        await copyDir(srcPath, dstPath)
-      } else if (s.isFile()) {
-        await copyFile(srcPath, dstPath).catch((e) => {
-          log.debug(`cloud-sync: copyDir ${srcPath}: ${e}`)
-        })
+    sourceEntries.map(async (name) => {
+      const sourcePath = join(sourceDirectory, name)
+      const destinationPath = join(destinationDirectory, name)
+      const sourceStat = await lstat(sourcePath)
+
+      if (sourceStat.isSymbolicLink()) {
+        throw new CloudSyncConflictError(sourcePath, destinationPath)
+      }
+      if (sourceStat.isDirectory()) {
+        await mirrorDirectory(sourcePath, destinationPath)
+        return
+      }
+      if (sourceStat.isFile()) {
+        await copyFileAtomically(sourcePath, destinationPath)
       }
     })
+  )
+
+  const sourceNames = new Set(sourceEntries)
+  await Promise.all(
+    destinationEntries
+      .filter((name) => !sourceNames.has(name))
+      .map((name) => rm(join(destinationDirectory, name), { force: true, recursive: true }))
+  )
+}
+
+async function copyFileAtomically(sourcePath: string, destinationPath: string): Promise<void> {
+  const temporaryPath = temporarySiblingPath(destinationPath, 'copy')
+  try {
+    await copyFile(sourcePath, temporaryPath)
+    await rename(temporaryPath, destinationPath)
+  } finally {
+    await rm(temporaryPath, { force: true })
+  }
+}
+
+async function lstatIfPresent(path: string): Promise<Awaited<ReturnType<typeof lstat>> | null> {
+  try {
+    return await lstat(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+async function readDirectoryOrThrow(directoryPath: string): Promise<string[]> {
+  try {
+    return await readdir(directoryPath)
+  } catch (error) {
+    throw new CloudSyncUnavailableError(directoryPath, error)
+  }
+}
+
+function bufferStartsWith(candidate: Buffer, prefix: Buffer): boolean {
+  return candidate.length >= prefix.length && candidate.subarray(0, prefix.length).equals(prefix)
+}
+
+function temporarySiblingPath(path: string, purpose: string): string {
+  return `${path}.ccm-${purpose}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function hasLiveSessionForPath(
+  liveSessions: Awaited<ReturnType<typeof getLiveSessionRecords>>,
+  projectPath: string
+): boolean {
+  return liveSessions.some(
+    (session) => session.cwd !== null && pathsReferToSameLocation(session.cwd, projectPath)
   )
 }

@@ -1,6 +1,7 @@
 import { readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { getActiveSessions } from './active-sessions.js'
 import { getProjectDirectory } from './claude-paths.js'
 import { invalidateProjectCache } from './project-cache.js'
 import type { Project } from './session-model.js'
@@ -13,6 +14,13 @@ interface SessionSidecarMetadata {
 
 interface ProjectSidecarMetadata {
   sessions?: Record<string, SessionSidecarMetadata>
+}
+
+export class ActiveSessionDeletionError extends Error {
+  constructor(sessionId: string) {
+    super(`cannot delete active session: ${sessionId}`)
+    this.name = 'ActiveSessionDeletionError'
+  }
 }
 
 /**
@@ -134,6 +142,10 @@ export async function setSessionAlias(
  * The `.jsonl` file is owned by Claude Code — this is a destructive operation.
  */
 export async function deleteSession(projectId: string, sessionId: string): Promise<void> {
+  if ((await getActiveSessions()).has(sessionId)) {
+    throw new ActiveSessionDeletionError(sessionId)
+  }
+
   const projectDirectory = getProjectDirectory(projectId)
   const jsonlPath = join(projectDirectory, `${sessionId}.jsonl`)
 

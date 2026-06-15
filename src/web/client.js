@@ -985,6 +985,10 @@ async function saveSessionAlias(session, aliasInput) {
 }
 
 async function deleteSessionPermanently(session) {
+  if (activeSessionIds.has(session.id)) {
+    showToast('Cannot delete an active session.', 'err')
+    return
+  }
   const confirmed = window.confirm(
     'Delete "' +
       (session.alias || session.name) +

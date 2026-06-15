@@ -1,7 +1,7 @@
 import { getActiveSessions } from '../core/active-sessions.js'
 import { findCleanupCandidates, summariseCandidates } from '../core/cleanup.js'
 import { loadProjects } from '../core/project-discovery.js'
-import { deleteSession } from '../core/session-metadata.js'
+import { setSessionArchived } from '../core/session-metadata.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { writeOutput } from './output.js'
 
@@ -58,8 +58,8 @@ export async function runCleanupCommand(args: string[]): Promise<void> {
     return
   }
 
-  await Promise.all(chosen.map((c) => deleteSession(c.projectId, c.session.id)))
-  writeOutput(`Deleted ${chosen.length} session${chosen.length === 1 ? '' : 's'}.`)
+  await Promise.all(chosen.map((c) => setSessionArchived(c.projectId, c.session.id, true)))
+  writeOutput(`Archived ${chosen.length} session${chosen.length === 1 ? '' : 's'}.`)
 }
 
 function formatDryRun(candidates: ReturnType<typeof findCleanupCandidates>): string {

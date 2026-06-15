@@ -27,6 +27,7 @@ export type CleanupReason =
 const STALE_DAYS = 90
 const TRIVIAL_MAX_MESSAGES = 2
 const STALE_MAX_MESSAGES = 10 // only flag stale if the session was short
+const AUTO_ARCHIVE_MIN_SCORE = 85
 
 export interface CleanupCandidate {
   session: Session
@@ -68,6 +69,16 @@ export function findCleanupCandidates(
   }
 
   return candidates.sort((a, b) => b.score - a.score)
+}
+
+/**
+ * Returns candidates safe enough for unattended, reversible archiving.
+ *
+ * Lower-confidence candidates remain available in the interactive picker, but
+ * automatic cleanup must never make a judgement call on the user's behalf.
+ */
+export function findAutoArchiveCandidates(candidates: CleanupCandidate[]): CleanupCandidate[] {
+  return candidates.filter((candidate) => candidate.score >= AUTO_ARCHIVE_MIN_SCORE)
 }
 
 /** Returns a one-line summary suitable for `--check` output. */

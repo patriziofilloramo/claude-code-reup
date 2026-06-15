@@ -49,6 +49,30 @@ describe('web routes', () => {
     expect(response.status).toBe(403)
   })
 
+  it('protects theme persistence from non-local origins', async () => {
+    const response = await buildApp().request('/api/theme', {
+      body: JSON.stringify({ name: 'terminal' }),
+      headers: {
+        'Content-Type': 'text/plain',
+        Host: 'localhost',
+        Origin: 'https://example.com',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects inherited object properties as theme names', async () => {
+    const response = await buildApp().request('/api/theme', {
+      body: JSON.stringify({ name: 'toString' }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(400)
+  })
+
   it('validates session IDs before parsing resume request bodies', async () => {
     const response = await buildApp().request('/api/resume/not-a-session', {
       method: 'POST',
@@ -137,6 +161,24 @@ describe('web routes', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'archived must be boolean' })
+  })
+
+  it('refuses to delete an active session', async () => {
+    await createKnownSession()
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, `${SESSION_ID}.json`),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+
+    const response = await buildApp().request(`/api/sessions/${PROJECT_ID}/${SESSION_ID}`, {
+      headers: { Host: 'localhost' },
+      method: 'DELETE',
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'cannot delete an active session' })
   })
 
   async function createKnownSession(): Promise<void> {

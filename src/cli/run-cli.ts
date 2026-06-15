@@ -223,16 +223,19 @@ async function runTerminalInterface(): Promise<void> {
   const { autoCleanupOnStart } = readUserPrefsSync()
   if (autoCleanupOnStart !== 'off') {
     const { getActiveSessions } = await import('../core/active-sessions.js')
-    const { findCleanupCandidates } = await import('../core/cleanup.js')
+    const { findAutoArchiveCandidates, findCleanupCandidates } = await import('../core/cleanup.js')
     const { loadProjects } = await import('../core/project-discovery.js')
-    const { deleteSession } = await import('../core/session-metadata.js')
+    const { setSessionArchived } = await import('../core/session-metadata.js')
 
     const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
     const candidates = findCleanupCandidates(projects, activeSessionIds)
     if (candidates.length > 0) {
       if (autoCleanupOnStart === 'auto') {
+        const safeCandidates = findAutoArchiveCandidates(candidates)
         await Promise.all(
-          candidates.map((candidate) => deleteSession(candidate.projectId, candidate.session.id))
+          safeCandidates.map((candidate) =>
+            setSessionArchived(candidate.projectId, candidate.session.id, true)
+          )
         )
       } else {
         // 'on' mode — show picker, user selects
@@ -243,7 +246,7 @@ async function runTerminalInterface(): Promise<void> {
           await Promise.all(
             candidates
               .filter((c) => chosen.some((ch) => ch.session.id === c.session.id))
-              .map((c) => deleteSession(c.projectId, c.session.id))
+              .map((c) => setSessionArchived(c.projectId, c.session.id, true))
           )
         }
       }

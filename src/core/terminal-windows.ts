@@ -1,4 +1,4 @@
-import { execFile as execFileCallback } from 'node:child_process'
+import { execFile as execFileCallback, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { copyLaunchCommand, executableExists, successfulLaunch } from './terminal-shared.js'
@@ -7,12 +7,10 @@ import type { LaunchResult } from './terminal-shared.js'
 const execFile = promisify(execFileCallback)
 
 /**
- * Opens a Windows terminal using Windows Terminal, PowerShell, or cmd.
+ * Opens a Windows terminal using Windows Terminal, PowerShell, or a detached cmd.
  *
- * All three launchers use execFile (not exec) so arguments are passed as argv
- * elements rather than interpolated into a shell string. This eliminates the
- * intermediate cmd.exe shell layer and means workingDirectory and command parts
- * are never subject to shell metacharacter interpretation.
+ * Launchers pass the working directory and command as structured process
+ * options or argv elements. No user-controlled path is passed through `cmd /c`.
  *
  * command is always "claude" or "claude --resume <hex-uuid>" — word-splitting
  * it is safe because neither part contains spaces or special characters.
@@ -57,17 +55,34 @@ export async function launchWindows(
     launchErrors.push(`ps5: ${String(error)}`)
   }
 
-  // `start` is the universal final launcher before clipboard fallback.
+  // Spawn cmd directly so workingDirectory never passes through cmd /c parsing.
   try {
-    const startArgs = ['/c', 'start', '']
-    if (workingDirectory) startArgs.push('/d', workingDirectory)
-    startArgs.push('cmd', '/k', ...commandParts)
-    await execFile('cmd', startArgs)
+    await spawnDetachedCommandPrompt(commandParts, workingDirectory)
     return successfulLaunch()
   } catch (error) {
-    launchErrors.push(`start: ${String(error)}`)
+    launchErrors.push(`cmd: ${String(error)}`)
   }
 
   const fallbackCommand = workingDirectory ? `cd /d "${workingDirectory}" && ${command}` : command
   return copyLaunchCommand(fallbackCommand, launchErrors)
+}
+
+function spawnDetachedCommandPrompt(
+  commandParts: string[],
+  workingDirectory?: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('cmd.exe', ['/k', ...commandParts], {
+      cwd: workingDirectory,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    })
+
+    child.once('error', reject)
+    child.once('spawn', () => {
+      child.unref()
+      resolve()
+    })
+  })
 }

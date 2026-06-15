@@ -2,7 +2,12 @@ import type { Hono } from 'hono'
 
 import { loadProjectById } from '../../core/project-discovery.js'
 import { isValidSessionId } from '../../core/session-model.js'
-import { deleteSession, setSessionAlias, setSessionArchived } from '../../core/session-metadata.js'
+import {
+  ActiveSessionDeletionError,
+  deleteSession,
+  setSessionAlias,
+  setSessionArchived,
+} from '../../core/session-metadata.js'
 import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 
@@ -96,7 +101,14 @@ export function registerSessionMetadataRoutes(app: Hono): void {
       if (!project.sessions.some((s) => s.id === sessionId)) {
         return context.json({ error: 'session not found' }, 404)
       }
-      await deleteSession(projectId, sessionId)
+      try {
+        await deleteSession(projectId, sessionId)
+      } catch (error) {
+        if (error instanceof ActiveSessionDeletionError) {
+          return context.json({ error: 'cannot delete an active session' }, 409)
+        }
+        throw error
+      }
       log.debug('delete: removed session', sessionId)
       return context.json({ ok: true })
     })

@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os'
 
 import { getActiveSessions } from '../../src/core/active-sessions.js'
 
+const LIVE_SESSION_ID = '11111111-1111-4111-8111-111111111111'
+const DEAD_SESSION_ID = '22222222-2222-4222-8222-222222222222'
+
 describe('getActiveSessions', () => {
   let activeSessionsDirectory: string
   let originalClaudeConfigDirectory: string | undefined
@@ -32,10 +35,10 @@ describe('getActiveSessions', () => {
     await mkdir(activeSessionsDirectory, { recursive: true })
     await writeFile(
       join(activeSessionsDirectory, 'live.json'),
-      JSON.stringify({ sessionId: 'live-session-id', pid: process.pid })
+      JSON.stringify({ sessionId: LIVE_SESSION_ID, pid: process.pid })
     )
     const activeSessionIds = await getActiveSessions()
-    expect(activeSessionIds.has('live-session-id')).toBe(true)
+    expect(activeSessionIds.has(LIVE_SESSION_ID)).toBe(true)
   })
 
   it('excludes session with a dead PID on Unix', async () => {
@@ -43,10 +46,10 @@ describe('getActiveSessions', () => {
     await mkdir(activeSessionsDirectory, { recursive: true })
     await writeFile(
       join(activeSessionsDirectory, 'dead.json'),
-      JSON.stringify({ sessionId: 'dead-session-id', pid: 2147483647 })
+      JSON.stringify({ sessionId: DEAD_SESSION_ID, pid: 2147483647 })
     )
     const activeSessionIds = await getActiveSessions()
-    expect(activeSessionIds.has('dead-session-id')).toBe(false)
+    expect(activeSessionIds.has(DEAD_SESSION_ID)).toBe(false)
   })
 
   it('skips files with missing required fields', async () => {
@@ -68,6 +71,18 @@ describe('getActiveSessions', () => {
     await writeFile(join(activeSessionsDirectory, 'garbage.json'), 'not json at all')
     await writeFile(join(activeSessionsDirectory, 'ignore.txt'), '{"sessionId":"x","pid":1}')
     const activeSessionIds = await getActiveSessions()
+    expect(activeSessionIds.size).toBe(0)
+  })
+
+  it('skips live lock records with an invalid session ID', async () => {
+    await mkdir(activeSessionsDirectory, { recursive: true })
+    await writeFile(
+      join(activeSessionsDirectory, 'invalid-id.json'),
+      JSON.stringify({ sessionId: '../../outside', pid: process.pid })
+    )
+
+    const activeSessionIds = await getActiveSessions()
+
     expect(activeSessionIds.size).toBe(0)
   })
 })

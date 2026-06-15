@@ -10,6 +10,7 @@ import {
   getClaudeProjectsDirectory,
   resolveProjectPath,
 } from './claude-paths.js'
+import { normalizePathForComparison, pathsReferToSameLocation } from './path-comparison.js'
 import { getCachedProjects, setCachedProjects } from './project-cache.js'
 import { getLiveSessionRecords, type SessionLockRecord } from './active-sessions.js'
 import type { Project, Session, SessionContextMetrics, SessionSignals } from './session-model.js'
@@ -65,11 +66,11 @@ export async function loadProjects(): Promise<Project[]> {
   // belong to brand-new projects whose directory may not exist yet.
   // Only recent records qualify — stale lock files from recycled PIDs are rejected.
   const now = Date.now()
-  const knownPaths = new Set(projects.map((project) => normalisePath(project.path)))
+  const knownPaths = new Set(projects.map((project) => normalizePathForComparison(project.path)))
   const orphanedRecords = liveSessions.filter(
     (record): record is SessionLockRecord & { cwd: string } =>
       record.cwd !== null &&
-      !knownPaths.has(normalisePath(record.cwd)) &&
+      !knownPaths.has(normalizePathForComparison(record.cwd)) &&
       isRecentLockRecord(record.startedAt, now)
   )
 
@@ -389,7 +390,7 @@ async function addGhostSessions(
   const candidates = liveSessions.filter(
     (record): record is SessionLockRecord & { cwd: string } =>
       record.cwd !== null &&
-      normalisePath(record.cwd) === normalisePath(projectPath) &&
+      pathsReferToSameLocation(record.cwd, projectPath) &&
       !knownIds.has(record.sessionId)
   )
 
@@ -446,7 +447,7 @@ function buildGhostSession(record: SessionLockRecord & { cwd: string }): Session
 function buildOrphanProjects(records: Array<SessionLockRecord & { cwd: string }>): Project[] {
   const byPath = new Map<string, Array<SessionLockRecord & { cwd: string }>>()
   for (const r of records) {
-    const key = normalisePath(r.cwd)
+    const key = normalizePathForComparison(r.cwd)
     const group = byPath.get(key) ?? []
     group.push(r)
     byPath.set(key, group)
@@ -462,10 +463,6 @@ function buildOrphanProjects(records: Array<SessionLockRecord & { cwd: string }>
 
 function isRecentLockRecord(startedAt: number | null, now: number): boolean {
   return startedAt !== null && now - startedAt < LOCK_FILE_GRACE_PERIOD_MS
-}
-
-function normalisePath(path: string): string {
-  return path.toLowerCase().replace(/[/\\]+$/, '')
 }
 
 // -----------------------------------------------------------------------------
