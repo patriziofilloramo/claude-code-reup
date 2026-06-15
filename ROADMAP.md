@@ -148,27 +148,32 @@ Anthropic API (plan name, credit spending detail, routine allowances) are tracke
 
 ---
 
-## Milestone 7 — Code refactoring and cleanup
+## Milestone 7 — Code refactoring and cleanup ✓ done
 
 The codebase has grown organically across six milestones. Now that the full feature surface is
 clear, a dedicated cleanup pass will improve maintainability, reduce duplication, and make future
 milestones faster to implement. No visible behaviour changes — this is purely internal.
 
-- [ ] **Web client modularisation** — `client.js` is a single large IIFE. Split into cohesive
-      modules (rendering, state, search, context menu, deep search, dialogs) while keeping the
-      build output a single bundled file
-- [ ] **Shared type layer** — API response shapes are duplicated between server routes and client
-      parsing. Extract shared TypeScript interfaces so both sides stay in sync automatically
-- [ ] **Route consolidation** — several web routes share boilerplate error handling and response
-      shape. Introduce a thin route helper and unify response envelopes
-- [ ] **CSS architecture** — `styles.css` has grown to ~1200 lines without clear section
-      boundaries. Reorganise with consistent naming, remove dead `.ds-*` drawer rules, and enforce
-      the BEM-lite pattern already used in newer sections
-- [x] **Core module boundary cleanup (partial)** — renamed terminal platform modules from
-      `terminal.{shared,unix,windows}.ts` to `terminal-{shared,unix,windows}.ts` (kebab-case
-      consistency); remaining circular-dependency and responsibility audit still pending
-- [ ] **Test coverage gaps** — identify untested code paths introduced in milestones 5–6 (usage
-      capture parsing, deep search route, config TUI state machine) and add targeted unit tests
+- [x] **Web client modularisation** — split `client.js` (1830 lines) into 15 segment files under
+      `src/web/client/` (01-config through 15-data); `scripts/build-client.mjs` concatenates them
+      back into one IIFE-wrapped output; `pretest` hook keeps `client.js` in sync automatically;
+      all `client-regressions` tests continue to pass unchanged
+- [x] **Shared type layer** — `src/web/api-model.ts` is the single source of truth for all API
+      response shapes (`ApiProject`, `ApiSession`, `ApiLaunchResponse`, etc.); server routes and
+      client parsing both reference it, eliminating the duplication
+- [x] **Route consolidation** — `apiRoute` / `guardedRoute` wrappers in `src/web/routes/` unify
+      error handling and response envelopes across all route files
+- [x] **CSS cleanup** — removed dead `.p-cloud--offline` rule (amber `⚠` icon from an earlier
+      branch, superseded by the `☁` coloured via `p-cloud--stale`); `styles.css` is now 1209 lines
+- [x] **Core module boundary cleanup** — renamed terminal platform modules to kebab-case
+      (`terminal-{shared,unix,windows}.ts`); resolved post-merge duplicate `initCloudSync` /
+      `guardOfflineLinks` calls in `server.ts`; `syncRegistry` breaks the project-discovery →
+      cloud-sync circular dependency
+- [x] **Test coverage gaps** — added `tests/core/cloud-sync.test.ts` (9 cases: `stopSyncLoop`
+      idempotency, `syncBidirectional` copy both directions, larger-file merge, recursive descent,
+      skip `.ccm-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
+      existing); also fixed a `syncBidirectional` bug where A-only subdirectories were silently
+      skipped instead of being created in B; total test count: 194 (was 180)
 
 ---
 

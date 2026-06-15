@@ -1032,10 +1032,6 @@ body {
   font-size: 10px;
   opacity: 0.65;
 }
-.p-cloud--offline {
-  color: var(--amber);
-  opacity: 1;
-}
 
 .p-cloud--ok {
   color: var(--green);

@@ -260,6 +260,7 @@ async function migrateLinkFileToJunction(junctionPath: string, cloudDir: string)
 export async function syncBidirectional(dirA: string, dirB: string): Promise<void> {
   let entriesB: string[]
   try {
+    await mkdir(dirB, { recursive: true })
     entriesB = await readdir(dirB)
   } catch {
     log.debug(`cloud-sync: unreachable: ${dirB}`)

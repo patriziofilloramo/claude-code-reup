@@ -1,0 +1,22 @@
+  let projects = []
+  let activeSessionIds = new Set()
+  let liveUsage = null
+  let selectedProject = null
+  let selectedSession = null
+  let selectedFilter = 'all'
+  let selectedProjectSort = 'recent'
+  let selectedSort = 'recent'
+  let searchQuery = ''
+  let renamingSessionId = null
+  let claudeInstructionsProjectId = null
+  let claudeInstructionsSaveTimer = null
+  let liveUpdatesSource = null
+  let usageRefreshInProgress = false
+  let deepLinkProcessed = false
+  let ctxProject = null
+  let ctxSession = null
+  let deepSearchActive = false
+  let deepSearchMatches = []
+  let deepSearchLoading = false
+  let deepSearchQueryTerm = ''
+
