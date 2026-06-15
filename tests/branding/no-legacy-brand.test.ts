@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -7,6 +7,8 @@ import { getSwoopDirectory } from '../../src/core/project/claude-paths.js'
 
 const LEGACY_NAME = ['c', 'c', 'm'].join('')
 const REPOSITORY_ROOT = process.cwd()
+const PUBLIC_DOCUMENTS = ['CHANGELOG.md', 'CLAUDE.md', 'README.md', 'ROADMAP.md']
+const PUBLIC_DIRECTORIES = ['Documents', 'src']
 
 describe('Swoop branding', () => {
   it('publishes the canonical package and executable names', async () => {
@@ -28,16 +30,12 @@ describe('Swoop branding', () => {
   })
 
   it('does not expose the legacy name in critical public surfaces', async () => {
-    const criticalFiles = [
-      'src/cli/completion-command.ts',
-      'src/config/labels.ts',
-      'src/config/theme.ts',
-      'src/core/project/project-sidecar-lock.ts',
-      'src/core/session/session-metadata.ts',
-      'src/web/ui.html',
+    const publicSurfaceFiles = [
+      ...PUBLIC_DOCUMENTS,
+      ...(await Promise.all(PUBLIC_DIRECTORIES.map(listRepositoryFiles))).flat(),
     ]
 
-    for (const filePath of criticalFiles) {
+    for (const filePath of publicSurfaceFiles) {
       expect(await readRepositoryFile(filePath), filePath).not.toContain(LEGACY_NAME)
     }
   })
@@ -51,4 +49,21 @@ describe('Swoop branding', () => {
 
 function readRepositoryFile(relativePath: string): Promise<string> {
   return readFile(join(REPOSITORY_ROOT, relativePath), 'utf8')
+}
+
+async function listRepositoryFiles(relativeDirectory: string): Promise<string[]> {
+  const entries = await readdir(join(REPOSITORY_ROOT, relativeDirectory), { withFileTypes: true })
+  const files: string[] = []
+
+  for (const entry of entries) {
+    const relativePath = join(relativeDirectory, entry.name)
+
+    if (entry.isDirectory()) {
+      files.push(...(await listRepositoryFiles(relativePath)))
+    } else if (entry.isFile()) {
+      files.push(relativePath)
+    }
+  }
+
+  return files
 }

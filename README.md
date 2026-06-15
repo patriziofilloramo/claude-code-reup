@@ -79,7 +79,7 @@ npm install
 npm run build
 npm link
 
-swoop
+swoop.cmd
 ```
 
 Open the browser interface with:
@@ -382,7 +382,7 @@ Run with `SWOOP_DEBUG=1` and verify that `claude` is available on `PATH`.
 When a new terminal cannot be opened, `swoop` copies the resume command to
 the clipboard instead.
 
-On Windows: `$env:SWOOP_DEBUG = "1"; swoop`
+On Windows: `$env:SWOOP_DEBUG = "1"; swoop.cmd`
 
 **Web UI does not open**
 Run `swoop web --port 4000` or set `SWOOP_NO_OPEN=1` and open the printed
