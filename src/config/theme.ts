@@ -1,20 +1,31 @@
 /**
- * TUI design tokens.
- * CSS equivalents live in src/web/styles.css as :root custom properties.
- * Keep both files in sync when changing colours.
+ * TUI design tokens — derived from the active ThemeTokens object.
+ *
+ * Components import COLORS and SIZES as before; the active theme is determined
+ * at startup via getActiveTheme() in src/config/themes/index.ts.
+ * CSS equivalents live in src/web/styles.css as :root custom properties,
+ * injected at serve time by the web server using themeToCssVars().
  */
-export const COLORS = {
-  accent: '#22d3ee',
-  border: '#2a2a2a',
-  danger: '#f87171',
-  dim: '#4a4a4a',
-  muted: '#686868',
-  ok: '#34d399',
-  orange: '#fb923c',
-  text: '#f0f0f0',
-  textSub: '#c8c8c8',
-  warn: '#fbbf24',
-} as const
+import { resolveTheme } from './themes/index.js'
+import type { ThemeTokens } from './theme-tokens.js'
+
+/** Returns COLORS shaped for Ink/React components from a ThemeTokens object. */
+export function colorsFromTheme(t: ThemeTokens) {
+  return {
+    accent: t.accent,
+    border: t.dim,
+    danger: t.red,
+    dim: t.muted,
+    muted: t.muted2,
+    ok: t.green,
+    orange: t.orange,
+    text: t.strong,
+    textSub: t.text,
+    warn: t.amber,
+  } as const
+}
+
+export const COLORS = colorsFromTheme(resolveTheme(process.env['CCM_THEME']))
 
 export const SIZES = {
   projectPanelWidth: 30,
