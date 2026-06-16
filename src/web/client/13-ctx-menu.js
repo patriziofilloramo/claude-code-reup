@@ -39,6 +39,26 @@ function closeContextMenu() {
   ctxSession = null
 }
 
+/** Opens the session action menu from either a row, empty session-panel space, or the inspector. */
+function openSessionContextMenu(event, session) {
+  event.preventDefault()
+  selectSession(session)
+  ctxSession = session
+  ctxProject = null
+  openContextMenuAt(event.clientX, event.clientY, sessionActionItems(session))
+}
+
+/** Opens the project action menu from either a project row or selected project-panel space. */
+function openProjectContextMenu(event, project) {
+  event.preventDefault()
+  ctxProject = project
+  ctxSession = null
+  openContextMenuAt(event.clientX, event.clientY, [
+    { action: 'project-new-session', label: '+ new session' },
+    { action: 'project-copy-path', label: 'copy path' },
+  ])
+}
+
 elements.contextMenu.addEventListener('click', function (event) {
   const item = event.target.closest('.ctx-item')
   if (!item) return
@@ -59,32 +79,25 @@ elements.contextMenu.addEventListener('click', function (event) {
 
 elements.sessionList.addEventListener('contextmenu', function (event) {
   const row = event.target.closest('.sess-row')
-  if (!row || event.target.closest('.s-rename-input')) return
+  if (event.target.closest('.s-rename-input')) return
 
-  const session = resolveSessionFromRow(row)
+  const session = row ? resolveSessionFromRow(row) : selectedSession
   if (!session) return
 
-  event.preventDefault()
-  selectSession(session)
-  ctxSession = session
-  ctxProject = null
-  openContextMenuAt(event.clientX, event.clientY, sessionActionItems(session))
+  openSessionContextMenu(event, session)
 })
 
 elements.projectList.addEventListener('contextmenu', function (event) {
   const row = event.target.closest('.proj-row')
-  if (!row) return
-
-  const project = resolveProjectFromRow(row)
+  const project = row ? resolveProjectFromRow(row) : selectedProject
   if (!project) return
 
-  event.preventDefault()
-  ctxProject = project
-  ctxSession = null
-  openContextMenuAt(event.clientX, event.clientY, [
-    { action: 'project-new-session', label: '+ new session' },
-    { action: 'project-copy-path', label: 'copy path' },
-  ])
+  openProjectContextMenu(event, project)
+})
+
+elements.sessionInspector.addEventListener('contextmenu', function (event) {
+  if (!selectedSession || event.target.closest('button')) return
+  openSessionContextMenu(event, selectedSession)
 })
 
 document.addEventListener('click', function (event) {

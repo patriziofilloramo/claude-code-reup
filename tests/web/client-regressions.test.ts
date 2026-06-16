@@ -3,12 +3,23 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const CLIENT_PATH = join(process.cwd(), 'src', 'web', 'client.js')
+const STYLES_PATH = join(process.cwd(), 'src', 'web', 'styles.css')
+const UI_PATH = join(process.cwd(), 'src', 'web', 'ui.html')
 
 describe('web client session-row invariants', () => {
   let source: string
+  let stylesSource: string
+  let uiSource: string
 
   beforeAll(async () => {
-    source = await readFile(CLIENT_PATH, 'utf8')
+    const files = await Promise.all([
+      readFile(CLIENT_PATH, 'utf8'),
+      readFile(STYLES_PATH, 'utf8'),
+      readFile(UI_PATH, 'utf8'),
+    ])
+    source = files[0]
+    stylesSource = files[1]
+    uiSource = files[2]
   })
 
   function sourceBetween(start: string, end: string): string {
@@ -170,8 +181,22 @@ describe('web client session-row invariants', () => {
   it('uses a custom right-click menu for project and session rows', () => {
     expect(source).toContain("elements.sessionList.addEventListener('contextmenu'")
     expect(source).toContain("elements.projectList.addEventListener('contextmenu'")
+    expect(source).toContain("elements.sessionInspector.addEventListener('contextmenu'")
+    expect(source).toContain('function openSessionContextMenu(')
+    expect(source).toContain('row ? resolveSessionFromRow(row) : selectedSession')
+    expect(source).toContain('row ? resolveProjectFromRow(row) : selectedProject')
     expect(source).toContain('event.preventDefault()')
     expect(source).toContain('openContextMenuAt(event.clientX, event.clientY')
+  })
+
+  it('keeps the right-click footer hint visible in narrow layouts', () => {
+    const narrowStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 639px)'))
+
+    expect(uiSource).toContain('ftr-item ftr-item-context')
+    expect(narrowStyles).toContain('.ftr-item {')
+    expect(narrowStyles).toContain('display: none;')
+    expect(narrowStyles).toContain('.ftr-item-context {')
+    expect(narrowStyles).toContain('display: flex;')
   })
 
   it('loads Resume Card preview data lazily and invalidates it on live updates', () => {

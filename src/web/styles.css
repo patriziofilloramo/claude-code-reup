@@ -1402,9 +1402,12 @@ body {
     padding: 4px 8px;
   }
 
-  /* Footer: hide keyboard-hint items, keep only the status */
+  /* Footer: keep one discoverability hint even when keyboard hints would not fit. */
   .ftr-item {
     display: none;
+  }
+  .ftr-item-context {
+    display: flex;
   }
 
   /* Usage summary too wide for the tiny header */
