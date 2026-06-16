@@ -29,6 +29,21 @@
 
 ---
 
+## Recommended next focus
+
+1. **Milestone 12 — Organization layer** should be the next product milestone. It is the
+   most likely near-term feature to make Swoop feel meaningfully different from Claude Code's
+   native global resume picker, because it helps users manage intent, context, and parallel work
+   rather than only finding an old transcript.
+2. **Milestone 11 — VS Code extension discovery** should run in parallel as research, not as the
+   main implementation track yet. The extension will be much stronger if it can surface the same
+   groups, tags, stacks, active state, usage, and resume cards from Milestone 12.
+3. **Milestone 9 — Distribution and installers** remains release-critical, but it is not the
+   strongest differentiator while the product shape is still improving. Keep fixing launcher and
+   installer risks, then package once the organization layer stabilizes.
+
+---
+
 ## Milestone 2 — Session signals ✓ done
 
 - [x] Replace single `SessionStatus` with independent `SessionSignals` (archived, interrupted,
@@ -216,51 +231,7 @@ No server, no auth — the cloud provider handles transfer.
 
 ---
 
-## Milestone 9.5 — Config & CLI polish ✓ done
-
-Improvements shipped after M9:
-
-- [x] **Command registry** (`src/tui/commands.ts`) — single `COMMANDS` array with `visibleWhen`
-      named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
-      HelpOverlay and CommandPalette both derive from the same source of truth
-- [x] **`swoop sync`** — renamed from the earlier memory-command prototype throughout: file,
-      exports, CLI dispatch, help
-      text, documentation, and all user-facing strings; `memory` kept as a backwards-compat alias
-- [x] **Sync tab in `swoop config`** — interactive cursor navigation over unsynced and synced
-      projects; Enter to link/unlink inline without leaving the TUI; uses `linkProjectForTUI` /
-      `unlinkProjectForTUI` wrappers that suppress console output during TUI operation
-- [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
-      archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
-- [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
-      with title (consistent across all tabs); Features tab describes each state in plain text
-- [x] **`swoop --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
-      from `swoop config` line
-- [x] **Density toggle removed** — `d` key and comfortable/compact density removed from TUI;
-      two stale label keys (`cmdDensityComfortable`, `cmdDensityCompact`) remain in `labels.ts`
-      and should be cleaned up
-
----
-
-## Milestone 8 — Distribution and installers
-
-Make installation feel native and require no repository clone, build step, or
-manual shell setup. Detailed behavior is defined in
-[`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
-
-- [x] Resolve the public product/package name before producing signed artifacts
-- [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
-- [ ] Add the installed `swoop` launcher to the current user's `PATH`
-- [ ] Windows installer: offer pre-selected PowerShell completion integration
-      for Windows PowerShell 5.1 and PowerShell 7
-- [ ] Install shell completion as a managed, idempotent, reversible integration;
-      back up profiles before first modification and remove only Swoop-owned blocks
-- [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
-- [ ] Add upgrade, repair, and uninstall verification on clean platform environments
-- [ ] Publish checksums and document artifact provenance/signing
-
----
-
-## Milestone 9 — Growth: themes and i18n ✓ done
+## Milestone 8 — Growth: themes and i18n ✓ done
 
 ### Theme system
 
@@ -283,6 +254,50 @@ manual shell setup. Detailed behavior is defined in
       `src/tui/**` via `eslint.config.js`; fix path is `LABELS.xxx`
 - [ ] Extend lint coverage to `src/cli/**` and `src/web/routes/**`
 - [ ] Document contribution path: adding a language = parallel labels file + README section
+
+---
+
+## Milestone 8.5 — Config & CLI polish ✓ done
+
+Improvements shipped after M8:
+
+- [x] **Command registry** (`src/tui/commands.ts`) — single `COMMANDS` array with `visibleWhen`
+      named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
+      HelpOverlay and CommandPalette both derive from the same source of truth
+- [x] **`swoop sync`** — renamed from the earlier memory-command prototype throughout: file,
+      exports, CLI dispatch, help
+      text, documentation, and all user-facing strings; `memory` kept as a backwards-compat alias
+- [x] **Sync tab in `swoop config`** — interactive cursor navigation over unsynced and synced
+      projects; Enter to link/unlink inline without leaving the TUI; uses `linkProjectForTUI` /
+      `unlinkProjectForTUI` wrappers that suppress console output during TUI operation
+- [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
+      archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
+- [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
+      with title (consistent across all tabs); Features tab describes each state in plain text
+- [x] **`swoop --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
+      from `swoop config` line
+- [x] **Density toggle removed** — `d` key and comfortable/compact density removed from TUI;
+      two stale label keys (`cmdDensityComfortable`, `cmdDensityCompact`) remain in `labels.ts`
+      and should be cleaned up
+
+---
+
+## Milestone 9 — Distribution and installers
+
+Make installation feel native and require no repository clone, build step, or
+manual shell setup. Detailed behavior is defined in
+[`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
+
+- [x] Resolve the public product/package name before producing signed artifacts
+- [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
+- [ ] Add the installed `swoop` launcher to the current user's `PATH`
+- [ ] Windows installer: offer pre-selected PowerShell completion integration
+      for Windows PowerShell 5.1 and PowerShell 7
+- [ ] Install shell completion as a managed, idempotent, reversible integration;
+      back up profiles before first modification and remove only Swoop-owned blocks
+- [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
+- [ ] Add upgrade, repair, and uninstall verification on clean platform environments
+- [ ] Publish checksums and document artifact provenance/signing
 
 ---
 
@@ -355,6 +370,69 @@ Claude Code users already spend most of their time.
       service, and no API key for core features.
 - [ ] It must not block the CLI/TUI/web experience or add heavy dependencies to
       the existing package.
+
+---
+
+## Milestone 12 — Organization layer: tags, groups, and work stacks
+
+Make Swoop useful when Claude Code work stops being "a list of folders" and becomes many
+parallel investigations, branches, fixes, reviews, and half-finished threads. The goal is a
+lightweight organisation layer that feels faster than filing things manually.
+
+### Product direction
+
+- [ ] **Project groups** — user-defined groups such as `Work`, `Personal`, `Clients`,
+      `Research`, or `Archived Labs`; shown as collapsible sections in TUI and web
+- [ ] **Session tags** — small labels on sessions (`bug`, `release`, `waiting`, `review`,
+      `deep-dive`, etc.) stored in Swoop metadata; never written into Claude transcripts
+- [ ] **Project tags** — labels that apply to all sessions in a project and help search/filter
+      across related repos
+- [ ] **Work stacks** — a named saved view that can contain projects and sessions together,
+      e.g. `Auth migration`, `Launch week`, or `Bug bash`; this is the standout concept:
+      group by intent, not by filesystem
+- [ ] **Focus mode** — activate one group/tag/stack and hide unrelated noise until cleared
+- [ ] **Smart views** — built-in virtual views such as `Active now`, `Needs attention`,
+      `Waiting`, `High context`, `Recently touched`, and `Expiring soon`
+
+### Fast interaction model
+
+- [ ] **One-key tagging** — `t` opens a tiny tag picker for the focused session/project;
+      typing creates or filters tags, Enter toggles, Esc cancels
+- [ ] **Quick move/group** — `g` opens a group/stack picker; Enter assigns the focused project
+      or selected sessions without leaving the keyboard flow
+- [ ] **Web drag-and-drop** — drag a session or project onto a group/stack in the sidebar;
+      no dependency-heavy DnD framework unless native pointer events become too fragile
+- [ ] **Command palette actions** — `Tag selected`, `Move to group`, `Create stack from selection`,
+      `Focus this tag`, `Clear focus`
+- [ ] **Bulk organisation** — multi-select sessions with existing `space`, then tag/group/archive
+      them together
+- [ ] **Recent tags and suggested tags** — show the last-used tags first; optionally suggest tags
+      from branch name, project folder, status signals, and existing aliases without AI/API calls
+
+### Data and safety
+
+- [ ] Store session tags in each project's `swoop.json` sidecar beside alias/archive metadata
+- [ ] Store project groups, project tags, stack definitions, and tag palette in
+      `~/.claude/swoop/prefs.json`
+- [ ] Keep organisation metadata local-first and portable; no account, no telemetry, no server
+- [ ] Provide `swoop config` toggles for organisation UI density and suggested-tag behaviour
+- [ ] Add export/import for organisation metadata before adding complex editing flows
+- [ ] Make delete/archive/tag actions undo-friendly where feasible, or clearly reversible by design
+
+### MVP slice
+
+- [ ] Data model: session tags + project groups + saved stack definitions
+- [ ] CLI: `swoop list --tag <tag>`, `swoop list --group <group>`, and JSON fields for tags/groups
+- [ ] TUI: tag picker (`t`), group picker (`g`), and focus filter
+- [ ] Web: visible group/sidebar section, tag chips in rows, drag project/session onto a group
+- [ ] Tests: metadata read/write, filters, keyboard actions, and web-client regression guards
+
+### Product guardrails
+
+- [ ] Do not turn Swoop into a project-management app: no due dates, comments, assignments, or
+      kanban boards in the core product
+- [ ] Keep the default experience clean for users with no tags/groups configured
+- [ ] Every organisation feature must improve resume/triage speed, not just decorate rows
 
 ---
 
