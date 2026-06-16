@@ -13,13 +13,16 @@ async function startNewSession(project) {
       body: JSON.stringify({ projectId: project.id }),
     })
     if (result.launched) {
-      showToast('New session started in terminal')
+      showToast(STRINGS.newSessionStarted)
     } else if (result.copied) {
-      showToast('Launch failed — command copied to clipboard', 'copied')
+      showToast(STRINGS.newSessionLaunchFailedCopied, 'copied')
     } else {
-      showToast('Launch failed: ' + (result.message || 'unknown error'), 'err')
+      showToast(
+        fmt(STRINGS.newSessionLaunchFailed, { message: result.message || 'unknown error' }),
+        'err'
+      )
     }
   } catch (error) {
-    showToast('Error: ' + error.message, 'err')
+    showToast(fmt(STRINGS.newSessionError, { message: error.message }), 'err')
   }
 }

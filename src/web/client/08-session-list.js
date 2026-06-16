@@ -7,6 +7,7 @@ function buildSessionRowHtml(session) {
   const isSelected = selectedSession && session.id === selectedSession.id
   const branch = session.gitBranch || null
   const displayName = session.alias || session.name
+  const isLive = activeSessionIds.has(session.id)
 
   return (
     '<div class="sess-row' +
@@ -19,20 +20,32 @@ function buildSessionRowHtml(session) {
     '<span class="s-arrow">' +
     (isSelected ? '▶' : ' ') +
     '</span>' +
-    (activeSessionIds.has(session.id) ? '<span class="s-live">●</span>' : '') +
+    '<span class="s-live"' +
+    (isLive ? ' title="' + escapeHtml(STRINGS.sessionLiveTooltip) + '"' : '') +
+    '>' +
+    (isLive ? '◉' : '') +
+    '</span>' +
     (renamingSessionId === session.id
       ? '<input class="s-rename-input" value="' + escapeHtml(displayName) + '" maxlength="160">'
       : '<span class="s-name">' + escapeHtml(displayName) + '</span>') +
-    '<span class="s-time">' +
+    '<span class="s-time" title="' +
+    escapeHtml(
+      fmt(STRINGS.sessionTimeTooltip, { date: new Date(session.updated).toLocaleString() })
+    ) +
+    '">' +
     relativeTime(session.updated) +
     '</span>' +
-    '<button class="s-menu-btn" title="More actions">⋯</button>' +
+    '<button class="s-menu-btn" title="' +
+    escapeHtml(STRINGS.sessionMoreActions) +
+    '">⋯</button>' +
     '</div>' +
     '<div class="s-line2">' +
     (branch
-      ? '<span class="pip" style="background:' +
+      ? '<span class="branch-n" style="color:' +
         colorForGitBranch(branch) +
-        '"></span><span class="branch-n">⎷ ' +
+        '" title="' +
+        escapeHtml(fmt(STRINGS.sessionBranchTooltip, { branch: branch })) +
+        '">⎇ ' +
         escapeHtml(branch) +
         '</span>' +
         buildBranchDriftHtml(session) +
@@ -42,10 +55,20 @@ function buildSessionRowHtml(session) {
     session.messageCount +
     ' msgs</span>' +
     (session.context.latestModel
-      ? '<span class="s-model">' + escapeHtml(session.context.latestModel) + '</span>'
+      ? '<span class="s-model" title="' +
+        escapeHtml(fmt(STRINGS.sessionModelTooltip, { model: session.context.latestModel })) +
+        '">' +
+        escapeHtml(session.context.latestModel) +
+        '</span>'
       : '') +
     (session.context.latestContextTokens != null
-      ? '<span class="s-context">' +
+      ? '<span class="s-context" title="' +
+        escapeHtml(
+          fmt(STRINGS.sessionContextTooltip, {
+            tokens: formatTokenCount(session.context.latestContextTokens),
+          })
+        ) +
+        '">' +
         formatTokenCount(session.context.latestContextTokens) +
         ' ctx</span>'
       : '') +
@@ -60,20 +83,22 @@ function buildSessionRowHtml(session) {
 function buildEmptySessionListHtml(visibleSessions) {
   if (!selectedProject) {
     return searchQuery
-      ? '<div class="empty">No projects or sessions match.</div>'
-      : '<div class="empty">Select a project from the left panel.</div>'
+      ? '<div class="empty">' + STRINGS.emptyNoMatch + '</div>'
+      : '<div class="empty">' + STRINGS.emptySelectProject + '</div>'
   }
   if (visibleSessions.length > 0) return ''
 
   const archivedCount = sessionsMatchingFilter(selectedProject, 'archived').length
   const message = searchQuery
-    ? 'No sessions match.'
+    ? STRINGS.emptyNoSessionsSearch
     : selectedFilter === 'all'
-      ? 'No sessions.'
-      : 'No sessions in this filter.'
+      ? STRINGS.emptyNoSessions
+      : STRINGS.emptyNoSessionsFilter
   const archiveHint =
     selectedFilter === 'all' && archivedCount > 0
-      ? ' <span class="empty-hint">' + archivedCount + ' archived.</span>'
+      ? ' <span class="empty-hint">' +
+        fmt(STRINGS.emptyArchivedHint, { n: archivedCount }) +
+        '</span>'
       : ''
   return '<div class="empty">' + message + archiveHint + '</div>'
 }
@@ -123,22 +148,20 @@ async function saveSessionAlias(session, aliasInput) {
       body: JSON.stringify({ alias: alias || null }),
     })
     await refreshProjectData()
-    showToast(alias ? 'Renamed to "' + alias + '"' : 'Alias cleared')
+    showToast(alias ? fmt(STRINGS.sessionRenamed, { alias: alias }) : STRINGS.sessionAliasCleared)
   } catch (error) {
     await refreshProjectData()
-    showToast('Rename failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionRenameFailed, { error: error.message }), 'err')
   }
 }
 
 async function deleteSessionPermanently(session) {
   if (activeSessionIds.has(session.id)) {
-    showToast('Cannot delete an active session.', 'err')
+    showToast(STRINGS.sessionCannotDeleteActive, 'err')
     return
   }
   const confirmed = window.confirm(
-    'Delete "' +
-      (session.alias || session.name) +
-      '" permanently?\n\nThis removes the transcript file and cannot be undone.'
+    fmt(STRINGS.sessionDeleteConfirm, { name: session.alias || session.name })
   )
   if (!confirmed) return
   try {
@@ -146,9 +169,9 @@ async function deleteSessionPermanently(session) {
       method: 'DELETE',
     })
     await refreshProjectData()
-    showToast('Session deleted.')
+    showToast(STRINGS.sessionDeleted)
   } catch (error) {
-    showToast('Delete failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionDeleteFailed, { error: error.message }), 'err')
   }
 }
 
@@ -162,9 +185,9 @@ async function toggleSessionArchivedState(session) {
       body: JSON.stringify({ archived: shouldArchive }),
     })
     await refreshProjectData()
-    if (shouldArchive) showToast('Archived locally. Claude may still delete the transcript.')
+    if (shouldArchive) showToast(STRINGS.sessionArchivedNote)
   } catch (error) {
-    showToast('Archive failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionArchiveFailed, { error: error.message }), 'err')
   }
 }
 
@@ -176,20 +199,20 @@ function beginSessionRename(session) {
 
 /** Copies the full session ID to the clipboard. */
 function copySessionId(session) {
-  copyTextToClipboard(session.id, 'ID copied: ' + session.id.slice(0, 8) + '...')
+  copyTextToClipboard(session.id, fmt(STRINGS.sessionCopiedId, { prefix: session.id.slice(0, 8) }))
 }
 
 /** Builds a Markdown handoff packet on the server and copies it to the clipboard. */
 async function copySessionHandoff(session) {
   if (!selectedProject) return
   try {
-    showToast('Building handoff...')
+    showToast(STRINGS.sessionHandoffBuilding)
     const result = await requestJson(
       '/api/sessions/' + selectedProject.id + '/' + session.id + '/handoff'
     )
-    copyTextToClipboard(result.markdown, 'Handoff copied')
+    copyTextToClipboard(result.markdown, STRINGS.sessionHandoffCopied)
   } catch (error) {
-    showToast('Handoff failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionHandoffFailed, { error: error.message }), 'err')
   }
 }
 
@@ -216,15 +239,17 @@ function executeSessionAction(action, session) {
 /** Returns the menu/action labels for a session in a single canonical order. */
 function sessionActionItems(session) {
   return [
-    { action: 'session-resume', label: 'resume' },
-    { action: 'session-handoff', label: 'copy handoff' },
-    { action: 'session-rename', label: 'rename' },
+    { action: 'session-resume', label: STRINGS.sessionActionResume },
+    { action: 'session-handoff', label: STRINGS.sessionActionHandoff },
+    { action: 'session-rename', label: STRINGS.sessionActionRename },
     {
       action: 'session-archive',
-      label: session.signals.archived ? 'unarchive' : 'archive locally',
+      label: session.signals.archived
+        ? STRINGS.sessionActionUnarchive
+        : STRINGS.sessionActionArchive,
     },
-    { action: 'session-copy-id', label: 'copy session ID' },
-    { action: 'session-delete', label: 'delete permanently' },
+    { action: 'session-copy-id', label: STRINGS.sessionActionCopyId },
+    { action: 'session-delete', label: STRINGS.sessionActionDelete },
   ]
 }
 

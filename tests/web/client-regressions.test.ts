@@ -208,19 +208,36 @@ describe('web client session-row invariants', () => {
     expect(narrowStyles).toContain('display: flex;')
   })
 
-  it('loads Resume Card preview data lazily and invalidates it on live updates', () => {
+  it('loads Resume Card preview data lazily and refreshes it without blanking on live updates', () => {
+    const previewRefresh = sourceBetween(
+      'function refreshSessionPreview(',
+      'function ensureSessionPreview('
+    )
     const previewLoading = sourceBetween(
       'function ensureSessionPreview(',
+      'function markSessionPreviewsStale('
+    )
+    const staleInvalidation = sourceBetween(
+      'function markSessionPreviewsStale(',
       'function buildInspectorActionsHtml('
     )
     const sseUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
 
-    expect(previewLoading).toContain('/preview')
+    expect(previewRefresh).toContain('/preview')
+    expect(previewRefresh).toContain('entry.refreshing = true')
+    expect(previewRefresh).toContain('if (entry.data)')
+    expect(previewRefresh).toContain('renderInspector(deriveVisibleSessions())')
     expect(previewLoading).toContain('sessionPreviewCache.set')
-    expect(previewLoading).toContain('renderInspector(deriveVisibleSessions())')
+    expect(staleInvalidation).toContain('entry.stale = true')
     expect(source).toContain('function buildSessionPreviewHtml(')
     expect(source).toContain('Resume Card')
-    expect(sseUpdates).toContain('sessionPreviewCache.clear()')
+    expect(source).toContain('function buildNativePlanHtml(')
+    expect(source).toContain('function buildNativeTodosHtml(')
+    expect(source).toContain('function renderPreviewMarkdown(')
+    expect(source).toContain('previewNativePlan')
+    expect(source).toContain('previewNativeTodos')
+    expect(sseUpdates).toContain('markSessionPreviewsStale()')
+    expect(sseUpdates).not.toContain('sessionPreviewCache.clear()')
   })
 
   it('derives branch drift from each session working directory', () => {

@@ -20,6 +20,7 @@
           <input
             id="search-input"
             placeholder="project / session — tab: search all context"
+            title="Search projects and sessions — Tab to search inside full transcripts"
             autocomplete="off"
             spellcheck="false"
           />
@@ -49,7 +50,13 @@
             <button class="back-btn" id="back-btn" aria-label="Back to projects">←</button>
             <span class="right-hdr-title" id="right-title">Select a project</span>
             <span class="right-cnt" id="right-cnt"></span>
-            <a class="md-tag" id="md-tag" style="display: none" href="#">
+            <a
+              class="md-tag"
+              id="md-tag"
+              style="display: none"
+              href="#"
+              title="Edit project instructions (CLAUDE.md)"
+            >
               <span class="md-pip"></span>CLAUDE.md
             </a>
           </div>
@@ -58,6 +65,7 @@
             <button class="filter-pill" data-filter="attention">Needs Attention</button>
             <button class="filter-pill" data-filter="active">Active</button>
             <button class="filter-pill" data-filter="archived">Archived</button>
+            <!-- titles set dynamically by renderFilterBar() from STRINGS -->
             <span class="filter-sep"></span>
             <select class="sort-select" id="sort-select" title="Sort order">
               <option value="recent">Recent</option>
@@ -71,13 +79,27 @@
       </div>
 
       <footer class="ftr">
-        <span class="ftr-item"><b class="ftr-k">click</b> select</span>
-        <span class="ftr-item ftr-item-context"><b class="ftr-k">right-click</b> actions</span>
-        <span class="ftr-item"><b class="ftr-k">enter</b> resume</span>
-        <span class="ftr-item"><b class="ftr-k">/</b> search</span>
-        <span class="ftr-item"><b class="ftr-k">r</b> rename</span>
-        <span class="ftr-item"><b class="ftr-k">H</b> handoff</span>
-        <span class="ftr-item"><b class="ftr-k">D</b> delete</span>
+        <span class="ftr-item" title="Click to select a session"
+          ><b class="ftr-k">click</b> select</span
+        >
+        <span
+          class="ftr-item ftr-item-context"
+          title="Right-click a session or project row for actions"
+          ><b class="ftr-k">right-click</b> actions</span
+        >
+        <span class="ftr-item" title="Resume the selected session in a terminal"
+          ><b class="ftr-k">enter</b> resume</span
+        >
+        <span class="ftr-item" title="Open the search bar"><b class="ftr-k">/</b> search</span>
+        <span class="ftr-item" title="Rename the selected session (r)"
+          ><b class="ftr-k">r</b> rename</span
+        >
+        <span class="ftr-item" title="Copy a handoff packet for the selected session (H)"
+          ><b class="ftr-k">H</b> handoff</span
+        >
+        <span class="ftr-item" title="Delete the selected session permanently (D)"
+          ><b class="ftr-k">D</b> delete</span
+        >
         <span class="ftr-sp"></span>
         <button class="ftr-diagnostics" id="ftr-diagnostics" style="display: none"></button>
         <button class="ftr-theme-btn" id="ftr-theme-btn" title="Switch theme">theme</button>

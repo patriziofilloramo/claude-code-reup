@@ -183,10 +183,10 @@ function copyTextToClipboard(text, successMessage) {
   navigator.clipboard
     .writeText(text)
     .then(function () {
-      showToast(successMessage || 'Copied')
+      showToast(successMessage || STRINGS.clipboardCopied)
     })
     .catch(function () {
-      showToast('Clipboard unavailable', 'err')
+      showToast(STRINGS.clipboardUnavailable, 'err')
     })
 }
 
@@ -217,19 +217,38 @@ function buildBranchDriftHtml(session) {
 /** Returns an HTML badge for warning/error session states. Empty string for the "ok" state. */
 function buildStatusBadgeHtml(session) {
   const status = session.primaryStatus
+  const signals = session.signals || {}
   if (status === 'interrupted') {
-    return '<span class="s-badge s-badge-warn">✗ interrupted</span>'
+    return (
+      '<span class="s-badge s-badge-warn" title="' +
+      escapeHtml(STRINGS.statusInterruptedDesc) +
+      '">✗ interrupted</span>'
+    )
   }
   if (status === 'expiring') {
-    const days =
-      session.signals && session.signals.expiresInDays != null ? session.signals.expiresInDays : '?'
-    return '<span class="s-badge s-badge-err">⚠ ' + days + 'd left</span>'
+    const days = signals.expiresInDays != null ? signals.expiresInDays : '?'
+    return (
+      '<span class="s-badge s-badge-err" title="' +
+      escapeHtml(fmt(STRINGS.statusExpiringDesc, { days: days })) +
+      '">⚠ ' +
+      days +
+      'd left</span>'
+    )
   }
   if (status === 'path-missing') {
-    return '<span class="s-badge s-badge-err">⚠ path gone</span>'
+    return (
+      '<span class="s-badge s-badge-err" title="' +
+      escapeHtml(STRINGS.statusPathMissingDesc) +
+      '">⚠ path gone</span>'
+    )
   }
   if (status === 'heavily-compacted') {
-    return '<span class="s-badge s-badge-dim">⤡ heavy ctx</span>'
+    const count = signals.compactionCount != null ? signals.compactionCount : '?'
+    return (
+      '<span class="s-badge s-badge-dim" title="' +
+      escapeHtml(fmt(STRINGS.statusHeavilyCompactedDesc, { count: count })) +
+      '">⤡ heavy ctx</span>'
+    )
   }
   return ''
 }

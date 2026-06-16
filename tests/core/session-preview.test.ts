@@ -51,12 +51,13 @@ function writeTool(id: string, filePath: string) {
 
 describe('extractSessionPreview', () => {
   it('returns empty preview for an empty transcript', () => {
-    expect(extractSessionPreview([])).toEqual({
+    expect(extractSessionPreview([])).toMatchObject({
       goal: null,
       lastResponse: null,
       pendingToolName: null,
       touchedFiles: [],
     })
+    expect(extractSessionPreview([]).automaticContext.todos.items).toEqual([])
   })
 
   it('ignores malformed JSONL lines without throwing', () => {

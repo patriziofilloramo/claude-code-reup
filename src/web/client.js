@@ -8,6 +8,204 @@
  */
 ;(function () {
 // ---------------------------------------------------------------------------
+// UI strings — swap this object at runtime to localise the interface
+// ---------------------------------------------------------------------------
+
+const STRINGS = {
+  // ── Project panel ──────────────────────────────────────────────────────────
+  projectsLabel: 'PROJECTS [{n}]',
+  projectLastActive: 'last active: {time}',
+  projectNewSession: 'New session',
+  projectMoreActions: 'More actions',
+  projectCloudOk: 'Shared storage — writes directly to cloud',
+  projectCloudOffline:
+    'Cloud offline — sessions saved locally, new sessions paused until sync resumes',
+  projectCloudUnlinked: 'Device(s) not linked: {devices} — run swoop sync link on those devices',
+  projectCtxNewSession: '+ new session',
+  projectCtxCopyPath: 'copy path',
+  projectPathCopied: 'Path copied',
+
+  // ── Filters ────────────────────────────────────────────────────────────────
+  filterAll: 'All',
+  filterActive: 'Active',
+  filterArchived: 'Archived',
+  filterAttention: 'Needs Attention',
+  filterTooltipAll: 'All non-archived sessions',
+  filterTooltipActive: 'Sessions currently running in a terminal',
+  filterTooltipArchived: 'Locally archived sessions',
+  filterTooltipAttention:
+    'Sessions needing attention: interrupted, expiring, or with missing paths',
+
+  // ── Session list ──────────────────────────────────────────────────────────
+  sessionLiveTooltip: 'Active — this session is currently running',
+  sessionBranchTooltip: 'Branch: {branch}',
+  sessionTimeTooltip: 'Last active: {date}',
+  sessionModelTooltip: 'Model: {model}',
+  sessionContextTooltip: 'Context window tokens in the last turn ({tokens})',
+  sessionMoreActions: 'More actions',
+
+  sessionDeepHit: '{n} hit',
+  sessionDeepHits: '{n} hits',
+
+  sessionActionResume: 'resume',
+  sessionActionHandoff: 'copy handoff',
+  sessionActionRename: 'rename',
+  sessionActionArchive: 'archive locally',
+  sessionActionUnarchive: 'unarchive',
+  sessionActionCopyId: 'copy session ID',
+  sessionActionDelete: 'delete permanently',
+
+  sessionCopiedId: 'ID copied: {prefix}…',
+  sessionHandoffBuilding: 'Building handoff...',
+  sessionHandoffCopied: 'Handoff copied',
+  sessionHandoffFailed: 'Handoff failed: {error}',
+  sessionCannotDeleteActive: 'Cannot delete an active session.',
+  sessionDeleteConfirm:
+    'Delete “{name}” permanently?\n\nThis removes the transcript file and cannot be undone.',
+  sessionDeleted: 'Session deleted.',
+  sessionDeleteFailed: 'Delete failed: {error}',
+  sessionRenamed: 'Renamed to “{alias}”',
+  sessionAliasCleared: 'Alias cleared',
+  sessionRenameFailed: 'Rename failed: {error}',
+  sessionArchivedNote: 'Archived locally. Claude may still delete the transcript.',
+  sessionArchiveFailed: 'Archive failed: {error}',
+
+  // ── Session status badges ─────────────────────────────────────────────────
+  statusInterruptedDesc: 'Claude had pending tool calls with no result — resume to continue.',
+  statusExpiringDesc: 'Transcript expires in {days} days (Claude auto-deletes after 30).',
+  statusPathMissingDesc: 'Project directory no longer exists on disk.',
+  statusHeavilyCompactedDesc: 'Context was compacted {count} times.',
+
+  // ── Clipboard ─────────────────────────────────────────────────────────────
+  clipboardCopied: 'Copied',
+  clipboardUnavailable: 'Clipboard unavailable',
+
+  // ── Inspector ─────────────────────────────────────────────────────────────
+  inspectorTitle: 'Session Details',
+  inspectorCopyId: 'Copy full session ID',
+
+  inspBtnResume: 'Resume',
+  inspBtnResumeTooltip: 'Open session in terminal (Enter)',
+  inspBtnHandoff: 'Handoff',
+  inspBtnHandoffTooltip: 'Copy context handoff packet (H)',
+  inspBtnRename: 'Rename',
+  inspBtnRenameTooltip: 'Rename session (r)',
+  inspBtnArchive: 'Archive',
+  inspBtnArchiveTooltip: 'Archive session locally (a)',
+  inspBtnUnarchive: 'Unarchive',
+  inspBtnUnarchiveTooltip: 'Unarchive session (a)',
+  inspBtnDelete: 'Delete',
+  inspBtnDeleteTooltip: 'Delete session permanently (D)',
+  inspBtnDeleteDisabledTooltip: 'Active sessions cannot be deleted',
+
+  inspShortcuts: 'enter resume · H handoff · r rename · a archive · D delete',
+
+  inspRowStatus: 'Status',
+  inspRowLastActive: 'Last active',
+  inspRowMessages: 'Messages',
+  inspRowCompactions: 'Compactions',
+  inspRowCompactionsTooltip: 'Number of times Claude compressed the context window to save space',
+  inspRowExpiresIn: 'Expires in',
+  inspRowExpiresInTooltip: 'Claude auto-deletes transcripts after 30 days of inactivity',
+  inspRowExpiresInValue: '{days} days',
+  inspRowLatestModel: 'Latest model',
+  inspRowLastContext: 'Last context',
+  inspRowLastContextTooltip: 'Tokens in the context window during the last turn',
+  inspRowLastOutput: 'Last output',
+  inspRowLastOutputTooltip: 'Tokens generated in the last response',
+  inspRowModelsUsed: 'Models used',
+  inspRowModelsUsedTooltip: 'All models used across the lifetime of this session',
+  inspRowSessionId: 'Session ID',
+  inspRowSessionIdTooltip: 'Click to copy the full session ID',
+  inspRowPath: 'Path',
+  inspRowTokenValue: '{count} tokens',
+  inspStatusOk: 'ok',
+  inspCopied: 'Copied: {prefix}…',
+
+  // ── Resume card ────────────────────────────────────────────────────────────
+  previewTitle: 'Resume Card',
+  previewGoal: 'what you asked for',
+  previewLastResponse: 'where Claude left off',
+  previewNativePlan: 'native plan',
+  previewNativeTodos: 'native todos',
+  previewNativeTodosSummary: '{open} open, {done} done',
+  previewTodoMore: '+{n} more',
+  previewNotFound: 'Not found in transcript.',
+  previewPendingTool: 'Pending tool: {name}',
+  previewFilesTouched: 'files touched · {count}',
+  previewLoading: 'Loading session preview...',
+  previewError: 'Preview unavailable: {error}',
+
+  // ── Resume dialog ──────────────────────────────────────────────────────────
+  resumeLaunchingFrames: ['launching', 'launching.', 'launching..', 'launching...'],
+  resumeConfirmBtn: 'Resume',
+  resumeResumed: 'Session resumed in terminal',
+  resumeLaunchFailed: 'Launch failed — {message}',
+  resumeCommandCopied: 'Command copied to clipboard',
+  resumeFallbackFailed: 'Failed to launch terminal.',
+  resumeError: 'Error: {message}',
+
+  // ── Diagnostics / Lost & Found ────────────────────────────────────────────
+  diagnosticsScanning: 'Scanning…',
+  diagnosticsLoadFailed: 'Failed to load diagnostics.',
+  diagnosticsNoIssues: 'No issues found.',
+  diagnosticsSummary: '{n} issue found',
+  diagnosticsSummaryPlural: '{n} issues found',
+  diagnosticsSectionExpiring: 'Expiring ({n})',
+  diagnosticsSectionMissingPaths: 'Missing paths ({n})',
+  diagnosticsSectionOrphaned: 'Orphaned transcripts ({n})',
+  diagnosticsSectionBrokenIndices: 'Broken indices ({n})',
+  diagnosticsSectionStaleLocks: 'Stale locks ({n})',
+  diagnosticsExpiresSoon: 'Expires soon · {path}',
+  diagnosticsPathMissing: 'Path missing · {path}',
+
+  // ── CLAUDE.md drawer ───────────────────────────────────────────────────────
+  claudeMdSaved: 'saved',
+  claudeMdUnsaved: 'unsaved',
+  claudeMdSaveError: 'error: {message}',
+
+  // ── New session ────────────────────────────────────────────────────────────
+  newSessionStarted: 'New session started in terminal',
+  newSessionLaunchFailedCopied: 'Launch failed — command copied to clipboard',
+  newSessionLaunchFailed: 'Launch failed: {message}',
+  newSessionError: 'Error: {message}',
+
+  // ── Status bar ─────────────────────────────────────────────────────────────
+  statusBarProjects: '{n} projects',
+  statusBarLoadError: 'Error loading projects',
+  statusBarDiagnostics: '⚠ {n} issue',
+  statusBarDiagnosticsPlural: '⚠ {n} issues',
+
+  // ── Empty states ──────────────────────────────────────────────────────────
+  emptyNoMatch: 'No projects or sessions match.',
+  emptySelectProject: 'Select a project from the left panel.',
+  emptyNoSessions: 'No sessions.',
+  emptyNoSessionsFilter: 'No sessions in this filter.',
+  emptyNoSessionsSearch: 'No sessions match.',
+  emptyArchivedHint: '{n} archived.',
+}
+
+/**
+ * Substitutes {key} placeholders in a template with values from vars.
+ * Use instead of string concatenation so strings remain translatable as
+ * complete phrases.
+ */
+function fmt(template, vars) {
+  return template.replace(/\{(\w+)\}/g, function (_, key) {
+    return vars[key] !== undefined ? String(vars[key]) : '{' + key + '}'
+  })
+}
+
+/** Returns the display label for a filter key (all/active/archived/attention). */
+function filterLabel(filter) {
+  return STRINGS['filter' + filter.charAt(0).toUpperCase() + filter.slice(1)] || filter
+}
+
+/** Returns the tooltip for a filter key. */
+function filterTooltip(filter) {
+  return STRINGS['filterTooltip' + filter.charAt(0).toUpperCase() + filter.slice(1)] || ''
+}
+// ---------------------------------------------------------------------------
 // Configuration and application state
 // ---------------------------------------------------------------------------
 
@@ -25,12 +223,6 @@ const USAGE_POLL_INTERVAL_MS = 5000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
 
-const FILTER_LABELS = {
-  active: 'Active',
-  all: 'All',
-  archived: 'Archived',
-  attention: 'Needs Attention',
-}
 const RISK_RANK = {
   interrupted: 0,
   expiring: 1,
@@ -291,10 +483,10 @@ function copyTextToClipboard(text, successMessage) {
   navigator.clipboard
     .writeText(text)
     .then(function () {
-      showToast(successMessage || 'Copied')
+      showToast(successMessage || STRINGS.clipboardCopied)
     })
     .catch(function () {
-      showToast('Clipboard unavailable', 'err')
+      showToast(STRINGS.clipboardUnavailable, 'err')
     })
 }
 
@@ -325,19 +517,38 @@ function buildBranchDriftHtml(session) {
 /** Returns an HTML badge for warning/error session states. Empty string for the "ok" state. */
 function buildStatusBadgeHtml(session) {
   const status = session.primaryStatus
+  const signals = session.signals || {}
   if (status === 'interrupted') {
-    return '<span class="s-badge s-badge-warn">✗ interrupted</span>'
+    return (
+      '<span class="s-badge s-badge-warn" title="' +
+      escapeHtml(STRINGS.statusInterruptedDesc) +
+      '">✗ interrupted</span>'
+    )
   }
   if (status === 'expiring') {
-    const days =
-      session.signals && session.signals.expiresInDays != null ? session.signals.expiresInDays : '?'
-    return '<span class="s-badge s-badge-err">⚠ ' + days + 'd left</span>'
+    const days = signals.expiresInDays != null ? signals.expiresInDays : '?'
+    return (
+      '<span class="s-badge s-badge-err" title="' +
+      escapeHtml(fmt(STRINGS.statusExpiringDesc, { days: days })) +
+      '">⚠ ' +
+      days +
+      'd left</span>'
+    )
   }
   if (status === 'path-missing') {
-    return '<span class="s-badge s-badge-err">⚠ path gone</span>'
+    return (
+      '<span class="s-badge s-badge-err" title="' +
+      escapeHtml(STRINGS.statusPathMissingDesc) +
+      '">⚠ path gone</span>'
+    )
   }
   if (status === 'heavily-compacted') {
-    return '<span class="s-badge s-badge-dim">⤡ heavy ctx</span>'
+    const count = signals.compactionCount != null ? signals.compactionCount : '?'
+    return (
+      '<span class="s-badge s-badge-dim" title="' +
+      escapeHtml(fmt(STRINGS.statusHeavilyCompactedDesc, { count: count })) +
+      '">⤡ heavy ctx</span>'
+    )
   }
   return ''
 }
@@ -414,27 +625,37 @@ function buildProjectRowHtml(project) {
     escapeHtml(project.id) +
     '" title="' +
     escapeHtml(project.path) +
-    (lastActive ? '\nlast active: ' + relativeTime(lastActive) : '') +
+    (lastActive ? '\n' + fmt(STRINGS.projectLastActive, { time: relativeTime(lastActive) }) : '') +
     '">' +
     '<span class="p-name">' +
     escapeHtml(compactPath(project.path)) +
     '</span>' +
     (project.isShared
       ? project.cloudOffline
-        ? '<span class="p-cloud p-cloud--stale" title="Cloud offline — sessions saved locally, new sessions paused until sync resumes">☁</span>'
+        ? '<span class="p-cloud p-cloud--stale" title="' +
+          escapeHtml(STRINGS.projectCloudOffline) +
+          '">☁</span>'
         : project.unlinkedDevices && project.unlinkedDevices.length > 0
-          ? '<span class="p-cloud p-cloud--unlinked" title="Device(s) not linked: ' +
-            escapeHtml(project.unlinkedDevices.join(', ')) +
-            ' — run swoop sync link on those devices">☁</span>'
-          : '<span class="p-cloud p-cloud--ok" title="Shared storage — writes directly to cloud">☁</span>'
+          ? '<span class="p-cloud p-cloud--unlinked" title="' +
+            escapeHtml(
+              fmt(STRINGS.projectCloudUnlinked, { devices: project.unlinkedDevices.join(', ') })
+            ) +
+            '">☁</span>'
+          : '<span class="p-cloud p-cloud--ok" title="' +
+            escapeHtml(STRINGS.projectCloudOk) +
+            '">☁</span>'
       : '') +
     (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
     '<span class="p-cnt">' +
     sessionCount +
     '</span>' +
     '<div class="p-actions">' +
-    '<button class="p-act-btn p-new-btn" title="New session">+</button>' +
-    '<button class="p-act-btn p-menu-btn" title="More actions">⋯</button>' +
+    '<button class="p-act-btn p-new-btn" title="' +
+    escapeHtml(STRINGS.projectNewSession) +
+    '">+</button>' +
+    '<button class="p-act-btn p-menu-btn" title="' +
+    escapeHtml(STRINGS.projectMoreActions) +
+    '">⋯</button>' +
     '</div>' +
     '</div>'
   )
@@ -451,11 +672,14 @@ function getDeepMatchForSession(sessionId) {
 /** Returns an HTML snippet row showing the match count and text excerpt. Empty string when match is null. */
 function buildDeepSnippetHtml(match) {
   if (!match) return ''
+  const hitLabel =
+    match.matchCount === 1
+      ? fmt(STRINGS.sessionDeepHit, { n: match.matchCount })
+      : fmt(STRINGS.sessionDeepHits, { n: match.matchCount })
   return (
     '<div class="s-deep-snippet">' +
     '<span class="s-deep-count">' +
-    match.matchCount +
-    (match.matchCount === 1 ? ' hit' : ' hits') +
+    hitLabel +
     '</span>' +
     '<span class="s-deep-text">' +
     escapeHtml(match.snippet) +
@@ -501,7 +725,7 @@ function deriveVisibleProjects() {
 /** Re-renders the full project list panel from current state. */
 function renderProjects() {
   const visibleProjects = deriveVisibleProjects()
-  elements.projectCountLabel.textContent = 'PROJECTS [' + visibleProjects.length + ']'
+  elements.projectCountLabel.textContent = fmt(STRINGS.projectsLabel, { n: visibleProjects.length })
   elements.projectList.innerHTML = visibleProjects.map(buildProjectRowHtml).join('')
 }
 
@@ -535,8 +759,8 @@ elements.projectList.addEventListener('click', function (event) {
     ctxProject = project
     ctxSession = null
     openContextMenu(menuBtn, [
-      { action: 'project-new-session', label: '+ new session' },
-      { action: 'project-copy-path', label: 'copy path' },
+      { action: 'project-new-session', label: STRINGS.projectCtxNewSession },
+      { action: 'project-copy-path', label: STRINGS.projectCtxCopyPath },
     ])
     return
   }
@@ -740,7 +964,7 @@ function calculateFilterCounts() {
   }
 }
 
-/** Updates filter pill active state and counts. Hides the bar entirely when no project is selected. */
+/** Updates filter pill active state, counts, and tooltips. Hides the bar entirely when no project is selected. */
 function renderFilterBar() {
   if (!selectedProject) {
     elements.filterBar.style.display = 'none'
@@ -753,9 +977,9 @@ function renderFilterBar() {
     const filter = pill.dataset.filter
     const count = counts[filter] || 0
     pill.classList.toggle('active', filter === selectedFilter)
+    pill.title = filterTooltip(filter)
     pill.innerHTML =
-      (FILTER_LABELS[filter] || filter) +
-      (count > 0 ? '<span class="pill-cnt">' + count + '</span>' : '')
+      filterLabel(filter) + (count > 0 ? '<span class="pill-cnt">' + count + '</span>' : '')
   })
 }
 
@@ -779,15 +1003,9 @@ function previewCacheKey(project, session) {
   return project.id + ':' + session.id
 }
 
-/** Starts loading Resume Card data for a session if it is not already cached. */
-function ensureSessionPreview(project, session) {
-  const key = previewCacheKey(project, session)
-  const cached = sessionPreviewCache.get(key)
-  if (cached) return cached
-
-  const loadingEntry = { state: 'loading' }
-  sessionPreviewCache.set(key, loadingEntry)
-
+/** Fetches fresh Resume Card data while preserving any existing rendered card. */
+function refreshSessionPreview(project, session, key, entry) {
+  entry.refreshing = true
   requestJson('/api/sessions/' + project.id + '/' + session.id + '/preview')
     .then(function (preview) {
       sessionPreviewCache.set(key, { data: preview, state: 'ready' })
@@ -800,7 +1018,13 @@ function ensureSessionPreview(project, session) {
       }
     })
     .catch(function (error) {
-      sessionPreviewCache.set(key, { error: error.message, state: 'error' })
+      if (entry.data) {
+        entry.refreshError = error.message
+        entry.refreshing = false
+        entry.stale = false
+      } else {
+        sessionPreviewCache.set(key, { error: error.message, state: 'error' })
+      }
       if (
         selectedProject &&
         selectedProject.id === project.id &&
@@ -809,26 +1033,75 @@ function ensureSessionPreview(project, session) {
         renderInspector(deriveVisibleSessions())
       }
     })
+}
+
+/** Starts loading Resume Card data for a session if it is not already cached. */
+function ensureSessionPreview(project, session) {
+  const key = previewCacheKey(project, session)
+  const cached = sessionPreviewCache.get(key)
+  if (cached) {
+    if (cached.stale && !cached.refreshing) refreshSessionPreview(project, session, key, cached)
+    return cached
+  }
+
+  const loadingEntry = { state: 'loading' }
+  sessionPreviewCache.set(key, loadingEntry)
+  refreshSessionPreview(project, session, key, loadingEntry)
 
   return loadingEntry
+}
+
+/** Marks cached previews stale so live refreshes do not blank the inspector while reloading. */
+function markSessionPreviewsStale() {
+  sessionPreviewCache.forEach(function (entry, key) {
+    if (entry.state === 'ready' && entry.data) {
+      entry.stale = true
+      entry.refreshError = null
+      return
+    }
+    if (entry.state !== 'loading') sessionPreviewCache.delete(key)
+  })
 }
 
 /** Returns action buttons for the selected session. These mirror the row menu and keyboard shortcuts. */
 function buildInspectorActionsHtml(session) {
   const deleteDisabled = activeSessionIds.has(session.id)
+  const isArchived = session.signals.archived
   return (
     '<div class="insp-actions">' +
-    '<button class="insp-action primary" data-inspector-action="session-resume">Resume</button>' +
-    '<button class="insp-action" data-inspector-action="session-handoff">Handoff</button>' +
-    '<button class="insp-action" data-inspector-action="session-rename">Rename</button>' +
-    '<button class="insp-action" data-inspector-action="session-archive">' +
-    (session.signals.archived ? 'Unarchive' : 'Archive') +
+    '<button class="insp-action primary" data-inspector-action="session-resume" title="' +
+    escapeHtml(STRINGS.inspBtnResumeTooltip) +
+    '">' +
+    STRINGS.inspBtnResume +
     '</button>' +
-    '<button class="insp-action danger" data-inspector-action="session-delete"' +
-    (deleteDisabled ? ' disabled title="Active sessions cannot be deleted"' : '') +
-    '>Delete</button>' +
+    '<button class="insp-action" data-inspector-action="session-handoff" title="' +
+    escapeHtml(STRINGS.inspBtnHandoffTooltip) +
+    '">' +
+    STRINGS.inspBtnHandoff +
+    '</button>' +
+    '<button class="insp-action" data-inspector-action="session-rename" title="' +
+    escapeHtml(STRINGS.inspBtnRenameTooltip) +
+    '">' +
+    STRINGS.inspBtnRename +
+    '</button>' +
+    '<button class="insp-action" data-inspector-action="session-archive" title="' +
+    escapeHtml(isArchived ? STRINGS.inspBtnUnarchiveTooltip : STRINGS.inspBtnArchiveTooltip) +
+    '">' +
+    (isArchived ? STRINGS.inspBtnUnarchive : STRINGS.inspBtnArchive) +
+    '</button>' +
+    '<button class="insp-action danger" data-inspector-action="session-delete" title="' +
+    escapeHtml(
+      deleteDisabled ? STRINGS.inspBtnDeleteDisabledTooltip : STRINGS.inspBtnDeleteTooltip
+    ) +
+    '"' +
+    (deleteDisabled ? ' disabled' : '') +
+    '>' +
+    STRINGS.inspBtnDelete +
+    '</button>' +
     '</div>' +
-    '<div class="insp-shortcuts">enter resume · H handoff · r rename · a archive · D delete</div>'
+    '<div class="insp-shortcuts">' +
+    STRINGS.inspShortcuts +
+    '</div>'
   )
 }
 
@@ -840,7 +1113,25 @@ function buildPreviewBlockHtml(label, text) {
     label +
     '</div>' +
     '<div class="preview-text">' +
-    (text ? escapeHtml(text) : '<span class="preview-empty">Not found in transcript.</span>') +
+    (text
+      ? escapeHtml(text)
+      : '<span class="preview-empty">' + STRINGS.previewNotFound + '</span>') +
+    '</div>' +
+    '</div>'
+  )
+}
+
+/** Returns one labelled Resume Card block with a safe, tiny Markdown subset. */
+function buildPreviewMarkdownBlockHtml(label, text) {
+  return (
+    '<div class="preview-block">' +
+    '<div class="preview-label">' +
+    label +
+    '</div>' +
+    '<div class="preview-markdown">' +
+    (text
+      ? renderPreviewMarkdown(text)
+      : '<span class="preview-empty">' + STRINGS.previewNotFound + '</span>') +
     '</div>' +
     '</div>'
   )
@@ -862,10 +1153,68 @@ function buildTouchedFilesHtml(preview, session) {
     .join('')
   return (
     '<div class="preview-block">' +
-    '<div class="preview-label">files touched · ' +
-    preview.touchedFiles.length +
+    '<div class="preview-label">' +
+    fmt(STRINGS.previewFilesTouched, { count: preview.touchedFiles.length }) +
     '</div>' +
     rows +
+    '</div>'
+  )
+}
+
+/** Returns the latest Claude-native plan section when the transcript contains one. */
+function buildNativePlanHtml(automaticContext) {
+  const plan = automaticContext && automaticContext.plan
+  return plan ? buildPreviewMarkdownBlockHtml(STRINGS.previewNativePlan, plan.text) : ''
+}
+
+/** Returns a compact, read-only view of Claude-native TodoWrite state. */
+function buildNativeTodosHtml(automaticContext) {
+  const todos = automaticContext && automaticContext.todos
+  if (!todos || !Array.isArray(todos.items) || todos.items.length === 0) return ''
+
+  const visibleTodos = selectVisibleTodos(todos.items)
+  const rows = visibleTodos
+    .map(function (todo) {
+      const status = todo.status || 'unknown'
+      return (
+        '<div class="preview-todo preview-todo--' +
+        escapeHtml(status) +
+        '" title="' +
+        escapeHtml(status) +
+        '">' +
+        '<span class="preview-todo-marker">' +
+        todoMarker(todo) +
+        '</span>' +
+        escapeHtml(todo.content) +
+        '</div>'
+      )
+    })
+    .join('')
+  const remainingCount = todos.items.length - visibleTodos.length
+  const remaining =
+    remainingCount > 0
+      ? '<div class="preview-more">' +
+        escapeHtml(fmt(STRINGS.previewTodoMore, { n: remainingCount })) +
+        '</div>'
+      : ''
+
+  return (
+    '<div class="preview-block">' +
+    '<div class="preview-label">' +
+    STRINGS.previewNativeTodos +
+    ' · ' +
+    escapeHtml(
+      fmt(STRINGS.previewNativeTodosSummary, {
+        done: todos.counts?.completed || 0,
+        open:
+          (todos.counts?.pending || 0) +
+          (todos.counts?.in_progress || 0) +
+          (todos.counts?.unknown || 0),
+      })
+    ) +
+    '</div>' +
+    rows +
+    remaining +
     '</div>'
   )
 }
@@ -875,12 +1224,16 @@ function buildSessionPreviewHtml(project, session) {
   const entry = ensureSessionPreview(project, session)
 
   if (entry.state === 'loading') {
-    return '<div class="preview-card"><div class="preview-loading">Loading session preview...</div></div>'
+    return (
+      '<div class="preview-card"><div class="preview-loading">' +
+      STRINGS.previewLoading +
+      '</div></div>'
+    )
   }
   if (entry.state === 'error') {
     return (
-      '<div class="preview-card"><div class="preview-error">Preview unavailable: ' +
-      escapeHtml(entry.error || 'unknown error') +
+      '<div class="preview-card"><div class="preview-error">' +
+      escapeHtml(fmt(STRINGS.previewError, { error: entry.error || 'unknown error' })) +
       '</div></div>'
     )
   }
@@ -888,17 +1241,92 @@ function buildSessionPreviewHtml(project, session) {
   const preview = entry.data || {}
   return (
     '<div class="preview-card">' +
-    '<div class="preview-title">Resume Card</div>' +
-    buildPreviewBlockHtml('what you asked for', preview.goal) +
-    buildPreviewBlockHtml('where Claude left off', preview.lastResponse) +
+    '<div class="preview-title">' +
+    STRINGS.previewTitle +
+    '</div>' +
+    buildPreviewBlockHtml(STRINGS.previewGoal, preview.goal) +
+    buildPreviewBlockHtml(STRINGS.previewLastResponse, preview.lastResponse) +
+    buildNativePlanHtml(preview.automaticContext) +
+    buildNativeTodosHtml(preview.automaticContext) +
     (preview.pendingToolName
-      ? '<div class="preview-warning">Pending tool: ' +
-        escapeHtml(preview.pendingToolName) +
+      ? '<div class="preview-warning">' +
+        escapeHtml(fmt(STRINGS.previewPendingTool, { name: preview.pendingToolName })) +
         '</div>'
       : '') +
     buildTouchedFilesHtml(preview, session) +
     '</div>'
   )
+}
+
+const MAX_VISIBLE_NATIVE_TODOS = 5
+
+function selectVisibleTodos(items) {
+  const unfinished = items.filter(function (todo) {
+    return todo.status !== 'completed'
+  })
+  return (unfinished.length > 0 ? unfinished : items).slice(0, MAX_VISIBLE_NATIVE_TODOS)
+}
+
+function todoMarker(todo) {
+  if (todo.status === 'completed') return '[x]'
+  if (todo.status === 'in_progress') return '[~]'
+  if (todo.status === 'pending') return '[ ]'
+  return '[?]'
+}
+
+function renderPreviewMarkdown(markdown) {
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n')
+  let html = ''
+  let inList = false
+
+  function closeList() {
+    if (!inList) return
+    html += '</ul>'
+    inList = false
+  }
+
+  lines.forEach(function (rawLine) {
+    const line = rawLine.trim()
+    if (!line) {
+      closeList()
+      return
+    }
+
+    const heading = line.match(/^#{1,4}\s+(.+)$/)
+    if (heading) {
+      closeList()
+      html += '<div class="preview-md-heading">' + renderMarkdownInline(heading[1]) + '</div>'
+      return
+    }
+
+    const bullet = line.match(/^(?:[-*]|\d+\.)\s+(.+)$/)
+    if (bullet) {
+      if (!inList) {
+        html += '<ul class="preview-md-list">'
+        inList = true
+      }
+      html += '<li>' + renderMarkdownInline(bullet[1]) + '</li>'
+      return
+    }
+
+    closeList()
+    html += '<p>' + renderMarkdownInline(line) + '</p>'
+  })
+
+  closeList()
+  return html || '<span class="preview-empty">' + STRINGS.previewNotFound + '</span>'
+}
+
+function renderMarkdownInline(text) {
+  return String(text)
+    .split(/(`[^`]+`)/g)
+    .map(function (part) {
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return '<code>' + escapeHtml(part.slice(1, -1)) + '</code>'
+      }
+      return escapeHtml(part).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    })
+    .join('')
 }
 
 /** Re-renders the session inspector panel for the selected session. Hides it when no selection is visible. */
@@ -916,14 +1344,17 @@ function renderInspector(visibleSessions) {
   const session = selectedSession
   const signals = session.signals || {}
   const descriptions = {
-    interrupted: 'Claude had pending tool calls with no result - resume to continue.',
-    expiring:
-      'Transcript expires in ' + signals.expiresInDays + ' days (Claude auto-deletes after 30).',
-    'path-missing': 'Project directory no longer exists on disk.',
-    'heavily-compacted': 'Context was compacted ' + signals.compactionCount + ' times.',
+    interrupted: STRINGS.statusInterruptedDesc,
+    expiring: fmt(STRINGS.statusExpiringDesc, { days: signals.expiresInDays }),
+    'path-missing': STRINGS.statusPathMissingDesc,
+    'heavily-compacted': fmt(STRINGS.statusHeavilyCompactedDesc, {
+      count: signals.compactionCount,
+    }),
   }
   const statusDescription = descriptions[session.primaryStatus]
-  const status = buildStatusBadgeHtml(session) || '<span style="color:var(--muted2)">ok</span>'
+  const status =
+    buildStatusBadgeHtml(session) ||
+    '<span style="color:var(--muted2)">' + STRINGS.inspStatusOk + '</span>'
   const statusValue =
     status +
     (statusDescription
@@ -932,49 +1363,83 @@ function renderInspector(visibleSessions) {
 
   let html =
     '<div class="insp-title-row">' +
-    '<div class="insp-title">Session Details</div>' +
-    '<button class="insp-icon-btn" data-inspector-action="session-copy-id" title="Copy full session ID">ID</button>' +
+    '<div class="insp-title">' +
+    STRINGS.inspectorTitle +
+    '</div>' +
+    '<button class="insp-icon-btn" data-inspector-action="session-copy-id" title="' +
+    escapeHtml(STRINGS.inspectorCopyId) +
+    '">ID</button>' +
     '</div>'
   html += buildInspectorActionsHtml(session)
   html += buildSessionPreviewHtml(selectedProject, session)
-  html += buildInspectorRowHtml('Status', statusValue)
+  html += buildInspectorRowHtml(STRINGS.inspRowStatus, statusValue)
   html += buildInspectorRowHtml(
-    'Last active',
+    STRINGS.inspRowLastActive,
     '<em>' + escapeHtml(relativeTime(session.updated)) + '</em>'
   )
-  html += buildInspectorRowHtml('Messages', session.messageCount)
+  html += buildInspectorRowHtml(STRINGS.inspRowMessages, session.messageCount)
   if (signals.analysisComplete && signals.compactionCount > 0) {
-    html += buildInspectorRowHtml('Compactions', signals.compactionCount)
+    html += buildInspectorRowHtml(
+      STRINGS.inspRowCompactions,
+      signals.compactionCount,
+      null,
+      'title="' + escapeHtml(STRINGS.inspRowCompactionsTooltip) + '"'
+    )
   }
   if (signals.expiresInDays != null) {
-    html += buildInspectorRowHtml('Expires in', signals.expiresInDays + ' days')
+    html += buildInspectorRowHtml(
+      STRINGS.inspRowExpiresIn,
+      fmt(STRINGS.inspRowExpiresInValue, { days: signals.expiresInDays }),
+      null,
+      'title="' + escapeHtml(STRINGS.inspRowExpiresInTooltip) + '"'
+    )
   }
   if (session.context.latestModel) {
-    html += buildInspectorRowHtml('Latest model', escapeHtml(session.context.latestModel))
+    html += buildInspectorRowHtml(
+      STRINGS.inspRowLatestModel,
+      escapeHtml(session.context.latestModel)
+    )
   }
   if (session.context.latestContextTokens != null) {
     html += buildInspectorRowHtml(
-      'Last context',
-      formatTokenCount(session.context.latestContextTokens) + ' tokens'
+      STRINGS.inspRowLastContext,
+      fmt(STRINGS.inspRowTokenValue, {
+        count: formatTokenCount(session.context.latestContextTokens),
+      }),
+      null,
+      'title="' + escapeHtml(STRINGS.inspRowLastContextTooltip) + '"'
     )
   }
   if (session.context.latestOutputTokens != null) {
     html += buildInspectorRowHtml(
-      'Last output',
-      formatTokenCount(session.context.latestOutputTokens) + ' tokens'
+      STRINGS.inspRowLastOutput,
+      fmt(STRINGS.inspRowTokenValue, {
+        count: formatTokenCount(session.context.latestOutputTokens),
+      }),
+      null,
+      'title="' + escapeHtml(STRINGS.inspRowLastOutputTooltip) + '"'
     )
   }
   if (session.context.models && session.context.models.length > 1) {
-    html += buildInspectorRowHtml('Models used', escapeHtml(session.context.models.join(', ')))
+    html += buildInspectorRowHtml(
+      STRINGS.inspRowModelsUsed,
+      escapeHtml(session.context.models.join(', ')),
+      null,
+      'title="' + escapeHtml(STRINGS.inspRowModelsUsedTooltip) + '"'
+    )
   }
   html += buildInspectorRowHtml(
-    'Session ID',
+    STRINGS.inspRowSessionId,
     session.id.slice(0, 8) + '...',
     'insp-copy',
-    'title="Click to copy" data-copy="' + escapeHtml(session.id) + '"'
+    'title="' +
+      escapeHtml(STRINGS.inspRowSessionIdTooltip) +
+      '" data-copy="' +
+      escapeHtml(session.id) +
+      '"'
   )
   html += buildInspectorRowHtml(
-    'Path',
+    STRINGS.inspRowPath,
     escapeHtml(session.projectPath),
     'insp-path',
     'title="' + escapeHtml(session.projectPath) + '"'
@@ -995,7 +1460,7 @@ elements.sessionInspector.addEventListener('click', function (event) {
   const text = copyTarget && copyTarget.dataset.copy
   if (!text) return
 
-  copyTextToClipboard(text, 'Copied: ' + text.slice(0, 20) + '...')
+  copyTextToClipboard(text, fmt(STRINGS.inspCopied, { prefix: text.slice(0, 20) }))
 })
 
 elements.filterBar.addEventListener('click', function (event) {
@@ -1020,6 +1485,7 @@ function buildSessionRowHtml(session) {
   const isSelected = selectedSession && session.id === selectedSession.id
   const branch = session.gitBranch || null
   const displayName = session.alias || session.name
+  const isLive = activeSessionIds.has(session.id)
 
   return (
     '<div class="sess-row' +
@@ -1032,20 +1498,32 @@ function buildSessionRowHtml(session) {
     '<span class="s-arrow">' +
     (isSelected ? '▶' : ' ') +
     '</span>' +
-    (activeSessionIds.has(session.id) ? '<span class="s-live">●</span>' : '') +
+    '<span class="s-live"' +
+    (isLive ? ' title="' + escapeHtml(STRINGS.sessionLiveTooltip) + '"' : '') +
+    '>' +
+    (isLive ? '◉' : '') +
+    '</span>' +
     (renamingSessionId === session.id
       ? '<input class="s-rename-input" value="' + escapeHtml(displayName) + '" maxlength="160">'
       : '<span class="s-name">' + escapeHtml(displayName) + '</span>') +
-    '<span class="s-time">' +
+    '<span class="s-time" title="' +
+    escapeHtml(
+      fmt(STRINGS.sessionTimeTooltip, { date: new Date(session.updated).toLocaleString() })
+    ) +
+    '">' +
     relativeTime(session.updated) +
     '</span>' +
-    '<button class="s-menu-btn" title="More actions">⋯</button>' +
+    '<button class="s-menu-btn" title="' +
+    escapeHtml(STRINGS.sessionMoreActions) +
+    '">⋯</button>' +
     '</div>' +
     '<div class="s-line2">' +
     (branch
-      ? '<span class="pip" style="background:' +
+      ? '<span class="branch-n" style="color:' +
         colorForGitBranch(branch) +
-        '"></span><span class="branch-n">⎷ ' +
+        '" title="' +
+        escapeHtml(fmt(STRINGS.sessionBranchTooltip, { branch: branch })) +
+        '">⎇ ' +
         escapeHtml(branch) +
         '</span>' +
         buildBranchDriftHtml(session) +
@@ -1055,10 +1533,20 @@ function buildSessionRowHtml(session) {
     session.messageCount +
     ' msgs</span>' +
     (session.context.latestModel
-      ? '<span class="s-model">' + escapeHtml(session.context.latestModel) + '</span>'
+      ? '<span class="s-model" title="' +
+        escapeHtml(fmt(STRINGS.sessionModelTooltip, { model: session.context.latestModel })) +
+        '">' +
+        escapeHtml(session.context.latestModel) +
+        '</span>'
       : '') +
     (session.context.latestContextTokens != null
-      ? '<span class="s-context">' +
+      ? '<span class="s-context" title="' +
+        escapeHtml(
+          fmt(STRINGS.sessionContextTooltip, {
+            tokens: formatTokenCount(session.context.latestContextTokens),
+          })
+        ) +
+        '">' +
         formatTokenCount(session.context.latestContextTokens) +
         ' ctx</span>'
       : '') +
@@ -1073,20 +1561,22 @@ function buildSessionRowHtml(session) {
 function buildEmptySessionListHtml(visibleSessions) {
   if (!selectedProject) {
     return searchQuery
-      ? '<div class="empty">No projects or sessions match.</div>'
-      : '<div class="empty">Select a project from the left panel.</div>'
+      ? '<div class="empty">' + STRINGS.emptyNoMatch + '</div>'
+      : '<div class="empty">' + STRINGS.emptySelectProject + '</div>'
   }
   if (visibleSessions.length > 0) return ''
 
   const archivedCount = sessionsMatchingFilter(selectedProject, 'archived').length
   const message = searchQuery
-    ? 'No sessions match.'
+    ? STRINGS.emptyNoSessionsSearch
     : selectedFilter === 'all'
-      ? 'No sessions.'
-      : 'No sessions in this filter.'
+      ? STRINGS.emptyNoSessions
+      : STRINGS.emptyNoSessionsFilter
   const archiveHint =
     selectedFilter === 'all' && archivedCount > 0
-      ? ' <span class="empty-hint">' + archivedCount + ' archived.</span>'
+      ? ' <span class="empty-hint">' +
+        fmt(STRINGS.emptyArchivedHint, { n: archivedCount }) +
+        '</span>'
       : ''
   return '<div class="empty">' + message + archiveHint + '</div>'
 }
@@ -1136,22 +1626,20 @@ async function saveSessionAlias(session, aliasInput) {
       body: JSON.stringify({ alias: alias || null }),
     })
     await refreshProjectData()
-    showToast(alias ? 'Renamed to "' + alias + '"' : 'Alias cleared')
+    showToast(alias ? fmt(STRINGS.sessionRenamed, { alias: alias }) : STRINGS.sessionAliasCleared)
   } catch (error) {
     await refreshProjectData()
-    showToast('Rename failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionRenameFailed, { error: error.message }), 'err')
   }
 }
 
 async function deleteSessionPermanently(session) {
   if (activeSessionIds.has(session.id)) {
-    showToast('Cannot delete an active session.', 'err')
+    showToast(STRINGS.sessionCannotDeleteActive, 'err')
     return
   }
   const confirmed = window.confirm(
-    'Delete "' +
-      (session.alias || session.name) +
-      '" permanently?\n\nThis removes the transcript file and cannot be undone.'
+    fmt(STRINGS.sessionDeleteConfirm, { name: session.alias || session.name })
   )
   if (!confirmed) return
   try {
@@ -1159,9 +1647,9 @@ async function deleteSessionPermanently(session) {
       method: 'DELETE',
     })
     await refreshProjectData()
-    showToast('Session deleted.')
+    showToast(STRINGS.sessionDeleted)
   } catch (error) {
-    showToast('Delete failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionDeleteFailed, { error: error.message }), 'err')
   }
 }
 
@@ -1175,9 +1663,9 @@ async function toggleSessionArchivedState(session) {
       body: JSON.stringify({ archived: shouldArchive }),
     })
     await refreshProjectData()
-    if (shouldArchive) showToast('Archived locally. Claude may still delete the transcript.')
+    if (shouldArchive) showToast(STRINGS.sessionArchivedNote)
   } catch (error) {
-    showToast('Archive failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionArchiveFailed, { error: error.message }), 'err')
   }
 }
 
@@ -1189,20 +1677,20 @@ function beginSessionRename(session) {
 
 /** Copies the full session ID to the clipboard. */
 function copySessionId(session) {
-  copyTextToClipboard(session.id, 'ID copied: ' + session.id.slice(0, 8) + '...')
+  copyTextToClipboard(session.id, fmt(STRINGS.sessionCopiedId, { prefix: session.id.slice(0, 8) }))
 }
 
 /** Builds a Markdown handoff packet on the server and copies it to the clipboard. */
 async function copySessionHandoff(session) {
   if (!selectedProject) return
   try {
-    showToast('Building handoff...')
+    showToast(STRINGS.sessionHandoffBuilding)
     const result = await requestJson(
       '/api/sessions/' + selectedProject.id + '/' + session.id + '/handoff'
     )
-    copyTextToClipboard(result.markdown, 'Handoff copied')
+    copyTextToClipboard(result.markdown, STRINGS.sessionHandoffCopied)
   } catch (error) {
-    showToast('Handoff failed: ' + error.message, 'err')
+    showToast(fmt(STRINGS.sessionHandoffFailed, { error: error.message }), 'err')
   }
 }
 
@@ -1229,15 +1717,17 @@ function executeSessionAction(action, session) {
 /** Returns the menu/action labels for a session in a single canonical order. */
 function sessionActionItems(session) {
   return [
-    { action: 'session-resume', label: 'resume' },
-    { action: 'session-handoff', label: 'copy handoff' },
-    { action: 'session-rename', label: 'rename' },
+    { action: 'session-resume', label: STRINGS.sessionActionResume },
+    { action: 'session-handoff', label: STRINGS.sessionActionHandoff },
+    { action: 'session-rename', label: STRINGS.sessionActionRename },
     {
       action: 'session-archive',
-      label: session.signals.archived ? 'unarchive' : 'archive locally',
+      label: session.signals.archived
+        ? STRINGS.sessionActionUnarchive
+        : STRINGS.sessionActionArchive,
     },
-    { action: 'session-copy-id', label: 'copy session ID' },
-    { action: 'session-delete', label: 'delete permanently' },
+    { action: 'session-copy-id', label: STRINGS.sessionActionCopyId },
+    { action: 'session-delete', label: STRINGS.sessionActionDelete },
   ]
 }
 
@@ -1320,7 +1810,7 @@ function openResumeDialog(session) {
   selectSession(session)
   elements.resumeCommand.textContent = 'claude --resume ' + session.id
   elements.resumeDialogName.textContent = session.name
-  elements.resumeDialogBranch.textContent = session.gitBranch ? '⎷ ' + session.gitBranch : ''
+  elements.resumeDialogBranch.textContent = session.gitBranch ? '⎇ ' + session.gitBranch : ''
   elements.resumeDialogMessage.textContent = ''
   elements.resumeOverlay.classList.add('open')
   elements.resumeConfirmButton.focus()
@@ -1335,7 +1825,7 @@ function closeResumeDialog() {
  * Returns the setInterval handle so the caller can stop it with stopLaunchAnimation.
  */
 function startLaunchAnimation() {
-  const labels = ['launching', 'launching.', 'launching..', 'launching...']
+  const labels = STRINGS.resumeLaunchingFrames
   let frame = 0
 
   elements.resumeConfirmButton.disabled = true
@@ -1351,7 +1841,7 @@ function startLaunchAnimation() {
 /** Stops the launch animation and restores the confirm button to its default state. */
 function stopLaunchAnimation(launchAnimationTimer) {
   clearInterval(launchAnimationTimer)
-  elements.resumeConfirmButton.textContent = 'Resume'
+  elements.resumeConfirmButton.textContent = STRINGS.resumeConfirmBtn
   elements.resumeConfirmButton.disabled = false
 }
 
@@ -1374,19 +1864,21 @@ async function resumeSelectedSession() {
 
     if (launchResult.launched) {
       closeResumeDialog()
-      showToast('Session resumed in terminal')
+      showToast(STRINGS.resumeResumed)
     } else if (launchResult.copied && launchResult.message) {
-      elements.resumeDialogMessage.textContent = 'Launch failed — ' + launchResult.message
+      elements.resumeDialogMessage.textContent = fmt(STRINGS.resumeLaunchFailed, {
+        message: launchResult.message,
+      })
     } else if (launchResult.copied) {
       closeResumeDialog()
-      showToast('Command copied to clipboard', 'copied')
+      showToast(STRINGS.resumeCommandCopied, 'copied')
     } else {
       elements.resumeDialogMessage.textContent =
-        launchResult.message || 'Failed to launch terminal.'
+        launchResult.message || STRINGS.resumeFallbackFailed
     }
   } catch (error) {
     stopLaunchAnimation(launchAnimationTimer)
-    elements.resumeDialogMessage.textContent = 'Error: ' + error.message
+    elements.resumeDialogMessage.textContent = fmt(STRINGS.resumeError, { message: error.message })
   }
 }
 
@@ -1460,7 +1952,8 @@ function closeClaudeInstructionsDrawer() {
 /** Opens the Lost & Found panel and immediately triggers a diagnostic scan. */
 function openDiagnosticsDrawer() {
   elements.diagnosticsDrawer.classList.add('open')
-  elements.diagnosticsBody.innerHTML = '<div class="lf-loading">Scanning…</div>'
+  elements.diagnosticsBody.innerHTML =
+    '<div class="lf-loading">' + STRINGS.diagnosticsScanning + '</div>'
   void renderDiagnosticsPanel()
 }
 
@@ -1474,7 +1967,8 @@ async function renderDiagnosticsPanel() {
   try {
     report = await requestJson('/api/diagnostics')
   } catch {
-    elements.diagnosticsBody.innerHTML = '<div class="lf-loading">Failed to load diagnostics.</div>'
+    elements.diagnosticsBody.innerHTML =
+      '<div class="lf-loading">' + STRINGS.diagnosticsLoadFailed + '</div>'
     return
   }
 
@@ -1488,8 +1982,8 @@ async function renderDiagnosticsPanel() {
           '<div class="lf-item-name">' +
           escapeHtml(s.name || s.id) +
           '</div>' +
-          '<div class="lf-item-meta lf-item-warn">Expires soon · ' +
-          escapeHtml(s.projectPath || '') +
+          '<div class="lf-item-meta lf-item-warn">' +
+          fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' }) +
           '</div>' +
           '</div>'
         )
@@ -1497,9 +1991,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Expiring (' +
-        report.expiring.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionExpiring, { n: report.expiring.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -1513,8 +2007,8 @@ async function renderDiagnosticsPanel() {
           '<div class="lf-item-name">' +
           escapeHtml(s.name || s.id) +
           '</div>' +
-          '<div class="lf-item-meta lf-item-err">Path missing · ' +
-          escapeHtml(s.projectPath || '') +
+          '<div class="lf-item-meta lf-item-err">' +
+          fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' }) +
           '</div>' +
           '</div>'
         )
@@ -1522,9 +2016,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Missing paths (' +
-        report.pathMissing.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionMissingPaths, { n: report.pathMissing.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -1547,9 +2041,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Orphaned transcripts (' +
-        report.orphanedTranscripts.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionOrphaned, { n: report.orphanedTranscripts.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -1572,9 +2066,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Broken indices (' +
-        report.brokenIndices.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionBrokenIndices, { n: report.brokenIndices.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -1597,9 +2091,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Stale locks (' +
-        report.staleLocks.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionStaleLocks, { n: report.staleLocks.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -1612,9 +2106,14 @@ async function renderDiagnosticsPanel() {
     (report.brokenIndices ? report.brokenIndices.length : 0) +
     (report.staleLocks ? report.staleLocks.length : 0)
 
-  elements.diagnosticsSubtitle.textContent = total + ' issue' + (total === 1 ? '' : 's') + ' found'
+  elements.diagnosticsSubtitle.textContent =
+    total === 1
+      ? fmt(STRINGS.diagnosticsSummary, { n: total })
+      : fmt(STRINGS.diagnosticsSummaryPlural, { n: total })
   elements.diagnosticsBody.innerHTML =
-    sections.length > 0 ? sections.join('') : '<div class="lf-empty">No issues found.</div>'
+    sections.length > 0
+      ? sections.join('')
+      : '<div class="lf-empty">' + STRINGS.diagnosticsNoIssues + '</div>'
 }
 
 /**
@@ -1638,10 +2137,12 @@ async function saveClaudeInstructions() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: elements.instructionsEditor.value }),
     })
-    elements.instructionsSaveStatus.textContent = 'saved'
+    elements.instructionsSaveStatus.textContent = STRINGS.claudeMdSaved
     elements.instructionsSaveStatus.className = 'save-status saved'
   } catch (error) {
-    elements.instructionsSaveStatus.textContent = 'error: ' + error.message
+    elements.instructionsSaveStatus.textContent = fmt(STRINGS.claudeMdSaveError, {
+      message: error.message,
+    })
   }
 }
 
@@ -1660,7 +2161,7 @@ elements.diagnosticsDrawer.addEventListener('click', function (event) {
   if (event.target === elements.diagnosticsDrawer) closeDiagnosticsDrawer()
 })
 elements.instructionsEditor.addEventListener('input', function () {
-  elements.instructionsSaveStatus.textContent = 'unsaved'
+  elements.instructionsSaveStatus.textContent = STRINGS.claudeMdUnsaved
   elements.instructionsSaveStatus.className = 'save-status'
   clearTimeout(claudeInstructionsSaveTimer)
   claudeInstructionsSaveTimer = setTimeout(function () {
@@ -1685,14 +2186,17 @@ async function startNewSession(project) {
       body: JSON.stringify({ projectId: project.id }),
     })
     if (result.launched) {
-      showToast('New session started in terminal')
+      showToast(STRINGS.newSessionStarted)
     } else if (result.copied) {
-      showToast('Launch failed — command copied to clipboard', 'copied')
+      showToast(STRINGS.newSessionLaunchFailedCopied, 'copied')
     } else {
-      showToast('Launch failed: ' + (result.message || 'unknown error'), 'err')
+      showToast(
+        fmt(STRINGS.newSessionLaunchFailed, { message: result.message || 'unknown error' }),
+        'err'
+      )
     }
   } catch (error) {
-    showToast('Error: ' + error.message, 'err')
+    showToast(fmt(STRINGS.newSessionError, { message: error.message }), 'err')
   }
 }
 // ---------------------------------------------------------------------------
@@ -1768,7 +2272,7 @@ elements.contextMenu.addEventListener('click', function (event) {
   if (action === 'project-new-session' && project) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
-    copyTextToClipboard(project.path, 'Path copied')
+    copyTextToClipboard(project.path, STRINGS.projectPathCopied)
   } else if (session) {
     executeSessionAction(action, session)
   }
@@ -2057,14 +2561,16 @@ async function refreshProjectData() {
         (diagnosticsData.staleLocks ? diagnosticsData.staleLocks.length : 0)
       if (issueCount > 0) {
         elements.diagnosticsButton.textContent =
-          '⚠ ' + issueCount + ' issue' + (issueCount === 1 ? '' : 's')
+          issueCount === 1
+            ? fmt(STRINGS.statusBarDiagnostics, { n: issueCount })
+            : fmt(STRINGS.statusBarDiagnosticsPlural, { n: issueCount })
         elements.diagnosticsButton.style.display = ''
       } else {
         elements.diagnosticsButton.style.display = 'none'
       }
     }
 
-    elements.footerStatus.textContent = projects.length + ' projects'
+    elements.footerStatus.textContent = fmt(STRINGS.statusBarProjects, { n: projects.length })
     elements.footerStatus.className = 'ftr-status'
 
     if (selectedProject) {
@@ -2101,7 +2607,7 @@ async function refreshProjectData() {
       }
     }
   } catch (error) {
-    elements.footerStatus.textContent = 'Error loading projects'
+    elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
     console.error('[swoop] failed to refresh project data:', error)
   }
@@ -2117,7 +2623,7 @@ function connectLiveUpdates() {
 
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
-    sessionPreviewCache.clear()
+    markSessionPreviewsStale()
     void refreshProjectData()
     void refreshUsageSummary()
   })

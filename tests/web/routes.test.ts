@@ -156,7 +156,17 @@ describe('web routes', () => {
     const response = await buildApp().request(`/api/sessions/${PROJECT_ID}/${SESSION_ID}/preview`)
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
+      automaticContext: {
+        execution: {
+          cwd: claudeDirectory,
+        },
+        todos: {
+          counts: { completed: 0, in_progress: 0, pending: 0, unknown: 0 },
+          items: [],
+          source: null,
+        },
+      },
       goal: 'hello',
       lastResponse: null,
       pendingToolName: null,

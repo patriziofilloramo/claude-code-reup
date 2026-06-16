@@ -45,14 +45,16 @@ async function refreshProjectData() {
         (diagnosticsData.staleLocks ? diagnosticsData.staleLocks.length : 0)
       if (issueCount > 0) {
         elements.diagnosticsButton.textContent =
-          '⚠ ' + issueCount + ' issue' + (issueCount === 1 ? '' : 's')
+          issueCount === 1
+            ? fmt(STRINGS.statusBarDiagnostics, { n: issueCount })
+            : fmt(STRINGS.statusBarDiagnosticsPlural, { n: issueCount })
         elements.diagnosticsButton.style.display = ''
       } else {
         elements.diagnosticsButton.style.display = 'none'
       }
     }
 
-    elements.footerStatus.textContent = projects.length + ' projects'
+    elements.footerStatus.textContent = fmt(STRINGS.statusBarProjects, { n: projects.length })
     elements.footerStatus.className = 'ftr-status'
 
     if (selectedProject) {
@@ -89,7 +91,7 @@ async function refreshProjectData() {
       }
     }
   } catch (error) {
-    elements.footerStatus.textContent = 'Error loading projects'
+    elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
     console.error('[swoop] failed to refresh project data:', error)
   }
@@ -105,7 +107,7 @@ function connectLiveUpdates() {
 
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
-    sessionPreviewCache.clear()
+    markSessionPreviewsStale()
     void refreshProjectData()
     void refreshUsageSummary()
   })

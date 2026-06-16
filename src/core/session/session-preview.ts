@@ -2,12 +2,18 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getProjectDirectory } from '../project/claude-paths.js'
+import {
+  extractAutomaticSessionContext,
+  type AutomaticSessionContext,
+} from './session-automatic-context.js'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface SessionPreview {
+  /** Structured facts Claude Code already recorded; read-only and best-effort. */
+  automaticContext: AutomaticSessionContext
   /** Last human turn text, stripped of injection markers, max 240 chars. */
   goal: string | null
   /** Last assistant text, max 400 chars. */
@@ -88,6 +94,7 @@ export function extractSessionPreview(lines: string[]): SessionPreview {
   }
 
   return {
+    automaticContext: extractAutomaticSessionContext(lines),
     goal,
     lastResponse,
     pendingToolName: lastValue(pendingTools),
@@ -224,5 +231,11 @@ function smartTruncate(text: string, maxChars: number): string {
 }
 
 function emptyPreview(): SessionPreview {
-  return { goal: null, lastResponse: null, pendingToolName: null, touchedFiles: [] }
+  return {
+    automaticContext: extractAutomaticSessionContext([]),
+    goal: null,
+    lastResponse: null,
+    pendingToolName: null,
+    touchedFiles: [],
+  }
 }

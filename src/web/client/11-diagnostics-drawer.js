@@ -5,7 +5,8 @@
 /** Opens the Lost & Found panel and immediately triggers a diagnostic scan. */
 function openDiagnosticsDrawer() {
   elements.diagnosticsDrawer.classList.add('open')
-  elements.diagnosticsBody.innerHTML = '<div class="lf-loading">Scanning…</div>'
+  elements.diagnosticsBody.innerHTML =
+    '<div class="lf-loading">' + STRINGS.diagnosticsScanning + '</div>'
   void renderDiagnosticsPanel()
 }
 
@@ -19,7 +20,8 @@ async function renderDiagnosticsPanel() {
   try {
     report = await requestJson('/api/diagnostics')
   } catch {
-    elements.diagnosticsBody.innerHTML = '<div class="lf-loading">Failed to load diagnostics.</div>'
+    elements.diagnosticsBody.innerHTML =
+      '<div class="lf-loading">' + STRINGS.diagnosticsLoadFailed + '</div>'
     return
   }
 
@@ -33,8 +35,8 @@ async function renderDiagnosticsPanel() {
           '<div class="lf-item-name">' +
           escapeHtml(s.name || s.id) +
           '</div>' +
-          '<div class="lf-item-meta lf-item-warn">Expires soon · ' +
-          escapeHtml(s.projectPath || '') +
+          '<div class="lf-item-meta lf-item-warn">' +
+          fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' }) +
           '</div>' +
           '</div>'
         )
@@ -42,9 +44,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Expiring (' +
-        report.expiring.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionExpiring, { n: report.expiring.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -58,8 +60,8 @@ async function renderDiagnosticsPanel() {
           '<div class="lf-item-name">' +
           escapeHtml(s.name || s.id) +
           '</div>' +
-          '<div class="lf-item-meta lf-item-err">Path missing · ' +
-          escapeHtml(s.projectPath || '') +
+          '<div class="lf-item-meta lf-item-err">' +
+          fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' }) +
           '</div>' +
           '</div>'
         )
@@ -67,9 +69,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Missing paths (' +
-        report.pathMissing.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionMissingPaths, { n: report.pathMissing.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -92,9 +94,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Orphaned transcripts (' +
-        report.orphanedTranscripts.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionOrphaned, { n: report.orphanedTranscripts.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -117,9 +119,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Broken indices (' +
-        report.brokenIndices.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionBrokenIndices, { n: report.brokenIndices.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -142,9 +144,9 @@ async function renderDiagnosticsPanel() {
       .join('')
     sections.push(
       '<div class="lf-section">' +
-        '<div class="lf-section-title">Stale locks (' +
-        report.staleLocks.length +
-        ')</div>' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionStaleLocks, { n: report.staleLocks.length }) +
+        '</div>' +
         rows +
         '</div>'
     )
@@ -157,9 +159,14 @@ async function renderDiagnosticsPanel() {
     (report.brokenIndices ? report.brokenIndices.length : 0) +
     (report.staleLocks ? report.staleLocks.length : 0)
 
-  elements.diagnosticsSubtitle.textContent = total + ' issue' + (total === 1 ? '' : 's') + ' found'
+  elements.diagnosticsSubtitle.textContent =
+    total === 1
+      ? fmt(STRINGS.diagnosticsSummary, { n: total })
+      : fmt(STRINGS.diagnosticsSummaryPlural, { n: total })
   elements.diagnosticsBody.innerHTML =
-    sections.length > 0 ? sections.join('') : '<div class="lf-empty">No issues found.</div>'
+    sections.length > 0
+      ? sections.join('')
+      : '<div class="lf-empty">' + STRINGS.diagnosticsNoIssues + '</div>'
 }
 
 /**
@@ -183,10 +190,12 @@ async function saveClaudeInstructions() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: elements.instructionsEditor.value }),
     })
-    elements.instructionsSaveStatus.textContent = 'saved'
+    elements.instructionsSaveStatus.textContent = STRINGS.claudeMdSaved
     elements.instructionsSaveStatus.className = 'save-status saved'
   } catch (error) {
-    elements.instructionsSaveStatus.textContent = 'error: ' + error.message
+    elements.instructionsSaveStatus.textContent = fmt(STRINGS.claudeMdSaveError, {
+      message: error.message,
+    })
   }
 }
 
@@ -205,7 +214,7 @@ elements.diagnosticsDrawer.addEventListener('click', function (event) {
   if (event.target === elements.diagnosticsDrawer) closeDiagnosticsDrawer()
 })
 elements.instructionsEditor.addEventListener('input', function () {
-  elements.instructionsSaveStatus.textContent = 'unsaved'
+  elements.instructionsSaveStatus.textContent = STRINGS.claudeMdUnsaved
   elements.instructionsSaveStatus.className = 'save-status'
   clearTimeout(claudeInstructionsSaveTimer)
   claudeInstructionsSaveTimer = setTimeout(function () {

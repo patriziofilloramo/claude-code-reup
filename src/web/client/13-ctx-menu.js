@@ -71,7 +71,7 @@ elements.contextMenu.addEventListener('click', function (event) {
   if (action === 'project-new-session' && project) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
-    copyTextToClipboard(project.path, 'Path copied')
+    copyTextToClipboard(project.path, STRINGS.projectPathCopied)
   } else if (session) {
     executeSessionAction(action, session)
   }

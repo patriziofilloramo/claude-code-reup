@@ -450,6 +450,19 @@ structure and existing Swoop parsers:
 Guardrail: every field must be labelled by source/freshness and degrade to "unknown" when the
 artifact is missing. Do not infer private intent from raw content when a structured signal exists.
 
+Current implementation status:
+
+- [x] Shared automatic-context extractor in `src/core/session/session-automatic-context.ts` reads
+      native Claude transcript artifacts without modifying them: plans, TODOs, touched files,
+      read/research trail, tool health, execution facts, agent activity, compact summaries, and
+      last-prompt events.
+- [x] Session preview API includes the extracted automatic context so web, TUI, CLI, and future
+      VS Code surfaces can consume the same facts.
+- [x] TUI Resume Card shows native plan and native TODO state when present, keeping it read-only
+      and separate from Swoop-owned organization metadata.
+- [ ] Web inspector/Resume Card should surface the same plan/TODO/read-research facts once the
+      organization rail and inspector layout are finalized.
+
 ### Feature ideas worth building
 
 - [ ] **Triage Inbox** — an unfiled/attention-first view for sessions that are active,
@@ -534,11 +547,14 @@ artifact is missing. Do not infer private intent from raw content when a structu
 ### MVP slice
 
 1. [ ] Data model: session tags + project groups + work stack definitions
-2. [ ] Automatic context extractor: native plan, TODO, touched files, read/research trail, tool
-       health, agent/subagent activity, and execution context facts with source/freshness labels
+2. [x] Automatic context extractor: native plan, TODO, touched files, read/research trail, tool
+       health, agent/subagent activity, and execution context facts. Source/freshness metadata is
+       present for the initial structured artifacts and should be made more visible in the UI.
 3. [ ] Native TODO extraction: latest `TodoWrite` list, open/in-progress/completed counts, and
-       concise TODO preview in Resume Card / inspector
-4. [ ] Native Plan extraction: latest plan summary/status and `planned` smart bucket
+       concise TODO preview in Resume Card / inspector. Core extraction + TUI preview are done;
+       web inspector and smart-bucket integration remain.
+4. [ ] Native Plan extraction: latest plan summary/status and `planned` smart bucket. Core
+       extraction + TUI preview are done; planned bucket remains.
 5. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
 6. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips/TODO/plan count in compact rows
 7. [ ] Search/list integration: tags/groups/stacks/TODO/plan state participate in search and

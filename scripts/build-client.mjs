@@ -5,7 +5,7 @@
  * module system, no bundler dependency). This script concatenates the logical
  * segments — each owning a cohesive concern — into one IIFE-wrapped output.
  *
- * Source segments are in src/web/client/ and named 01-*.js … 16-*.js to make
+ * Source segments are in src/web/client/ and named 00-*.js … 16-*.js to make
  * their load order unambiguous. All segments share the enclosing IIFE scope, so
  * variables declared in one segment are visible to segments that follow — the
  * same semantics as the original monolithic file.
@@ -17,7 +17,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const SEGMENTS = [
-  '01-config.js', // tunable constants, filter labels, risk rank
+  '00-strings.js', // user-facing strings and lightweight formatter helpers
+  '01-config.js', // tunable constants, risk rank
   '02-state.js', // mutable application state (all let variables)
   '03-elements.js', // DOM element references
   '04-format-request.js', // formatters (relativeTime, escapeHtml…) + HTTP helpers

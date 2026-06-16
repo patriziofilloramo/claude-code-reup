@@ -5,6 +5,10 @@ import { COLORS } from '../../config/theme.js'
 import { getSessionLockInfo } from '../../core/session/active-sessions.js'
 import type { SessionLockInfo } from '../../core/session/active-sessions.js'
 import type { Session } from '../../core/session/session-model.js'
+import type {
+  NativeTodoItem,
+  NativeTodoState,
+} from '../../core/session/session-automatic-context.js'
 import { primaryStatus } from '../../core/session/session-signals.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import type { SessionPreview } from '../../core/session/session-preview.js'
@@ -68,6 +72,7 @@ export default function ResumeCard({
   const contextTokens = session.context.latestContextTokens
   const status = primaryStatus(session.signals)
   const isLoading = preview === null
+  const automaticContext = preview?.automaticContext ?? null
 
   // Interrupted when signals say so, or when the preview reveals a pending tool
   const interrupted =
@@ -150,6 +155,12 @@ export default function ResumeCard({
         label="where claude left off"
         text={preview?.lastResponse ?? null}
       />
+      {!isLoading && automaticContext?.plan ? (
+        <PreviewSection isLoading={false} label="native plan" text={automaticContext.plan.text} />
+      ) : null}
+      {!isLoading && automaticContext && automaticContext.todos.items.length > 0 ? (
+        <TodoPreviewSection todos={automaticContext.todos} />
+      ) : null}
 
       {/* ── Stopped mid-task ─────────────────────────────────────────────── */}
       {!isLoading && interrupted ? (
@@ -190,6 +201,12 @@ export default function ResumeCard({
           <Text color={COLORS.text}>esc</Text>
           {' back'}
         </Text>
+        {!isLoading && preview && preview.touchedFiles.length > 0 ? (
+          <Text color={COLORS.muted}>
+            <Text color={COLORS.text}>f</Text>
+            {' files'}
+          </Text>
+        ) : null}
       </Box>
     </Box>
   )
@@ -220,9 +237,64 @@ function PreviewSection({ isLoading, label, text }: PreviewSectionProps) {
   )
 }
 
+interface TodoPreviewSectionProps {
+  todos: NativeTodoState
+}
+
+function TodoPreviewSection({ todos }: TodoPreviewSectionProps) {
+  const visibleTodos = selectVisibleTodos(todos.items)
+
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color={COLORS.dim}>{formatTodoHeading(todos)}</Text>
+      {visibleTodos.map((todo, index) => (
+        <Text
+          key={`${todo.status}:${todo.content}:${index}`}
+          color={todoColor(todo)}
+          wrap="truncate"
+        >
+          {'  ' + todoMarker(todo) + ' ' + todo.content}
+        </Text>
+      ))}
+      {todos.items.length > visibleTodos.length ? (
+        <Text color={COLORS.border}>{`  +${todos.items.length - visibleTodos.length} more`}</Text>
+      ) : null}
+    </Box>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
+
+const MAX_VISIBLE_TODOS = 5
+
+function formatTodoHeading(todos: NativeTodoState): string {
+  const openCount = todos.counts.pending + todos.counts.in_progress + todos.counts.unknown
+  const completedCount = todos.counts.completed
+  const parts = ['native todos', `${openCount} open`]
+  if (completedCount > 0) parts.push(`${completedCount} done`)
+  return parts.join(' · ')
+}
+
+function selectVisibleTodos(items: NativeTodoItem[]): NativeTodoItem[] {
+  const unfinished = items.filter((todo) => todo.status !== 'completed')
+  return (unfinished.length > 0 ? unfinished : items).slice(0, MAX_VISIBLE_TODOS)
+}
+
+function todoMarker(todo: NativeTodoItem): string {
+  if (todo.status === 'completed') return '[x]'
+  if (todo.status === 'in_progress') return '[~]'
+  if (todo.status === 'pending') return '[ ]'
+  return '[?]'
+}
+
+function todoColor(todo: NativeTodoItem): string {
+  if (todo.status === 'completed') return COLORS.ok
+  if (todo.status === 'in_progress') return COLORS.warn
+  if (todo.status === 'pending') return COLORS.textSub
+  return COLORS.border
+}
 
 function shortModelName(model: string): string {
   const m = model.match(/claude-(\w+)-(\d+(?:\.\d+)?)/)

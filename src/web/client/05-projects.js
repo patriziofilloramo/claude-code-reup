@@ -34,27 +34,37 @@ function buildProjectRowHtml(project) {
     escapeHtml(project.id) +
     '" title="' +
     escapeHtml(project.path) +
-    (lastActive ? '\nlast active: ' + relativeTime(lastActive) : '') +
+    (lastActive ? '\n' + fmt(STRINGS.projectLastActive, { time: relativeTime(lastActive) }) : '') +
     '">' +
     '<span class="p-name">' +
     escapeHtml(compactPath(project.path)) +
     '</span>' +
     (project.isShared
       ? project.cloudOffline
-        ? '<span class="p-cloud p-cloud--stale" title="Cloud offline — sessions saved locally, new sessions paused until sync resumes">☁</span>'
+        ? '<span class="p-cloud p-cloud--stale" title="' +
+          escapeHtml(STRINGS.projectCloudOffline) +
+          '">☁</span>'
         : project.unlinkedDevices && project.unlinkedDevices.length > 0
-          ? '<span class="p-cloud p-cloud--unlinked" title="Device(s) not linked: ' +
-            escapeHtml(project.unlinkedDevices.join(', ')) +
-            ' — run swoop sync link on those devices">☁</span>'
-          : '<span class="p-cloud p-cloud--ok" title="Shared storage — writes directly to cloud">☁</span>'
+          ? '<span class="p-cloud p-cloud--unlinked" title="' +
+            escapeHtml(
+              fmt(STRINGS.projectCloudUnlinked, { devices: project.unlinkedDevices.join(', ') })
+            ) +
+            '">☁</span>'
+          : '<span class="p-cloud p-cloud--ok" title="' +
+            escapeHtml(STRINGS.projectCloudOk) +
+            '">☁</span>'
       : '') +
     (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
     '<span class="p-cnt">' +
     sessionCount +
     '</span>' +
     '<div class="p-actions">' +
-    '<button class="p-act-btn p-new-btn" title="New session">+</button>' +
-    '<button class="p-act-btn p-menu-btn" title="More actions">⋯</button>' +
+    '<button class="p-act-btn p-new-btn" title="' +
+    escapeHtml(STRINGS.projectNewSession) +
+    '">+</button>' +
+    '<button class="p-act-btn p-menu-btn" title="' +
+    escapeHtml(STRINGS.projectMoreActions) +
+    '">⋯</button>' +
     '</div>' +
     '</div>'
   )
@@ -71,11 +81,14 @@ function getDeepMatchForSession(sessionId) {
 /** Returns an HTML snippet row showing the match count and text excerpt. Empty string when match is null. */
 function buildDeepSnippetHtml(match) {
   if (!match) return ''
+  const hitLabel =
+    match.matchCount === 1
+      ? fmt(STRINGS.sessionDeepHit, { n: match.matchCount })
+      : fmt(STRINGS.sessionDeepHits, { n: match.matchCount })
   return (
     '<div class="s-deep-snippet">' +
     '<span class="s-deep-count">' +
-    match.matchCount +
-    (match.matchCount === 1 ? ' hit' : ' hits') +
+    hitLabel +
     '</span>' +
     '<span class="s-deep-text">' +
     escapeHtml(match.snippet) +
@@ -121,7 +134,7 @@ function deriveVisibleProjects() {
 /** Re-renders the full project list panel from current state. */
 function renderProjects() {
   const visibleProjects = deriveVisibleProjects()
-  elements.projectCountLabel.textContent = 'PROJECTS [' + visibleProjects.length + ']'
+  elements.projectCountLabel.textContent = fmt(STRINGS.projectsLabel, { n: visibleProjects.length })
   elements.projectList.innerHTML = visibleProjects.map(buildProjectRowHtml).join('')
 }
 
@@ -155,8 +168,8 @@ elements.projectList.addEventListener('click', function (event) {
     ctxProject = project
     ctxSession = null
     openContextMenu(menuBtn, [
-      { action: 'project-new-session', label: '+ new session' },
-      { action: 'project-copy-path', label: 'copy path' },
+      { action: 'project-new-session', label: STRINGS.projectCtxNewSession },
+      { action: 'project-copy-path', label: STRINGS.projectCtxCopyPath },
     ])
     return
   }

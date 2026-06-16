@@ -16,12 +16,6 @@ const USAGE_POLL_INTERVAL_MS = 5000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
 
-const FILTER_LABELS = {
-  active: 'Active',
-  all: 'All',
-  archived: 'Archived',
-  attention: 'Needs Attention',
-}
 const RISK_RANK = {
   interrupted: 0,
   expiring: 1,

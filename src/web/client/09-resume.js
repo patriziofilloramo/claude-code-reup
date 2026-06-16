@@ -7,7 +7,7 @@ function openResumeDialog(session) {
   selectSession(session)
   elements.resumeCommand.textContent = 'claude --resume ' + session.id
   elements.resumeDialogName.textContent = session.name
-  elements.resumeDialogBranch.textContent = session.gitBranch ? '⎷ ' + session.gitBranch : ''
+  elements.resumeDialogBranch.textContent = session.gitBranch ? '⎇ ' + session.gitBranch : ''
   elements.resumeDialogMessage.textContent = ''
   elements.resumeOverlay.classList.add('open')
   elements.resumeConfirmButton.focus()
@@ -22,7 +22,7 @@ function closeResumeDialog() {
  * Returns the setInterval handle so the caller can stop it with stopLaunchAnimation.
  */
 function startLaunchAnimation() {
-  const labels = ['launching', 'launching.', 'launching..', 'launching...']
+  const labels = STRINGS.resumeLaunchingFrames
   let frame = 0
 
   elements.resumeConfirmButton.disabled = true
@@ -38,7 +38,7 @@ function startLaunchAnimation() {
 /** Stops the launch animation and restores the confirm button to its default state. */
 function stopLaunchAnimation(launchAnimationTimer) {
   clearInterval(launchAnimationTimer)
-  elements.resumeConfirmButton.textContent = 'Resume'
+  elements.resumeConfirmButton.textContent = STRINGS.resumeConfirmBtn
   elements.resumeConfirmButton.disabled = false
 }
 
@@ -61,19 +61,21 @@ async function resumeSelectedSession() {
 
     if (launchResult.launched) {
       closeResumeDialog()
-      showToast('Session resumed in terminal')
+      showToast(STRINGS.resumeResumed)
     } else if (launchResult.copied && launchResult.message) {
-      elements.resumeDialogMessage.textContent = 'Launch failed — ' + launchResult.message
+      elements.resumeDialogMessage.textContent = fmt(STRINGS.resumeLaunchFailed, {
+        message: launchResult.message,
+      })
     } else if (launchResult.copied) {
       closeResumeDialog()
-      showToast('Command copied to clipboard', 'copied')
+      showToast(STRINGS.resumeCommandCopied, 'copied')
     } else {
       elements.resumeDialogMessage.textContent =
-        launchResult.message || 'Failed to launch terminal.'
+        launchResult.message || STRINGS.resumeFallbackFailed
     }
   } catch (error) {
     stopLaunchAnimation(launchAnimationTimer)
-    elements.resumeDialogMessage.textContent = 'Error: ' + error.message
+    elements.resumeDialogMessage.textContent = fmt(STRINGS.resumeError, { message: error.message })
   }
 }
 
