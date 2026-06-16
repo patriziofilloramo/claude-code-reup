@@ -39,7 +39,7 @@ function closeContextMenu() {
   ctxSession = null
 }
 
-/** Opens the session action menu from either a row, empty session-panel space, or the inspector. */
+/** Opens the session action menu for a concrete session row. */
 function openSessionContextMenu(event, session) {
   event.preventDefault()
   selectSession(session)
@@ -48,7 +48,7 @@ function openSessionContextMenu(event, session) {
   openContextMenuAt(event.clientX, event.clientY, sessionActionItems(session))
 }
 
-/** Opens the project action menu from either a project row or selected project-panel space. */
+/** Opens the project action menu for a concrete project row. */
 function openProjectContextMenu(event, project) {
   event.preventDefault()
   ctxProject = project
@@ -79,9 +79,9 @@ elements.contextMenu.addEventListener('click', function (event) {
 
 elements.sessionList.addEventListener('contextmenu', function (event) {
   const row = event.target.closest('.sess-row')
-  if (event.target.closest('.s-rename-input')) return
+  if (!row || event.target.closest('.s-rename-input')) return
 
-  const session = row ? resolveSessionFromRow(row) : selectedSession
+  const session = resolveSessionFromRow(row)
   if (!session) return
 
   openSessionContextMenu(event, session)
@@ -89,15 +89,12 @@ elements.sessionList.addEventListener('contextmenu', function (event) {
 
 elements.projectList.addEventListener('contextmenu', function (event) {
   const row = event.target.closest('.proj-row')
-  const project = row ? resolveProjectFromRow(row) : selectedProject
+  if (!row) return
+
+  const project = resolveProjectFromRow(row)
   if (!project) return
 
   openProjectContextMenu(event, project)
-})
-
-elements.sessionInspector.addEventListener('contextmenu', function (event) {
-  if (!selectedSession || event.target.closest('button')) return
-  openSessionContextMenu(event, selectedSession)
 })
 
 document.addEventListener('click', function (event) {

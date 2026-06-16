@@ -179,12 +179,21 @@ describe('web client session-row invariants', () => {
   })
 
   it('uses a custom right-click menu for project and session rows', () => {
+    const contextMenu = sourceBetween(
+      "elements.sessionList.addEventListener('contextmenu'",
+      "document.addEventListener('click'"
+    )
+
     expect(source).toContain("elements.sessionList.addEventListener('contextmenu'")
     expect(source).toContain("elements.projectList.addEventListener('contextmenu'")
-    expect(source).toContain("elements.sessionInspector.addEventListener('contextmenu'")
     expect(source).toContain('function openSessionContextMenu(')
-    expect(source).toContain('row ? resolveSessionFromRow(row) : selectedSession')
-    expect(source).toContain('row ? resolveProjectFromRow(row) : selectedProject')
+    expect(source).not.toContain("elements.sessionInspector.addEventListener('contextmenu'")
+    expect(contextMenu).toContain("if (!row || event.target.closest('.s-rename-input')) return")
+    expect(contextMenu).toContain('const session = resolveSessionFromRow(row)')
+    expect(contextMenu).toContain('if (!row) return')
+    expect(contextMenu).toContain('const project = resolveProjectFromRow(row)')
+    expect(contextMenu).not.toContain('selectedSession')
+    expect(contextMenu).not.toContain('selectedProject')
     expect(source).toContain('event.preventDefault()')
     expect(source).toContain('openContextMenuAt(event.clientX, event.clientY')
   })
