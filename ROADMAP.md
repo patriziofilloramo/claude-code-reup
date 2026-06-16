@@ -31,16 +31,21 @@
 
 ## Recommended next focus
 
-1. **Milestone 12 — Organization layer** should be the next product milestone. It is the
-   most likely near-term feature to make Swoop feel meaningfully different from Claude Code's
-   native global resume picker, because it helps users manage intent, context, and parallel work
-   rather than only finding an old transcript.
-2. **Milestone 11 — VS Code extension discovery** should run in parallel as research, not as the
-   main implementation track yet. The extension will be much stronger if it can surface the same
-   groups, tags, stacks, active state, usage, and resume cards from Milestone 12.
-3. **Milestone 9 — Distribution and installers** remains release-critical, but it is not the
-   strongest differentiator while the product shape is still improving. Keep fixing launcher and
-   installer risks, then package once the organization layer stabilizes.
+Swoop's near-term product bets are:
+
+1. **Milestone 12 — Organization layer**: make the web UI genuinely useful for managing many
+   Claude Code projects and sessions. This is the strongest immediate differentiator because it
+   solves the "too many parallel threads" problem better than a picker.
+2. **Milestone 13 — Live web control panel**: make `swoop web` worth keeping open while working.
+   It should show what is active, changing, risky, or close to a limit without becoming a chat UI.
+3. **Milestone 11 — VS Code extension discovery**: investigate the editor-native surface after the
+   organization and live concepts are clear enough to reuse. The extension should expose the same
+   intelligence, not become a separate product.
+
+**Recommended order:** build Milestone 12 first, design Milestone 13 next, and keep Milestone 11 as
+parallel research until the VS Code MVP can reuse groups, tags, stacks, live state, resume cards,
+and usage signals. Milestone 9 remains release-critical, but installers should not distract from
+the product shape until the main differentiators feel sharp.
 
 ---
 
@@ -379,6 +384,21 @@ Make Swoop useful when Claude Code work stops being "a list of folders" and beco
 parallel investigations, branches, fixes, reviews, and half-finished threads. The goal is a
 lightweight organisation layer that feels faster than filing things manually.
 
+### Why this matters
+
+Claude Code's native resume flow can already find sessions globally. Swoop should win by helping
+users **organize intent**: what belongs together, what is waiting, what is active, what is risky,
+and what should be resumed next. The web UI is the best surface for this because it has room for a
+left-side organization model, a dense session list, and a detail/preview panel at the same time.
+
+The design target is not "manual filing". It is **triage in seconds**:
+
+- see all work grouped by meaning, not just by filesystem path
+- drag or keybind a session into the right bucket while scanning
+- focus one work stream and hide unrelated noise
+- recover a project/session later by memory: tag, goal, branch, status, or work stack
+- keep zero-config useful defaults when the user never creates a tag
+
 ### Product direction
 
 - [ ] **Project groups** — user-defined groups such as `Work`, `Personal`, `Clients`,
@@ -393,6 +413,32 @@ lightweight organisation layer that feels faster than filing things manually.
 - [ ] **Focus mode** — activate one group/tag/stack and hide unrelated noise until cleared
 - [ ] **Smart views** — built-in virtual views such as `Active now`, `Needs attention`,
       `Waiting`, `High context`, `Recently touched`, and `Expiring soon`
+
+### Feature ideas worth building
+
+- [ ] **Triage Inbox** — an unfiled/attention-first view for sessions that are active,
+      interrupted, expiring, branch-drifted, high-context, recently modified, or untagged. The
+      user can archive, tag, stack, or dismiss from one place.
+- [ ] **Smart Buckets** — virtual sections generated from signals: `Now`, `Needs review`,
+      `Waiting on tools`, `High context`, `Stale`, `Expiring`, `Archived`. These should exist even
+      before the user creates manual groups.
+- [ ] **Work Stack rail** — a persistent web sidebar above projects. A stack can contain both
+      projects and individual sessions. Selecting it filters the whole app to that intent.
+- [ ] **"Send to stack" gesture** — web: drag a row onto a stack; keyboard: `g`; CLI:
+      `swoop tag/move` later if useful. Keep the first implementation native and simple.
+- [ ] **Session chips** — compact visible chips in rows for tags/stacks, capped at 2 plus `+N`.
+      Chips are clickable filters in web and searchable tokens in TUI/CLI.
+- [ ] **Suggested tags** — local heuristics only: branch prefix (`feat`, `fix`, `release`),
+      project folder name, status signals (`interrupted`, `high-context`, `expiring`), and recent
+      tag usage. Suggestions are opt-in in config and never call an API.
+- [ ] **Focus bar** — when filtering by group/tag/stack, show a clear top bar:
+      `Focus: Launch week x`. Escape or one click clears it.
+- [ ] **Saved view from search** — after a global search, allow "save as stack" so a messy set of
+      related sessions becomes a reusable work context.
+- [ ] **Quick clean sweep** — from a group/stack, archive completed or stale sessions in bulk, with
+      active sessions skipped and reported.
+- [ ] **Portable organization export** — export/import only Swoop metadata, not transcripts, so a
+      user can move their organization layer between machines safely.
 
 ### Fast interaction model
 
@@ -409,6 +455,23 @@ lightweight organisation layer that feels faster than filing things manually.
 - [ ] **Recent tags and suggested tags** — show the last-used tags first; optionally suggest tags
       from branch name, project folder, status signals, and existing aliases without AI/API calls
 
+### Web UI shape
+
+- [ ] Left rail: `Smart`, `Stacks`, `Groups`, then `Projects`; each section collapsible
+- [ ] Main list: projects/sessions filtered by current focus, with chips and health badges visible
+- [ ] Right inspector: Resume Card plus organization editor for selected session/project
+- [ ] Drag targets: stacks/groups highlight only while dragging a project/session row
+- [ ] Empty state: "No stacks yet — press g or drag a session here" instead of a settings-heavy flow
+- [ ] Context menu: row-only actions for tag, move to stack/group, archive, delete, handoff
+
+### TUI / CLI shape
+
+- [ ] TUI footer hints: `t tag`, `g stack/group`, `f focus`, `esc clear`
+- [ ] TUI command palette entries mirror the web actions
+- [ ] CLI filters: `swoop list --tag bug`, `swoop list --group work`, `swoop list --stack launch`
+- [ ] CLI mutations stay optional until the UI model proves itself; avoid adding too many commands
+      before the vocabulary settles
+
 ### Data and safety
 
 - [ ] Store session tags in each project's `swoop.json` sidecar beside alias/archive metadata
@@ -421,11 +484,13 @@ lightweight organisation layer that feels faster than filing things manually.
 
 ### MVP slice
 
-- [ ] Data model: session tags + project groups + saved stack definitions
-- [ ] CLI: `swoop list --tag <tag>`, `swoop list --group <group>`, and JSON fields for tags/groups
-- [ ] TUI: tag picker (`t`), group picker (`g`), and focus filter
-- [ ] Web: visible group/sidebar section, tag chips in rows, drag project/session onto a group
-- [ ] Tests: metadata read/write, filters, keyboard actions, and web-client regression guards
+1. [ ] Data model: session tags + project groups + work stack definitions
+2. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
+3. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips in compact rows
+4. [ ] Search/list integration: tags/groups/stacks participate in search and `swoop list --json`
+5. [ ] CLI filters: `--tag`, `--group`, `--stack`; mutation commands only if users need scripting
+6. [ ] Tests: metadata read/write, filters, keyboard actions, drag handler guards, and regression
+       checks for zero-config defaults
 
 ### Product guardrails
 
@@ -433,6 +498,87 @@ lightweight organisation layer that feels faster than filing things manually.
       kanban boards in the core product
 - [ ] Keep the default experience clean for users with no tags/groups configured
 - [ ] Every organisation feature must improve resume/triage speed, not just decorate rows
+- [ ] Prefer reversible local metadata over destructive transcript edits
+- [ ] Avoid AI auto-organization in the core path; heuristic suggestions are enough for the MVP
+
+---
+
+## Milestone 13 — Live web control panel
+
+Make `swoop web` worth keeping open on a second monitor or browser tab while Claude Code runs in a
+terminal. The web UI should become a quiet operations panel: active sessions, live limits, recent
+tool activity, and attention signals update without the user refreshing or switching context.
+
+### Why this matters
+
+The TUI is great for intentional navigation. The web UI can win a different use case: **passive
+awareness while working**. A developer should glance at Swoop and know:
+
+- which Claude session is active right now
+- whether it is using tools, waiting, interrupted, or recently wrote output
+- whether context or account limits are becoming dangerous
+- whether the active project/session changed underneath them
+- which session deserves attention next
+
+### Product direction
+
+- [ ] **Live Activity Strip** — a top or right-side strip showing active sessions with state:
+      running, recently changed, waiting, interrupted, remote-active, or stale
+- [ ] **Selected-session heartbeat** — when a selected session changes, show last update time,
+      latest event type, latest tool name, and whether output is still moving
+- [ ] **Tool trace** — compact last-tool display: `Edit`, `Read`, `Bash`, `Write`, failed tool,
+      or pending tool. No transcript streaming; just operational state.
+- [ ] **Context/limit meters** — persistent current-session and weekly/monthly account limit bars,
+      with freshness and reset time visible. Never show stale data as live.
+- [ ] **Attention feed** — small chronological feed of actionable events: session became active,
+      tool failed, path missing, branch drift, high context, session expiring, orphan found.
+- [ ] **Live Resume Card refresh** — refresh the selected session's Resume Card when transcript
+      changes, but debounce enough to avoid distracting flicker.
+- [ ] **Pinned watch list** — pin up to a few projects/sessions to the live panel. This pairs well
+      with Milestone 12 work stacks.
+
+### Live signal model
+
+- [ ] Split live data into explicit freshness states: `live`, `recent`, `stale`, `unavailable`
+- [ ] Reuse existing SSE for project/session changes; add narrowly scoped event payloads only if
+      polling the whole project list becomes visibly wasteful
+- [ ] Track latest transcript mtime per active session and derive a "last changed" heartbeat
+- [ ] Extract latest tool event from transcript tail only, not by reparsing full transcripts on every
+      tick
+- [ ] Treat account usage separately from session context; label both clearly
+- [ ] Display "updated X ago" beside every live meter whose value can go stale
+
+### Web UI shape
+
+- [ ] Header: compact usage bars remain visible but cleaner; stale values become dim with clear text
+- [ ] Right panel: selected-session live card above/beside Resume Card
+- [ ] Optional bottom rail: active sessions and attention feed, collapsible
+- [ ] Use subtle motion only for state changes, never constant animation
+- [ ] Keep row density readable; live indicators should clarify, not decorate
+
+### Safety and performance
+
+- [ ] Add feature toggle in `swoop config`: live web panel on/off
+- [ ] Respect `SWOOP_NO_OPEN` and localhost-only web server constraints
+- [ ] Avoid transcript tail reads more often than necessary; batch updates per project
+- [ ] Never expose secret transcript content in the live feed; tool names, file paths, and statuses
+      are enough for the first version
+- [ ] Degrade gracefully when usage integration is disabled or unavailable
+
+### MVP slice
+
+1. [ ] Live activity strip for active/recent sessions
+2. [ ] Selected-session heartbeat with latest tool/status and last update time
+3. [ ] Freshness-aware usage bars in the web header and detail panel
+4. [ ] Attention feed with only high-signal events
+5. [ ] Config toggle and tests for freshness, throttling, and stale display
+
+### Product guardrails
+
+- [ ] Do not build a transcript viewer or chat clone
+- [ ] Do not imply "live" when the source has not updated recently
+- [ ] Do not add noisy notifications by default; this is a glanceable dashboard, not an alarm system
+- [ ] Prefer "calm useful state" over animation-heavy monitoring UI
 
 ---
 
@@ -477,25 +623,9 @@ Promote from Milestone 11 discovery only after the extension has a clear MVP
 that beats a simple native picker workflow. See the Milestone 11 go/no-go
 criteria.
 
-### Live session panel — the "always-open" use case
+### Live web control panel
 
-The web UI could act as a **passive control panel** that developers keep open in a browser tab
-while working in the terminal. The value proposition: at a glance, without switching windows, you
-see what Claude is doing right now.
-
-Proposed additions to the web right-panel (using existing SSE + usage capture infrastructure):
-
-- [ ] **Live context bar** — context window % for the currently active session, updated in real time
-      via the SSE channel. Colour-coded to match the `swoop usage` bar thresholds
-- [ ] **Rate limit mini-display** — inline 5h and 7d percentage next to the active session indicator,
-      replacing the current static `●` dot with a subtle meter
-- [ ] **Last-tool trace** — the most recent tool call name/type from the active session's transcript,
-      updated on every SSE change event. Gives a "heartbeat" feeling while Claude is processing
-- [ ] **Session timeline** — a compact sparkline of message activity over the last hour for the
-      selected session, drawing on existing transcript timestamps. No new data required
-
-The goal is not to replicate a chat UI — that belongs to Claude Code. The goal is a glanceable
-dashboard that makes context exhaustion and rate limits impossible to miss.
+Promoted to [Milestone 13](#milestone-13--live-web-control-panel).
 
 ---
 

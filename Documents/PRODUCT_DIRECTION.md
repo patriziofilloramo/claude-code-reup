@@ -65,6 +65,26 @@ pre-resume summaries. Surface choice means the same local facts are useful from
 the terminal, web, scripts, and eventually VS Code. A prettier picker alone is
 not defensible; a reliable local operations console is.
 
+## Strategic Bets
+
+Swoop's next differentiators should be built around three reinforcing bets:
+
+1. **Web organization for many projects and sessions.** The web UI should become
+   the best place to group, tag, stack, triage, and focus Claude Code work. The
+   winning concept is not generic labels; it is work organization by intent:
+   "Launch week", "Auth migration", "Waiting on review", "High-context work".
+2. **An always-open live web panel.** Developers should be able to keep
+   `swoop web` open while Claude Code runs elsewhere and immediately see active
+   sessions, changing state, latest tool activity, usage freshness, and attention
+   events. It should be calm and glanceable, not a transcript stream.
+3. **A VS Code extension only if it surfaces Swoop intelligence natively.** The
+   extension should not be a dashboard clone. It should bring groups, stacks,
+   active state, usage, resume cards, and safe actions into the editor workflow.
+
+The preferred sequence is: organization first, live web panel second, VS Code
+extension discovery in parallel until its MVP is clearly stronger than simply
+calling Claude Code's native picker.
+
 ## Product Principles
 
 - Local-first, private, and useful without an account.
@@ -196,10 +216,10 @@ When choosing what to build next, apply this filter in order:
 5. **Is it UI polish, navigation convenience, or parity with a competitor?**
    → Low priority. Only if it costs little and doesn't add cognitive surface.
 
-The Resume Card remains the highest-priority unbuilt shared capability. The
-next discovery track is the VS Code extension, because it may be the strongest
-new surface for that same intelligence. Nothing in the UI layer should block
-the shared core needed by both.
+The next shared capabilities should strengthen the three strategic bets:
+organization metadata, live state/freshness, and editor-ready JSON contracts.
+Nothing in the UI layer should block the shared core needed by web, TUI, CLI,
+and a future VS Code extension.
 
 ## Delivery Guidance
 
