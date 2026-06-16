@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -6,6 +7,11 @@ import { getProjectDirectory } from '../project/claude-paths.js'
 import { invalidateProjectCache } from '../project/project-cache.js'
 import type { Project } from './session-model.js'
 import { withProjectSidecarLock } from '../project/project-sidecar-lock.js'
+import { log } from '../../utils/logger.js'
+
+const SIDECAR_REPLACE_ATTEMPTS = 20
+const SIDECAR_REPLACE_RETRY_MS = 40
+const RETRYABLE_REPLACE_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
 
 interface SessionSidecarMetadata {
   alias?: string
@@ -70,18 +76,46 @@ async function writeProjectSidecarAtomically(
   metadata: ProjectSidecarMetadata
 ): Promise<void> {
   const sidecarPath = join(projectDirectory, 'swoop.json')
-  // PID-qualified temp paths prevent independent Swoop processes from writing
-  // the same temporary file before either reaches the atomic rename.
-  const temporarySidecarPath = `${sidecarPath}.${process.pid}.tmp`
+  const temporarySidecarPath = `${sidecarPath}.${process.pid}.${randomUUID()}.tmp`
 
   try {
     await writeFile(temporarySidecarPath, JSON.stringify(metadata, null, 2), 'utf8')
-    await rename(temporarySidecarPath, sidecarPath)
+    await replaceSidecarWithRetry(temporarySidecarPath, sidecarPath)
   } finally {
     // `rename` removes the temp path on success. Cleanup matters only after an
     // interrupted or failed write.
     await unlink(temporarySidecarPath).catch(() => {})
   }
+}
+
+async function replaceSidecarWithRetry(
+  temporarySidecarPath: string,
+  sidecarPath: string
+): Promise<void> {
+  for (let attempt = 1; attempt <= SIDECAR_REPLACE_ATTEMPTS; attempt++) {
+    try {
+      await rename(temporarySidecarPath, sidecarPath)
+      return
+    } catch (error) {
+      if (!shouldRetrySidecarReplace(error) || attempt === SIDECAR_REPLACE_ATTEMPTS) throw error
+
+      // Windows can reject a rename-over-existing-file while another short-lived
+      // reader has the destination open. The advisory lock prevents Swoop writers
+      // from racing each other; this retry handles external readers.
+      await waitForSidecarReplaceRetry(attempt)
+    }
+  }
+}
+
+function shouldRetrySidecarReplace(error: unknown): boolean {
+  const errorCode = (error as NodeJS.ErrnoException).code
+  return typeof errorCode === 'string' && RETRYABLE_REPLACE_ERROR_CODES.has(errorCode)
+}
+
+async function waitForSidecarReplaceRetry(attempt: number): Promise<void> {
+  const jitterMs = Math.random() * 15
+  const backoffMs = SIDECAR_REPLACE_RETRY_MS + Math.min(attempt * 5, 60) + jitterMs
+  await new Promise<void>((resolve) => setTimeout(resolve, backoffMs))
 }
 
 function sessionMetadataEntry(
@@ -152,10 +186,17 @@ export async function deleteSession(projectId: string, sessionId: string): Promi
   // Delete the transcript (ignore if already gone)
   await rm(jsonlPath, { force: true })
 
-  // Remove the sidecar entry to avoid orphaned metadata
-  await enqueueProjectSidecarUpdate(projectDirectory, (metadata) => {
-    if (metadata.sessions) delete metadata.sessions[sessionId]
-  })
+  try {
+    // Remove the sidecar entry to avoid orphaned metadata. Once the transcript
+    // has been removed, this cleanup is best-effort: an orphaned sidecar entry
+    // is ignored by discovery and must not turn a successful delete into an
+    // apparent failure for the user.
+    await enqueueProjectSidecarUpdate(projectDirectory, (metadata) => {
+      if (metadata.sessions) delete metadata.sessions[sessionId]
+    })
+  } catch (error) {
+    log.warn('delete: transcript removed but sidecar cleanup failed:', error)
+  }
 
   invalidateProjectCache()
 }

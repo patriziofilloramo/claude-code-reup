@@ -92,4 +92,27 @@ describe('lock resilience', () => {
       archived: true,
     })
   })
+
+  it('retries sidecar replacement while another process briefly holds the file open', async () => {
+    const sidecarPath = join(temporaryClaudeDirectory, 'projects', PROJECT_ID, 'swoop.json')
+    await writeFile(sidecarPath, JSON.stringify({ sessions: {} }))
+
+    const heldSidecar = await open(sidecarPath, 'r')
+    const releaseSidecar = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void heldSidecar.close().finally(resolve)
+      }, 120)
+    })
+
+    try {
+      await expect(setSessionArchived(PROJECT_ID, SESSION_ID, true)).resolves.toBeUndefined()
+    } finally {
+      await releaseSidecar
+    }
+
+    const metadata = JSON.parse(await readFile(sidecarPath, 'utf8')) as {
+      sessions?: Record<string, { archived?: boolean }>
+    }
+    expect(metadata.sessions?.[SESSION_ID]?.archived).toBe(true)
+  })
 })
