@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Swoop VS Code Extension",
+      "type": "shell",
+      "command": "npm run compile",
+      "options": {
+        "cwd": "${workspaceFolder}/extension"
+      },
+      "problemMatcher": "$tsc",
+      "group": "build",
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "silent"
+      }
+    }
+  ]
+}
