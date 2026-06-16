@@ -19,6 +19,26 @@ export default tseslint.config(
     },
   },
   {
+    files: ['extension/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-console': 'off',
+    },
+  },
+  {
+    files: ['extension/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
     files: ['src/web/client.js'],
     languageOptions: {
       globals: {
@@ -54,6 +74,12 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', 'src/web/client/**', '*.config.js'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'extension/dist/**',
+      'src/web/client/**',
+      '*.config.js',
+    ],
   }
 )

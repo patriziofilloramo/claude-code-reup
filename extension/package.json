@@ -1,0 +1,139 @@
+{
+  "name": "swoop-vscode",
+  "displayName": "Swoop",
+  "description": "Editor-native Claude Code session intelligence from Swoop.",
+  "version": "0.0.1",
+  "publisher": "swoop-local",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onCommand:swoop.diagnostics",
+    "onCommand:swoop.refreshSessions",
+    "onCommand:swoop.resumeHere",
+    "onCommand:swoop.resumeSession",
+    "onView:swoop.sessions"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "swoop.diagnostics",
+        "title": "Swoop: Diagnostics"
+      },
+      {
+        "command": "swoop.refreshSessions",
+        "title": "Swoop: Refresh Sessions",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "swoop.resumeHere",
+        "title": "Swoop: Resume Here"
+      },
+      {
+        "command": "swoop.resumeSession",
+        "title": "Swoop: Resume Session"
+      },
+      {
+        "command": "swoop.tree.copySessionId",
+        "title": "Copy Session ID",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "swoop.tree.resumeSession",
+        "title": "Resume Session",
+        "icon": "$(play)"
+      },
+      {
+        "command": "swoop.tree.revealProjectFolder",
+        "title": "Reveal Project Folder",
+        "icon": "$(folder-opened)"
+      }
+    ],
+    "configuration": {
+      "title": "Swoop",
+      "properties": {
+        "swoop.includeArchived": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include archived sessions in Swoop's VS Code views."
+        },
+        "swoop.refreshMode": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "watch",
+            "interval"
+          ],
+          "default": "manual",
+          "description": "Controls how Swoop refreshes session data inside VS Code. Only manual refresh is used by the current preview."
+        },
+        "swoop.showStatusBar": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reserved for a future status bar usage indicator. Disabled until usage freshness is proven in VS Code."
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "swoop.refreshSessions",
+          "when": "view == swoop.sessions",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "swoop.tree.resumeSession",
+          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "group": "inline"
+        },
+        {
+          "command": "swoop.tree.copySessionId",
+          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "group": "navigation"
+        },
+        {
+          "command": "swoop.tree.revealProjectFolder",
+          "when": "view == swoop.sessions && viewItem == swoopProject",
+          "group": "navigation"
+        }
+      ]
+    },
+    "views": {
+      "swoop": [
+        {
+          "id": "swoop.sessions",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "swoop",
+          "title": "Swoop",
+          "icon": "media/swoop.svg"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc --noEmit && node esbuild.mjs",
+    "package": "npm run compile",
+    "watch": "node esbuild.mjs --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.0.0"
+  }
+}

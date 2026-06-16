@@ -1,6 +1,7 @@
 # VS Code Extension Plan
 
-Status: working plan for Milestone 11 discovery.
+Status: working plan for Milestone 11 discovery. Phase 0 and the first read-only
+editor proof are now implemented on `feat/vscode-extension-plan`.
 
 This document defines the first VS Code extension slice for Swoop. It is written
 for an implementation agent: decisions are explicit, risky ideas are deferred,
@@ -175,20 +176,23 @@ the existing CLI/TUI/web package.
 
 Deliverables:
 
-- [ ] `extension/` scaffold with TypeScript + esbuild.
-- [ ] `vscode` externalized from the bundle.
-- [ ] Direct imports from Swoop core compile inside the extension bundle.
-- [ ] `Swoop: Diagnostics` command logs discovered project/session counts to
+- [x] `extension/` scaffold with TypeScript + esbuild.
+- [x] `vscode` externalized from the bundle.
+- [x] Direct imports from Swoop core compile inside the extension bundle.
+- [x] `Swoop: Diagnostics` command logs discovered project/session counts to
       an Output Channel.
-- [ ] No user-facing sidebar yet.
+- [x] No mutation-capable sidebar yet. A read-only session tree exists because
+      it is cheap, useful for Extension Host smoke testing, and does not change
+      Swoop data.
 
 Verification:
 
-- [ ] Existing root checks still pass: `npm run build`, `npm test`,
+- [x] Existing root checks still pass: `npm run build`, `npm test`,
       `npm run lint`, `npm run format:check`.
-- [ ] Extension build passes from `extension/`.
-- [ ] Extension host can activate on command.
-- [ ] No new root dependency is added unless justified.
+- [x] Extension build passes from `extension/`.
+- [ ] Extension host manual smoke test.
+- [x] No new root dependency is added. Extension build dependencies are local to
+      `extension/`.
 
 ### Phase 1 - Quick Pick resume flows
 
@@ -196,9 +200,9 @@ Goal: make the keyboard path obviously better than a bare picker.
 
 Commands:
 
-- [ ] `Swoop: Resume Here`
-- [ ] `Swoop: Resume Session`
-- [ ] `Swoop: Refresh Sessions`
+- [x] `Swoop: Resume Here`
+- [x] `Swoop: Resume Session`
+- [x] `Swoop: Refresh Sessions`
 
 Behavior:
 
@@ -243,10 +247,10 @@ View:
 
 Inline/context actions:
 
-- [ ] Resume
-- [ ] Copy Session ID
-- [ ] Reveal Project Folder
-- [ ] Refresh
+- [x] Resume
+- [x] Copy Session ID
+- [x] Reveal Project Folder
+- [x] Refresh
 
 Deferred from the first tree:
 
