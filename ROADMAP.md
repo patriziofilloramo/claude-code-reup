@@ -413,9 +413,42 @@ The design target is not "manual filing". It is **triage in seconds**:
 - [ ] **Native TODO state** — detect Claude Code `TodoWrite` lists from transcripts and show open,
       in-progress, and completed task counts beside the session. This is read-only insight, not a
       task manager.
+- [ ] **Native Plan state** — detect Claude Code planning artifacts (`ExitPlanMode`,
+      `plan_file_reference`, `plan_mode`, and plan tool results when present) and surface the latest
+      accepted/proposed plan separately from TODOs.
 - [ ] **Focus mode** — activate one group/tag/stack and hide unrelated noise until cleared
 - [ ] **Smart views** — built-in virtual views such as `Active now`, `Needs attention`,
       `Waiting`, `High context`, `Recently touched`, and `Expiring soon`
+
+### Automatic Claude context layer
+
+Swoop should mine read-only facts that Claude Code already records, so the user gets richer
+organization with nearly zero manual effort. Candidate sources observed in local transcript
+structure and existing Swoop parsers:
+
+- [ ] **Plans** — `ExitPlanMode`, plan-mode attachments, and plan file references; show latest
+      plan title/summary/status when available
+- [ ] **TODOs** — `TodoWrite` and TODO tool results; show active/in-progress/completed counts and
+      latest unfinished items
+- [ ] **Touched files** — Edit/Write/MultiEdit/NotebookEdit tool inputs and edited-file
+      attachments; show recent files without diffing the repo
+- [ ] **Read/research trail** — Read/Grep/Glob/WebSearch/WebFetch tool usage; show "looked at"
+      files and research actions separately from changed files
+- [ ] **Tool health** — pending tool calls, failed tool results, command duration, truncated
+      output, interrupted commands, and backgrounded tasks
+- [ ] **Execution context** — cwd, git branch, entrypoint (`cli`, `claude-vscode`, SDK), Claude Code
+      version, permission mode, and session slug
+- [ ] **Agent/subagent activity** — agent listings, sidechain sessions, Task/Agent tool results,
+      agent IDs, token totals, and tool stats where available
+- [ ] **Compaction / summaries** — compact boundaries, summary events, compact file references,
+      and last prompt events
+- [ ] **IDE and file-history hints** — file-history snapshots, IDE diagnostics, edited text file
+      attachments, and shell snapshots when available
+- [ ] **Usage facts** — model, input/output/cache tokens, context usage reports, service tier, and
+      account-limit snapshots already handled by the usage layer
+
+Guardrail: every field must be labelled by source/freshness and degrade to "unknown" when the
+artifact is missing. Do not infer private intent from raw content when a structured signal exists.
 
 ### Feature ideas worth building
 
@@ -440,6 +473,11 @@ The design target is not "manual filing". It is **triage in seconds**:
       related sessions becomes a reusable work context.
 - [ ] **TODO-aware triage** — sessions with unfinished Claude TODOs appear in Inbox/Smart Buckets;
       completed TODO lists can make a session a cleanup/archive candidate.
+- [ ] **Plan-aware triage** — sessions with a proposed/accepted plan but no completed TODOs appear
+      as `planned`, making them easy to resume before the implementation context goes cold.
+- [ ] **Auto-suggest organization** — suggest tags/stacks from plan title, TODO wording, branch
+      prefix, touched-file directories, agent type, and status signals. Suggestions remain local,
+      visible, and user-controlled.
 - [ ] **Quick clean sweep** — from a group/stack, archive completed or stale sessions in bulk, with
       active sessions skipped and reported.
 - [ ] **Portable organization export** — export/import only Swoop metadata, not transcripts, so a
@@ -466,6 +504,7 @@ The design target is not "manual filing". It is **triage in seconds**:
 - [ ] Main list: projects/sessions filtered by current focus, with chips and health badges visible
 - [ ] Right inspector: Resume Card, native TODO summary, and organization editor for selected
       session/project
+- [ ] Plan section: latest native plan shown above TODOs when present, with source/freshness label
 - [ ] Drag targets: stacks/groups highlight only while dragging a project/session row
 - [ ] Empty state: "No stacks yet — press g or drag a session here" instead of a settings-heavy flow
 - [ ] Context menu: row-only actions for tag, move to stack/group, archive, delete, handoff
@@ -485,6 +524,8 @@ The design target is not "manual filing". It is **triage in seconds**:
       `~/.claude/swoop/prefs.json`
 - [ ] Derive TODO state from transcript `TodoWrite` events and keep it read-only; never write back
       into Claude's TODO tools or transcript files
+- [ ] Derive plan state from transcript/plan artifacts and keep it read-only; never rewrite plan
+      files or inject plan content into transcripts
 - [ ] Keep organisation metadata local-first and portable; no account, no telemetry, no server
 - [ ] Provide `swoop config` toggles for organisation UI density and suggested-tag behaviour
 - [ ] Add export/import for organisation metadata before adding complex editing flows
@@ -493,16 +534,19 @@ The design target is not "manual filing". It is **triage in seconds**:
 ### MVP slice
 
 1. [ ] Data model: session tags + project groups + work stack definitions
-2. [ ] Native TODO extraction: latest `TodoWrite` list, open/in-progress/completed counts, and
+2. [ ] Automatic context extractor: native plan, TODO, touched files, read/research trail, tool
+       health, agent/subagent activity, and execution context facts with source/freshness labels
+3. [ ] Native TODO extraction: latest `TodoWrite` list, open/in-progress/completed counts, and
        concise TODO preview in Resume Card / inspector
-3. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
-4. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips/TODO count in compact rows
-5. [ ] Search/list integration: tags/groups/stacks/TODO state participate in search and
+4. [ ] Native Plan extraction: latest plan summary/status and `planned` smart bucket
+5. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
+6. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips/TODO/plan count in compact rows
+7. [ ] Search/list integration: tags/groups/stacks/TODO/plan state participate in search and
        `swoop list --json`
-6. [ ] CLI filters: `--tag`, `--group`, `--stack`, `--todo`; mutation commands only if users need
-       scripting
-7. [ ] Tests: metadata read/write, TODO extraction, filters, keyboard actions, drag handler guards,
-       and regression
+8. [ ] CLI filters: `--tag`, `--group`, `--stack`, `--todo`, `--planned`; mutation commands only if
+       users need scripting
+9. [ ] Tests: metadata read/write, automatic context extraction, TODO/plan extraction, filters,
+       keyboard actions, drag handler guards, and regression
        checks for zero-config defaults
 
 ### Product guardrails
@@ -513,6 +557,7 @@ The design target is not "manual filing". It is **triage in seconds**:
 - [ ] Every organisation feature must improve resume/triage speed, not just decorate rows
 - [ ] Prefer reversible local metadata over destructive transcript edits
 - [ ] TODO state is displayed as observed session context, not as a Swoop-owned checklist to edit
+- [ ] Plan state is displayed as observed session context, not as a Swoop-owned project plan to edit
 - [ ] Avoid AI auto-organization in the core path; heuristic suggestions are enough for the MVP
 
 ---

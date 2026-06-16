@@ -132,12 +132,35 @@ Before resume, show a compact answer to "what was happening?":
 - Last meaningful user request
 - Last meaningful assistant response
 - Pending or failed tool call
+- Native Claude plan state when present (`ExitPlanMode` / plan references / plan-mode artifacts)
 - Native Claude TODO state when present (`TodoWrite` open / in-progress / completed items)
 - Recently touched files
+- Recently read/searched files when they are useful to explain context
 - Recorded cwd and branch
+- Entrypoint, agent/subagent, and permission-mode facts when available
 - Last activity and active-session state
 
 This is more valuable than building a full transcript viewer first.
+
+### Zero-Effort Context
+
+Swoop should prefer facts Claude Code already records over manual user input. The user should get
+rich organization and resume context with almost no extra bookkeeping.
+
+Good automatic sources include:
+
+- plan-mode artifacts and `ExitPlanMode`
+- `TodoWrite` state
+- tool calls and tool results
+- changed/read/searched files
+- cwd, branch, entrypoint, permission mode, and Claude Code version
+- agent/subagent sidechain activity
+- compact summaries and last prompts
+- usage/model/token facts
+- IDE diagnostics and file-history snapshots when available
+
+The rule: extract structured facts first, label freshness/source clearly, and never mutate
+Claude-owned artifacts to make Swoop's view prettier.
 
 ### Context Drift
 
