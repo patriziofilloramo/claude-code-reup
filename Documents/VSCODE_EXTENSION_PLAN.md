@@ -1,211 +1,411 @@
 # VS Code Extension Plan
 
-Swoop as a native VS Code extension. Goal: make Swoop's local intelligence
-useful inside the editor workflow without requiring any additional prerequisites
-beyond Claude Code being installed.
+Status: working plan for Milestone 11 discovery.
 
----
+This document defines the first VS Code extension slice for Swoop. It is written
+for an implementation agent: decisions are explicit, risky ideas are deferred,
+and every phase has a verification target.
 
-## Core decisions (resolved)
+## Executive Summary
 
-### Architecture: bundled extension with shared source
+Swoop should enter VS Code only if it does something the editor makes uniquely
+better. The extension must not be a smaller copy of the web dashboard and must
+not compete with Claude Code's native picker on "global search exists". The
+winning workflow is:
 
-The extension is a standalone directory (`extension/`) in this repo. Its bundler
-(esbuild) follows TypeScript imports directly into `../src/core/`, producing a
-single self-contained `extension.js`. The VSIX packages only that file.
+> From the workspace I am editing, show the Claude Code sessions that matter,
+> explain their state, and resume the right one in the integrated terminal.
 
-**No `@swoop/core` workspace package needed.** No shell-out to a `swoop` binary.
-No running web server. The extension reads `~/.claude/projects/` directly, the
-same way the CLI and web server do — because it compiles the same source.
+The first extension milestone is therefore an **Editor Resume Proof**:
 
-```
+1. `Swoop: Resume Here` ranks sessions for the current workspace first.
+2. `Swoop: Resume Session` provides a global Quick Pick with health, branch,
+   project, active state, TODO/plan hints, and last activity.
+3. A lightweight Activity Bar tree makes active/attention sessions visible
+   without opening the web UI.
+
+Everything else is deferred until this proof feels better than typing
+`claude --resume` and using the native picker.
+
+## Critical Review of the Previous Plan
+
+The previous plan had good instincts, but it was too broad for Phase 1.
+
+- **Phase 1 was overloaded.** Nineteen features in the first slice would mix
+  product discovery, extension packaging, mutations, live usage, notifications,
+  and UI design in one branch.
+- **Architecture was declared final too early.** Directly importing
+  `../src/core` is probably the right direction, but it still needs a bundle,
+  startup, and extension-host proof before it becomes a rule.
+- **"No backend logic required" was inaccurate.** The extension should not
+  create a second parser, but it does need an adapter layer that turns Swoop's
+  core model into VS Code-friendly view models and commands.
+- **Status bar usage was too early.** Usage has source/freshness complexity.
+  Showing stale or partial account limits inside VS Code would damage trust.
+- **Branch drift notifications risk being noisy.** Passive indicators are a
+  better first step. Notifications can come later, opt-in.
+- **Mutation features should not lead.** Archive, rename, delete, and handoff
+  are useful, but the first extension proof should be read-mostly and hard to
+  break.
+
+## Product Wedge
+
+### What the extension should beat
+
+Claude Code's native resume flow can search sessions globally. Swoop's VS Code
+extension should win when the user needs context before resuming:
+
+- Which sessions belong to the workspace I already have open?
+- Which one is active, interrupted, high-context, or branch-drifted?
+- What did Claude last plan, touch, or leave unfinished?
+- Can I resume it in the integrated terminal without changing surfaces?
+
+### What it should not become
+
+- Not a transcript viewer.
+- Not a second web dashboard.
+- Not a project-management tool.
+- Not a replacement for the Swoop TUI.
+- Not a wrapper that shells out to `swoop list` for every interaction.
+
+## Non-Negotiable Constraints
+
+- Local-first: no Swoop cloud, no telemetry, no account, no API key for core
+  features.
+- Read-only toward Claude-owned transcripts.
+- No dependency on an installed `swoop` binary for core extension behavior.
+- No web server required for the extension.
+- VS Code API usage stays at the edge; Swoop core remains editor-agnostic.
+- Mutations require explicit confirmation and are not part of the first proof.
+- Windows, macOS, and Linux must remain first-class.
+
+## Architecture Direction
+
+### Preferred shape
+
+```text
 claude-sessions-manager/
-├── src/                         ← existing swoop CLI + web
-│   └── core/                   ← imported directly by the extension
-├── extension/                  ← NEW
-│   ├── package.json            ← VS Code extension manifest
-│   ├── tsconfig.json           ← includes ../../src/core via paths
-│   ├── esbuild.mjs             ← bundles → dist/extension.js
-│   └── src/
-│       ├── extension.ts        ← activate / deactivate
-│       ├── projectTree.ts      ← Activity Bar TreeView
-│       ├── sessionPicker.ts    ← Quick Pick
-│       └── statusBar.ts        ← Status Bar item
+  src/
+    core/                         existing Swoop domain logic
+  extension/
+    package.json                  VS Code extension manifest
+    tsconfig.json                 extension build config
+    esbuild.mjs                   bundles extension host entry
+    src/
+      extension.ts                activation and command registration
+      swoop-data.ts               adapter from Swoop core to extension DTOs
+      resume-picker.ts            Quick Pick flows
+      session-tree.ts             Activity Bar TreeDataProvider
+      terminal.ts                 integrated terminal launch helpers
+      formatting.ts               labels, codicons, relative times
+      logger.ts                   extension output channel
 ```
 
-**Single prerequisite for the user:** Claude Code installed. Nothing else.
+### Boundary rules
 
-### Surfaces chosen
+- `extension/src/*` may import from `../src/core/*`.
+- `src/core/*` must never import from `vscode`.
+- The extension must not import `src/web/routes/*` or browser client code.
+- The extension must not call Swoop's platform terminal launcher; VS Code has
+  its own integrated terminal API.
+- The adapter returns small DTOs, not raw project/session objects everywhere.
 
-| Surface                         | Role                                                    |
-| ------------------------------- | ------------------------------------------------------- |
-| Activity Bar sidebar (TreeView) | Primary browsing — projects and sessions always visible |
-| Quick Pick                      | Primary keyboard action — resume with fuzzy search      |
-| Status Bar                      | Ambient awareness — active sessions + usage at a glance |
-| Command Palette                 | Discoverability — all actions available by name         |
-| Explorer context menu           | Contextual resume from the file tree                    |
-| Notification                    | Branch drift alert — unique to Swoop                    |
+Recommended adapter DTOs:
 
----
+```ts
+type ExtensionProject = {
+  id: string
+  name: string
+  path: string
+  sessionCount: number
+  updated: string | null
+}
 
-## Phase 1 — Core, everything essential
-
-All features in this phase map 1:1 to data Swoop already reads. No new backend
-logic required.
-
-### Feature matrix
-
-| #   | Feature                              | Surface               | Core source                           |
-| --- | ------------------------------------ | --------------------- | ------------------------------------- |
-| 1   | Projects → sessions tree             | Sidebar               | `loadProjects()`                      |
-| 2   | Health badge per session (◉ ⚠ ✗)     | Sidebar               | `primaryStatus` + `activeSessionIds`  |
-| 3   | Git branch per session               | Sidebar               | `session.gitBranch`                   |
-| 4   | Relative time ("2h ago")             | Sidebar               | `session.updated`                     |
-| 5   | Message count                        | Sidebar               | `session.messageCount`                |
-| 6   | **Resume** in integrated terminal    | Sidebar ▶ + Command   | same logic as resume-route            |
-| 7   | **New session** in project directory | Sidebar + Command     | same logic as new-session             |
-| 8   | Archive / Unarchive                  | Sidebar context menu  | `setSessionArchived()`                |
-| 9   | Rename / Alias                       | Sidebar context menu  | `setSessionAlias()`                   |
-| 10  | Copy Session ID                      | Sidebar context menu  | clipboard                             |
-| 11  | **Quick Pick "Resume Session"**      | Quick Pick + keybind  | `loadProjects()`                      |
-| 12  | **Quick Pick "Resume Here"**         | Quick Pick            | workspace path → project              |
-| 13  | Status Bar — active session count    | Status Bar            | `getActiveSessions()`                 |
-| 14  | Status Bar — usage %                 | Status Bar            | `loadLiveUsage()`                     |
-| 15  | Live auto-refresh                    | Background            | `FileSystemWatcher` on `~/.claude/`   |
-| 16  | Activity Bar badge (attention count) | Activity Bar icon     | `attention` filter                    |
-| 17  | Open Web Dashboard                   | Command               | opens browser to `swoop web`          |
-| 18  | **Branch drift alert**               | Notification          | `session.gitBranch` vs current branch |
-| 19  | "Resume Here" from Explorer          | Explorer context menu | workspace path → project              |
-
-### Sidebar layout
-
-```
-┌─ SWOOP ─────────────────────────── [+] [⟳] ┐
-│                                              │
-│  ▼  myapp                    3  ·  2h ago   │
-│     ◉  fix-auth-bug   feat/fix  47  2h   ▶  │  ← hover: ▶ appears
-│        add-tooltips   feat/ui   91  3h   ▶  │
-│     ⚠  cleanup        main      23  8d      │  ← ⚠ = expiring/interrupted
-│                                              │
-│  ▶  other-project            1  ·  1d ago   │  ← collapsed
-│                                              │
-└──────────────────────────────────────────────┘
+type ExtensionSession = {
+  id: string
+  projectId: string
+  projectName: string
+  projectPath: string
+  title: string
+  branch: string | null
+  updated: string | null
+  messageCount: number
+  contextTokens: number | null
+  primaryStatus: string
+  isActive: boolean
+  needsAttention: boolean
+  todoSummary: string | null
+  planSummary: string | null
+}
 ```
 
-- **Project row:** compact path · session count · last active · [+] on hover
-- **Session row:** status icon · name/alias · branch · msgs · time · [▶] on hover
-- **Right-click:** Resume / Rename / Archive / Copy ID
-- **Red badge** on Activity Bar icon when any session needs attention
+The exact names can evolve during implementation, but the principle should not:
+VS Code views consume a stable, small read model.
 
-### Quick Pick layout
+## VS Code API Decisions to Verify
 
+Use official VS Code APIs only:
+
+- Extension manifest and activation events:
+  https://code.visualstudio.com/api/references/extension-manifest
+- Activation events:
+  https://code.visualstudio.com/api/references/activation-events
+- Tree View API:
+  https://code.visualstudio.com/api/extension-guides/tree-view
+- VS Code API reference:
+  https://code.visualstudio.com/api/references/vscode-api
+
+Implementation notes:
+
+- Prefer activation on `onCommand:*` and `onView:swoop.sessions`; avoid `*`.
+- Use `window.showQuickPick()` for fast resume flows.
+- Use `window.createTreeView()` with a `TreeDataProvider` for the sidebar.
+- Use `window.createTerminal({ cwd })`, then `terminal.sendText(...)` for
+  resume/new-session commands.
+- File watching of `~/.claude/projects` must be verified. If VS Code's watcher
+  is unreliable for non-workspace folders on any OS, start with explicit
+  refresh and add a low-frequency refresh only while the Swoop view is visible.
+
+## MVP: Editor Resume Proof
+
+### Phase 0 - Build and data proof
+
+Goal: prove that the extension can bundle and read Swoop core without changing
+the existing CLI/TUI/web package.
+
+Deliverables:
+
+- [ ] `extension/` scaffold with TypeScript + esbuild.
+- [ ] `vscode` externalized from the bundle.
+- [ ] Direct imports from Swoop core compile inside the extension bundle.
+- [ ] `Swoop: Diagnostics` command logs discovered project/session counts to
+      an Output Channel.
+- [ ] No user-facing sidebar yet.
+
+Verification:
+
+- [ ] Existing root checks still pass: `npm run build`, `npm test`,
+      `npm run lint`, `npm run format:check`.
+- [ ] Extension build passes from `extension/`.
+- [ ] Extension host can activate on command.
+- [ ] No new root dependency is added unless justified.
+
+### Phase 1 - Quick Pick resume flows
+
+Goal: make the keyboard path obviously better than a bare picker.
+
+Commands:
+
+- [ ] `Swoop: Resume Here`
+- [ ] `Swoop: Resume Session`
+- [ ] `Swoop: Refresh Sessions`
+
+Behavior:
+
+- `Resume Here` ranks sessions by:
+  1. exact workspace folder path match
+  2. path contained by / containing the workspace folder
+  3. current git branch match
+  4. active state
+  5. needs-attention state
+  6. recent activity
+- `Resume Session` searches all projects globally.
+- Quick Pick rows show:
+  - status codicon
+  - alias/title
+  - project name
+  - branch
+  - relative activity time
+  - active/attention flags
+  - TODO/plan hint when available
+- Selecting a session opens a VS Code integrated terminal in the recorded
+  project path and sends `claude --resume <uuid>`.
+- If the path no longer exists, show a clear error and do not launch.
+- If the ID is not a full UUID, refuse to launch. The extension should resolve
+  prefixes before this point, not pass them to the shell.
+
+Why this can stand out:
+
+- The user does not leave VS Code.
+- The list is workspace-aware but still global.
+- It shows "should I resume this?" facts, not only names.
+
+### Phase 2 - Activity Bar tree
+
+Goal: provide a passive editor-native navigator without recreating the web UI.
+
+View:
+
+- `Swoop` Activity Bar container.
+- `Sessions` tree grouped by project.
+- Project rows show name, session count, and latest activity.
+- Session rows show status, title, branch, active state, and relative time.
+
+Inline/context actions:
+
+- [ ] Resume
+- [ ] Copy Session ID
+- [ ] Reveal Project Folder
+- [ ] Refresh
+
+Deferred from the first tree:
+
+- Rename
+- Archive
+- Delete
+- Handoff generation
+- Full detail webview
+
+Reason: the first tree should prove scanning and resume. Mutations can come
+after the data refresh model and confirmation UX are solid.
+
+### Phase 3 - Read-only session detail
+
+Goal: make Swoop's Resume Card available in the editor without building a
+dashboard clone.
+
+Candidate forms, in order:
+
+1. Quick Pick detail text for small summaries.
+2. Read-only virtual Markdown document: `swoop:/session/<id>.md`.
+3. Webview detail panel only if Markdown is not expressive enough.
+
+Content:
+
+- What the user asked for.
+- Where Claude left off.
+- Native plan.
+- Native TODO state.
+- Recently touched files.
+- Branch/path/active/attention facts.
+
+Guardrail: do not stream or render full transcripts.
+
+## Deferred Features
+
+These are useful but should not ship in the first proof.
+
+| Feature                    | Why defer                                                                  |
+| -------------------------- | -------------------------------------------------------------------------- |
+| Status bar usage           | Usage freshness is subtle; stale values in the editor would be misleading. |
+| Branch drift notifications | Notification fatigue risk. Start with passive indicators.                  |
+| Archive / rename / delete  | Mutations need confirmation, refresh, and conflict behavior.               |
+| Handoff generation         | Valuable, but not required to prove editor resume.                         |
+| Deep transcript search     | Can be expensive; first prove metadata search.                             |
+| Web dashboard command      | Easy, but not a differentiator for the extension.                          |
+| Groups / tags / stacks     | Wait until Milestone 12 data model stabilizes.                             |
+| Live activity strip        | Belongs to Milestone 13 first, then extension if useful.                   |
+
+## Configuration
+
+The extension should start with very few settings.
+
+Initial settings:
+
+- `swoop.refreshMode`: `manual` | `watch` | `interval`
+- `swoop.includeArchived`: boolean
+- `swoop.showStatusBar`: boolean, default `false` until usage is reliable
+
+Do not expose a large settings surface before the MVP teaches us which controls
+users actually need.
+
+## Error Handling and Logging
+
+- Create a `Swoop` Output Channel.
+- Log extension activation, refresh start/end, project/session counts, and
+  recoverable failures.
+- Never log transcript content.
+- User-facing errors should be short and actionable:
+  - "Project path no longer exists: <path>"
+  - "Claude Code session ID was not found locally."
+  - "Could not read Claude projects directory. Run Swoop Doctor for details."
+- Keep unexpected errors in the Output Channel with stack traces.
+
+## Security and Privacy
+
+- No telemetry.
+- No network requests.
+- No transcript writes.
+- No shell interpolation with untrusted strings.
+- Only full UUIDs may be passed to `claude --resume`.
+- Terminal cwd must come from a discovered local project/session path and must
+  be checked before launch.
+- Mutation commands, when later added, must require explicit confirmation and
+  reuse Swoop's existing safe metadata functions.
+
+## Testing Strategy
+
+Root repo checks remain mandatory:
+
+```bash
+npm run build
+npm test
+npm run lint
+npm run format:check
+git diff --check
 ```
- Swoop: Resume Session ____________________________
 
- ◉  fix-auth-bug                           myapp
-    feat/fix  ·  47 msgs  ·  2h ago
- ⚠  cleanup-routes                  [2d left]  myapp
-    main  ·  23 msgs  ·  8d ago  ·  expiring
-    add-tooltips                               myapp
-    feat/ui  ·  91 msgs  ·  3h ago
+Extension checks:
+
+```bash
+cd extension
+npm run compile
+npm run package
 ```
 
-- **Label:** status icon + session name (fuzzy-searchable)
-- **Description:** branch · msgs · time
-- **Detail:** project (small, dimmed)
-- **Suggested keybind:** `Ctrl+Shift+R` / `Cmd+Shift+R`
+Add tests where they buy confidence:
 
-This beats Claude Code's native `--resume` picker because it shows health,
-branch, and project for every session without opening anything.
+- Adapter formatting/ranking tests using local fixtures.
+- Prefix/UUID launch guard tests.
+- Quick Pick item construction tests without a VS Code host when possible.
+- Manual Extension Host smoke test for activation, Quick Pick, tree refresh,
+  and integrated-terminal launch.
 
-### Status Bar layout
+Avoid heavy UI automation until the extension shape is proven.
 
-```
-[Swoop  ◉ 2  ·  82%]
-```
+## Go / No-Go Criteria
 
-- `◉ 2` — active session count → click opens Quick Pick filtered to active
-- `82%` — 5h usage, color: green < 70 %, yellow < 90 %, red ≥ 90 %
-- Tooltip: 5h / 7d breakdown and reset time
-- Single compact item, non-intrusive
+Promote the extension beyond discovery only when all are true:
 
-### Branch drift alert (unique to Swoop)
+- A user can resume the right session from an open workspace faster and with
+  more confidence than with Claude Code's native picker.
+- The extension uses Swoop's existing core intelligence, not a parallel parser.
+- It remains local-first and telemetry-free.
+- It starts quickly and does not slow down normal VS Code startup.
+- It works on Windows, macOS, and Linux.
+- It does not make the CLI/TUI/web package heavier in day-to-day use.
 
-Fires when VS Code detects a branch change in the open workspace and a recorded
-session was started on a different branch:
+Kill or pause the extension idea if the MVP only feels like another picker.
 
-```
-┌──────────────────────────────────────────────────────┐
-│  Swoop: Branch changed to main                       │
-│  Session "fix-auth-bug" was started on feat/fix.     │
-│  [Resume on feat/fix]  [Dismiss]                     │
-└──────────────────────────────────────────────────────┘
-```
+## Suggested Branch Plan
 
-No backend work required — `session.gitBranch` and the current branch from
-`git rev-parse HEAD` are both available locally.
+1. `feat/vscode-extension-plan`
+   - rewrite this plan
+   - optionally add architecture notes discovered during scouting
+2. `feat/vscode-extension-skeleton`
+   - add extension scaffold
+   - prove activation and bundled core read
+3. `feat/vscode-resume-picker`
+   - implement `Resume Here` and `Resume Session`
+4. `feat/vscode-session-tree`
+   - add read-only Activity Bar tree
+5. `feat/vscode-session-detail`
+   - add Resume Card detail if the first two branches feel useful
 
-### Command Palette commands
+Keep each branch reviewable. The extension should earn complexity one slice at
+a time.
 
-```
-Swoop: Resume Session        ← all sessions Quick Pick
-Swoop: Resume Here           ← sessions for the current workspace
-Swoop: New Session Here      ← new session in the current workspace
-Swoop: Show Inbox            ← Quick Pick filtered to attention sessions
-Swoop: Open Web Dashboard    ← opens browser
-```
+## First Implementation Checklist
 
----
+When implementation starts, do this first:
 
-## Phase 2 — Important, but decisions needed
+- [ ] Create `extension/` with a minimal manifest and activation command.
+- [ ] Externalize `vscode` in esbuild.
+- [ ] Add a `Swoop: Diagnostics` command that reads `loadProjects()` and logs
+      counts.
+- [ ] Add `extension/src/swoop-data.ts` with a small DTO mapper.
+- [ ] Verify bundle size and activation time.
+- [ ] Only then implement Quick Pick resume.
 
-These features are valuable but each requires a non-trivial design choice before
-implementation. Deferring keeps Phase 1 focused and shippable.
-
-| #   | Feature                          | Surface                 | Open question                                             |
-| --- | -------------------------------- | ----------------------- | --------------------------------------------------------- |
-| A   | Session detail panel             | Sidebar Webview         | How much to duplicate the web inspector?                  |
-| B   | Resume Card inline               | Hover / Webview         | Generate locally or call the web route?                   |
-| C   | Handoff copy                     | Command + context menu  | Bundle generation logic or require web server?            |
-| D   | Lost & Found / Diagnostics panel | Command → panel         | Worth duplicating outside the web UI?                     |
-| E   | File decoration on Explorer      | File Decorator          | What to decorate — folder? Which indicator?               |
-| F   | Inbox notification on startup    | Notification            | How persistent? Opt-in? Frequency?                        |
-| G   | CLAUDE.md editor                 | Command + sidebar link  | Link to open the file in editor, or inline editor?        |
-| H   | Deep search                      | Quick Pick variant      | Needs the transcript index — defer to when web is running |
-| I   | Delete session                   | Context menu            | VS Code confirmation dialogs are awkward — design first   |
-| J   | Open project folder as workspace | Context menu on project | `vscode.openFolder` — simple but needs UX decision        |
-| K   | Usage detail chart/graph         | Webview tooltip         | Is it worth the complexity vs text tooltip?               |
-
----
-
-## Go / no-go criteria (from ROADMAP)
-
-Before shipping any version:
-
-- [ ] It clearly beats the native `claude --resume` picker for at least one
-      common workflow
-- [ ] It reuses Swoop's existing local intelligence with no second parser or
-      divergent data model
-- [ ] It stays local-first: no telemetry, no account, no API key for core
-      features
-- [ ] It does not block the CLI / TUI / web experience or add heavy dependencies
-      to the existing package
-- [ ] It works on Windows, macOS, and Linux
-
----
-
-## Effort estimate (Phase 1)
-
-| Component                                                      | Effort      |
-| -------------------------------------------------------------- | ----------- |
-| `extension/` scaffolding, manifest, esbuild config             | 0.5 d       |
-| Core reader bridge (TypeScript imports + type alignment)       | 0.5 d       |
-| `projectTree.ts` — Activity Bar TreeView (projects + sessions) | 1.5 d       |
-| `sessionPicker.ts` — Quick Pick (all + Resume Here)            | 1 d         |
-| `statusBar.ts` — active count + usage %                        | 0.5 d       |
-| Commands (New Session, Show Inbox, Open Web)                   | 0.5 d       |
-| `FileSystemWatcher` live refresh                               | 0.5 d       |
-| Branch drift notification                                      | 0.5 d       |
-| Explorer context menu ("Resume Here")                          | 0.5 d       |
-| Cross-platform testing + VSIX packaging                        | 0.5 d       |
-| **Total Phase 1**                                              | **~7 days** |
+This keeps the first coding step honest: if shared-core bundling is awkward,
+we learn before building UI on top of it.
