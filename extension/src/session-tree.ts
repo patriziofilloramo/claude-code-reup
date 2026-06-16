@@ -88,8 +88,8 @@ function sessionTreeItem(session: ExtensionSession): vscode.TreeItem {
   const item = new vscode.TreeItem(session.title, vscode.TreeItemCollapsibleState.None)
   item.command = {
     arguments: [{ kind: 'session', session } satisfies SessionTreeNode],
-    command: 'swoop.tree.resumeSession',
-    title: 'Resume Session',
+    command: 'swoop.openSessionDetail',
+    title: 'Open Resume Card',
   }
   item.contextValue = 'swoopSession'
   item.description = formatRelativeTime(session.updated)

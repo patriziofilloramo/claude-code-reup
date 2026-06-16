@@ -271,7 +271,8 @@ dashboard clone.
 Candidate forms, in order:
 
 1. Quick Pick detail text for small summaries.
-2. Read-only virtual Markdown document: `swoop:/session/<id>.md`.
+2. [x] Read-only virtual Markdown document:
+       `swoop:/session/<project-id>/<id>.md`.
 3. Webview detail panel only if Markdown is not expressive enough.
 
 Content:

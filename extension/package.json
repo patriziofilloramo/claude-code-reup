@@ -16,6 +16,7 @@
   "main": "./dist/extension.cjs",
   "activationEvents": [
     "onCommand:swoop.diagnostics",
+    "onCommand:swoop.openSessionDetail",
     "onCommand:swoop.refreshSessions",
     "onCommand:swoop.resumeHere",
     "onCommand:swoop.resumeSession",
@@ -39,6 +40,11 @@
       {
         "command": "swoop.resumeSession",
         "title": "Swoop: Resume Session"
+      },
+      {
+        "command": "swoop.openSessionDetail",
+        "title": "Open Resume Card",
+        "icon": "$(preview)"
       },
       {
         "command": "swoop.tree.copySessionId",
@@ -91,9 +97,14 @@
       ],
       "view/item/context": [
         {
-          "command": "swoop.tree.resumeSession",
+          "command": "swoop.openSessionDetail",
           "when": "view == swoop.sessions && viewItem == swoopSession",
           "group": "inline"
+        },
+        {
+          "command": "swoop.tree.resumeSession",
+          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "group": "inline@2"
         },
         {
           "command": "swoop.tree.copySessionId",

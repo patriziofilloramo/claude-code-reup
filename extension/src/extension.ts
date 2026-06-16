@@ -2,6 +2,11 @@ import * as vscode from 'vscode'
 
 import { createLogger } from './logger.js'
 import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-picker.js'
+import {
+  openSessionDetail,
+  showSessionDetailPicker,
+  SwoopSessionDetailProvider,
+} from './session-detail.js'
 import { asProjectTreeNode, asSessionTreeNode, SwoopSessionTreeProvider } from './session-tree.js'
 import { SwoopDataSource } from './swoop-data.js'
 import { resumeSessionInTerminal } from './terminal.js'
@@ -9,6 +14,7 @@ import { resumeSessionInTerminal } from './terminal.js'
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = createLogger()
   const dataSource = new SwoopDataSource(logger)
+  const detailProvider = new SwoopSessionDetailProvider(logger)
   const treeProvider = new SwoopSessionTreeProvider(dataSource, logger)
 
   logger.info('Swoop extension activated')
@@ -18,6 +24,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       showCollapseAll: true,
       treeDataProvider: treeProvider,
     }),
+    vscode.workspace.registerTextDocumentContentProvider('swoop', detailProvider),
     vscode.commands.registerCommand('swoop.diagnostics', async () => {
       await runDiagnostics(dataSource, logger)
     }),
@@ -29,6 +36,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('swoop.resumeSession', async () => {
       await showGlobalResumePicker(dataSource, logger)
+    }),
+    vscode.commands.registerCommand('swoop.openSessionDetail', async (node: unknown) => {
+      const sessionNode = asSessionTreeNode(node)
+      if (!sessionNode) {
+        await showSessionDetailPicker(detailProvider, dataSource, logger)
+        return
+      }
+      try {
+        await openSessionDetail(detailProvider, sessionNode.session)
+      } catch (error) {
+        logger.error('open session detail failed', error)
+        void vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'Could not open Swoop Resume Card.'
+        )
+      }
     }),
     vscode.commands.registerCommand('swoop.tree.resumeSession', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
