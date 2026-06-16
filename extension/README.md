@@ -11,6 +11,8 @@ Local preview extension for Swoop's editor-native workflow.
 - The Swoop Activity Bar view shows a read-only project/session tree.
 - Clicking a session in the tree opens its Resume Card; context actions still
   provide Resume / Copy ID.
+- `swoop.refreshMode` can keep the tree manual, filesystem-watched, or refreshed
+  every 20 seconds.
 - Session resume launches `claude --resume <uuid>` in a VS Code integrated
   terminal after validating the UUID and project path.
 

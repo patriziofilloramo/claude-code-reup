@@ -251,6 +251,8 @@ Inline/context actions:
 - [x] Copy Session ID
 - [x] Reveal Project Folder
 - [x] Refresh
+- [x] Optional automatic refresh via `swoop.refreshMode`: `manual`, `watch`, or
+      `interval`
 
 Deferred from the first tree:
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 
 import { createLogger } from './logger.js'
+import { SwoopRefreshController } from './refresh-controller.js'
 import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-picker.js'
 import {
   openSessionDetail,
@@ -16,12 +17,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const dataSource = new SwoopDataSource(logger)
   const detailProvider = new SwoopSessionDetailProvider(logger)
   const treeProvider = new SwoopSessionTreeProvider(dataSource, logger)
+  const refreshController = new SwoopRefreshController(logger, treeProvider)
 
   logger.info('Swoop extension activated')
 
   context.subscriptions.push(
     logger,
     detailProvider,
+    refreshController,
     treeProvider,
     vscode.window.createTreeView('swoop.sessions', {
       showCollapseAll: true,

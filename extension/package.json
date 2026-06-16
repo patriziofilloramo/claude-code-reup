@@ -81,7 +81,7 @@
             "interval"
           ],
           "default": "manual",
-          "description": "Controls how Swoop refreshes session data inside VS Code. Only manual refresh is used by the current preview."
+          "description": "Controls how Swoop refreshes session data inside VS Code. Manual refresh is safest; watch follows Claude's projects directory; interval refreshes every 20 seconds."
         },
         "swoop.showStatusBar": {
           "type": "boolean",
