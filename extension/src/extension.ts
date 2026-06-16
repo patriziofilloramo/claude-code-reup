@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 
+import { copySessionHandoff } from './handoff.js'
 import { createLogger } from './logger.js'
 import { SwoopRefreshController } from './refresh-controller.js'
 import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-picker.js'
@@ -74,6 +75,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!sessionNode) return
       await vscode.env.clipboard.writeText(sessionNode.session.id)
       void vscode.window.showInformationMessage('Swoop session ID copied.')
+    }),
+    vscode.commands.registerCommand('swoop.tree.copyHandoff', async (node: unknown) => {
+      const sessionNode = asSessionTreeNode(node)
+      if (!sessionNode) return
+      try {
+        await copySessionHandoff(sessionNode.session, logger)
+        void vscode.window.showInformationMessage('Swoop handoff packet copied.')
+      } catch (error) {
+        logger.error('copy handoff failed', error)
+        void vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'Could not copy Swoop handoff packet.'
+        )
+      }
     }),
     vscode.commands.registerCommand('swoop.tree.revealProjectFolder', async (node: unknown) => {
       const projectNode = asProjectTreeNode(node)

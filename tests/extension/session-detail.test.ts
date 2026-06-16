@@ -1,8 +1,11 @@
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
-import { extractSessionPreview } from '../../src/core/session/session-preview.js'
 import { renderSessionDetailMarkdown } from '../../extension/src/session-detail-markdown.js'
 import type { ExtensionSession } from '../../extension/src/swoop-data.js'
+import { extractSessionPreview } from '../../src/core/session/session-preview.js'
 
 function session(overrides: Partial<ExtensionSession> = {}): ExtensionSession {
   return {
@@ -44,12 +47,13 @@ describe('VS Code session detail renderer', () => {
 
     expect(markdown).toContain('# Swoop Resume Card')
     expect(markdown).toContain('**Session:** Fix markdown')
-    expect(markdown).toContain('**Status:** interrupted · active')
+    expect(markdown).toContain('**Status:** interrupted - active')
     expect(markdown).toContain('## What You Asked For')
     expect(markdown).toContain('Please fix the markdown rendering.')
     expect(markdown).toContain('## Where Claude Left Off')
     expect(markdown).toContain('## Done')
     expect(markdown).toContain('Read-only local view')
+    expect(markdown).not.toContain('Â')
   })
 
   it('escapes markdown-sensitive title and path metadata', () => {
@@ -63,5 +67,20 @@ describe('VS Code session detail renderer', () => {
 
     expect(markdown).toContain('Fix \\[links\\] and \\*stars\\*')
     expect(markdown).toContain('`C:\\repo\\`name`')
+  })
+
+  it('renders touched files as editor-openable file links', () => {
+    const projectPath = process.cwd()
+    const touchedFile = join(projectPath, 'src', 'index.ts')
+    const preview = {
+      ...extractSessionPreview([]),
+      touchedFiles: [touchedFile],
+    }
+
+    const markdown = renderSessionDetailMarkdown(session({ projectPath }), preview)
+
+    expect(markdown).toContain('## Files Touched')
+    expect(markdown).toContain(pathToFileURL(touchedFile).href)
+    expect(markdown).toContain(touchedFile.replace(/\\/g, '\\\\'))
   })
 })

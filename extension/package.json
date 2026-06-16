@@ -20,6 +20,7 @@
     "onCommand:swoop.refreshSessions",
     "onCommand:swoop.resumeHere",
     "onCommand:swoop.resumeSession",
+    "onCommand:swoop.tree.copyHandoff",
     "onCommand:swoop.tree.copySessionId",
     "onCommand:swoop.tree.resumeSession",
     "onCommand:swoop.tree.revealProjectFolder",
@@ -53,6 +54,11 @@
         "command": "swoop.tree.copySessionId",
         "title": "Copy Session ID",
         "icon": "$(copy)"
+      },
+      {
+        "command": "swoop.tree.copyHandoff",
+        "title": "Copy Handoff",
+        "icon": "$(clippy)"
       },
       {
         "command": "swoop.tree.resumeSession",
@@ -113,6 +119,11 @@
           "command": "swoop.tree.copySessionId",
           "when": "view == swoop.sessions && viewItem == swoopSession",
           "group": "navigation"
+        },
+        {
+          "command": "swoop.tree.copyHandoff",
+          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "group": "navigation@2"
         },
         {
           "command": "swoop.tree.revealProjectFolder",

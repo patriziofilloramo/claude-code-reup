@@ -13,6 +13,8 @@ Local preview extension for Swoop's editor-native workflow.
   provide Resume / Copy ID.
 - `swoop.refreshMode` can keep the tree manual, filesystem-watched, or refreshed
   every 20 seconds.
+- Session context actions can copy the session ID or a compact Markdown handoff
+  packet without modifying Claude-owned transcript files.
 - Session resume launches `claude --resume <uuid>` in a VS Code integrated
   terminal after validating the UUID and project path.
 

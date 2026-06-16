@@ -74,11 +74,15 @@ export async function openSessionDetail(
   session: ExtensionSession
 ): Promise<void> {
   const uri = provider.registerSession(session)
-  const document = await vscode.workspace.openTextDocument(uri)
-  await vscode.window.showTextDocument(document, {
-    preview: true,
-    viewColumn: vscode.ViewColumn.Active,
-  })
+  try {
+    await vscode.commands.executeCommand('markdown.showPreview', uri)
+  } catch {
+    const document = await vscode.workspace.openTextDocument(uri)
+    await vscode.window.showTextDocument(document, {
+      preview: true,
+      viewColumn: vscode.ViewColumn.Active,
+    })
+  }
 }
 
 export async function showSessionDetailPicker(

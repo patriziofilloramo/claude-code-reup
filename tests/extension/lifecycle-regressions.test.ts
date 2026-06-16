@@ -29,6 +29,12 @@ describe('VS Code extension lifecycle guardrails', () => {
     expect(detailSource).toContain('this.sessionsByUri.clear()')
   })
 
+  it('opens Resume Cards as Markdown previews with a raw-document fallback', () => {
+    expect(detailSource).toContain("executeCommand('markdown.showPreview', uri)")
+    expect(detailSource).toContain('openTextDocument(uri)')
+    expect(detailSource).toContain('showTextDocument(document')
+  })
+
   it('activates for tree context commands as well as top-level commands', () => {
     expect(manifest.activationEvents).toEqual(
       expect.arrayContaining([

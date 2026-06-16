@@ -249,6 +249,7 @@ Inline/context actions:
 
 - [x] Resume
 - [x] Copy Session ID
+- [x] Copy Handoff packet
 - [x] Reveal Project Folder
 - [x] Refresh
 - [x] Optional automatic refresh via `swoop.refreshMode`: `manual`, `watch`, or
@@ -259,7 +260,6 @@ Deferred from the first tree:
 - Rename
 - Archive
 - Delete
-- Handoff generation
 - Full detail webview
 
 Reason: the first tree should prove scanning and resume. Mutations can come
