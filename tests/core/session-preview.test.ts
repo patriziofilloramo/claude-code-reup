@@ -85,6 +85,16 @@ describe('extractSessionPreview', () => {
     )
   })
 
+  it('preserves markdown structure in the last assistant response', () => {
+    const lines = [
+      assistantText('## Done\n\n- Updated `README.md`\n- Added tests\n\nNext: run `npm test`'),
+    ]
+
+    expect(extractSessionPreview(lines).lastResponse).toBe(
+      '## Done\n\n- Updated `README.md`\n- Added tests\n\nNext: run `npm test`'
+    )
+  })
+
   it('strips <system-reminder> injections from goal and response', () => {
     const lines = [
       userText('<system-reminder>internal context</system-reminder> Implement the API router.'),

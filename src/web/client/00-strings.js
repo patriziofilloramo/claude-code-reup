@@ -74,6 +74,10 @@ const STRINGS = {
   // ── Inspector ─────────────────────────────────────────────────────────────
   inspectorTitle: 'Session Details',
   inspectorCopyId: 'Copy full session ID',
+  inspExpandDetailsLabel: 'expand',
+  inspExpandDetailsTooltip: 'Expand details panel',
+  inspCollapseDetailsLabel: 'compact',
+  inspCollapseDetailsTooltip: 'Collapse details panel',
 
   inspBtnResume: 'Resume',
   inspBtnResumeTooltip: 'Open session in terminal (Enter)',

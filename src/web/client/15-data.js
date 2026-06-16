@@ -136,6 +136,7 @@ if (backBtn) {
 // Clear narrow-sessions when the viewport widens past the single-panel breakpoint.
 window.matchMedia('(max-width: 639px)').addEventListener('change', function (e) {
   if (!e.matches) document.body.classList.remove('narrow-sessions')
+  renderSessions()
 })
 
 // Theme toggle button in footer.

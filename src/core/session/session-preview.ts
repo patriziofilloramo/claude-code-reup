@@ -87,7 +87,7 @@ export function extractSessionPreview(lines: string[]): SessionPreview {
 
     if (event['type'] === 'assistant') {
       const content = messageContent(event)
-      const text = extractText(content)
+      const text = extractStructuredText(content)
       if (text) lastResponse = smartTruncate(text, RESPONSE_MAX_CHARS)
       collectToolCalls(content, pendingTools, touchedSequence)
     }
@@ -149,6 +149,28 @@ function cleanText(text: string): string {
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function cleanStructuredText(text: string): string {
+  return text
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function extractStructuredText(content: unknown): string {
+  if (typeof content === 'string') return cleanStructuredText(content)
+  if (!Array.isArray(content)) return ''
+  return cleanStructuredText(
+    (content as Record<string, unknown>[])
+      .filter((b) => b['type'] === 'text' && typeof b['text'] === 'string')
+      .map((b) => b['text'] as string)
+      .join('\n')
+  )
 }
 
 function isContextUsageReport(content: unknown): boolean {

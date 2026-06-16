@@ -19,4 +19,5 @@ let deepSearchActive = false
 let deepSearchMatches = []
 let deepSearchLoading = false
 let deepSearchQueryTerm = ''
+let sessionInspectorExpanded = false
 let sessionPreviewCache = new Map()

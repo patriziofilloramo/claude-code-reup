@@ -107,6 +107,9 @@ function buildEmptySessionListHtml(visibleSessions) {
 function renderSessions() {
   const visibleSessions = deriveVisibleSessions()
   synchronizeSelectedSession()
+  const inspectorIsExpanded = isSessionInspectorExpanded(visibleSessions)
+  const listedSessions = inspectorIsExpanded ? [selectedSession] : visibleSessions
+  document.body.classList.toggle('session-details-expanded', inspectorIsExpanded)
 
   if (deepSearchActive) {
     elements.sessionPanelTitle.textContent = deepSearchLoading
@@ -125,7 +128,7 @@ function renderSessions() {
   renderInspector(visibleSessions)
 
   const emptyHtml = buildEmptySessionListHtml(visibleSessions)
-  elements.sessionList.innerHTML = emptyHtml || visibleSessions.map(buildSessionRowHtml).join('')
+  elements.sessionList.innerHTML = emptyHtml || listedSessions.map(buildSessionRowHtml).join('')
 
   if (renamingSessionId) {
     const input = elements.sessionList.querySelector('.s-rename-input')

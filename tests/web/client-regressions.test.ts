@@ -101,7 +101,8 @@ describe('web client session-row invariants', () => {
     expect(clickHandler).toContain('selectedSession.id === session.id')
     expect(clickHandler).toContain('selectSession(session)')
     expect(selectSession).toContain("elements.sessionList.querySelectorAll('.sess-row')")
-    expect(selectSession).toContain('renderInspector(deriveVisibleSessions())')
+    expect(selectSession).toContain('const visibleSessions = deriveVisibleSessions()')
+    expect(selectSession).toContain('renderInspector(visibleSessions)')
     expect(selectSession).not.toContain('innerHTML')
     expect(selectSession).not.toContain('renderSessions()')
   })
@@ -109,7 +110,7 @@ describe('web client session-row invariants', () => {
   it('preserves a selected session while filters temporarily hide it', () => {
     const synchronization = sourceBetween(
       'function synchronizeSelectedSession(',
-      'function selectSession('
+      'function refreshExpandedSessionListIfNeeded('
     )
 
     expect(synchronization).toContain('selectedSession = refreshedSession || null')
@@ -230,6 +231,8 @@ describe('web client session-row invariants', () => {
     expect(previewLoading).toContain('sessionPreviewCache.set')
     expect(staleInvalidation).toContain('entry.stale = true')
     expect(source).toContain('function buildSessionPreviewHtml(')
+    expect(source).toContain('function buildPreviewLabelHtml(')
+    expect(source).toContain('preview-label-icon')
     expect(source).toContain('Resume Card')
     expect(source).toContain('function buildNativePlanHtml(')
     expect(source).toContain('function buildNativeTodosHtml(')
@@ -238,6 +241,66 @@ describe('web client session-row invariants', () => {
     expect(source).toContain('previewNativeTodos')
     expect(sseUpdates).toContain('markSessionPreviewsStale()')
     expect(sseUpdates).not.toContain('sessionPreviewCache.clear()')
+  })
+
+  it('can expand the session detail panel without affecting mobile layout', () => {
+    const renderSessions = sourceBetween(
+      'function renderSessions()',
+      'async function saveSessionAlias('
+    )
+    const inspector = sourceBetween(
+      'function isSessionInspectorExpanded(',
+      "elements.filterBar.addEventListener('click'"
+    )
+    const narrowStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 639px)'))
+
+    expect(source).toContain('let sessionInspectorExpanded = false')
+    expect(renderSessions).toContain('const inspectorIsExpanded = isSessionInspectorExpanded')
+    expect(renderSessions).toContain(
+      'const listedSessions = inspectorIsExpanded ? [selectedSession] : visibleSessions'
+    )
+    expect(renderSessions).toContain("document.body.classList.toggle('session-details-expanded'")
+    expect(inspector).toContain('data-inspector-action="inspector-toggle-expanded"')
+    expect(inspector).toContain('sessionInspectorExpanded = !sessionInspectorExpanded')
+    expect(stylesSource).toContain('.session-details-expanded .sess-list')
+    expect(stylesSource).toContain('.session-details-expanded .sess-inspector')
+    expect(source).toContain('inspExpandDetailsLabel')
+    expect(source).toContain('inspCollapseDetailsLabel')
+    expect(source).toContain('insp-expand-icon')
+    expect(source).toContain('insp-expand-label')
+    expect(narrowStyles).toContain('.insp-expand-btn')
+    expect(narrowStyles).toContain('display: none;')
+  })
+
+  it('uses responsive project panel widths instead of a single fixed desktop size', () => {
+    expect(stylesSource).toContain('@media (min-width: 1100px)')
+    expect(stylesSource).toContain('@media (min-width: 1350px)')
+    expect(stylesSource).toContain('@media (min-width: 1600px)')
+    expect(stylesSource).toContain('@media (min-width: 1900px)')
+    expect(stylesSource).toContain('@media (min-width: 2300px)')
+  })
+
+  it('keeps the mobile session detail actions compact', () => {
+    const narrowStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 639px)'))
+
+    expect(narrowStyles).toContain(".filter-pill[data-filter='active']")
+    expect(narrowStyles).toContain(".filter-pill[data-filter='archived']")
+    expect(narrowStyles).toContain(".insp-action[data-inspector-action='session-handoff']")
+    expect(narrowStyles).toContain(".insp-action[data-inspector-action='session-rename']")
+    expect(narrowStyles).toContain(".insp-action[data-inspector-action='session-archive']")
+    expect(narrowStyles).toContain('.insp-shortcuts')
+  })
+
+  it('keeps mobile session rows compact without horizontal overflow', () => {
+    const narrowStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 639px)'))
+
+    expect(narrowStyles).toContain('overflow-x: hidden;')
+    expect(narrowStyles).toContain('.s-msgs')
+    expect(narrowStyles).toContain('.s-model')
+    expect(narrowStyles).toContain('.s-context')
+    expect(narrowStyles).toContain('display: none;')
+    expect(narrowStyles).toContain('.branch-n')
+    expect(narrowStyles).toContain('text-overflow: ellipsis;')
   })
 
   it('derives branch drift from each session working directory', () => {

@@ -154,13 +154,24 @@ function buildInspectorActionsHtml(session) {
   )
 }
 
-/** Returns one labelled Resume Card text block. */
-function buildPreviewBlockHtml(label, text) {
+function buildPreviewLabelHtml(label, icon) {
   return (
-    '<div class="preview-block">' +
     '<div class="preview-label">' +
+    (icon ? '<span class="preview-label-icon">' + icon + '</span>' : '') +
+    '<span>' +
     label +
-    '</div>' +
+    '</span>' +
+    '</div>'
+  )
+}
+
+/** Returns one labelled Resume Card text block. */
+function buildPreviewBlockHtml(label, text, blockClass, icon) {
+  return (
+    '<div class="preview-block' +
+    (blockClass ? ' ' + blockClass : '') +
+    '">' +
+    buildPreviewLabelHtml(label, icon) +
     '<div class="preview-text">' +
     (text
       ? escapeHtml(text)
@@ -171,12 +182,12 @@ function buildPreviewBlockHtml(label, text) {
 }
 
 /** Returns one labelled Resume Card block with a safe, tiny Markdown subset. */
-function buildPreviewMarkdownBlockHtml(label, text) {
+function buildPreviewMarkdownBlockHtml(label, text, blockClass, icon) {
   return (
-    '<div class="preview-block">' +
-    '<div class="preview-label">' +
-    label +
-    '</div>' +
+    '<div class="preview-block' +
+    (blockClass ? ' ' + blockClass : '') +
+    '">' +
+    buildPreviewLabelHtml(label, icon) +
     '<div class="preview-markdown">' +
     (text
       ? renderPreviewMarkdown(text)
@@ -202,9 +213,10 @@ function buildTouchedFilesHtml(preview, session) {
     .join('')
   return (
     '<div class="preview-block">' +
-    '<div class="preview-label">' +
-    fmt(STRINGS.previewFilesTouched, { count: preview.touchedFiles.length }) +
-    '</div>' +
+    buildPreviewLabelHtml(
+      fmt(STRINGS.previewFilesTouched, { count: preview.touchedFiles.length }),
+      '✎'
+    ) +
     rows +
     '</div>'
   )
@@ -213,7 +225,14 @@ function buildTouchedFilesHtml(preview, session) {
 /** Returns the latest Claude-native plan section when the transcript contains one. */
 function buildNativePlanHtml(automaticContext) {
   const plan = automaticContext && automaticContext.plan
-  return plan ? buildPreviewMarkdownBlockHtml(STRINGS.previewNativePlan, plan.text) : ''
+  return plan
+    ? buildPreviewMarkdownBlockHtml(
+        STRINGS.previewNativePlan,
+        plan.text,
+        'preview-block--scrollable',
+        '▤'
+      )
+    : ''
 }
 
 /** Returns a compact, read-only view of Claude-native TodoWrite state. */
@@ -221,8 +240,7 @@ function buildNativeTodosHtml(automaticContext) {
   const todos = automaticContext && automaticContext.todos
   if (!todos || !Array.isArray(todos.items) || todos.items.length === 0) return ''
 
-  const visibleTodos = selectVisibleTodos(todos.items)
-  const rows = visibleTodos
+  const rows = todos.items
     .map(function (todo) {
       const status = todo.status || 'unknown'
       return (
@@ -239,31 +257,26 @@ function buildNativeTodosHtml(automaticContext) {
       )
     })
     .join('')
-  const remainingCount = todos.items.length - visibleTodos.length
-  const remaining =
-    remainingCount > 0
-      ? '<div class="preview-more">' +
-        escapeHtml(fmt(STRINGS.previewTodoMore, { n: remainingCount })) +
-        '</div>'
-      : ''
 
   return (
-    '<div class="preview-block">' +
-    '<div class="preview-label">' +
-    STRINGS.previewNativeTodos +
-    ' · ' +
-    escapeHtml(
-      fmt(STRINGS.previewNativeTodosSummary, {
-        done: todos.counts?.completed || 0,
-        open:
-          (todos.counts?.pending || 0) +
-          (todos.counts?.in_progress || 0) +
-          (todos.counts?.unknown || 0),
-      })
+    '<div class="preview-block preview-block--scrollable">' +
+    buildPreviewLabelHtml(
+      STRINGS.previewNativeTodos +
+        ' · ' +
+        escapeHtml(
+          fmt(STRINGS.previewNativeTodosSummary, {
+            done: todos.counts?.completed || 0,
+            open:
+              (todos.counts?.pending || 0) +
+              (todos.counts?.in_progress || 0) +
+              (todos.counts?.unknown || 0),
+          })
+        ),
+      '☑'
     ) +
-    '</div>' +
+    '<div class="preview-todos-body">' +
     rows +
-    remaining +
+    '</div>' +
     '</div>'
   )
 }
@@ -293,8 +306,13 @@ function buildSessionPreviewHtml(project, session) {
     '<div class="preview-title">' +
     STRINGS.previewTitle +
     '</div>' +
-    buildPreviewBlockHtml(STRINGS.previewGoal, preview.goal) +
-    buildPreviewBlockHtml(STRINGS.previewLastResponse, preview.lastResponse) +
+    buildPreviewBlockHtml(STRINGS.previewGoal, preview.goal, null, '?') +
+    buildPreviewMarkdownBlockHtml(
+      STRINGS.previewLastResponse,
+      preview.lastResponse,
+      'preview-block--scrollable',
+      '↳'
+    ) +
     buildNativePlanHtml(preview.automaticContext) +
     buildNativeTodosHtml(preview.automaticContext) +
     (preview.pendingToolName
@@ -305,15 +323,6 @@ function buildSessionPreviewHtml(project, session) {
     buildTouchedFilesHtml(preview, session) +
     '</div>'
   )
-}
-
-const MAX_VISIBLE_NATIVE_TODOS = 5
-
-function selectVisibleTodos(items) {
-  const unfinished = items.filter(function (todo) {
-    return todo.status !== 'completed'
-  })
-  return (unfinished.length > 0 ? unfinished : items).slice(0, MAX_VISIBLE_NATIVE_TODOS)
 }
 
 function todoMarker(todo) {
@@ -378,6 +387,17 @@ function renderMarkdownInline(text) {
     .join('')
 }
 
+function isSessionInspectorExpanded(visibleSessions) {
+  return (
+    sessionInspectorExpanded &&
+    selectedSession &&
+    !window.matchMedia('(max-width: 639px)').matches &&
+    visibleSessions.some(function (session) {
+      return session.id === selectedSession.id
+    })
+  )
+}
+
 /** Re-renders the session inspector panel for the selected session. Hides it when no selection is visible. */
 function renderInspector(visibleSessions) {
   const selectionIsVisible =
@@ -415,6 +435,28 @@ function renderInspector(visibleSessions) {
     '<div class="insp-title">' +
     STRINGS.inspectorTitle +
     '</div>' +
+    '<button class="insp-expand-btn" data-inspector-action="inspector-toggle-expanded" title="' +
+    escapeHtml(
+      sessionInspectorExpanded
+        ? STRINGS.inspCollapseDetailsTooltip
+        : STRINGS.inspExpandDetailsTooltip
+    ) +
+    '" aria-label="' +
+    escapeHtml(
+      sessionInspectorExpanded
+        ? STRINGS.inspCollapseDetailsTooltip
+        : STRINGS.inspExpandDetailsTooltip
+    ) +
+    '">' +
+    '<span class="insp-expand-icon">' +
+    (isSessionInspectorExpanded(visibleSessions) ? '▾' : '▴') +
+    '</span>' +
+    '<span class="insp-expand-label">' +
+    (isSessionInspectorExpanded(visibleSessions)
+      ? STRINGS.inspCollapseDetailsLabel
+      : STRINGS.inspExpandDetailsLabel) +
+    '</span>' +
+    '</button>' +
     '<button class="insp-icon-btn" data-inspector-action="session-copy-id" title="' +
     escapeHtml(STRINGS.inspectorCopyId) +
     '">ID</button>' +
@@ -501,6 +543,11 @@ function renderInspector(visibleSessions) {
 elements.sessionInspector.addEventListener('click', function (event) {
   const actionButton = event.target.closest('[data-inspector-action]')
   if (actionButton && selectedSession) {
+    if (actionButton.dataset.inspectorAction === 'inspector-toggle-expanded') {
+      sessionInspectorExpanded = !sessionInspectorExpanded
+      renderSessions()
+      return
+    }
     executeSessionAction(actionButton.dataset.inspectorAction, selectedSession)
     return
   }

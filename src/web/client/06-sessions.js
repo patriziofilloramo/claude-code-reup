@@ -158,6 +158,12 @@ function synchronizeSelectedSession() {
  * and toggles the .sel class on the relevant row without rebuilding the list.
  * Keeping row nodes stable preserves any in-progress rename input.
  */
+function refreshExpandedSessionListIfNeeded(visibleSessions) {
+  if (!isSessionInspectorExpanded(visibleSessions)) return false
+  elements.sessionList.innerHTML = buildSessionRowHtml(selectedSession)
+  return true
+}
+
 function selectSession(session) {
   selectedSession = session
   // Update URL so this session can be bookmarked or shared
@@ -172,5 +178,10 @@ function selectSession(session) {
     const arrow = row.querySelector('.s-arrow')
     if (arrow) arrow.textContent = row.dataset.sessionId === session.id ? '▶' : ' '
   })
-  renderInspector(deriveVisibleSessions())
+  const visibleSessions = deriveVisibleSessions()
+  if (refreshExpandedSessionListIfNeeded(visibleSessions)) {
+    renderInspector(visibleSessions)
+    return
+  }
+  renderInspector(visibleSessions)
 }
