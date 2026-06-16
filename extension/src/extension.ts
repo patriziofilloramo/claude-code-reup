@@ -20,6 +20,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   logger.info('Swoop extension activated')
 
   context.subscriptions.push(
+    logger,
+    detailProvider,
+    treeProvider,
     vscode.window.createTreeView('swoop.sessions', {
       showCollapseAll: true,
       treeDataProvider: treeProvider,

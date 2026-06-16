@@ -20,6 +20,9 @@
     "onCommand:swoop.refreshSessions",
     "onCommand:swoop.resumeHere",
     "onCommand:swoop.resumeSession",
+    "onCommand:swoop.tree.copySessionId",
+    "onCommand:swoop.tree.resumeSession",
+    "onCommand:swoop.tree.revealProjectFolder",
     "onView:swoop.sessions"
   ],
   "contributes": {

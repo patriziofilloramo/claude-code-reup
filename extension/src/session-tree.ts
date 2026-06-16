@@ -16,7 +16,9 @@ interface SessionTreeNode {
   session: ExtensionSession
 }
 
-export class SwoopSessionTreeProvider implements vscode.TreeDataProvider<TreeNode> {
+export class SwoopSessionTreeProvider
+  implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable
+{
   private readonly changedEmitter = new vscode.EventEmitter<TreeNode | undefined>()
   private projects: ExtensionProject[] = []
   private sessionsByProject = new Map<string, ExtensionSession[]>()
@@ -64,6 +66,10 @@ export class SwoopSessionTreeProvider implements vscode.TreeDataProvider<TreeNod
       }))
     }
     return []
+  }
+
+  dispose(): void {
+    this.changedEmitter.dispose()
   }
 }
 

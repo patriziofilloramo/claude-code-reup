@@ -18,13 +18,20 @@ const DETAIL_SCHEME = 'swoop'
  * transcript streaming, no writes. Documents are generated on demand from the
  * same preview extractor used by Swoop's TUI/web surfaces.
  */
-export class SwoopSessionDetailProvider implements vscode.TextDocumentContentProvider {
+export class SwoopSessionDetailProvider
+  implements vscode.TextDocumentContentProvider, vscode.Disposable
+{
   private readonly changedEmitter = new vscode.EventEmitter<vscode.Uri>()
+  private readonly documentCloseListener: vscode.Disposable
   private readonly sessionsByUri = new Map<string, ExtensionSession>()
 
   readonly onDidChange = this.changedEmitter.event
 
-  constructor(private readonly logger: SwoopLogger) {}
+  constructor(private readonly logger: SwoopLogger) {
+    this.documentCloseListener = vscode.workspace.onDidCloseTextDocument((document) => {
+      if (document.uri.scheme === DETAIL_SCHEME) this.sessionsByUri.delete(document.uri.toString())
+    })
+  }
 
   registerSession(session: ExtensionSession): vscode.Uri {
     const uri = vscode.Uri.from({
@@ -53,6 +60,12 @@ export class SwoopSessionDetailProvider implements vscode.TextDocumentContentPro
         `Session ID: \`${escapeInlineCode(session.id)}\``,
       ].join('\n')
     }
+  }
+
+  dispose(): void {
+    this.documentCloseListener.dispose()
+    this.changedEmitter.dispose()
+    this.sessionsByUri.clear()
   }
 }
 

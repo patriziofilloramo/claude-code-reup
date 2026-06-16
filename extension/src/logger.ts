@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 
-export interface SwoopLogger {
+export interface SwoopLogger extends vscode.Disposable {
   debug(message: string, ...details: unknown[]): void
   error(message: string, error?: unknown): void
   info(message: string, ...details: unknown[]): void
@@ -19,6 +19,7 @@ export function createLogger(): SwoopLogger {
 
   return {
     debug: (message, ...details) => append('DEBUG', message, details),
+    dispose: () => output.dispose(),
     error: (message, error) => {
       append('ERROR', message, error === undefined ? [] : [formatError(error)])
     },
