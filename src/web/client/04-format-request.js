@@ -169,6 +169,27 @@ function compactPath(path) {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/')
 }
 
+/** Returns filePath relative to projectPath when possible; otherwise returns the original path. */
+function projectRelativePath(filePath, projectPath) {
+  const file = String(filePath || '').replace(/\\/g, '/')
+  const project = String(projectPath || '')
+    .replace(/\\/g, '/')
+    .replace(/\/$/, '')
+  return project && file.startsWith(project + '/') ? file.slice(project.length + 1) : filePath
+}
+
+/** Copies text to the clipboard and shows a short success/failure toast. */
+function copyTextToClipboard(text, successMessage) {
+  navigator.clipboard
+    .writeText(text)
+    .then(function () {
+      showToast(successMessage || 'Copied')
+    })
+    .catch(function () {
+      showToast('Clipboard unavailable', 'err')
+    })
+}
+
 /** Maps a git branch name to a CSS colour variable based on common naming conventions. */
 function colorForGitBranch(branch) {
   if (!branch || branch === 'main' || branch === 'master') return 'var(--muted2)'

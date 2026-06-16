@@ -114,21 +114,21 @@ A passive dashboard designed to stay open in a browser tab while you work.
 SSE live updates mean the page never needs a manual refresh. The only tool in
 the reviewed landscape that ships both a web UI and session intelligence.
 
-| Feature                            | Detail                                                                                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Filter pills**                   | All · Needs Attention · Active · Archived — one-click filter.                                                                               |
-| **Sort controls**                  | Recent (default) or Risk (attention-status sessions first). Project sort: recent activity or project name.                                  |
-| **Session Inspector card**         | Right-panel details: status with explanation, message count, compaction count, expiry, session ID copy button, full path.                   |
-| **SSE live updates**               | Server-sent events push changes when the transcript directory changes. No polling or manual refresh.                                        |
-| **Session context sort**           | Sessions sorted by latest observed context-input size descending. Sessions without analysed context sort last.                              |
-| **Full keyboard navigation**       | `j`/`k` navigate sessions; `[`/`]` or `h`/`l` navigate projects; `a` archives; `/` opens search. Guards prevent firing inside input fields. |
-| **Deep-linkable sessions**         | The URL hash resolves to a specific project and session on load. Share or bookmark any session directly.                                    |
-| **Context menus**                  | Right-click (or keyboard menu key) on a session row shows contextual actions.                                                               |
-| **CLAUDE.md editor**               | View and edit each project's instruction file from the web UI. Shown as a tag in the project header when the file exists.                   |
-| **Start new session from project** | `+ new` button launches a new Claude Code session in the project directory.                                                                 |
-| **Branch drift badge**             | Shown inline on session rows when the recorded branch differs from current git HEAD.                                                        |
-| **Status badges**                  | Each session row shows its derived `primaryStatus` badge.                                                                                   |
-| **Cloud indicator**                | Projects with linked shared storage show a cloud icon in the project list.                                                                  |
+| Feature                            | Detail                                                                                                                                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Filter pills**                   | All · Needs Attention · Active · Archived — one-click filter.                                                                                                                                |
+| **Sort controls**                  | Recent (default) or Risk (attention-status sessions first). Project sort: recent activity or project name.                                                                                   |
+| **Session Inspector card**         | Right-panel operations panel: visible Resume/Handoff/Rename/Archive/Delete actions, shortcut hints, Resume Card preview, status explanation, usage/context facts, session ID, and full path. |
+| **SSE live updates**               | Server-sent events push changes when the transcript directory changes. No polling or manual refresh.                                                                                         |
+| **Session context sort**           | Sessions sorted by latest observed context-input size descending. Sessions without analysed context sort last.                                                                               |
+| **Full keyboard navigation**       | `j`/`k` navigate sessions; `[`/`]` or `h`/`l` navigate projects; `a` archives; `/` opens search. Guards prevent firing inside input fields.                                                  |
+| **Deep-linkable sessions**         | The URL hash resolves to a specific project and session on load. Share or bookmark any session directly.                                                                                     |
+| **Context menus**                  | The visible `...` row button and right-click on project/session rows open Swoop's custom action menu instead of relying on browser defaults.                                                 |
+| **CLAUDE.md editor**               | View and edit each project's instruction file from the web UI. Shown as a tag in the project header when the file exists.                                                                    |
+| **Start new session from project** | `+ new` button launches a new Claude Code session in the project directory.                                                                                                                  |
+| **Branch drift badge**             | Shown inline on session rows when the recorded branch differs from current git HEAD.                                                                                                         |
+| **Status badges**                  | Each session row shows its derived `primaryStatus` badge.                                                                                                                                    |
+| **Cloud indicator**                | Projects with linked shared storage show a cloud icon in the project list.                                                                                                                   |
 
 ---
 

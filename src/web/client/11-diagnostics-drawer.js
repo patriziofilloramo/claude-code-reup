@@ -153,7 +153,9 @@ async function renderDiagnosticsPanel() {
   const total =
     (report.expiring ? report.expiring.length : 0) +
     (report.pathMissing ? report.pathMissing.length : 0) +
-    (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0)
+    (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0) +
+    (report.brokenIndices ? report.brokenIndices.length : 0) +
+    (report.staleLocks ? report.staleLocks.length : 0)
 
   elements.diagnosticsSubtitle.textContent = total + ' issue' + (total === 1 ? '' : 's') + ' found'
   elements.diagnosticsBody.innerHTML =

@@ -168,6 +168,66 @@ async function toggleSessionArchivedState(session) {
   }
 }
 
+/** Starts inline rename mode for a session row. */
+function beginSessionRename(session) {
+  renamingSessionId = session.id
+  renderSessions()
+}
+
+/** Copies the full session ID to the clipboard. */
+function copySessionId(session) {
+  copyTextToClipboard(session.id, 'ID copied: ' + session.id.slice(0, 8) + '...')
+}
+
+/** Builds a Markdown handoff packet on the server and copies it to the clipboard. */
+async function copySessionHandoff(session) {
+  if (!selectedProject) return
+  try {
+    showToast('Building handoff...')
+    const result = await requestJson(
+      '/api/sessions/' + selectedProject.id + '/' + session.id + '/handoff'
+    )
+    copyTextToClipboard(result.markdown, 'Handoff copied')
+  } catch (error) {
+    showToast('Handoff failed: ' + error.message, 'err')
+  }
+}
+
+/** Executes a named session action from buttons, menus, or keyboard shortcuts. */
+function executeSessionAction(action, session) {
+  if (!session) return
+  if (action === 'session-resume') {
+    selectSession(session)
+    if (shouldConfirmResume()) openResumeDialog(session)
+    else void resumeSelectedSession()
+  } else if (action === 'session-rename') {
+    beginSessionRename(session)
+  } else if (action === 'session-archive') {
+    void toggleSessionArchivedState(session)
+  } else if (action === 'session-delete') {
+    void deleteSessionPermanently(session)
+  } else if (action === 'session-copy-id') {
+    copySessionId(session)
+  } else if (action === 'session-handoff') {
+    void copySessionHandoff(session)
+  }
+}
+
+/** Returns the menu/action labels for a session in a single canonical order. */
+function sessionActionItems(session) {
+  return [
+    { action: 'session-resume', label: 'resume' },
+    { action: 'session-handoff', label: 'copy handoff' },
+    { action: 'session-rename', label: 'rename' },
+    {
+      action: 'session-archive',
+      label: session.signals.archived ? 'unarchive' : 'archive locally',
+    },
+    { action: 'session-copy-id', label: 'copy session ID' },
+    { action: 'session-delete', label: 'delete permanently' },
+  ]
+}
+
 // Event delegation keeps handlers valid when renderSessions replaces rows.
 elements.sessionList.addEventListener('click', function (event) {
   const menuBtn = event.target.closest('.s-menu-btn')
@@ -177,16 +237,7 @@ elements.sessionList.addEventListener('click', function (event) {
     if (!session) return
     ctxSession = session
     ctxProject = null
-    openContextMenu(menuBtn, [
-      { action: 'session-resume', label: 'resume' },
-      { action: 'session-rename', label: 'rename' },
-      {
-        action: 'session-archive',
-        label: session.signals.archived ? 'unarchive' : 'archive locally',
-      },
-      { action: 'session-copy-id', label: 'copy session ID' },
-      { action: 'session-delete', label: 'delete permanently' },
-    ])
+    openContextMenu(menuBtn, sessionActionItems(session))
     return
   }
 

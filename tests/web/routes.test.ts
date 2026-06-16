@@ -150,6 +150,33 @@ describe('web routes', () => {
     })
   })
 
+  it('returns compact session preview data for the web Resume Card', async () => {
+    await createKnownSession()
+
+    const response = await buildApp().request(`/api/sessions/${PROJECT_ID}/${SESSION_ID}/preview`)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      goal: 'hello',
+      lastResponse: null,
+      pendingToolName: null,
+      touchedFiles: [],
+    })
+  })
+
+  it('returns a Markdown handoff packet for the web action bar', async () => {
+    await createKnownSession()
+
+    const response = await buildApp().request(`/api/sessions/${PROJECT_ID}/${SESSION_ID}/handoff`)
+    const body = (await response.json()) as { context: { goal?: string }; markdown: string }
+
+    expect(response.status).toBe(200)
+    expect(body.context.goal).toBe('hello')
+    expect(body.markdown).toContain('# Swoop Handoff:')
+    expect(body.markdown).toContain('## Goal\n\nhello')
+    expect(body.markdown).toContain(`claude --resume ${SESSION_ID}`)
+  })
+
   it('validates archive request bodies before writing metadata', async () => {
     await createKnownSession()
 

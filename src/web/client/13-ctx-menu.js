@@ -4,9 +4,15 @@
 
 /**
  * Positions and opens the shared context menu below anchorEl.
- * The menu is positioned left-clamped so it never overflows the viewport edge.
+ * Used by the explicit row menu buttons.
  */
 function openContextMenu(anchorEl, items) {
+  const rect = anchorEl.getBoundingClientRect()
+  openContextMenuAt(rect.left, rect.bottom + 4, items)
+}
+
+/** Opens the shared context menu at a viewport coordinate, clamped to screen edges. */
+function openContextMenuAt(x, y, items) {
   const menu = elements.contextMenu
   menu.innerHTML = items
     .map(function (item) {
@@ -19,10 +25,10 @@ function openContextMenu(anchorEl, items) {
       )
     })
     .join('')
-  const rect = anchorEl.getBoundingClientRect()
-  const menuWidth = 160
-  const left = Math.min(rect.left, window.innerWidth - menuWidth - 8)
-  menu.style.top = rect.bottom + 4 + 'px'
+
+  const menuWidth = 180
+  const left = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8))
+  menu.style.top = y + 'px'
   menu.style.left = left + 'px'
   menu.classList.add('open')
 }
@@ -36,6 +42,7 @@ function closeContextMenu() {
 elements.contextMenu.addEventListener('click', function (event) {
   const item = event.target.closest('.ctx-item')
   if (!item) return
+
   const action = item.dataset.action
   const project = ctxProject
   const session = ctxSession
@@ -44,25 +51,40 @@ elements.contextMenu.addEventListener('click', function (event) {
   if (action === 'project-new-session' && project) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
-    navigator.clipboard.writeText(project.path).then(function () {
-      showToast('Path copied')
-    })
-  } else if (action === 'session-resume' && session) {
-    selectSession(session)
-    if (shouldConfirmResume()) openResumeDialog(session)
-    else void resumeSelectedSession()
-  } else if (action === 'session-rename' && session) {
-    renamingSessionId = session.id
-    renderSessions()
-  } else if (action === 'session-archive' && session) {
-    void toggleSessionArchivedState(session)
-  } else if (action === 'session-delete' && session) {
-    void deleteSessionPermanently(session)
-  } else if (action === 'session-copy-id' && session) {
-    navigator.clipboard.writeText(session.id).then(function () {
-      showToast('ID copied: ' + session.id.slice(0, 8) + '…')
-    })
+    copyTextToClipboard(project.path, 'Path copied')
+  } else if (session) {
+    executeSessionAction(action, session)
   }
+})
+
+elements.sessionList.addEventListener('contextmenu', function (event) {
+  const row = event.target.closest('.sess-row')
+  if (!row || event.target.closest('.s-rename-input')) return
+
+  const session = resolveSessionFromRow(row)
+  if (!session) return
+
+  event.preventDefault()
+  selectSession(session)
+  ctxSession = session
+  ctxProject = null
+  openContextMenuAt(event.clientX, event.clientY, sessionActionItems(session))
+})
+
+elements.projectList.addEventListener('contextmenu', function (event) {
+  const row = event.target.closest('.proj-row')
+  if (!row) return
+
+  const project = resolveProjectFromRow(row)
+  if (!project) return
+
+  event.preventDefault()
+  ctxProject = project
+  ctxSession = null
+  openContextMenuAt(event.clientX, event.clientY, [
+    { action: 'project-new-session', label: '+ new session' },
+    { action: 'project-copy-path', label: 'copy path' },
+  ])
 })
 
 document.addEventListener('click', function (event) {

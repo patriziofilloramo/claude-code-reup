@@ -7,8 +7,10 @@ import { APP } from '../../config/app.js'
 import { getActiveSessions } from '../../core/session/active-sessions.js'
 import { getClaudeDirectory } from '../../core/project/claude-paths.js'
 import { loadProjectById, loadProjects } from '../../core/project/project-discovery.js'
+import { formatHandoff, readTranscriptHandoffContext } from '../../core/session/session-handoff.js'
 import { isValidSessionId } from '../../core/session/session-model.js'
 import type { Project, Session } from '../../core/session/session-model.js'
+import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import { log } from '../../utils/logger.js'
 import { projectDisplayName, serializeProject, serializeSession } from '../api-model.js'
 import type { ApiSession } from '../api-model.js'
@@ -57,6 +59,53 @@ export function registerProjectRoutes(app: Hono): void {
       }
 
       return context.json(hits)
+    })
+  )
+
+  // ---------------------------------------------------------------------------
+  // GET /api/sessions/:projectId/:sessionId/preview — compact Resume Card data
+  // ---------------------------------------------------------------------------
+
+  app.get(
+    '/api/sessions/:projectId/:sessionId/preview',
+    apiRoute(async (context) => {
+      const selection = await resolveProjectSession(
+        context.req.param('projectId'),
+        context.req.param('sessionId')
+      )
+      if ('response' in selection) return selection.response
+
+      const preview = await loadSessionPreview(
+        sessionTranscriptPath(selection.project.id, selection.session.id)
+      )
+      return context.json(preview)
+    })
+  )
+
+  // ---------------------------------------------------------------------------
+  // GET /api/sessions/:projectId/:sessionId/handoff — Markdown continuation packet
+  // ---------------------------------------------------------------------------
+
+  app.get(
+    '/api/sessions/:projectId/:sessionId/handoff',
+    apiRoute(async (context) => {
+      const selection = await resolveProjectSession(
+        context.req.param('projectId'),
+        context.req.param('sessionId')
+      )
+      if ('response' in selection) return selection.response
+
+      try {
+        const contextData = await readTranscriptHandoffContext(
+          sessionTranscriptPath(selection.project.id, selection.session.id)
+        )
+        return context.json({
+          context: contextData,
+          markdown: formatHandoff(selection.session, contextData),
+        })
+      } catch {
+        return context.json({ error: 'session transcript not found' }, 404)
+      }
     })
   )
 
@@ -141,6 +190,29 @@ function sessionMatchesQuery(
     ...(session.context.models ?? []),
   ]
   return candidates.some((value) => (value ?? '').toLowerCase().includes(normalizedQuery))
+}
+
+/**
+ * Resolves a project/session pair for read-only session detail endpoints.
+ * Performs all identifier validation before touching session-specific files.
+ */
+async function resolveProjectSession(
+  projectId: string | undefined,
+  sessionId: string | undefined
+): Promise<{ project: Project; session: Session } | { response: Response }> {
+  if (!projectId)
+    return { response: Response.json({ error: 'projectId required' }, { status: 400 }) }
+  if (!isValidSessionId(sessionId ?? '')) {
+    return { response: Response.json({ error: 'invalid session id' }, { status: 400 }) }
+  }
+
+  const project = await loadProjectById(projectId)
+  if (!project) return { response: Response.json({ error: 'project not found' }, { status: 404 }) }
+
+  const session = project.sessions.find((candidate) => candidate.id === sessionId)
+  if (!session) return { response: Response.json({ error: 'session not found' }, { status: 404 }) }
+
+  return { project, session }
 }
 
 /**

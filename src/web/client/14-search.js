@@ -73,6 +73,7 @@ elements.searchInput.addEventListener('input', function () {
     renderSessions()
   }
 })
+
 elements.searchInput.addEventListener('keydown', function (event) {
   if (event.key === 'Tab') {
     event.preventDefault()
@@ -84,6 +85,7 @@ elements.searchInput.addEventListener('keydown', function (event) {
     else closeSearch()
   }
 })
+
 elements.searchDeepBtn.addEventListener('click', function () {
   if (searchQuery.trim().length >= 2) void runInlineDeepSearch(searchQuery.trim())
 })
@@ -112,7 +114,6 @@ document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeSearch()
     return
   }
-  // Don't fire navigation shortcuts when focus is inside an input/textarea
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
 
   if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
@@ -124,7 +125,30 @@ document.addEventListener('keydown', function (event) {
     else void resumeSelectedSession()
   }
 
-  // j / k — navigate sessions up/down
+  if (selectedSession && selectedProject) {
+    if (event.key === 'r') {
+      event.preventDefault()
+      executeSessionAction('session-rename', selectedSession)
+      return
+    }
+    if (event.key === 'H') {
+      event.preventDefault()
+      executeSessionAction('session-handoff', selectedSession)
+      return
+    }
+    if (event.key === 'c') {
+      event.preventDefault()
+      executeSessionAction('session-copy-id', selectedSession)
+      return
+    }
+    if (event.key === 'D') {
+      event.preventDefault()
+      executeSessionAction('session-delete', selectedSession)
+      return
+    }
+  }
+
+  // j / k - navigate sessions up/down
   if (event.key === 'j' || (event.key === 'ArrowDown' && !event.altKey)) {
     event.preventDefault()
     const visibleSessions = deriveVisibleSessions()
@@ -152,7 +176,7 @@ document.addEventListener('keydown', function (event) {
     return
   }
 
-  // [ / ] or h / l — navigate projects
+  // [ / ] or h / l - navigate projects
   if (event.key === '[' || event.key === 'h') {
     const visibleProjects = deriveVisibleProjects()
     const currentIndex = selectedProject
@@ -176,7 +200,7 @@ document.addEventListener('keydown', function (event) {
     return
   }
 
-  // a — archive / unarchive selected session
+  // a - archive / unarchive selected session
   if (event.key === 'a' && selectedSession && selectedProject) {
     void toggleSessionArchivedState(selectedSession)
     return

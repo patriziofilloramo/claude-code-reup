@@ -105,6 +105,7 @@ function connectLiveUpdates() {
 
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
+    sessionPreviewCache.clear()
     void refreshProjectData()
     void refreshUsageSummary()
   })

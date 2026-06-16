@@ -141,6 +141,54 @@ describe('web client session-row invariants', () => {
     expect(visibleSessions).toContain('right.updated.localeCompare(left.updated)')
   })
 
+  it('surfaces primary session actions in the inspector, menu, and keyboard shortcuts', () => {
+    const inspector = sourceBetween(
+      'function buildInspectorActionsHtml(',
+      'function buildPreviewBlockHtml('
+    )
+    const sessionActions = sourceBetween(
+      'function executeSessionAction(',
+      '// Event delegation keeps handlers valid'
+    )
+    const shortcuts = sourceBetween(
+      "document.addEventListener('keydown'",
+      '// j / k - navigate sessions up/down'
+    )
+
+    expect(inspector).toContain('data-inspector-action="session-resume"')
+    expect(inspector).toContain('data-inspector-action="session-handoff"')
+    expect(inspector).toContain('data-inspector-action="session-rename"')
+    expect(inspector).toContain('data-inspector-action="session-archive"')
+    expect(inspector).toContain('data-inspector-action="session-delete"')
+    expect(sessionActions).toContain("action === 'session-handoff'")
+    expect(sessionActions).toContain("action === 'session-delete'")
+    expect(shortcuts).toContain("event.key === 'r'")
+    expect(shortcuts).toContain("event.key === 'H'")
+    expect(shortcuts).toContain("event.key === 'D'")
+  })
+
+  it('uses a custom right-click menu for project and session rows', () => {
+    expect(source).toContain("elements.sessionList.addEventListener('contextmenu'")
+    expect(source).toContain("elements.projectList.addEventListener('contextmenu'")
+    expect(source).toContain('event.preventDefault()')
+    expect(source).toContain('openContextMenuAt(event.clientX, event.clientY')
+  })
+
+  it('loads Resume Card preview data lazily and invalidates it on live updates', () => {
+    const previewLoading = sourceBetween(
+      'function ensureSessionPreview(',
+      'function buildInspectorActionsHtml('
+    )
+    const sseUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
+
+    expect(previewLoading).toContain('/preview')
+    expect(previewLoading).toContain('sessionPreviewCache.set')
+    expect(previewLoading).toContain('renderInspector(deriveVisibleSessions())')
+    expect(source).toContain('function buildSessionPreviewHtml(')
+    expect(source).toContain('Resume Card')
+    expect(sseUpdates).toContain('sessionPreviewCache.clear()')
+  })
+
   it('derives branch drift from each session working directory', () => {
     const branchDrift = sourceBetween(
       'function buildBranchDriftHtml(',
@@ -191,6 +239,8 @@ describe('web client session-row invariants', () => {
 
     expect(diagnostics).toContain('report.brokenIndices')
     expect(diagnostics).toContain('report.staleLocks')
+    expect(diagnostics).toContain('(report.brokenIndices ? report.brokenIndices.length : 0) +')
+    expect(diagnostics).toContain('(report.staleLocks ? report.staleLocks.length : 0)')
     expect(refresh).toContain('diagnosticsData.brokenIndices')
     expect(refresh).toContain('diagnosticsData.staleLocks')
   })

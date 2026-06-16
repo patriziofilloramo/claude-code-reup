@@ -8,6 +8,8 @@
  */
 
 import type { Project, Session, SessionStatus } from '../core/session/session-model.js'
+import type { TranscriptHandoffContext } from '../core/session/session-handoff.js'
+import type { SessionPreview } from '../core/session/session-preview.js'
 import { primaryStatus } from '../core/session/session-signals.js'
 
 // ---------------------------------------------------------------------------
@@ -113,6 +115,19 @@ export interface ApiLaunchResponse {
  */
 export interface ApiTranscriptResponse {
   events: Record<string, unknown>[]
+}
+
+// ---------------------------------------------------------------------------
+// Resume-card and handoff responses
+// ---------------------------------------------------------------------------
+
+/** Response for `GET /api/sessions/:projectId/:sessionId/preview`. */
+export type ApiSessionPreviewResponse = SessionPreview
+
+/** Response for `GET /api/sessions/:projectId/:sessionId/handoff`. */
+export interface ApiSessionHandoffResponse {
+  context: TranscriptHandoffContext
+  markdown: string
 }
 
 // ---------------------------------------------------------------------------

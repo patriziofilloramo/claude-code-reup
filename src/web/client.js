@@ -59,6 +59,7 @@ let deepSearchActive = false
 let deepSearchMatches = []
 let deepSearchLoading = false
 let deepSearchQueryTerm = ''
+let sessionPreviewCache = new Map()
 function elementById(id) {
   return document.getElementById(id)
 }
@@ -274,6 +275,27 @@ function usageFeedStatus() {
 /** Returns the last two path segments, normalised to forward slashes: "user/myproject". */
 function compactPath(path) {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/')
+}
+
+/** Returns filePath relative to projectPath when possible; otherwise returns the original path. */
+function projectRelativePath(filePath, projectPath) {
+  const file = String(filePath || '').replace(/\\/g, '/')
+  const project = String(projectPath || '')
+    .replace(/\\/g, '/')
+    .replace(/\/$/, '')
+  return project && file.startsWith(project + '/') ? file.slice(project.length + 1) : filePath
+}
+
+/** Copies text to the clipboard and shows a short success/failure toast. */
+function copyTextToClipboard(text, successMessage) {
+  navigator.clipboard
+    .writeText(text)
+    .then(function () {
+      showToast(successMessage || 'Copied')
+    })
+    .catch(function () {
+      showToast('Clipboard unavailable', 'err')
+    })
 }
 
 /** Maps a git branch name to a CSS colour variable based on common naming conventions. */
@@ -752,6 +774,133 @@ function buildInspectorRowHtml(label, value, valueClass, valueAttributes) {
   )
 }
 
+/** Returns the stable cache key for a session preview. */
+function previewCacheKey(project, session) {
+  return project.id + ':' + session.id
+}
+
+/** Starts loading Resume Card data for a session if it is not already cached. */
+function ensureSessionPreview(project, session) {
+  const key = previewCacheKey(project, session)
+  const cached = sessionPreviewCache.get(key)
+  if (cached) return cached
+
+  const loadingEntry = { state: 'loading' }
+  sessionPreviewCache.set(key, loadingEntry)
+
+  requestJson('/api/sessions/' + project.id + '/' + session.id + '/preview')
+    .then(function (preview) {
+      sessionPreviewCache.set(key, { data: preview, state: 'ready' })
+      if (
+        selectedProject &&
+        selectedProject.id === project.id &&
+        selectedSession?.id === session.id
+      ) {
+        renderInspector(deriveVisibleSessions())
+      }
+    })
+    .catch(function (error) {
+      sessionPreviewCache.set(key, { error: error.message, state: 'error' })
+      if (
+        selectedProject &&
+        selectedProject.id === project.id &&
+        selectedSession?.id === session.id
+      ) {
+        renderInspector(deriveVisibleSessions())
+      }
+    })
+
+  return loadingEntry
+}
+
+/** Returns action buttons for the selected session. These mirror the row menu and keyboard shortcuts. */
+function buildInspectorActionsHtml(session) {
+  const deleteDisabled = activeSessionIds.has(session.id)
+  return (
+    '<div class="insp-actions">' +
+    '<button class="insp-action primary" data-inspector-action="session-resume">Resume</button>' +
+    '<button class="insp-action" data-inspector-action="session-handoff">Handoff</button>' +
+    '<button class="insp-action" data-inspector-action="session-rename">Rename</button>' +
+    '<button class="insp-action" data-inspector-action="session-archive">' +
+    (session.signals.archived ? 'Unarchive' : 'Archive') +
+    '</button>' +
+    '<button class="insp-action danger" data-inspector-action="session-delete"' +
+    (deleteDisabled ? ' disabled title="Active sessions cannot be deleted"' : '') +
+    '>Delete</button>' +
+    '</div>' +
+    '<div class="insp-shortcuts">enter resume · H handoff · r rename · a archive · D delete</div>'
+  )
+}
+
+/** Returns one labelled Resume Card text block. */
+function buildPreviewBlockHtml(label, text) {
+  return (
+    '<div class="preview-block">' +
+    '<div class="preview-label">' +
+    label +
+    '</div>' +
+    '<div class="preview-text">' +
+    (text ? escapeHtml(text) : '<span class="preview-empty">Not found in transcript.</span>') +
+    '</div>' +
+    '</div>'
+  )
+}
+
+/** Returns the "files touched" preview section. */
+function buildTouchedFilesHtml(preview, session) {
+  if (!preview.touchedFiles || preview.touchedFiles.length === 0) return ''
+  const rows = preview.touchedFiles
+    .map(function (file) {
+      return (
+        '<div class="preview-file" title="' +
+        escapeHtml(file) +
+        '">' +
+        escapeHtml(projectRelativePath(file, session.projectPath)) +
+        '</div>'
+      )
+    })
+    .join('')
+  return (
+    '<div class="preview-block">' +
+    '<div class="preview-label">files touched · ' +
+    preview.touchedFiles.length +
+    '</div>' +
+    rows +
+    '</div>'
+  )
+}
+
+/** Returns the selected session's on-demand Resume Card preview HTML. */
+function buildSessionPreviewHtml(project, session) {
+  const entry = ensureSessionPreview(project, session)
+
+  if (entry.state === 'loading') {
+    return '<div class="preview-card"><div class="preview-loading">Loading session preview...</div></div>'
+  }
+  if (entry.state === 'error') {
+    return (
+      '<div class="preview-card"><div class="preview-error">Preview unavailable: ' +
+      escapeHtml(entry.error || 'unknown error') +
+      '</div></div>'
+    )
+  }
+
+  const preview = entry.data || {}
+  return (
+    '<div class="preview-card">' +
+    '<div class="preview-title">Resume Card</div>' +
+    buildPreviewBlockHtml('what you asked for', preview.goal) +
+    buildPreviewBlockHtml('where Claude left off', preview.lastResponse) +
+    (preview.pendingToolName
+      ? '<div class="preview-warning">Pending tool: ' +
+        escapeHtml(preview.pendingToolName) +
+        '</div>'
+      : '') +
+    buildTouchedFilesHtml(preview, session) +
+    '</div>'
+  )
+}
+
 /** Re-renders the session inspector panel for the selected session. Hides it when no selection is visible. */
 function renderInspector(visibleSessions) {
   const selectionIsVisible =
@@ -767,7 +916,7 @@ function renderInspector(visibleSessions) {
   const session = selectedSession
   const signals = session.signals || {}
   const descriptions = {
-    interrupted: 'Claude had pending tool calls with no result — resume to continue.',
+    interrupted: 'Claude had pending tool calls with no result - resume to continue.',
     expiring:
       'Transcript expires in ' + signals.expiresInDays + ' days (Claude auto-deletes after 30).',
     'path-missing': 'Project directory no longer exists on disk.',
@@ -781,7 +930,13 @@ function renderInspector(visibleSessions) {
       ? '<span class="insp-note">' + escapeHtml(statusDescription) + '</span>'
       : '')
 
-  let html = '<div class="insp-title">Session Details</div>'
+  let html =
+    '<div class="insp-title-row">' +
+    '<div class="insp-title">Session Details</div>' +
+    '<button class="insp-icon-btn" data-inspector-action="session-copy-id" title="Copy full session ID">ID</button>' +
+    '</div>'
+  html += buildInspectorActionsHtml(session)
+  html += buildSessionPreviewHtml(selectedProject, session)
   html += buildInspectorRowHtml('Status', statusValue)
   html += buildInspectorRowHtml(
     'Last active',
@@ -814,7 +969,7 @@ function renderInspector(visibleSessions) {
   }
   html += buildInspectorRowHtml(
     'Session ID',
-    session.id.slice(0, 8) + '…',
+    session.id.slice(0, 8) + '...',
     'insp-copy',
     'title="Click to copy" data-copy="' + escapeHtml(session.id) + '"'
   )
@@ -830,13 +985,17 @@ function renderInspector(visibleSessions) {
 }
 
 elements.sessionInspector.addEventListener('click', function (event) {
+  const actionButton = event.target.closest('[data-inspector-action]')
+  if (actionButton && selectedSession) {
+    executeSessionAction(actionButton.dataset.inspectorAction, selectedSession)
+    return
+  }
+
   const copyTarget = event.target.closest('.insp-copy')
   const text = copyTarget && copyTarget.dataset.copy
   if (!text) return
 
-  navigator.clipboard.writeText(text).then(function () {
-    showToast('Copied: ' + text.slice(0, 20) + '…')
-  })
+  copyTextToClipboard(text, 'Copied: ' + text.slice(0, 20) + '...')
 })
 
 elements.filterBar.addEventListener('click', function (event) {
@@ -1022,6 +1181,66 @@ async function toggleSessionArchivedState(session) {
   }
 }
 
+/** Starts inline rename mode for a session row. */
+function beginSessionRename(session) {
+  renamingSessionId = session.id
+  renderSessions()
+}
+
+/** Copies the full session ID to the clipboard. */
+function copySessionId(session) {
+  copyTextToClipboard(session.id, 'ID copied: ' + session.id.slice(0, 8) + '...')
+}
+
+/** Builds a Markdown handoff packet on the server and copies it to the clipboard. */
+async function copySessionHandoff(session) {
+  if (!selectedProject) return
+  try {
+    showToast('Building handoff...')
+    const result = await requestJson(
+      '/api/sessions/' + selectedProject.id + '/' + session.id + '/handoff'
+    )
+    copyTextToClipboard(result.markdown, 'Handoff copied')
+  } catch (error) {
+    showToast('Handoff failed: ' + error.message, 'err')
+  }
+}
+
+/** Executes a named session action from buttons, menus, or keyboard shortcuts. */
+function executeSessionAction(action, session) {
+  if (!session) return
+  if (action === 'session-resume') {
+    selectSession(session)
+    if (shouldConfirmResume()) openResumeDialog(session)
+    else void resumeSelectedSession()
+  } else if (action === 'session-rename') {
+    beginSessionRename(session)
+  } else if (action === 'session-archive') {
+    void toggleSessionArchivedState(session)
+  } else if (action === 'session-delete') {
+    void deleteSessionPermanently(session)
+  } else if (action === 'session-copy-id') {
+    copySessionId(session)
+  } else if (action === 'session-handoff') {
+    void copySessionHandoff(session)
+  }
+}
+
+/** Returns the menu/action labels for a session in a single canonical order. */
+function sessionActionItems(session) {
+  return [
+    { action: 'session-resume', label: 'resume' },
+    { action: 'session-handoff', label: 'copy handoff' },
+    { action: 'session-rename', label: 'rename' },
+    {
+      action: 'session-archive',
+      label: session.signals.archived ? 'unarchive' : 'archive locally',
+    },
+    { action: 'session-copy-id', label: 'copy session ID' },
+    { action: 'session-delete', label: 'delete permanently' },
+  ]
+}
+
 // Event delegation keeps handlers valid when renderSessions replaces rows.
 elements.sessionList.addEventListener('click', function (event) {
   const menuBtn = event.target.closest('.s-menu-btn')
@@ -1031,16 +1250,7 @@ elements.sessionList.addEventListener('click', function (event) {
     if (!session) return
     ctxSession = session
     ctxProject = null
-    openContextMenu(menuBtn, [
-      { action: 'session-resume', label: 'resume' },
-      { action: 'session-rename', label: 'rename' },
-      {
-        action: 'session-archive',
-        label: session.signals.archived ? 'unarchive' : 'archive locally',
-      },
-      { action: 'session-copy-id', label: 'copy session ID' },
-      { action: 'session-delete', label: 'delete permanently' },
-    ])
+    openContextMenu(menuBtn, sessionActionItems(session))
     return
   }
 
@@ -1398,7 +1608,9 @@ async function renderDiagnosticsPanel() {
   const total =
     (report.expiring ? report.expiring.length : 0) +
     (report.pathMissing ? report.pathMissing.length : 0) +
-    (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0)
+    (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0) +
+    (report.brokenIndices ? report.brokenIndices.length : 0) +
+    (report.staleLocks ? report.staleLocks.length : 0)
 
   elements.diagnosticsSubtitle.textContent = total + ' issue' + (total === 1 ? '' : 's') + ' found'
   elements.diagnosticsBody.innerHTML =
@@ -1489,9 +1701,15 @@ async function startNewSession(project) {
 
 /**
  * Positions and opens the shared context menu below anchorEl.
- * The menu is positioned left-clamped so it never overflows the viewport edge.
+ * Used by the explicit row menu buttons.
  */
 function openContextMenu(anchorEl, items) {
+  const rect = anchorEl.getBoundingClientRect()
+  openContextMenuAt(rect.left, rect.bottom + 4, items)
+}
+
+/** Opens the shared context menu at a viewport coordinate, clamped to screen edges. */
+function openContextMenuAt(x, y, items) {
   const menu = elements.contextMenu
   menu.innerHTML = items
     .map(function (item) {
@@ -1504,10 +1722,10 @@ function openContextMenu(anchorEl, items) {
       )
     })
     .join('')
-  const rect = anchorEl.getBoundingClientRect()
-  const menuWidth = 160
-  const left = Math.min(rect.left, window.innerWidth - menuWidth - 8)
-  menu.style.top = rect.bottom + 4 + 'px'
+
+  const menuWidth = 180
+  const left = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8))
+  menu.style.top = y + 'px'
   menu.style.left = left + 'px'
   menu.classList.add('open')
 }
@@ -1521,6 +1739,7 @@ function closeContextMenu() {
 elements.contextMenu.addEventListener('click', function (event) {
   const item = event.target.closest('.ctx-item')
   if (!item) return
+
   const action = item.dataset.action
   const project = ctxProject
   const session = ctxSession
@@ -1529,25 +1748,40 @@ elements.contextMenu.addEventListener('click', function (event) {
   if (action === 'project-new-session' && project) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
-    navigator.clipboard.writeText(project.path).then(function () {
-      showToast('Path copied')
-    })
-  } else if (action === 'session-resume' && session) {
-    selectSession(session)
-    if (shouldConfirmResume()) openResumeDialog(session)
-    else void resumeSelectedSession()
-  } else if (action === 'session-rename' && session) {
-    renamingSessionId = session.id
-    renderSessions()
-  } else if (action === 'session-archive' && session) {
-    void toggleSessionArchivedState(session)
-  } else if (action === 'session-delete' && session) {
-    void deleteSessionPermanently(session)
-  } else if (action === 'session-copy-id' && session) {
-    navigator.clipboard.writeText(session.id).then(function () {
-      showToast('ID copied: ' + session.id.slice(0, 8) + '…')
-    })
+    copyTextToClipboard(project.path, 'Path copied')
+  } else if (session) {
+    executeSessionAction(action, session)
   }
+})
+
+elements.sessionList.addEventListener('contextmenu', function (event) {
+  const row = event.target.closest('.sess-row')
+  if (!row || event.target.closest('.s-rename-input')) return
+
+  const session = resolveSessionFromRow(row)
+  if (!session) return
+
+  event.preventDefault()
+  selectSession(session)
+  ctxSession = session
+  ctxProject = null
+  openContextMenuAt(event.clientX, event.clientY, sessionActionItems(session))
+})
+
+elements.projectList.addEventListener('contextmenu', function (event) {
+  const row = event.target.closest('.proj-row')
+  if (!row) return
+
+  const project = resolveProjectFromRow(row)
+  if (!project) return
+
+  event.preventDefault()
+  ctxProject = project
+  ctxSession = null
+  openContextMenuAt(event.clientX, event.clientY, [
+    { action: 'project-new-session', label: '+ new session' },
+    { action: 'project-copy-path', label: 'copy path' },
+  ])
 })
 
 document.addEventListener('click', function (event) {
@@ -1633,6 +1867,7 @@ elements.searchInput.addEventListener('input', function () {
     renderSessions()
   }
 })
+
 elements.searchInput.addEventListener('keydown', function (event) {
   if (event.key === 'Tab') {
     event.preventDefault()
@@ -1644,6 +1879,7 @@ elements.searchInput.addEventListener('keydown', function (event) {
     else closeSearch()
   }
 })
+
 elements.searchDeepBtn.addEventListener('click', function () {
   if (searchQuery.trim().length >= 2) void runInlineDeepSearch(searchQuery.trim())
 })
@@ -1672,7 +1908,6 @@ document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeSearch()
     return
   }
-  // Don't fire navigation shortcuts when focus is inside an input/textarea
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
 
   if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
@@ -1684,7 +1919,30 @@ document.addEventListener('keydown', function (event) {
     else void resumeSelectedSession()
   }
 
-  // j / k — navigate sessions up/down
+  if (selectedSession && selectedProject) {
+    if (event.key === 'r') {
+      event.preventDefault()
+      executeSessionAction('session-rename', selectedSession)
+      return
+    }
+    if (event.key === 'H') {
+      event.preventDefault()
+      executeSessionAction('session-handoff', selectedSession)
+      return
+    }
+    if (event.key === 'c') {
+      event.preventDefault()
+      executeSessionAction('session-copy-id', selectedSession)
+      return
+    }
+    if (event.key === 'D') {
+      event.preventDefault()
+      executeSessionAction('session-delete', selectedSession)
+      return
+    }
+  }
+
+  // j / k - navigate sessions up/down
   if (event.key === 'j' || (event.key === 'ArrowDown' && !event.altKey)) {
     event.preventDefault()
     const visibleSessions = deriveVisibleSessions()
@@ -1712,7 +1970,7 @@ document.addEventListener('keydown', function (event) {
     return
   }
 
-  // [ / ] or h / l — navigate projects
+  // [ / ] or h / l - navigate projects
   if (event.key === '[' || event.key === 'h') {
     const visibleProjects = deriveVisibleProjects()
     const currentIndex = selectedProject
@@ -1736,7 +1994,7 @@ document.addEventListener('keydown', function (event) {
     return
   }
 
-  // a — archive / unarchive selected session
+  // a - archive / unarchive selected session
   if (event.key === 'a' && selectedSession && selectedProject) {
     void toggleSessionArchivedState(selectedSession)
     return
@@ -1849,6 +2107,7 @@ function connectLiveUpdates() {
 
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
+    sessionPreviewCache.clear()
     void refreshProjectData()
     void refreshUsageSummary()
   })
