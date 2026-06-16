@@ -410,6 +410,9 @@ The design target is not "manual filing". It is **triage in seconds**:
 - [ ] **Work stacks** — a named saved view that can contain projects and sessions together,
       e.g. `Auth migration`, `Launch week`, or `Bug bash`; this is the standout concept:
       group by intent, not by filesystem
+- [ ] **Native TODO state** — detect Claude Code `TodoWrite` lists from transcripts and show open,
+      in-progress, and completed task counts beside the session. This is read-only insight, not a
+      task manager.
 - [ ] **Focus mode** — activate one group/tag/stack and hide unrelated noise until cleared
 - [ ] **Smart views** — built-in virtual views such as `Active now`, `Needs attention`,
       `Waiting`, `High context`, `Recently touched`, and `Expiring soon`
@@ -435,6 +438,8 @@ The design target is not "manual filing". It is **triage in seconds**:
       `Focus: Launch week x`. Escape or one click clears it.
 - [ ] **Saved view from search** — after a global search, allow "save as stack" so a messy set of
       related sessions becomes a reusable work context.
+- [ ] **TODO-aware triage** — sessions with unfinished Claude TODOs appear in Inbox/Smart Buckets;
+      completed TODO lists can make a session a cleanup/archive candidate.
 - [ ] **Quick clean sweep** — from a group/stack, archive completed or stale sessions in bulk, with
       active sessions skipped and reported.
 - [ ] **Portable organization export** — export/import only Swoop metadata, not transcripts, so a
@@ -459,7 +464,8 @@ The design target is not "manual filing". It is **triage in seconds**:
 
 - [ ] Left rail: `Smart`, `Stacks`, `Groups`, then `Projects`; each section collapsible
 - [ ] Main list: projects/sessions filtered by current focus, with chips and health badges visible
-- [ ] Right inspector: Resume Card plus organization editor for selected session/project
+- [ ] Right inspector: Resume Card, native TODO summary, and organization editor for selected
+      session/project
 - [ ] Drag targets: stacks/groups highlight only while dragging a project/session row
 - [ ] Empty state: "No stacks yet — press g or drag a session here" instead of a settings-heavy flow
 - [ ] Context menu: row-only actions for tag, move to stack/group, archive, delete, handoff
@@ -477,6 +483,8 @@ The design target is not "manual filing". It is **triage in seconds**:
 - [ ] Store session tags in each project's `swoop.json` sidecar beside alias/archive metadata
 - [ ] Store project groups, project tags, stack definitions, and tag palette in
       `~/.claude/swoop/prefs.json`
+- [ ] Derive TODO state from transcript `TodoWrite` events and keep it read-only; never write back
+      into Claude's TODO tools or transcript files
 - [ ] Keep organisation metadata local-first and portable; no account, no telemetry, no server
 - [ ] Provide `swoop config` toggles for organisation UI density and suggested-tag behaviour
 - [ ] Add export/import for organisation metadata before adding complex editing flows
@@ -485,11 +493,16 @@ The design target is not "manual filing". It is **triage in seconds**:
 ### MVP slice
 
 1. [ ] Data model: session tags + project groups + work stack definitions
-2. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
-3. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips in compact rows
-4. [ ] Search/list integration: tags/groups/stacks participate in search and `swoop list --json`
-5. [ ] CLI filters: `--tag`, `--group`, `--stack`; mutation commands only if users need scripting
-6. [ ] Tests: metadata read/write, filters, keyboard actions, drag handler guards, and regression
+2. [ ] Native TODO extraction: latest `TodoWrite` list, open/in-progress/completed counts, and
+       concise TODO preview in Resume Card / inspector
+3. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
+4. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips/TODO count in compact rows
+5. [ ] Search/list integration: tags/groups/stacks/TODO state participate in search and
+       `swoop list --json`
+6. [ ] CLI filters: `--tag`, `--group`, `--stack`, `--todo`; mutation commands only if users need
+       scripting
+7. [ ] Tests: metadata read/write, TODO extraction, filters, keyboard actions, drag handler guards,
+       and regression
        checks for zero-config defaults
 
 ### Product guardrails
@@ -499,6 +512,7 @@ The design target is not "manual filing". It is **triage in seconds**:
 - [ ] Keep the default experience clean for users with no tags/groups configured
 - [ ] Every organisation feature must improve resume/triage speed, not just decorate rows
 - [ ] Prefer reversible local metadata over destructive transcript edits
+- [ ] TODO state is displayed as observed session context, not as a Swoop-owned checklist to edit
 - [ ] Avoid AI auto-organization in the core path; heuristic suggestions are enough for the MVP
 
 ---

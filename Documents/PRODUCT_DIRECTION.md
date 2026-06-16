@@ -132,6 +132,7 @@ Before resume, show a compact answer to "what was happening?":
 - Last meaningful user request
 - Last meaningful assistant response
 - Pending or failed tool call
+- Native Claude TODO state when present (`TodoWrite` open / in-progress / completed items)
 - Recently touched files
 - Recorded cwd and branch
 - Last activity and active-session state
