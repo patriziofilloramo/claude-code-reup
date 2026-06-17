@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
 import { LABELS } from '../config/labels.js'
@@ -98,7 +99,10 @@ export function ConfigApp({
   }, [])
 
   const currentTab = TABS[tabIndex]!
-  const syncRows = useMemo(() => syncOverview?.projects ?? [], [syncOverview])
+  const syncRows = useMemo(() => {
+    const all = syncOverview?.projects ?? []
+    return [...all.filter((p) => p.isShared), ...all.filter((p) => !p.isShared)]
+  }, [syncOverview])
   const featuresCursorMax =
     crossDeviceSessionStorage === 'on' ? 4 + Math.max(0, syncRows.length) : 1
   const maxCursor = currentTab === 'Features' ? featuresCursorMax : TAB_CURSOR_MAX[currentTab]
@@ -475,21 +479,23 @@ function FeaturesTab({
 
   return (
     <Box flexDirection="column" gap={1}>
-      <SelectableRow
-        active={autoCleanupOnStart !== 'off'}
-        description={
-          autoCleanupOnStart === 'off'
-            ? 'No automatic cleanup. Run `swoop cleanup` manually.'
-            : autoCleanupOnStart === 'auto'
-              ? 'Archives high-confidence cleanup candidates automatically on startup.'
-              : 'Shows cleanup picker before opening swoop; you choose what to archive.'
-        }
-        focused={cursor === 0}
-        label="Cleanup on start"
-        status={cleanupLabel}
-      />
+      <FeatureCard focused={cursor === 0}>
+        <SelectableRow
+          active={autoCleanupOnStart !== 'off'}
+          description={
+            autoCleanupOnStart === 'off'
+              ? 'No automatic cleanup. Run `swoop cleanup` manually.'
+              : autoCleanupOnStart === 'auto'
+                ? 'Archives high-confidence cleanup candidates automatically on startup.'
+                : 'Shows cleanup picker before opening swoop; you choose what to archive.'
+          }
+          focused={cursor === 0}
+          label="Cleanup on start"
+          status={cleanupLabel}
+        />
+      </FeatureCard>
 
-      <Box flexDirection="column">
+      <FeatureCard focused={cursor >= 1}>
         <SelectableRow
           active={syncEnabled}
           badge="Alpha"
@@ -501,12 +507,10 @@ function FeaturesTab({
         />
 
         {syncEnabled && (
-          <Box flexDirection="column" paddingLeft={3} marginTop={1}>
-            <Box marginBottom={1}>
-              <Text bold color={COLORS.text}>
-                {LABELS.configSyncActionsTitle}
-              </Text>
-            </Box>
+          <Box flexDirection="column" paddingLeft={3} marginTop={1} marginBottom={1}>
+            <Text bold color={COLORS.text}>
+              {LABELS.configSyncActionsTitle}
+            </Text>
             <SyncActionRow
               confirm={false}
               focused={cursor === 2}
@@ -526,45 +530,87 @@ function FeaturesTab({
               suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
             />
 
-            <Box marginTop={1} marginBottom={0}>
-              <Text bold color={COLORS.text}>
-                {LABELS.configProjectsTitle}
-              </Text>
-            </Box>
             {syncRows.length === 0 ? (
-              <Box paddingLeft={2}>
+              <Box marginTop={1} paddingLeft={2}>
                 <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
               </Box>
             ) : (
               <>
-                {syncRows.map((project, index) => (
-                  <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
-                ))}
-                <SyncLegend />
+                {(() => {
+                  const linkedRows = syncRows.filter((p) => p.isShared)
+                  const unlinkedRows = syncRows.filter((p) => !p.isShared && p.isCloudProject)
+                  const unlinkedOffset = 5 + linkedRows.length
+                  return (
+                    <>
+                      {linkedRows.length > 0 && (
+                        <Box flexDirection="column" marginTop={1}>
+                          <Text bold color={COLORS.text}>
+                            {LABELS.configSyncLinkedProjectsTitle}
+                          </Text>
+                          {linkedRows.map((project, i) => (
+                            <SyncLinkedProjectRow
+                              focused={cursor === 5 + i}
+                              key={project.id}
+                              project={project}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                      {unlinkedRows.length > 0 && (
+                        <Box flexDirection="column" marginTop={1}>
+                          <Text bold color={COLORS.text}>
+                            {LABELS.configSyncUnlinkedProjectsTitle}
+                          </Text>
+                          {unlinkedRows.map((project, i) => (
+                            <SyncUnlinkedProjectRow
+                              focused={cursor === unlinkedOffset + i}
+                              key={project.id}
+                              project={project}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </>
+                  )
+                })()}
+                <CloudIconLegend />
               </>
             )}
           </Box>
         )}
-      </Box>
+      </FeatureCard>
     </Box>
   )
 }
 
-function SyncLegend() {
+function FeatureCard({ children, focused }: { children: ReactNode; focused: boolean }) {
   return (
-    <Box gap={3} marginTop={1}>
-      <Text color={COLORS.muted}>legend</Text>
+    <Box
+      borderColor={focused ? COLORS.accent : COLORS.border}
+      borderStyle="single"
+      flexDirection="column"
+      paddingX={1}
+    >
+      {children}
+    </Box>
+  )
+}
+
+function CloudIconLegend() {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text color={COLORS.muted}>{LABELS.configCloudIconLegendTitle}</Text>
       <Box gap={1}>
-        <Text color={COLORS.ok}>{LABELS.configSyncLegendLinked}</Text>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendLinkedDesc}</Text>
+        <Text color={COLORS.ok}>☁</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconOnline}</Text>
       </Box>
       <Box gap={1}>
-        <Text color={COLORS.accent}>{LABELS.configSyncLegendCloud}</Text>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendCloudDesc}</Text>
+        <Text color={COLORS.orange}>☁</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconPartial}</Text>
       </Box>
       <Box gap={1}>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendLocal}</Text>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendLocalDesc}</Text>
+        <Text color={COLORS.muted}>☁</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconOffline}</Text>
       </Box>
     </Box>
   )
@@ -628,33 +674,50 @@ function SyncActionRow({
   )
 }
 
-function SyncProjectRow({ focused, project }: { focused: boolean; project: SyncProjectReport }) {
-  const action = project.isActive
-    ? 'active - disabled'
-    : project.isShared
-      ? 'enter to unlink'
-      : 'enter to link'
-  const state = project.isShared ? 'linked' : project.isCloudProject ? 'cloud' : 'local'
-  const color = project.isActive
-    ? COLORS.orange
-    : project.isShared
-      ? project.cloudOffline
-        ? COLORS.muted
-        : COLORS.ok
-      : project.isCloudProject
-        ? COLORS.accent
-        : COLORS.dim
+function SyncLinkedProjectRow({
+  focused,
+  project,
+}: {
+  focused: boolean
+  project: SyncProjectReport
+}) {
+  const cloudColor = project.cloudOffline
+    ? COLORS.muted
+    : project.unlinkedDevices.length
+      ? COLORS.orange
+      : COLORS.ok
+  const action = project.isActive ? 'active — cannot unlink' : 'enter to unlink'
 
   return (
     <Box gap={1}>
-      <Box width={2} flexShrink={0}>
+      <Box flexShrink={0} width={2}>
         <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ''}</Text>
       </Box>
-      <Text color={color}>{state}</Text>
+      <Text color={cloudColor}>☁</Text>
       <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
         {project.path}
       </Text>
-      <Text color={COLORS.dim}>{action}</Text>
+      <Text color={project.isActive ? COLORS.muted : COLORS.dim}>{action}</Text>
+    </Box>
+  )
+}
+
+function SyncUnlinkedProjectRow({
+  focused,
+  project,
+}: {
+  focused: boolean
+  project: SyncProjectReport
+}) {
+  return (
+    <Box gap={1}>
+      <Box flexShrink={0} width={2}>
+        <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ''}</Text>
+      </Box>
+      <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+        {project.path}
+      </Text>
+      <Text color={COLORS.dim}>enter to link</Text>
     </Box>
   )
 }
