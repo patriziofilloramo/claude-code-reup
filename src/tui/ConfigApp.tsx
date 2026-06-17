@@ -99,7 +99,10 @@ export function ConfigApp({
   }, [])
 
   const currentTab = TABS[tabIndex]!
-  const syncRows = useMemo(() => syncOverview?.projects ?? [], [syncOverview])
+  const syncRows = useMemo(() => {
+    const all = syncOverview?.projects ?? []
+    return [...all.filter((p) => p.isShared), ...all.filter((p) => !p.isShared)]
+  }, [syncOverview])
   const featuresCursorMax =
     crossDeviceSessionStorage === 'on' ? 4 + Math.max(0, syncRows.length) : 1
   const maxCursor = currentTab === 'Features' ? featuresCursorMax : TAB_CURSOR_MAX[currentTab]
@@ -529,22 +532,52 @@ function FeaturesTab({
               suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
             />
 
-            <Box marginTop={1}>
-              <Text bold color={COLORS.text}>
-                {LABELS.configProjectsTitle}
-              </Text>
-            </Box>
             {syncRows.length === 0 ? (
-              <Box paddingLeft={2}>
+              <Box marginTop={1} paddingLeft={2}>
                 <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
               </Box>
             ) : (
-              syncRows.map((project, index) => (
-                <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
-              ))
+              <>
+                {(() => {
+                  const linkedRows = syncRows.filter((p) => p.isShared)
+                  const unlinkedRows = syncRows.filter((p) => !p.isShared)
+                  const unlinkedOffset = 5 + linkedRows.length
+                  return (
+                    <>
+                      {linkedRows.length > 0 && (
+                        <Box flexDirection="column" marginTop={1}>
+                          <Text bold color={COLORS.text}>
+                            {LABELS.configSyncLinkedProjectsTitle}
+                          </Text>
+                          {linkedRows.map((project, i) => (
+                            <SyncLinkedProjectRow
+                              focused={cursor === 5 + i}
+                              key={project.id}
+                              project={project}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                      {unlinkedRows.length > 0 && (
+                        <Box flexDirection="column" marginTop={1}>
+                          <Text bold color={COLORS.text}>
+                            {LABELS.configSyncUnlinkedProjectsTitle}
+                          </Text>
+                          {unlinkedRows.map((project, i) => (
+                            <SyncUnlinkedProjectRow
+                              focused={cursor === unlinkedOffset + i}
+                              key={project.id}
+                              project={project}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </>
+                  )
+                })()}
+                <CloudIconLegend />
+              </>
             )}
-
-            <CloudIconLegend />
           </Box>
         )}
       </FeatureCard>
@@ -643,33 +676,54 @@ function SyncActionRow({
   )
 }
 
-function SyncProjectRow({ focused, project }: { focused: boolean; project: SyncProjectReport }) {
-  const action = project.isActive
-    ? 'active - disabled'
-    : project.isShared
-      ? 'enter to unlink'
-      : 'enter to link'
-  const state = project.isShared ? 'linked' : project.isCloudProject ? 'cloud' : 'local'
-  const color = project.isActive
-    ? COLORS.orange
-    : project.isShared
-      ? project.cloudOffline
-        ? COLORS.muted
-        : COLORS.ok
-      : project.isCloudProject
-        ? COLORS.accent
-        : COLORS.dim
+function SyncLinkedProjectRow({
+  focused,
+  project,
+}: {
+  focused: boolean
+  project: SyncProjectReport
+}) {
+  const cloudColor = project.cloudOffline
+    ? COLORS.muted
+    : project.unlinkedDevices.length
+      ? COLORS.orange
+      : COLORS.ok
+  const action = project.isActive ? 'active — cannot unlink' : 'enter to unlink'
 
   return (
     <Box gap={1}>
-      <Box width={2} flexShrink={0}>
+      <Box flexShrink={0} width={2}>
         <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ''}</Text>
       </Box>
-      <Text color={color}>{state}</Text>
+      <Text color={cloudColor}>☁</Text>
       <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
         {project.path}
       </Text>
-      <Text color={COLORS.dim}>{action}</Text>
+      <Text color={project.isActive ? COLORS.muted : COLORS.dim}>{action}</Text>
+    </Box>
+  )
+}
+
+function SyncUnlinkedProjectRow({
+  focused,
+  project,
+}: {
+  focused: boolean
+  project: SyncProjectReport
+}) {
+  const typeLabel = project.isCloudProject ? 'cloud' : 'local'
+  const typeColor = project.isCloudProject ? COLORS.accent : COLORS.dim
+
+  return (
+    <Box gap={1}>
+      <Box flexShrink={0} width={2}>
+        <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ''}</Text>
+      </Box>
+      <Text color={typeColor}>{typeLabel}</Text>
+      <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+        {project.path}
+      </Text>
+      <Text color={COLORS.dim}>enter to link</Text>
     </Box>
   )
 }
