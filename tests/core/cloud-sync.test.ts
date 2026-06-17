@@ -104,6 +104,23 @@ describe('syncBidirectional', () => {
     )
   })
 
+  it('skips junctions and symlinks without throwing', async () => {
+    const { symlink } = await import('node:fs/promises')
+    await writeFile(join(dirA, 'session.jsonl'), 'data', 'utf8')
+    await mkdir(join(dirA, 'real-dir'))
+    // Create a symlink in dirA alongside real content
+    await symlink(join(dirA, 'real-dir'), join(dirA, 'memory'), 'junction').catch(() =>
+      symlink(join(dirA, 'real-dir'), join(dirA, 'memory'))
+    )
+
+    await syncBidirectional(dirA, dirB)
+
+    // The real session file is synced; the symlink/junction is skipped, not an error
+    expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('data')
+    const { lstat } = await import('node:fs/promises')
+    await expect(lstat(join(dirB, 'memory'))).rejects.toThrow() // not copied
+  })
+
   it('skips the legacy .swoop-link marker', async () => {
     await writeFile(join(dirA, '.swoop-link'), '/cloud/path', 'utf8')
     await writeFile(join(dirA, 'session.jsonl'), 'data', 'utf8')
@@ -114,22 +131,63 @@ describe('syncBidirectional', () => {
     expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('data')
   })
 
-  it('preserves and reports same-size independent edits', async () => {
+  it('resolves same-size independent edits by keeping the A-side copy', async () => {
     await writeFile(join(dirA, 'session.jsonl'), 'AAAA', 'utf8')
     await writeFile(join(dirB, 'session.jsonl'), 'BBBB', 'utf8')
 
-    await expect(syncBidirectional(dirA, dirB)).rejects.toBeInstanceOf(CloudSyncConflictError)
+    await syncBidirectional(dirA, dirB)
+
     expect(await readFile(join(dirA, 'session.jsonl'), 'utf8')).toBe('AAAA')
-    expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('BBBB')
+    expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('AAAA')
   })
 
-  it('preserves and reports divergent edits of different sizes', async () => {
+  it('resolves divergent edits of different sizes by keeping the longer copy', async () => {
     await writeFile(join(dirA, 'session.jsonl'), 'local edit\n', 'utf8')
     await writeFile(join(dirB, 'session.jsonl'), 'independent cloud edit\n', 'utf8')
 
-    await expect(syncBidirectional(dirA, dirB)).rejects.toBeInstanceOf(CloudSyncConflictError)
-    expect(await readFile(join(dirA, 'session.jsonl'), 'utf8')).toBe('local edit\n')
+    await syncBidirectional(dirA, dirB)
+
+    expect(await readFile(join(dirA, 'session.jsonl'), 'utf8')).toBe('independent cloud edit\n')
     expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('independent cloud edit\n')
+  })
+
+  it('auto-merges independently-edited .md files into a union of their lines', async () => {
+    await writeFile(
+      join(dirA, 'MEMORY.md'),
+      '# Memory Index\n\n- [entry1](f1.md) — desc1\n',
+      'utf8'
+    )
+    await writeFile(
+      join(dirB, 'MEMORY.md'),
+      '# Memory Index\n\n- [entry2](f2.md) — desc2\n',
+      'utf8'
+    )
+
+    await syncBidirectional(dirA, dirB)
+
+    const expected = '# Memory Index\n\n- [entry1](f1.md) — desc1\n- [entry2](f2.md) — desc2\n'
+    expect(await readFile(join(dirA, 'MEMORY.md'), 'utf8')).toBe(expected)
+    expect(await readFile(join(dirB, 'MEMORY.md'), 'utf8')).toBe(expected)
+  })
+
+  it('auto-merges .md files in subdirectories', async () => {
+    await mkdir(join(dirA, 'memory'), { recursive: true })
+    await mkdir(join(dirB, 'memory'), { recursive: true })
+    await writeFile(join(dirA, 'memory', 'MEMORY.md'), '- [a](a.md) — from device A\n', 'utf8')
+    await writeFile(join(dirB, 'memory', 'MEMORY.md'), '- [b](b.md) — from device B\n', 'utf8')
+
+    await syncBidirectional(dirA, dirB)
+
+    const expected = '- [a](a.md) — from device A\n- [b](b.md) — from device B\n'
+    expect(await readFile(join(dirA, 'memory', 'MEMORY.md'), 'utf8')).toBe(expected)
+    expect(await readFile(join(dirB, 'memory', 'MEMORY.md'), 'utf8')).toBe(expected)
+  })
+
+  it('reports a conflict for invalid UTF-8 content in .md files', async () => {
+    await writeFile(join(dirA, 'corrupt.md'), Buffer.from([0x80, 0x81, 0x82]))
+    await writeFile(join(dirB, 'corrupt.md'), Buffer.from([0x90, 0x91, 0x92]))
+
+    await expect(syncBidirectional(dirA, dirB)).rejects.toBeInstanceOf(CloudSyncConflictError)
   })
 })
 

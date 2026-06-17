@@ -33,6 +33,7 @@ import {
   stat,
   symlink,
   unlink,
+  writeFile,
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -328,7 +329,12 @@ export async function syncBidirectional(dirA: string, dirB: string): Promise<voi
       const [statA, statB] = await Promise.all([lstatIfPresent(pathA), lstatIfPresent(pathB)])
 
       if (statA?.isSymbolicLink() || statB?.isSymbolicLink()) {
-        throw new CloudSyncConflictError(pathA, pathB)
+        // Junctions and symlinks are structural plumbing (e.g. auto-memory junctions
+        // created by Claude Code). Skip them — their targets are synced independently.
+        log.debug(
+          `cloud-sync: skipping junction/symlink during sync: ${statA?.isSymbolicLink() ? pathA : pathB}`
+        )
+        return
       }
 
       if (statA?.isDirectory() && statB?.isDirectory()) {
@@ -383,7 +389,67 @@ async function syncOneFile(
     return
   }
 
-  throw new CloudSyncConflictError(pathA, pathB)
+  if (pathA.toLowerCase().endsWith('.md')) {
+    await mergeMarkdownFilesUnion(pathA, pathB, contentA, contentB)
+    return
+  }
+
+  // Both copies diverged independently (e.g. offline session writes on two devices).
+  // Keep the longer copy — it has more accumulated data — and propagate it to both sides.
+  const [sourcePath, destinationPath] =
+    contentA.length >= contentB.length ? [pathA, pathB] : [pathB, pathA]
+  await copyFileAtomically(sourcePath, destinationPath)
+  log.debug(`cloud-sync: resolved conflict by keeping longer copy: ${sourcePath}`)
+}
+
+/**
+ * Union-merges two independently-edited UTF-8 Markdown files.
+ *
+ * Lines present in contentB but absent in contentA are appended to pathA,
+ * then pathA is copied to pathB so both sides converge to the same content.
+ * Invalid UTF-8 (binary content) falls back to a conflict error.
+ *
+ * This handles the common case where each device appended entries to an index
+ * file (e.g. MEMORY.md) independently: the merge captures all entries from
+ * both devices without data loss.
+ */
+async function mergeMarkdownFilesUnion(
+  pathA: string,
+  pathB: string,
+  contentA: Buffer,
+  contentB: Buffer
+): Promise<void> {
+  let textA: string
+  let textB: string
+  try {
+    const decoder = new TextDecoder('utf-8', { fatal: true })
+    textA = decoder.decode(contentA)
+    textB = decoder.decode(contentB)
+  } catch {
+    throw new CloudSyncConflictError(pathA, pathB)
+  }
+
+  const splitLines = (text: string): string[] => {
+    const lines = text.split('\n')
+    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+    return lines
+  }
+
+  const linesA = splitLines(textA)
+  const lineSetA = new Set(linesA)
+  const extra = splitLines(textB).filter((line) => !lineSetA.has(line))
+  const merged = Buffer.from([...linesA, ...extra].join('\n') + '\n', 'utf-8')
+
+  const tempPath = temporarySiblingPath(pathA, 'merge')
+  try {
+    await writeFile(tempPath, merged)
+    await rename(tempPath, pathA)
+  } finally {
+    await rm(tempPath, { force: true })
+  }
+  await copyFileAtomically(pathA, pathB)
+
+  log.debug(`cloud-sync: auto-merged .md conflict: ${pathA}`)
 }
 
 // ---------------------------------------------------------------------------
