@@ -27,6 +27,7 @@ const elements = {
   resumeDialogMessage: elementById('dlg-msg'),
   resumeDialogName: elementById('dlg-name'),
   resumeOverlay: elementById('resume-overlay'),
+  reviewSignals: elementById('review-signals'),
   searchClearButton: elementById('search-clear'),
   searchInput: elementById('search-input'),
   searchWrapper: elementById('search-wrap'),

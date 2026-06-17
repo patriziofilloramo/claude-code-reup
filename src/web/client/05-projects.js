@@ -125,13 +125,12 @@ function deriveVisibleProjects() {
     })
   }
 
-  const normalizedQuery = searchQuery.trim().toLowerCase()
-  const visibleProjects = normalizedQuery
+  const searchSpec = parseSearchQuery(searchQuery)
+  const visibleProjects = searchSpecHasFilters(searchSpec)
     ? baseProjects.filter(function (project) {
-        return (
-          projectMatchesSearch(project, normalizedQuery) ||
-          deriveVisibleSessionsForProject(project).length > 0
-        )
+        const projectTextMatches = projectMatchesSearch(project, searchSpec)
+        if (projectTextMatches && searchSpec.reviewBucketIds.length === 0) return true
+        return deriveVisibleSessionsForProject(project).length > 0
       })
     : baseProjects
   if (selectedProjectSort !== 'name') return visibleProjects

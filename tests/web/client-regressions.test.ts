@@ -66,12 +66,14 @@ describe('web client session-row invariants', () => {
       "elements.searchInput.addEventListener('keydown'"
     )
 
-    expect(projectSearch).toContain('projectMatchesSearch(project, normalizedQuery)')
+    expect(projectSearch).toContain('parseSearchQuery(searchQuery)')
+    expect(projectSearch).toContain('projectMatchesSearch(project, searchSpec)')
     expect(projectSearch).toContain('deriveVisibleSessionsForProject(project).length > 0')
     expect(sessionSearch).toContain('[project.id, project.path]')
     expect(sessionSearch).toContain('session.id')
     expect(sessionSearch).toContain('session.projectPath')
     expect(sessionSearch).toContain('session.currentBranch')
+    expect(sessionSearch).toContain('sessionMatchesReviewBuckets')
     expect(sessionSearch).toContain('.concat(session.context.models || [])')
     expect(searchHandlers).toContain('synchronizeSelectedProjectWithView()')
     expect(searchHandlers).toContain('renderProjects()')
@@ -119,7 +121,7 @@ describe('web client session-row invariants', () => {
 
   it('searches original names and model history even when a session has an alias', () => {
     const visibleSessions = sourceBetween(
-      'function sessionMatchesSearch(',
+      'function sessionMatchesSearchText(',
       'function deriveVisibleSessionsForProject('
     )
 
@@ -409,25 +411,29 @@ describe('web client org layer invariants', () => {
     return source.slice(source.indexOf(start), source.indexOf(end))
   }
 
-  it('renders review section with only non-zero bucket counts', () => {
-    const reviewSection = sourceBetween(
-      'function buildReviewSectionHtml()',
-      'function buildStacksSectionHtml()'
+  it('renders review signal icons in the selected project header', () => {
+    const reviewSignals = sourceBetween(
+      'function renderReviewSignals()',
+      'function renderSessions()'
     )
-    expect(reviewSection).toContain('countBucketSessions(bucket)')
-    expect(reviewSection).toContain('if (count === 0) continue')
-    expect(reviewSection).toContain('data-rail-action="inbox-bucket"')
-    expect(reviewSection).toContain('data-bucket=')
+    expect(reviewSignals).toContain('countReviewBucketSessionsForProject(selectedProject, bucket)')
+    expect(reviewSignals).toContain('if (count === 0) continue')
+    expect(reviewSignals).toContain('review-signal')
+    expect(reviewSignals).toContain('data-review-token')
+    expect(reviewSignals).toContain('bucket.searchToken')
   })
 
-  it('focuses by inbox bucket without applying pill filter', () => {
-    const focusResolver = sourceBetween(
-      'function getSessionsMatchingFocus(project)',
-      'function isRailSectionCollapsed('
+  it('parses review search tokens and aliases', () => {
+    const searchParsing = sourceBetween(
+      'function normalizeReviewSearchToken(',
+      '/** Returns true if the project'
     )
-    expect(focusResolver).toContain("focusFilter.kind === 'inbox'")
-    expect(focusResolver).toContain('bucket.test(s)')
-    expect(focusResolver).toContain('!s.signals.archived')
+    expect(searchParsing).toContain("token === 'drift'")
+    expect(searchParsing).toContain("'branch-drift'")
+    expect(searchParsing).toContain("token === 'context'")
+    expect(searchParsing).toContain("'high-context'")
+    expect(searchParsing).toContain("part.toLowerCase().startsWith('is:')")
+    expect(searchParsing).toContain('reviewBucketIds.push(bucketId)')
   })
 
   it('focuses by stack resolving project and session items separately', () => {
@@ -475,13 +481,14 @@ describe('web client org layer invariants', () => {
     expect(deriveProjects).toContain('focusSessions.length > 0')
   })
 
-  it('inbox bucket focus bypasses pill filter for session list', () => {
+  it('review search tokens filter sessions through review buckets', () => {
     const deriveSessions = sourceBetween(
       'function deriveVisibleSessionsForProject(',
       'function deriveVisibleSessions()'
     )
-    expect(deriveSessions).toContain("focusFilter.kind === 'inbox'")
-    expect(deriveSessions).toContain('sessions = focusSessions')
+    expect(deriveSessions).toContain('parseSearchQuery(searchQuery)')
+    expect(deriveSessions).toContain('sessionMatchesReviewBuckets')
+    expect(deriveSessions).toContain('projectTextMatches')
   })
 
   it('tag + stack focus intersects with pill filter', () => {
@@ -567,7 +574,7 @@ describe('web client org layer invariants', () => {
   it('rail persists collapse state in localStorage by section id', () => {
     const collapse = sourceBetween(
       'function isRailSectionCollapsed(',
-      'function countBucketSessions('
+      'function countStackSessionsForRail('
     )
     expect(collapse).toContain('RAIL_STORAGE_KEY')
     expect(collapse).toContain("':collapsed'")
@@ -582,8 +589,8 @@ describe('web client org layer invariants', () => {
       '/** Re-renders the org rail.'
     )
     expect(railBuilders).toContain('rail-section-count')
-    expect(railBuilders).toContain("if (stacks.length === 0) return ''")
-    expect(railBuilders).toContain("if (groups.length === 0) return ''")
+    expect(railBuilders).toContain('visibleStacks.length === 0')
+    expect(railBuilders).toContain('visibleGroups.length === 0')
     expect(railBuilders).not.toContain('rail-add')
   })
 
@@ -637,6 +644,7 @@ describe('web client org layer invariants', () => {
   it('HTML contains the rail, focus-bar, tag-picker, and org-picker elements', () => {
     expect(uiSource).toContain('id="rail"')
     expect(uiSource).toContain('id="focus-bar"')
+    expect(uiSource).toContain('id="review-signals"')
     expect(uiSource).toContain('id="tag-picker-overlay"')
     expect(uiSource).toContain('id="tag-picker-input"')
     expect(uiSource).toContain('id="org-picker-overlay"')
@@ -655,8 +663,9 @@ describe('web client org layer invariants', () => {
     expect(stylesSource).toContain('.org-picker-dlg {')
     expect(stylesSource).toContain('.insp-org-section {')
     expect(stylesSource).toContain('.rail-info {')
+    expect(stylesSource).toContain('.review-signals {')
+    expect(stylesSource).toContain('.ui-tooltip {')
     expect(stylesSource).toContain('.filter-scope-label {')
     expect(stylesSource).toContain(".filter-pill[data-filter='attention']")
-    expect(stylesSource).toContain(".rail-section[data-rail-section='inbox']")
   })
 })

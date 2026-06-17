@@ -39,13 +39,74 @@ function valuesMatchSearch(values, normalizedQuery) {
   })
 }
 
-/** Returns true if the project's ID or path matches the search query. */
-function projectMatchesSearch(project, normalizedQuery) {
-  return valuesMatchSearch([project.id, project.path], normalizedQuery)
+function normalizeReviewSearchToken(value) {
+  var token = String(value || '')
+    .toLowerCase()
+    .replace(/^is:/, '')
+  if (token === 'drift') return 'branch-drift'
+  if (token === 'missing') return 'path-missing'
+  if (token === 'context') return 'high-context'
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    if (REVIEW_BUCKETS[i].id === token) return token
+  }
+  return null
 }
 
-/** Returns true if any searchable field of the session matches the query. */
-function sessionMatchesSearch(session, normalizedQuery) {
+function getReviewBucket(bucketId) {
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    if (REVIEW_BUCKETS[i].id === bucketId) return REVIEW_BUCKETS[i]
+  }
+  return null
+}
+
+function parseSearchQuery(query) {
+  var reviewBucketIds = []
+  var textParts = []
+  var parts = String(query || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i]
+    if (part.toLowerCase().startsWith('is:')) {
+      var bucketId = normalizeReviewSearchToken(part)
+      if (bucketId) {
+        reviewBucketIds.push(bucketId)
+        continue
+      }
+    }
+    textParts.push(part)
+  }
+
+  return {
+    raw: String(query || '').trim(),
+    reviewBucketIds: reviewBucketIds,
+    text: textParts.join(' ').toLowerCase(),
+  }
+}
+
+function searchSpecHasFilters(searchSpec) {
+  return !!(searchSpec.raw || searchSpec.text || searchSpec.reviewBucketIds.length > 0)
+}
+
+function sessionMatchesReviewBuckets(session, reviewBucketIds) {
+  if (reviewBucketIds.length === 0) return true
+  if (session.signals.archived) return false
+
+  return reviewBucketIds.every(function (bucketId) {
+    var bucket = getReviewBucket(bucketId)
+    return bucket ? bucket.test(session) : true
+  })
+}
+
+/** Returns true if the project's ID or path matches the textual search query. */
+function projectMatchesSearch(project, searchSpec) {
+  return !!searchSpec.text && valuesMatchSearch([project.id, project.path], searchSpec.text)
+}
+
+/** Returns true if any searchable field of the session matches the textual search query. */
+function sessionMatchesSearchText(session, normalizedQuery) {
   return valuesMatchSearch(
     [
       session.id,
@@ -86,9 +147,6 @@ function deriveVisibleSessionsForProject(project) {
   if (focusSessions === undefined || focusSessions === null) {
     // Project is in focus with no session-level restriction — apply pill filter normally.
     sessions = sessionsMatchingFilter(project, selectedFilter)
-  } else if (focusFilter && focusFilter.kind === 'inbox') {
-    // Review bucket focus overrides the pill filter — show bucket sessions directly.
-    sessions = focusSessions
   } else {
     // Tag / specific-session stack focus — intersect with pill filter.
     var pilledIds = new Set(
@@ -101,11 +159,16 @@ function deriveVisibleSessionsForProject(project) {
     })
   }
 
-  const normalizedQuery = searchQuery.trim().toLowerCase()
-  if (!normalizedQuery || projectMatchesSearch(project, normalizedQuery)) return sessions
+  const searchSpec = parseSearchQuery(searchQuery)
+  if (!searchSpecHasFilters(searchSpec)) return sessions
+
+  const projectTextMatches = projectMatchesSearch(project, searchSpec)
+  if (projectTextMatches && searchSpec.reviewBucketIds.length === 0) return sessions
 
   return sessions.filter(function (session) {
-    return sessionMatchesSearch(session, normalizedQuery)
+    if (!sessionMatchesReviewBuckets(session, searchSpec.reviewBucketIds)) return false
+    if (!searchSpec.text || projectTextMatches) return true
+    return sessionMatchesSearchText(session, searchSpec.text)
   })
 }
 

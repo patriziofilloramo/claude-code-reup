@@ -11,6 +11,61 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
 }
 
+let floatingTooltip = null
+
+function getFloatingTooltip() {
+  if (floatingTooltip) return floatingTooltip
+  floatingTooltip = document.createElement('div')
+  floatingTooltip.className = 'ui-tooltip'
+  document.body.appendChild(floatingTooltip)
+  return floatingTooltip
+}
+
+function hideFloatingTooltip() {
+  if (!floatingTooltip) return
+  floatingTooltip.classList.remove('open')
+}
+
+function showFloatingTooltip(target) {
+  const text = target && target.getAttribute('data-tooltip')
+  if (!text) return
+
+  const tooltip = getFloatingTooltip()
+  tooltip.textContent = text
+  tooltip.classList.add('open')
+
+  const rect = target.getBoundingClientRect()
+  const tooltipRect = tooltip.getBoundingClientRect()
+  const gap = 8
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - tooltipRect.width - 8))
+  const below = rect.bottom + gap
+  const top =
+    below + tooltipRect.height <= window.innerHeight - 8
+      ? below
+      : Math.max(8, rect.top - tooltipRect.height - gap)
+
+  tooltip.style.left = left + 'px'
+  tooltip.style.top = top + 'px'
+}
+
+document.addEventListener('pointerover', function (event) {
+  const target = event.target.closest && event.target.closest('[data-tooltip]')
+  if (target) showFloatingTooltip(target)
+})
+
+document.addEventListener('pointerout', function (event) {
+  if (event.target.closest && event.target.closest('[data-tooltip]')) hideFloatingTooltip()
+})
+
+document.addEventListener('focusin', function (event) {
+  const target = event.target.closest && event.target.closest('[data-tooltip]')
+  if (target) showFloatingTooltip(target)
+})
+
+document.addEventListener('focusout', hideFloatingTooltip)
+window.addEventListener('scroll', hideFloatingTooltip, true)
+window.addEventListener('resize', hideFloatingTooltip)
+
 /**
  * Returns a human-readable relative time string, e.g. "just now", "3h ago", "2d ago".
  * Used in session row timestamps and inspector panels where full precision is less useful.

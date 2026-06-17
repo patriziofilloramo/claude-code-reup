@@ -131,6 +131,67 @@ function buildEmptySessionListHtml(visibleSessions) {
   return '<div class="empty">' + message + archiveHint + '</div>'
 }
 
+function countReviewBucketSessionsForProject(project, bucket) {
+  if (!project) return 0
+  var count = 0
+  for (var i = 0; i < project.sessions.length; i++) {
+    var session = project.sessions[i]
+    if (!session.signals.archived && bucket.test(session)) count++
+  }
+  return count
+}
+
+function applyReviewSearchToken(token) {
+  if (deepSearchActive) exitInlineDeepSearch()
+  openSearch()
+  searchQuery = token
+  selectedFilter = 'all'
+  elements.searchInput.value = token
+  elements.searchInput.focus()
+  synchronizeSelectedProjectWithView()
+  renderProjects()
+  renderSessions()
+}
+
+function renderReviewSignals() {
+  if (!elements.reviewSignals) return
+  if (!selectedProject || deepSearchActive) {
+    elements.reviewSignals.style.display = 'none'
+    elements.reviewSignals.innerHTML = ''
+    return
+  }
+
+  var html = ''
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    var bucket = REVIEW_BUCKETS[i]
+    var count = countReviewBucketSessionsForProject(selectedProject, bucket)
+    if (count === 0) continue
+
+    var label = STRINGS[bucket.labelKey] || bucket.id
+    var countLabel = count === 1 ? '1 session' : count + ' sessions'
+    var tooltip = fmt(STRINGS.reviewSignalTooltip, {
+      count: countLabel,
+      label: label,
+      token: bucket.searchToken,
+    })
+    html +=
+      '<button class="review-signal ' +
+      bucket.cssClass +
+      '" data-review-token="' +
+      escapeHtml(bucket.searchToken) +
+      '" data-tooltip="' +
+      escapeHtml(tooltip) +
+      '" aria-label="' +
+      escapeHtml(tooltip) +
+      '">' +
+      bucket.icon +
+      '</button>'
+  }
+
+  elements.reviewSignals.innerHTML = html
+  elements.reviewSignals.style.display = html ? 'flex' : 'none'
+}
+
 /** Re-renders the session list, panel header, filter bar, and inspector from current state. */
 function renderSessions() {
   const visibleSessions = deriveVisibleSessions()
@@ -152,6 +213,7 @@ function renderSessions() {
       : 'Select a project'
     elements.sessionCount.textContent = selectedProject ? visibleSessions.length + ' sessions' : ''
   }
+  renderReviewSignals()
   renderFilterBar()
   renderInspector(visibleSessions)
 
@@ -165,6 +227,15 @@ function renderSessions() {
       input.select()
     }
   }
+}
+
+if (elements.reviewSignals) {
+  elements.reviewSignals.addEventListener('click', function (event) {
+    var button = event.target.closest('.review-signal')
+    if (!button) return
+    var token = button.dataset.reviewToken
+    if (token) applyReviewSearchToken(token)
+  })
 }
 
 /** Persists a session alias to the server, then refreshes and shows a toast. Clears alias when empty. */

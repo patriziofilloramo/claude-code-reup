@@ -35,7 +35,7 @@ const SEGMENTS = [
   '14-search.js', // search bar, deep-search mode, keyboard shortcuts
   '15-data.js', // data refresh, SSE live updates, bootstrap
   '16-theme.js', // theme cycling, persistence, Matrix rain easter egg
-  '17-rail.js', // left rail: Inbox, Stacks, Groups, focus filter
+  '17-rail.js', // left rail: Stacks, Groups, focus filter
   '18-tag-picker.js', // tag picker dialog (t key)
   '19-org-picker.js', // group/stack assignment picker
   '20-org-manager.js', // stack/group item manager dialog

@@ -19,8 +19,8 @@
           <span class="search-lbl">/</span>
           <input
             id="search-input"
-            placeholder="project / session — tab: search all context"
-            title="Search projects and sessions — Tab to search inside full transcripts"
+            placeholder="project / session / is:attention — tab: search all context"
+            title="Search projects and sessions. Try is:attention, is:drift, is:high-context. Tab searches full transcripts."
             autocomplete="off"
             spellcheck="false"
           />
@@ -55,6 +55,12 @@
           <div class="right-hdr">
             <button class="back-btn" id="back-btn" aria-label="Back to projects">←</button>
             <span class="right-hdr-title" id="right-title">Select a project</span>
+            <div
+              class="review-signals"
+              id="review-signals"
+              aria-label="Review signals"
+              style="display: none"
+            ></div>
             <span class="right-cnt" id="right-cnt"></span>
             <a
               class="md-tag"

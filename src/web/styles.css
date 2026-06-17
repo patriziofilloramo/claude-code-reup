@@ -392,24 +392,6 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
-.rail-info:hover::after {
-  background: var(--surface-deep);
-  border: 1px solid var(--dim);
-  border-radius: 4px;
-  box-shadow: var(--shadow-dlg);
-  color: var(--text);
-  content: attr(data-tooltip);
-  font-size: 11px;
-  left: -6px;
-  letter-spacing: 0;
-  line-height: 1.4;
-  padding: 8px 10px;
-  position: absolute;
-  text-transform: none;
-  top: 18px;
-  width: 230px;
-  z-index: 30;
-}
 .rail-section-count {
   color: var(--muted2);
   flex-shrink: 0;
@@ -587,6 +569,7 @@ body {
   color: var(--text);
   flex: 1;
   font-size: 12px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -594,6 +577,58 @@ body {
 .right-cnt {
   color: var(--muted);
   flex-shrink: 0;
+}
+.review-signals {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+  max-width: 132px;
+  overflow: hidden;
+}
+.review-signal {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--muted2);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-family: var(--font);
+  font-size: 11px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 20px;
+}
+.review-signal:hover,
+.review-signal:focus {
+  background: var(--surface-chip);
+  border-color: rgb(var(--accent-rgb) / 0.22);
+  outline: none;
+}
+.review-signal.bucket--active {
+  color: #4caf50;
+}
+.review-signal.bucket--attention {
+  color: #f4a261;
+}
+.review-signal.bucket--drift {
+  color: #5fb3f7;
+}
+.review-signal.bucket--missing {
+  color: #e76f51;
+}
+.review-signal.bucket--ctx {
+  color: #a78bfa;
+}
+.review-signal.bucket--expiring {
+  color: #ffd166;
+}
+.review-signal.bucket--recent {
+  color: var(--muted2);
 }
 
 .md-tag {
@@ -1793,6 +1828,27 @@ body {
   border-color: rgb(var(--accent-rgb) / 0.3);
   color: var(--accent);
 }
+.ui-tooltip {
+  background: var(--surface-deep);
+  border: 1px solid var(--dim);
+  border-radius: 4px;
+  box-shadow: var(--shadow-dlg);
+  color: var(--text);
+  display: none;
+  font-size: 11px;
+  left: 0;
+  line-height: 1.4;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 8px 10px;
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  white-space: normal;
+  z-index: 1000;
+}
+.ui-tooltip.open {
+  display: block;
+}
 
 /* ── Cloud / shared storage indicator ───────────────────────────────────── */
 
@@ -2383,10 +2439,6 @@ body {
 }
 
 @media (max-width: 1199px) {
-  .rail-section[data-rail-section='inbox'] {
-    display: none;
-  }
-
   .filter-pill[data-filter='attention'] {
     display: inline-flex;
   }

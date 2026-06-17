@@ -207,10 +207,6 @@ const STRINGS = {
 
   // ── Empty states ──────────────────────────────────────────────────────────
   // ── Left rail ─────────────────────────────────────────────────────────────
-  railReview: 'REVIEW',
-  railReviewEmpty: 'No review signals.',
-  railReviewTooltip:
-    'Cross-project review signals. Selecting one focuses the project and session lists.',
   railStacks: 'STACKS',
   railStacksTooltip:
     'Temporary work sets. A stack can collect sessions or whole projects you want to revisit together.',
@@ -237,6 +233,7 @@ const STRINGS = {
   inboxBucketHighContext: 'High context',
   inboxBucketExpiring: 'Expiring soon',
   inboxBucketRecent: 'Recently touched',
+  reviewSignalTooltip: '{label}: {count}. Click to search {token}.',
 
   // Focus bar
   focusBar: 'Focus: {name}',
@@ -345,6 +342,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'active',
     labelKey: 'inboxBucketActive',
+    searchToken: 'is:active',
     icon: '●',
     cssClass: 'bucket--active',
     test: function (session) {
@@ -354,6 +352,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'attention',
     labelKey: 'inboxBucketAttention',
+    searchToken: 'is:attention',
     icon: '!',
     cssClass: 'bucket--attention',
     test: function (session) {
@@ -363,6 +362,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'branch-drift',
     labelKey: 'inboxBucketBranchDrift',
+    searchToken: 'is:branch-drift',
     icon: '⎇',
     cssClass: 'bucket--drift',
     test: function (session) {
@@ -376,6 +376,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'path-missing',
     labelKey: 'inboxBucketPathMissing',
+    searchToken: 'is:path-missing',
     icon: '⊗',
     cssClass: 'bucket--missing',
     test: function (session) {
@@ -385,6 +386,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'high-context',
     labelKey: 'inboxBucketHighContext',
+    searchToken: 'is:high-context',
     icon: '◉',
     cssClass: 'bucket--ctx',
     test: function (session) {
@@ -394,6 +396,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'expiring',
     labelKey: 'inboxBucketExpiring',
+    searchToken: 'is:expiring',
     icon: '⏱',
     cssClass: 'bucket--expiring',
     test: function (session) {
@@ -403,6 +406,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'recent',
     labelKey: 'inboxBucketRecent',
+    searchToken: 'is:recent',
     icon: '⊙',
     cssClass: 'bucket--recent',
     test: function (session) {
@@ -439,8 +443,7 @@ let syncOverview = null
 // Org data fetched from /api/org; null before first load.
 let orgData = null
 // Active focus filter — narrows both the project list and session list.
-// Shape: null | { kind: 'inbox', bucket: string }
-//             | { kind: 'stack', id: string, name: string }
+// Shape: null | { kind: 'stack', id: string, name: string }
 //             | { kind: 'group', id: string, name: string }
 //             | { kind: 'tag', tag: string }
 let focusFilter = null
@@ -475,6 +478,7 @@ const elements = {
   resumeDialogMessage: elementById('dlg-msg'),
   resumeDialogName: elementById('dlg-name'),
   resumeOverlay: elementById('resume-overlay'),
+  reviewSignals: elementById('review-signals'),
   searchClearButton: elementById('search-clear'),
   searchInput: elementById('search-input'),
   searchWrapper: elementById('search-wrap'),
@@ -529,6 +533,61 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
+
+let floatingTooltip = null
+
+function getFloatingTooltip() {
+  if (floatingTooltip) return floatingTooltip
+  floatingTooltip = document.createElement('div')
+  floatingTooltip.className = 'ui-tooltip'
+  document.body.appendChild(floatingTooltip)
+  return floatingTooltip
+}
+
+function hideFloatingTooltip() {
+  if (!floatingTooltip) return
+  floatingTooltip.classList.remove('open')
+}
+
+function showFloatingTooltip(target) {
+  const text = target && target.getAttribute('data-tooltip')
+  if (!text) return
+
+  const tooltip = getFloatingTooltip()
+  tooltip.textContent = text
+  tooltip.classList.add('open')
+
+  const rect = target.getBoundingClientRect()
+  const tooltipRect = tooltip.getBoundingClientRect()
+  const gap = 8
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - tooltipRect.width - 8))
+  const below = rect.bottom + gap
+  const top =
+    below + tooltipRect.height <= window.innerHeight - 8
+      ? below
+      : Math.max(8, rect.top - tooltipRect.height - gap)
+
+  tooltip.style.left = left + 'px'
+  tooltip.style.top = top + 'px'
+}
+
+document.addEventListener('pointerover', function (event) {
+  const target = event.target.closest && event.target.closest('[data-tooltip]')
+  if (target) showFloatingTooltip(target)
+})
+
+document.addEventListener('pointerout', function (event) {
+  if (event.target.closest && event.target.closest('[data-tooltip]')) hideFloatingTooltip()
+})
+
+document.addEventListener('focusin', function (event) {
+  const target = event.target.closest && event.target.closest('[data-tooltip]')
+  if (target) showFloatingTooltip(target)
+})
+
+document.addEventListener('focusout', hideFloatingTooltip)
+window.addEventListener('scroll', hideFloatingTooltip, true)
+window.addEventListener('resize', hideFloatingTooltip)
 
 /**
  * Returns a human-readable relative time string, e.g. "just now", "3h ago", "2d ago".
@@ -935,13 +994,12 @@ function deriveVisibleProjects() {
     })
   }
 
-  const normalizedQuery = searchQuery.trim().toLowerCase()
-  const visibleProjects = normalizedQuery
+  const searchSpec = parseSearchQuery(searchQuery)
+  const visibleProjects = searchSpecHasFilters(searchSpec)
     ? baseProjects.filter(function (project) {
-        return (
-          projectMatchesSearch(project, normalizedQuery) ||
-          deriveVisibleSessionsForProject(project).length > 0
-        )
+        const projectTextMatches = projectMatchesSearch(project, searchSpec)
+        if (projectTextMatches && searchSpec.reviewBucketIds.length === 0) return true
+        return deriveVisibleSessionsForProject(project).length > 0
       })
     : baseProjects
   if (selectedProjectSort !== 'name') return visibleProjects
@@ -1036,13 +1094,74 @@ function valuesMatchSearch(values, normalizedQuery) {
   })
 }
 
-/** Returns true if the project's ID or path matches the search query. */
-function projectMatchesSearch(project, normalizedQuery) {
-  return valuesMatchSearch([project.id, project.path], normalizedQuery)
+function normalizeReviewSearchToken(value) {
+  var token = String(value || '')
+    .toLowerCase()
+    .replace(/^is:/, '')
+  if (token === 'drift') return 'branch-drift'
+  if (token === 'missing') return 'path-missing'
+  if (token === 'context') return 'high-context'
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    if (REVIEW_BUCKETS[i].id === token) return token
+  }
+  return null
 }
 
-/** Returns true if any searchable field of the session matches the query. */
-function sessionMatchesSearch(session, normalizedQuery) {
+function getReviewBucket(bucketId) {
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    if (REVIEW_BUCKETS[i].id === bucketId) return REVIEW_BUCKETS[i]
+  }
+  return null
+}
+
+function parseSearchQuery(query) {
+  var reviewBucketIds = []
+  var textParts = []
+  var parts = String(query || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i]
+    if (part.toLowerCase().startsWith('is:')) {
+      var bucketId = normalizeReviewSearchToken(part)
+      if (bucketId) {
+        reviewBucketIds.push(bucketId)
+        continue
+      }
+    }
+    textParts.push(part)
+  }
+
+  return {
+    raw: String(query || '').trim(),
+    reviewBucketIds: reviewBucketIds,
+    text: textParts.join(' ').toLowerCase(),
+  }
+}
+
+function searchSpecHasFilters(searchSpec) {
+  return !!(searchSpec.raw || searchSpec.text || searchSpec.reviewBucketIds.length > 0)
+}
+
+function sessionMatchesReviewBuckets(session, reviewBucketIds) {
+  if (reviewBucketIds.length === 0) return true
+  if (session.signals.archived) return false
+
+  return reviewBucketIds.every(function (bucketId) {
+    var bucket = getReviewBucket(bucketId)
+    return bucket ? bucket.test(session) : true
+  })
+}
+
+/** Returns true if the project's ID or path matches the textual search query. */
+function projectMatchesSearch(project, searchSpec) {
+  return !!searchSpec.text && valuesMatchSearch([project.id, project.path], searchSpec.text)
+}
+
+/** Returns true if any searchable field of the session matches the textual search query. */
+function sessionMatchesSearchText(session, normalizedQuery) {
   return valuesMatchSearch(
     [
       session.id,
@@ -1083,9 +1202,6 @@ function deriveVisibleSessionsForProject(project) {
   if (focusSessions === undefined || focusSessions === null) {
     // Project is in focus with no session-level restriction — apply pill filter normally.
     sessions = sessionsMatchingFilter(project, selectedFilter)
-  } else if (focusFilter && focusFilter.kind === 'inbox') {
-    // Review bucket focus overrides the pill filter — show bucket sessions directly.
-    sessions = focusSessions
   } else {
     // Tag / specific-session stack focus — intersect with pill filter.
     var pilledIds = new Set(
@@ -1098,11 +1214,16 @@ function deriveVisibleSessionsForProject(project) {
     })
   }
 
-  const normalizedQuery = searchQuery.trim().toLowerCase()
-  if (!normalizedQuery || projectMatchesSearch(project, normalizedQuery)) return sessions
+  const searchSpec = parseSearchQuery(searchQuery)
+  if (!searchSpecHasFilters(searchSpec)) return sessions
+
+  const projectTextMatches = projectMatchesSearch(project, searchSpec)
+  if (projectTextMatches && searchSpec.reviewBucketIds.length === 0) return sessions
 
   return sessions.filter(function (session) {
-    return sessionMatchesSearch(session, normalizedQuery)
+    if (!sessionMatchesReviewBuckets(session, searchSpec.reviewBucketIds)) return false
+    if (!searchSpec.text || projectTextMatches) return true
+    return sessionMatchesSearchText(session, searchSpec.text)
   })
 }
 
@@ -2107,6 +2228,67 @@ function buildEmptySessionListHtml(visibleSessions) {
   return '<div class="empty">' + message + archiveHint + '</div>'
 }
 
+function countReviewBucketSessionsForProject(project, bucket) {
+  if (!project) return 0
+  var count = 0
+  for (var i = 0; i < project.sessions.length; i++) {
+    var session = project.sessions[i]
+    if (!session.signals.archived && bucket.test(session)) count++
+  }
+  return count
+}
+
+function applyReviewSearchToken(token) {
+  if (deepSearchActive) exitInlineDeepSearch()
+  openSearch()
+  searchQuery = token
+  selectedFilter = 'all'
+  elements.searchInput.value = token
+  elements.searchInput.focus()
+  synchronizeSelectedProjectWithView()
+  renderProjects()
+  renderSessions()
+}
+
+function renderReviewSignals() {
+  if (!elements.reviewSignals) return
+  if (!selectedProject || deepSearchActive) {
+    elements.reviewSignals.style.display = 'none'
+    elements.reviewSignals.innerHTML = ''
+    return
+  }
+
+  var html = ''
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    var bucket = REVIEW_BUCKETS[i]
+    var count = countReviewBucketSessionsForProject(selectedProject, bucket)
+    if (count === 0) continue
+
+    var label = STRINGS[bucket.labelKey] || bucket.id
+    var countLabel = count === 1 ? '1 session' : count + ' sessions'
+    var tooltip = fmt(STRINGS.reviewSignalTooltip, {
+      count: countLabel,
+      label: label,
+      token: bucket.searchToken,
+    })
+    html +=
+      '<button class="review-signal ' +
+      bucket.cssClass +
+      '" data-review-token="' +
+      escapeHtml(bucket.searchToken) +
+      '" data-tooltip="' +
+      escapeHtml(tooltip) +
+      '" aria-label="' +
+      escapeHtml(tooltip) +
+      '">' +
+      bucket.icon +
+      '</button>'
+  }
+
+  elements.reviewSignals.innerHTML = html
+  elements.reviewSignals.style.display = html ? 'flex' : 'none'
+}
+
 /** Re-renders the session list, panel header, filter bar, and inspector from current state. */
 function renderSessions() {
   const visibleSessions = deriveVisibleSessions()
@@ -2128,6 +2310,7 @@ function renderSessions() {
       : 'Select a project'
     elements.sessionCount.textContent = selectedProject ? visibleSessions.length + ' sessions' : ''
   }
+  renderReviewSignals()
   renderFilterBar()
   renderInspector(visibleSessions)
 
@@ -2141,6 +2324,15 @@ function renderSessions() {
       input.select()
     }
   }
+}
+
+if (elements.reviewSignals) {
+  elements.reviewSignals.addEventListener('click', function (event) {
+    var button = event.target.closest('.review-signal')
+    if (!button) return
+    var token = button.dataset.reviewToken
+    if (token) applyReviewSearchToken(token)
+  })
 }
 
 /** Persists a session alias to the server, then refreshes and shows a toast. Clears alias when empty. */
@@ -3585,35 +3777,21 @@ if (logoEl) {
 // initialise button label from current data-theme (set server-side)
 applyTheme(getActiveTheme())
 // ---------------------------------------------------------------------------
-// Left rail: Review, Stacks, Groups + Focus bar
+// Left rail: Stacks, Groups + Focus bar
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Focus filter — session scope resolver
+// Focus filter - session scope resolver
 // Called by 05-projects.js and 06-sessions.js (hoisted function declaration).
 //
 // Returns:
-//   undefined  — project is NOT in the current focus (exclude from list)
-//   null       — project IS in focus, no session-level restriction
-//   Session[]  — project IS in focus, show only these sessions
+//   undefined  - project is NOT in the current focus (exclude from list)
+//   null       - project IS in focus, no session-level restriction
+//   Session[]  - project IS in focus, show only these sessions
 // ---------------------------------------------------------------------------
 
 function getSessionsMatchingFocus(project) {
   if (!focusFilter) return null
-
-  if (focusFilter.kind === 'inbox') {
-    var bucket = null
-    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
-      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
-        bucket = REVIEW_BUCKETS[bi]
-        break
-      }
-    }
-    if (!bucket) return undefined
-    return project.sessions.filter(function (s) {
-      return !s.signals.archived && bucket.test(s)
-    })
-  }
 
   if (focusFilter.kind === 'stack') {
     if (!orgData) return undefined
@@ -3675,23 +3853,7 @@ function toggleRailSectionCollapsed(sectionId) {
 }
 
 // ---------------------------------------------------------------------------
-// Review bucket count (non-archived sessions matching a bucket)
-// ---------------------------------------------------------------------------
-
-function countBucketSessions(bucket) {
-  var count = 0
-  for (var pi = 0; pi < projects.length; pi++) {
-    var proj = projects[pi]
-    for (var si = 0; si < proj.sessions.length; si++) {
-      var sess = proj.sessions[si]
-      if (!sess.signals.archived && bucket.test(sess)) count++
-    }
-  }
-  return count
-}
-
-// ---------------------------------------------------------------------------
-// Stack session count (unique non-archived sessions referenced by stack items)
+// Rail counts
 // ---------------------------------------------------------------------------
 
 function countStackSessionsForRail(stack) {
@@ -3727,6 +3889,16 @@ function countStackSessionsForRail(stack) {
   return seenKeys.size
 }
 
+function countGroupProjectsForRail(groupId) {
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var count = 0
+  var keys = Object.keys(assignments)
+  for (var i = 0; i < keys.length; i++) {
+    if (assignments[keys[i]] === groupId) count++
+  }
+  return count
+}
+
 // ---------------------------------------------------------------------------
 // Rail HTML builders
 // ---------------------------------------------------------------------------
@@ -3734,7 +3906,7 @@ function countStackSessionsForRail(stack) {
 function buildRailInfoHtml(tooltip) {
   if (!tooltip) return ''
   return (
-    '<span class="rail-info" data-tooltip="' +
+    '<span class="rail-info" tabindex="0" data-tooltip="' +
     escapeHtml(tooltip) +
     '" aria-label="' +
     escapeHtml(tooltip) +
@@ -3770,51 +3942,20 @@ function buildRailSectionHtml(sectionId, title, icon, bodyHtml, collapsedCount, 
   )
 }
 
-function buildReviewSectionHtml() {
-  var rows = ''
-  for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
-    var bucket = REVIEW_BUCKETS[bi]
-    var count = countBucketSessions(bucket)
-    if (count === 0) continue
-    var isActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket.id
-    rows +=
-      '<div class="rail-item ' +
-      bucket.cssClass +
-      (isActive ? ' active' : '') +
-      '" data-rail-action="inbox-bucket" data-bucket="' +
-      bucket.id +
-      '">' +
-      '<span class="rail-item-icon">' +
-      bucket.icon +
-      '</span>' +
-      '<span class="rail-item-label">' +
-      escapeHtml(STRINGS[bucket.labelKey] || bucket.labelKey) +
-      '</span>' +
-      '<span class="rail-item-cnt">' +
-      count +
-      '</span>' +
-      '</div>'
-  }
-  var body = rows || '<div class="rail-empty">' + STRINGS.railReviewEmpty + '</div>'
-  return buildRailSectionHtml(
-    'inbox',
-    STRINGS.railReview,
-    '',
-    body,
-    null,
-    STRINGS.railReviewTooltip
-  )
-}
-
 function buildStacksSectionHtml() {
   var stacks = (orgData && orgData.stacks) || []
-  if (stacks.length === 0) return ''
+  var visibleStacks = []
+
+  for (var i = 0; i < stacks.length; i++) {
+    var count = countStackSessionsForRail(stacks[i])
+    if (count > 0) visibleStacks.push({ count: count, stack: stacks[i] })
+  }
+  if (visibleStacks.length === 0) return ''
 
   var rows = ''
-  for (var i = 0; i < stacks.length; i++) {
-    var stack = stacks[i]
+  for (var vi = 0; vi < visibleStacks.length; vi++) {
+    var stack = visibleStacks[vi].stack
     var isActive = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stack.id
-    var count = countStackSessionsForRail(stack)
     rows +=
       '<div class="rail-item' +
       (isActive ? ' active' : '') +
@@ -3827,7 +3968,7 @@ function buildStacksSectionHtml() {
       escapeHtml(stack.name) +
       '</span>' +
       '<span class="rail-item-cnt">' +
-      count +
+      visibleStacks[vi].count +
       '</span>' +
       '</div>'
   }
@@ -3836,25 +3977,25 @@ function buildStacksSectionHtml() {
     STRINGS.railStacks,
     '⬡',
     rows,
-    stacks.length,
+    visibleStacks.length,
     STRINGS.railStacksTooltip
   )
 }
 
 function buildGroupsSectionHtml() {
   var groups = (orgData && orgData.groups) || []
-  if (groups.length === 0) return ''
+  var visibleGroups = []
 
-  var assignments = (orgData && orgData.projectGroupAssignments) || {}
-  var rows = ''
   for (var i = 0; i < groups.length; i++) {
-    var group = groups[i]
+    var count = countGroupProjectsForRail(groups[i].id)
+    if (count > 0) visibleGroups.push({ count: count, group: groups[i] })
+  }
+  if (visibleGroups.length === 0) return ''
+
+  var rows = ''
+  for (var vi = 0; vi < visibleGroups.length; vi++) {
+    var group = visibleGroups[vi].group
     var isActive = focusFilter && focusFilter.kind === 'group' && focusFilter.id === group.id
-    var count = 0
-    var keys = Object.keys(assignments)
-    for (var k = 0; k < keys.length; k++) {
-      if (assignments[keys[k]] === group.id) count++
-    }
     rows +=
       '<div class="rail-item' +
       (isActive ? ' active' : '') +
@@ -3867,7 +4008,7 @@ function buildGroupsSectionHtml() {
       escapeHtml(group.name) +
       '</span>' +
       '<span class="rail-item-cnt">' +
-      count +
+      visibleGroups[vi].count +
       '</span>' +
       '</div>'
   }
@@ -3876,7 +4017,7 @@ function buildGroupsSectionHtml() {
     STRINGS.railGroups,
     '⊞',
     rows,
-    groups.length,
+    visibleGroups.length,
     STRINGS.railGroupsTooltip
   )
 }
@@ -3884,8 +4025,9 @@ function buildGroupsSectionHtml() {
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  elements.rail.innerHTML =
-    buildReviewSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html = buildStacksSectionHtml() + buildGroupsSectionHtml()
+  elements.rail.innerHTML = html
+  elements.rail.style.display = html ? '' : 'none'
 }
 
 // ---------------------------------------------------------------------------
@@ -3899,14 +4041,7 @@ function renderFocusBar() {
     return
   }
   var name = ''
-  if (focusFilter.kind === 'inbox') {
-    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
-      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
-        name = STRINGS[REVIEW_BUCKETS[bi].labelKey] || focusFilter.bucket
-        break
-      }
-    }
-  } else if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
+  if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
     name = focusFilter.name
   } else if (focusFilter.kind === 'tag') {
     name = '#' + focusFilter.tag
@@ -3939,7 +4074,6 @@ if (elements.focusClearBtn) {
 
 if (elements.rail) {
   elements.rail.addEventListener('click', function (event) {
-    // Section collapse toggle
     var toggleTarget = event.target.closest('[data-rail-toggle]')
     if (toggleTarget) {
       if (event.target.closest('.rail-info')) return
@@ -3948,38 +4082,28 @@ if (elements.rail) {
       return
     }
 
-    // Rail item — set or clear focus filter
     var item = event.target.closest('.rail-item')
-    if (item) {
-      var action = item.dataset.railAction
+    if (!item) return
 
-      if (action === 'inbox-bucket') {
-        var bucket = item.dataset.bucket
-        var wasActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket
-        focusFilter = wasActive ? null : { kind: 'inbox', bucket: bucket }
-      } else if (action === 'stack') {
-        var stackId = item.dataset.stackId
-        var stackName = item.dataset.stackName
-        var wasActiveStack =
-          focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId
-        focusFilter = wasActiveStack ? null : { kind: 'stack', id: stackId, name: stackName }
-      } else if (action === 'group') {
-        var groupId = item.dataset.groupId
-        var groupName = item.dataset.groupName
-        var wasActiveGroup =
-          focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId
-        focusFilter = wasActiveGroup ? null : { kind: 'group', id: groupId, name: groupName }
-      }
-
-      renderRail()
-      renderFocusBar()
-      renderProjects()
-      renderSessions()
-      return
+    var action = item.dataset.railAction
+    if (action === 'stack') {
+      var stackId = item.dataset.stackId
+      var stackName = item.dataset.stackName
+      var wasActiveStack = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId
+      focusFilter = wasActiveStack ? null : { kind: 'stack', id: stackId, name: stackName }
+    } else if (action === 'group') {
+      var groupId = item.dataset.groupId
+      var groupName = item.dataset.groupName
+      var wasActiveGroup = focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId
+      focusFilter = wasActiveGroup ? null : { kind: 'group', id: groupId, name: groupName }
     }
+
+    renderRail()
+    renderFocusBar()
+    renderProjects()
+    renderSessions()
   })
 
-  // Right-click on stack or group items — open delete / manage menu
   elements.rail.addEventListener('contextmenu', function (event) {
     event.preventDefault()
     var item = event.target.closest('.rail-item')

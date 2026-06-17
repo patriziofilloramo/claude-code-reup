@@ -198,10 +198,6 @@ const STRINGS = {
 
   // ── Empty states ──────────────────────────────────────────────────────────
   // ── Left rail ─────────────────────────────────────────────────────────────
-  railReview: 'REVIEW',
-  railReviewEmpty: 'No review signals.',
-  railReviewTooltip:
-    'Cross-project review signals. Selecting one focuses the project and session lists.',
   railStacks: 'STACKS',
   railStacksTooltip:
     'Temporary work sets. A stack can collect sessions or whole projects you want to revisit together.',
@@ -228,6 +224,7 @@ const STRINGS = {
   inboxBucketHighContext: 'High context',
   inboxBucketExpiring: 'Expiring soon',
   inboxBucketRecent: 'Recently touched',
+  reviewSignalTooltip: '{label}: {count}. Click to search {token}.',
 
   // Focus bar
   focusBar: 'Focus: {name}',

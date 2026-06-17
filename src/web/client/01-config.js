@@ -40,6 +40,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'active',
     labelKey: 'inboxBucketActive',
+    searchToken: 'is:active',
     icon: '●',
     cssClass: 'bucket--active',
     test: function (session) {
@@ -49,6 +50,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'attention',
     labelKey: 'inboxBucketAttention',
+    searchToken: 'is:attention',
     icon: '!',
     cssClass: 'bucket--attention',
     test: function (session) {
@@ -58,6 +60,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'branch-drift',
     labelKey: 'inboxBucketBranchDrift',
+    searchToken: 'is:branch-drift',
     icon: '⎇',
     cssClass: 'bucket--drift',
     test: function (session) {
@@ -71,6 +74,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'path-missing',
     labelKey: 'inboxBucketPathMissing',
+    searchToken: 'is:path-missing',
     icon: '⊗',
     cssClass: 'bucket--missing',
     test: function (session) {
@@ -80,6 +84,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'high-context',
     labelKey: 'inboxBucketHighContext',
+    searchToken: 'is:high-context',
     icon: '◉',
     cssClass: 'bucket--ctx',
     test: function (session) {
@@ -89,6 +94,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'expiring',
     labelKey: 'inboxBucketExpiring',
+    searchToken: 'is:expiring',
     icon: '⏱',
     cssClass: 'bucket--expiring',
     test: function (session) {
@@ -98,6 +104,7 @@ const REVIEW_BUCKETS = [
   {
     id: 'recent',
     labelKey: 'inboxBucketRecent',
+    searchToken: 'is:recent',
     icon: '⊙',
     cssClass: 'bucket--recent',
     test: function (session) {

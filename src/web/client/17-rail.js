@@ -1,33 +1,19 @@
 // ---------------------------------------------------------------------------
-// Left rail: Review, Stacks, Groups + Focus bar
+// Left rail: Stacks, Groups + Focus bar
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Focus filter — session scope resolver
+// Focus filter - session scope resolver
 // Called by 05-projects.js and 06-sessions.js (hoisted function declaration).
 //
 // Returns:
-//   undefined  — project is NOT in the current focus (exclude from list)
-//   null       — project IS in focus, no session-level restriction
-//   Session[]  — project IS in focus, show only these sessions
+//   undefined  - project is NOT in the current focus (exclude from list)
+//   null       - project IS in focus, no session-level restriction
+//   Session[]  - project IS in focus, show only these sessions
 // ---------------------------------------------------------------------------
 
 function getSessionsMatchingFocus(project) {
   if (!focusFilter) return null
-
-  if (focusFilter.kind === 'inbox') {
-    var bucket = null
-    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
-      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
-        bucket = REVIEW_BUCKETS[bi]
-        break
-      }
-    }
-    if (!bucket) return undefined
-    return project.sessions.filter(function (s) {
-      return !s.signals.archived && bucket.test(s)
-    })
-  }
 
   if (focusFilter.kind === 'stack') {
     if (!orgData) return undefined
@@ -89,23 +75,7 @@ function toggleRailSectionCollapsed(sectionId) {
 }
 
 // ---------------------------------------------------------------------------
-// Review bucket count (non-archived sessions matching a bucket)
-// ---------------------------------------------------------------------------
-
-function countBucketSessions(bucket) {
-  var count = 0
-  for (var pi = 0; pi < projects.length; pi++) {
-    var proj = projects[pi]
-    for (var si = 0; si < proj.sessions.length; si++) {
-      var sess = proj.sessions[si]
-      if (!sess.signals.archived && bucket.test(sess)) count++
-    }
-  }
-  return count
-}
-
-// ---------------------------------------------------------------------------
-// Stack session count (unique non-archived sessions referenced by stack items)
+// Rail counts
 // ---------------------------------------------------------------------------
 
 function countStackSessionsForRail(stack) {
@@ -141,6 +111,16 @@ function countStackSessionsForRail(stack) {
   return seenKeys.size
 }
 
+function countGroupProjectsForRail(groupId) {
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var count = 0
+  var keys = Object.keys(assignments)
+  for (var i = 0; i < keys.length; i++) {
+    if (assignments[keys[i]] === groupId) count++
+  }
+  return count
+}
+
 // ---------------------------------------------------------------------------
 // Rail HTML builders
 // ---------------------------------------------------------------------------
@@ -148,7 +128,7 @@ function countStackSessionsForRail(stack) {
 function buildRailInfoHtml(tooltip) {
   if (!tooltip) return ''
   return (
-    '<span class="rail-info" data-tooltip="' +
+    '<span class="rail-info" tabindex="0" data-tooltip="' +
     escapeHtml(tooltip) +
     '" aria-label="' +
     escapeHtml(tooltip) +
@@ -184,51 +164,20 @@ function buildRailSectionHtml(sectionId, title, icon, bodyHtml, collapsedCount, 
   )
 }
 
-function buildReviewSectionHtml() {
-  var rows = ''
-  for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
-    var bucket = REVIEW_BUCKETS[bi]
-    var count = countBucketSessions(bucket)
-    if (count === 0) continue
-    var isActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket.id
-    rows +=
-      '<div class="rail-item ' +
-      bucket.cssClass +
-      (isActive ? ' active' : '') +
-      '" data-rail-action="inbox-bucket" data-bucket="' +
-      bucket.id +
-      '">' +
-      '<span class="rail-item-icon">' +
-      bucket.icon +
-      '</span>' +
-      '<span class="rail-item-label">' +
-      escapeHtml(STRINGS[bucket.labelKey] || bucket.labelKey) +
-      '</span>' +
-      '<span class="rail-item-cnt">' +
-      count +
-      '</span>' +
-      '</div>'
-  }
-  var body = rows || '<div class="rail-empty">' + STRINGS.railReviewEmpty + '</div>'
-  return buildRailSectionHtml(
-    'inbox',
-    STRINGS.railReview,
-    '',
-    body,
-    null,
-    STRINGS.railReviewTooltip
-  )
-}
-
 function buildStacksSectionHtml() {
   var stacks = (orgData && orgData.stacks) || []
-  if (stacks.length === 0) return ''
+  var visibleStacks = []
+
+  for (var i = 0; i < stacks.length; i++) {
+    var count = countStackSessionsForRail(stacks[i])
+    if (count > 0) visibleStacks.push({ count: count, stack: stacks[i] })
+  }
+  if (visibleStacks.length === 0) return ''
 
   var rows = ''
-  for (var i = 0; i < stacks.length; i++) {
-    var stack = stacks[i]
+  for (var vi = 0; vi < visibleStacks.length; vi++) {
+    var stack = visibleStacks[vi].stack
     var isActive = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stack.id
-    var count = countStackSessionsForRail(stack)
     rows +=
       '<div class="rail-item' +
       (isActive ? ' active' : '') +
@@ -241,7 +190,7 @@ function buildStacksSectionHtml() {
       escapeHtml(stack.name) +
       '</span>' +
       '<span class="rail-item-cnt">' +
-      count +
+      visibleStacks[vi].count +
       '</span>' +
       '</div>'
   }
@@ -250,25 +199,25 @@ function buildStacksSectionHtml() {
     STRINGS.railStacks,
     '⬡',
     rows,
-    stacks.length,
+    visibleStacks.length,
     STRINGS.railStacksTooltip
   )
 }
 
 function buildGroupsSectionHtml() {
   var groups = (orgData && orgData.groups) || []
-  if (groups.length === 0) return ''
+  var visibleGroups = []
 
-  var assignments = (orgData && orgData.projectGroupAssignments) || {}
-  var rows = ''
   for (var i = 0; i < groups.length; i++) {
-    var group = groups[i]
+    var count = countGroupProjectsForRail(groups[i].id)
+    if (count > 0) visibleGroups.push({ count: count, group: groups[i] })
+  }
+  if (visibleGroups.length === 0) return ''
+
+  var rows = ''
+  for (var vi = 0; vi < visibleGroups.length; vi++) {
+    var group = visibleGroups[vi].group
     var isActive = focusFilter && focusFilter.kind === 'group' && focusFilter.id === group.id
-    var count = 0
-    var keys = Object.keys(assignments)
-    for (var k = 0; k < keys.length; k++) {
-      if (assignments[keys[k]] === group.id) count++
-    }
     rows +=
       '<div class="rail-item' +
       (isActive ? ' active' : '') +
@@ -281,7 +230,7 @@ function buildGroupsSectionHtml() {
       escapeHtml(group.name) +
       '</span>' +
       '<span class="rail-item-cnt">' +
-      count +
+      visibleGroups[vi].count +
       '</span>' +
       '</div>'
   }
@@ -290,7 +239,7 @@ function buildGroupsSectionHtml() {
     STRINGS.railGroups,
     '⊞',
     rows,
-    groups.length,
+    visibleGroups.length,
     STRINGS.railGroupsTooltip
   )
 }
@@ -298,8 +247,9 @@ function buildGroupsSectionHtml() {
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  elements.rail.innerHTML =
-    buildReviewSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html = buildStacksSectionHtml() + buildGroupsSectionHtml()
+  elements.rail.innerHTML = html
+  elements.rail.style.display = html ? '' : 'none'
 }
 
 // ---------------------------------------------------------------------------
@@ -313,14 +263,7 @@ function renderFocusBar() {
     return
   }
   var name = ''
-  if (focusFilter.kind === 'inbox') {
-    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
-      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
-        name = STRINGS[REVIEW_BUCKETS[bi].labelKey] || focusFilter.bucket
-        break
-      }
-    }
-  } else if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
+  if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
     name = focusFilter.name
   } else if (focusFilter.kind === 'tag') {
     name = '#' + focusFilter.tag
@@ -353,7 +296,6 @@ if (elements.focusClearBtn) {
 
 if (elements.rail) {
   elements.rail.addEventListener('click', function (event) {
-    // Section collapse toggle
     var toggleTarget = event.target.closest('[data-rail-toggle]')
     if (toggleTarget) {
       if (event.target.closest('.rail-info')) return
@@ -362,38 +304,28 @@ if (elements.rail) {
       return
     }
 
-    // Rail item — set or clear focus filter
     var item = event.target.closest('.rail-item')
-    if (item) {
-      var action = item.dataset.railAction
+    if (!item) return
 
-      if (action === 'inbox-bucket') {
-        var bucket = item.dataset.bucket
-        var wasActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket
-        focusFilter = wasActive ? null : { kind: 'inbox', bucket: bucket }
-      } else if (action === 'stack') {
-        var stackId = item.dataset.stackId
-        var stackName = item.dataset.stackName
-        var wasActiveStack =
-          focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId
-        focusFilter = wasActiveStack ? null : { kind: 'stack', id: stackId, name: stackName }
-      } else if (action === 'group') {
-        var groupId = item.dataset.groupId
-        var groupName = item.dataset.groupName
-        var wasActiveGroup =
-          focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId
-        focusFilter = wasActiveGroup ? null : { kind: 'group', id: groupId, name: groupName }
-      }
-
-      renderRail()
-      renderFocusBar()
-      renderProjects()
-      renderSessions()
-      return
+    var action = item.dataset.railAction
+    if (action === 'stack') {
+      var stackId = item.dataset.stackId
+      var stackName = item.dataset.stackName
+      var wasActiveStack = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId
+      focusFilter = wasActiveStack ? null : { kind: 'stack', id: stackId, name: stackName }
+    } else if (action === 'group') {
+      var groupId = item.dataset.groupId
+      var groupName = item.dataset.groupName
+      var wasActiveGroup = focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId
+      focusFilter = wasActiveGroup ? null : { kind: 'group', id: groupId, name: groupName }
     }
+
+    renderRail()
+    renderFocusBar()
+    renderProjects()
+    renderSessions()
   })
 
-  // Right-click on stack or group items — open delete / manage menu
   elements.rail.addEventListener('contextmenu', function (event) {
     event.preventDefault()
     var item = event.target.closest('.rail-item')

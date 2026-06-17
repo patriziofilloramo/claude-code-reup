@@ -25,8 +25,7 @@ let syncOverview = null
 // Org data fetched from /api/org; null before first load.
 let orgData = null
 // Active focus filter — narrows both the project list and session list.
-// Shape: null | { kind: 'inbox', bucket: string }
-//             | { kind: 'stack', id: string, name: string }
+// Shape: null | { kind: 'stack', id: string, name: string }
 //             | { kind: 'group', id: string, name: string }
 //             | { kind: 'tag', tag: string }
 let focusFilter = null
