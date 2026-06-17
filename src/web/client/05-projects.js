@@ -54,14 +54,13 @@ function buildProjectRowHtml(project) {
             escapeHtml(STRINGS.projectCloudOk) +
             '">☁</span>'
       : '') +
-    (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
+    '<span class="p-last">' +
+    lastLabel +
+    '</span>' +
     '<span class="p-cnt">' +
     sessionCount +
     '</span>' +
     '<div class="p-actions">' +
-    '<button class="p-act-btn p-new-btn" title="' +
-    escapeHtml(STRINGS.projectNewSession) +
-    '">+</button>' +
     '<button class="p-act-btn p-menu-btn" title="' +
     escapeHtml(STRINGS.projectMoreActions) +
     '">⋯</button>' +
@@ -114,15 +113,27 @@ function deriveVisibleProjects() {
       return matchedProjectIds.has(p.id)
     })
   }
+
+  // Apply focus filter (defined in 17-rail.js; hoisted function declaration).
+  var baseProjects = projects
+  if (focusFilter) {
+    baseProjects = projects.filter(function (project) {
+      var focusSessions = getSessionsMatchingFocus(project)
+      if (focusSessions === undefined) return false
+      if (focusSessions === null) return true
+      return focusSessions.length > 0
+    })
+  }
+
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const visibleProjects = normalizedQuery
-    ? projects.filter(function (project) {
+    ? baseProjects.filter(function (project) {
         return (
           projectMatchesSearch(project, normalizedQuery) ||
           deriveVisibleSessionsForProject(project).length > 0
         )
       })
-    : projects
+    : baseProjects
   if (selectedProjectSort !== 'name') return visibleProjects
 
   return visibleProjects.slice().sort(function (left, right) {
@@ -152,14 +163,6 @@ function selectProject(project) {
 }
 
 elements.projectList.addEventListener('click', function (event) {
-  const newBtn = event.target.closest('.p-new-btn')
-  if (newBtn) {
-    event.stopPropagation()
-    const project = resolveProjectFromRow(newBtn.closest('.proj-row'))
-    if (project) void startNewSession(project)
-    return
-  }
-
   const menuBtn = event.target.closest('.p-menu-btn')
   if (menuBtn) {
     event.stopPropagation()

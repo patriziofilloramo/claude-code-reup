@@ -103,6 +103,19 @@ export default function ResumeCard({
         <Text color={COLORS.border}>· preview</Text>
       </Box>
 
+      {session.tags && session.tags.length > 0 ? (
+        <Box gap={1} marginBottom={1} paddingLeft={2}>
+          {session.tags.slice(0, 4).map((tag) => (
+            <Text key={tag} color={COLORS.accent}>
+              #{tag}
+            </Text>
+          ))}
+          {session.tags.length > 4 ? (
+            <Text color={COLORS.muted}>+{session.tags.length - 4}</Text>
+          ) : null}
+        </Box>
+      ) : null}
+
       <Box marginBottom={1}>
         <Text color={COLORS.border} wrap="truncate">
           {'─'.repeat(dividerWidth)}

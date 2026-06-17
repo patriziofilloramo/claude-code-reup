@@ -39,6 +39,7 @@ interface ParsedQuery {
   filterArchived: boolean
   projectTerms: string[]
   statusTerms: string[]
+  tagTerms: string[]
   text: string
 }
 
@@ -50,6 +51,7 @@ function parseSearchQuery(searchQuery: string): ParsedQuery {
     filterArchived: false,
     projectTerms: [],
     statusTerms: [],
+    tagTerms: [],
     text: '',
   }
   const textParts: string[] = []
@@ -66,6 +68,9 @@ function parseSearchQuery(searchQuery: string): ParsedQuery {
       result.branchTerms.push(lower.slice(7))
     } else if (lower.startsWith('status:')) {
       result.statusTerms.push(lower.slice(7))
+    } else if (lower.startsWith('tag:') || lower.startsWith('#')) {
+      const tag = lower.startsWith('tag:') ? lower.slice(4) : lower.slice(1)
+      if (tag) result.tagTerms.push(tag)
     } else {
       textParts.push(lower)
     }
@@ -83,6 +88,7 @@ function parseSearchQuery(searchQuery: string): ParsedQuery {
  *   project:<t>  — only projects whose path contains <t>
  *   branch:<t>   — only sessions whose branch contains <t>
  *   status:<t>   — only sessions whose primary status contains <t>
+ *   tag:<t>      — only sessions whose tags include <t> (also: #<t>)
  *
  * A project match keeps all of its visible sessions. A session match keeps
  * only matching sessions and their parent project.
@@ -100,7 +106,8 @@ export function deriveSearchResults(
     parsed.filterArchived ||
     parsed.projectTerms.length > 0 ||
     parsed.branchTerms.length > 0 ||
-    parsed.statusTerms.length > 0
+    parsed.statusTerms.length > 0 ||
+    parsed.tagTerms.length > 0
 
   return projects.flatMap((project) => {
     const visibleSessions = project.sessions.filter(
@@ -148,6 +155,10 @@ export function deriveSearchResults(
         const status = primaryStatus(session.signals)
         if (!parsed.statusTerms.some((t) => status.includes(t))) return false
       }
+      if (parsed.tagTerms.length > 0) {
+        const sessionTags = (session.tags ?? []).map((t) => t.toLowerCase())
+        if (!parsed.tagTerms.some((t) => sessionTags.some((st) => st.includes(t)))) return false
+      }
       return true
     })
 
@@ -169,6 +180,7 @@ function sessionMatchesQuery(session: Session, normalizedQuery: string): boolean
       session.gitBranch,
       session.currentBranch,
       ...(session.context.models ?? []),
+      ...(session.tags ?? []),
     ],
     normalizedQuery
   )

@@ -16,8 +16,14 @@ function openContextMenuAt(x, y, items) {
   const menu = elements.contextMenu
   menu.innerHTML = items
     .map(function (item) {
+      if (item.type === 'separator') return '<div class="ctx-item-sep"></div>'
+      if (item.type === 'header') {
+        return '<div class="ctx-hdr">' + escapeHtml(item.label) + '</div>'
+      }
       return (
-        '<div class="ctx-item" data-action="' +
+        '<div class="ctx-item' +
+        (item.danger ? ' ctx-item-danger' : '') +
+        '" data-action="' +
         escapeHtml(item.action) +
         '">' +
         escapeHtml(item.label) +
@@ -37,6 +43,7 @@ function closeContextMenu() {
   elements.contextMenu.classList.remove('open')
   ctxProject = null
   ctxSession = null
+  ctxRailItem = null
 }
 
 /** Opens the session action menu for a concrete session row. */
@@ -53,10 +60,14 @@ function openProjectContextMenu(event, project) {
   event.preventDefault()
   ctxProject = project
   ctxSession = null
-  openContextMenuAt(event.clientX, event.clientY, [
+  var items = [
     { action: 'project-new-session', label: '+ new session' },
     { action: 'project-copy-path', label: 'copy path' },
-  ])
+  ]
+  if (orgData && orgData.groups && orgData.groups.length > 0) {
+    items.push({ action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup })
+  }
+  openContextMenuAt(event.clientX, event.clientY, items)
 }
 
 elements.contextMenu.addEventListener('click', function (event) {
@@ -66,16 +77,59 @@ elements.contextMenu.addEventListener('click', function (event) {
   const action = item.dataset.action
   const project = ctxProject
   const session = ctxSession
+  const railItem = ctxRailItem
   closeContextMenu()
 
   if (action === 'project-new-session' && project) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
     copyTextToClipboard(project.path, STRINGS.projectPathCopied)
+  } else if (action === 'project-move-group' && project) {
+    openGroupPicker(project)
+  } else if (action === 'session-add-stack' && session) {
+    openStackPicker(ctxProject || selectedProject, session)
+  } else if (action === 'rail-stack-delete' && railItem && railItem.kind === 'stack') {
+    deleteRailStack(railItem.id, railItem.name)
+  } else if (action === 'rail-group-delete' && railItem && railItem.kind === 'group') {
+    deleteRailGroup(railItem.id, railItem.name)
+  } else if (action === 'rail-stack-manage' && railItem && railItem.kind === 'stack') {
+    openOrgManager('stack', railItem.id, railItem.name)
+  } else if (action === 'rail-group-manage' && railItem && railItem.kind === 'group') {
+    openOrgManager('group', railItem.id, railItem.name)
   } else if (session) {
     executeSessionAction(action, session)
   }
 })
+
+function deleteRailStack(stackId, stackName) {
+  if (!confirm(fmt(STRINGS.railDeleteStackConfirm, { name: stackName }))) return
+  requestJson('/api/org/stacks/' + stackId, { method: 'DELETE' })
+    .then(function () {
+      if (focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId) {
+        focusFilter = null
+        renderFocusBar()
+      }
+      return refreshProjectData()
+    })
+    .catch(function (error) {
+      showToast('Failed to delete stack: ' + (error.message || String(error)), 'err')
+    })
+}
+
+function deleteRailGroup(groupId, groupName) {
+  if (!confirm(fmt(STRINGS.railDeleteGroupConfirm, { name: groupName }))) return
+  requestJson('/api/org/groups/' + groupId, { method: 'DELETE' })
+    .then(function () {
+      if (focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId) {
+        focusFilter = null
+        renderFocusBar()
+      }
+      return refreshProjectData()
+    })
+    .catch(function (error) {
+      showToast('Failed to delete group: ' + (error.message || String(error)), 'err')
+    })
+}
 
 elements.sessionList.addEventListener('contextmenu', function (event) {
   const row = event.target.closest('.sess-row')

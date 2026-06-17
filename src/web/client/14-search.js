@@ -114,6 +114,14 @@ document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeSearch()
     return
   }
+  if (elements.tagPickerOverlay.classList.contains('open')) {
+    // Tag picker handles its own keydown — nothing to do here
+    return
+  }
+  if (elements.orgPickerOverlay.classList.contains('open')) {
+    // Org picker handles its own Escape — nothing to do here
+    return
+  }
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
 
   if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
@@ -125,7 +133,19 @@ document.addEventListener('keydown', function (event) {
     else void resumeSelectedSession()
   }
 
+  if (selectedProject) {
+    if (event.key === 'g') {
+      event.preventDefault()
+      openGroupPicker(selectedProject)
+      return
+    }
+  }
   if (selectedSession && selectedProject) {
+    if (event.key === 't') {
+      event.preventDefault()
+      openTagPicker(selectedSession, selectedProject)
+      return
+    }
     if (event.key === 'r') {
       event.preventDefault()
       executeSessionAction('session-rename', selectedSession)

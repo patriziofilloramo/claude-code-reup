@@ -14,7 +14,9 @@ export default function SearchBar({ query }: SearchBarProps) {
       </Text>
       <Text color={COLORS.text}>{query}</Text>
       <Text color={COLORS.accent}>█</Text>
-      {query.length === 0 && <Text color={COLORS.dim}>e.g. fix auth, branch:main, is:active</Text>}
+      {query.length === 0 && (
+        <Text color={COLORS.dim}>e.g. fix auth, branch:main, tag:deploy, is:active</Text>
+      )}
     </Box>
   )
 }

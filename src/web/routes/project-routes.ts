@@ -11,6 +11,8 @@ import { formatHandoff, readTranscriptHandoffContext } from '../../core/session/
 import { isValidSessionId } from '../../core/session/session-model.js'
 import type { Project, Session } from '../../core/session/session-model.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
+import { filterProjectsByOrg } from '../../core/org/org-filters.js'
+import { readOrgData } from '../../core/org/org-prefs.js'
 import { log } from '../../utils/logger.js'
 import { projectDisplayName, serializeProject, serializeSession } from '../api-model.js'
 import type { ApiSession } from '../api-model.js'
@@ -25,34 +27,62 @@ import { apiRoute } from './route-helper.js'
  */
 export function registerProjectRoutes(app: Hono): void {
   // ---------------------------------------------------------------------------
-  // GET /api/projects — full project + session tree
+  // GET /api/projects?group=:id&stack=:id&tag=:tag — full project + session tree
   // ---------------------------------------------------------------------------
 
   app.get(
     '/api/projects',
     apiRoute(async (context) => {
+      const groupId = context.req.query('group')
+      const stackId = context.req.query('stack')
+      const tag = context.req.query('tag')
+
       const projects = await loadProjects()
+
+      if (groupId || stackId || tag) {
+        const orgData = await readOrgData()
+        const filtered = filterProjectsByOrg(projects, orgData, { groupId, stackId, tag })
+        return context.json(filtered.map(serializeProject))
+      }
+
       return context.json(projects.map(serializeProject))
     })
   )
 
   // ---------------------------------------------------------------------------
-  // GET /api/search?q=<query> — metadata search across projects and sessions
+  // GET /api/search?q=<query>&tag=:tag&group=:id&stack=:id — metadata search
+  // Note: deep/transcript search lives in search-route.ts (/api/search/deep).
   // ---------------------------------------------------------------------------
 
   app.get(
     '/api/search',
     apiRoute(async (context) => {
       const normalizedQuery = (context.req.query('q') ?? '').toLowerCase().trim()
-      if (!normalizedQuery) return context.json([])
+      const groupId = context.req.query('group')
+      const stackId = context.req.query('stack')
+      const tag = context.req.query('tag')
 
-      const projects = await loadProjects()
+      if (!normalizedQuery && !groupId && !stackId && !tag) return context.json([])
+
+      const allProjects = await loadProjects()
+      let projects = allProjects
+
+      if (groupId || stackId || tag) {
+        const orgData = await readOrgData()
+        projects = filterProjectsByOrg(projects, orgData, { groupId, stackId, tag })
+      }
+
       const hits: Array<ApiSession & { projectName: string }> = []
 
       for (const project of projects) {
         const projectName = projectDisplayName(project)
         for (const session of project.sessions) {
-          if (!sessionMatchesQuery(session, project, projectName, normalizedQuery)) continue
+          if (
+            normalizedQuery &&
+            !sessionMatchesQuery(session, project, projectName, normalizedQuery)
+          ) {
+            continue
+          }
           hits.push({ ...serializeSession(session), projectName })
           if (hits.length >= APP.maxSearchResults) return context.json(hits)
         }
@@ -188,6 +218,8 @@ function sessionMatchesQuery(
     session.gitBranch,
     session.currentBranch,
     ...(session.context.models ?? []),
+    ...(session.tags ?? []),
+    ...(project.projectTags ?? []),
   ]
   return candidates.some((value) => (value ?? '').toLowerCase().includes(normalizedQuery))
 }

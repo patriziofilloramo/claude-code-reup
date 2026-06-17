@@ -7,7 +7,12 @@ import {
   deleteSession,
   setSessionAlias,
   setSessionArchived,
+  setSessionTags,
+  setProjectTags,
 } from '../../core/session/session-metadata.js'
+import { recordTagInPalette } from '../../core/org/org-prefs.js'
+import { validateAndNormalizeTags } from '../../core/org/org-validation.js'
+import { OrgValidationError } from '../../core/org/org-validation.js'
 import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 
@@ -110,6 +115,82 @@ export function registerSessionMetadataRoutes(app: Hono): void {
         throw error
       }
       log.debug('delete: removed session', sessionId)
+      return context.json({ ok: true })
+    })
+  )
+
+  // ---------------------------------------------------------------------------
+  // PUT /api/projects/:projectId/sessions/:sessionId/tags
+  // Body: { tags: string[] }  — replaces the entire tag list
+  // ---------------------------------------------------------------------------
+
+  app.put(
+    '/api/projects/:projectId/sessions/:sessionId/tags',
+    guardedRoute(async (context) => {
+      const { projectId, sessionId } = context.req.param()
+
+      const idError = validateSessionIdentifiers(projectId, sessionId)
+      if (idError) return context.json({ error: idError }, 400)
+
+      const project = await loadProjectById(projectId)
+      if (!project) return context.json({ error: 'project not found' }, 404)
+      if (!project.sessions.some((s) => s.id === sessionId)) {
+        return context.json({ error: 'session not found' }, 404)
+      }
+
+      const body = await context.req.json<{ tags?: unknown }>()
+      if (!Array.isArray(body.tags)) {
+        return context.json({ error: 'tags must be an array' }, 400)
+      }
+
+      let normalizedTags: string[]
+      try {
+        normalizedTags = validateAndNormalizeTags(body.tags)
+      } catch (error) {
+        if (error instanceof OrgValidationError) return context.json({ error: error.message }, 400)
+        throw error
+      }
+
+      await setSessionTags(projectId, sessionId, normalizedTags)
+      // Best-effort palette update; failure does not affect the tag write.
+      for (const tag of normalizedTags) void recordTagInPalette(tag)
+
+      log.debug('tags: updated session', sessionId, '→', normalizedTags)
+      return context.json({ ok: true })
+    })
+  )
+
+  // ---------------------------------------------------------------------------
+  // PUT /api/projects/:projectId/tags
+  // Body: { tags: string[] }  — replaces the project-level tag list
+  // ---------------------------------------------------------------------------
+
+  app.put(
+    '/api/projects/:projectId/tags',
+    guardedRoute(async (context) => {
+      const { projectId } = context.req.param()
+      if (!projectId) return context.json({ error: 'projectId is required' }, 400)
+
+      const project = await loadProjectById(projectId)
+      if (!project) return context.json({ error: 'project not found' }, 404)
+
+      const body = await context.req.json<{ tags?: unknown }>()
+      if (!Array.isArray(body.tags)) {
+        return context.json({ error: 'tags must be an array' }, 400)
+      }
+
+      let normalizedTags: string[]
+      try {
+        normalizedTags = validateAndNormalizeTags(body.tags)
+      } catch (error) {
+        if (error instanceof OrgValidationError) return context.json({ error: error.message }, 400)
+        throw error
+      }
+
+      await setProjectTags(projectId, normalizedTags)
+      for (const tag of normalizedTags) void recordTagInPalette(tag)
+
+      log.debug('tags: updated project', projectId, '→', normalizedTags)
       return context.json({ ok: true })
     })
   )

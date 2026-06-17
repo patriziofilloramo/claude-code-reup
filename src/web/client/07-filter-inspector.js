@@ -222,17 +222,30 @@ function buildTouchedFilesHtml(preview, session) {
   )
 }
 
+/**
+ * Maps AutomaticFactSource values to reader-friendly labels.
+ * Returns the raw value for any unknown source so new sources surface visibly.
+ */
+function friendlySource(source) {
+  if (source === 'summary-event') return 'compaction'
+  if (source === 'assistant-tool' || source === 'tool-result') return 'tool result'
+  if (source === 'attachment') return 'attachment'
+  if (source === 'transcript-event') return 'transcript'
+  return source || ''
+}
+
 /** Returns the latest Claude-native plan section when the transcript contains one. */
 function buildNativePlanHtml(automaticContext) {
   const plan = automaticContext && automaticContext.plan
-  return plan
-    ? buildPreviewMarkdownBlockHtml(
-        STRINGS.previewNativePlan,
-        plan.text,
-        'preview-block--scrollable',
-        '▤'
-      )
-    : ''
+  if (!plan) return ''
+  const labelParts = [STRINGS.previewNativePlan]
+  if (plan.source) labelParts.push(friendlySource(plan.source))
+  return buildPreviewMarkdownBlockHtml(
+    labelParts.join(' · '),
+    plan.text,
+    'preview-block--scrollable',
+    '▤'
+  )
 }
 
 /** Returns a compact, read-only view of Claude-native TodoWrite state. */
@@ -258,25 +271,101 @@ function buildNativeTodosHtml(automaticContext) {
     })
     .join('')
 
+  const summaryLabelParts = [
+    STRINGS.previewNativeTodos,
+    escapeHtml(
+      fmt(STRINGS.previewNativeTodosSummary, {
+        done: todos.counts?.completed || 0,
+        open:
+          (todos.counts?.pending || 0) +
+          (todos.counts?.in_progress || 0) +
+          (todos.counts?.unknown || 0),
+      })
+    ),
+  ]
+  if (todos.source) summaryLabelParts.push(escapeHtml(friendlySource(todos.source)))
+
   return (
     '<div class="preview-block preview-block--scrollable">' +
-    buildPreviewLabelHtml(
-      STRINGS.previewNativeTodos +
-        ' · ' +
-        escapeHtml(
-          fmt(STRINGS.previewNativeTodosSummary, {
-            done: todos.counts?.completed || 0,
-            open:
-              (todos.counts?.pending || 0) +
-              (todos.counts?.in_progress || 0) +
-              (todos.counts?.unknown || 0),
-          })
-        ),
-      '☑'
-    ) +
+    buildPreviewLabelHtml(summaryLabelParts.join(' · '), '☑') +
     '<div class="preview-todos-body">' +
     rows +
     '</div>' +
+    '</div>'
+  )
+}
+
+/** Returns a compact summary of files read and research actions taken in the session. */
+function buildResearchTrailHtml(automaticContext) {
+  const readFiles = (automaticContext && automaticContext.readFiles) || []
+  const researchActions = (automaticContext && automaticContext.researchActions) || []
+  const totalCount = readFiles.length + researchActions.length
+  if (totalCount === 0) return ''
+
+  const kindPrefix = { grep: '~', glob: '*', 'web-search': '?', 'web-fetch': '→' }
+
+  const fileRows = readFiles
+    .map(function (file) {
+      return (
+        '<div class="preview-file" title="' +
+        escapeHtml(file) +
+        '">r ' +
+        escapeHtml(file) +
+        '</div>'
+      )
+    })
+    .join('')
+
+  const actionRows = researchActions
+    .map(function (action) {
+      const prefix = (kindPrefix[action.kind] || '?') + ' ' + escapeHtml(action.kind)
+      const detail = action.query ? ': ' + escapeHtml(action.query) : ''
+      return '<div class="preview-file">' + prefix + detail + '</div>'
+    })
+    .join('')
+
+  return (
+    '<div class="preview-block">' +
+    buildPreviewLabelHtml(fmt(STRINGS.previewResearchTrail, { count: totalCount }), '⌕') +
+    '<div class="preview-todos-body">' +
+    fileRows +
+    actionRows +
+    '</div>' +
+    '</div>'
+  )
+}
+
+/** Returns a compact summary of tool failures and interruptions, or empty string when clean. */
+function buildToolHealthHtml(automaticContext) {
+  const health = automaticContext && automaticContext.toolHealth
+  if (!health) return ''
+
+  const failed = health.failed || []
+  const interrupted = health.interrupted || []
+  if (failed.length === 0 && interrupted.length === 0) return ''
+
+  const summaryParts = []
+  if (failed.length > 0) summaryParts.push(fmt(STRINGS.previewToolFailed, { count: failed.length }))
+  if (interrupted.length > 0)
+    summaryParts.push(fmt(STRINGS.previewToolInterrupted, { count: interrupted.length }))
+
+  const failedRows = failed
+    .map(function (t) {
+      return '<div class="preview-file">✗ ' + escapeHtml(t.name) + '</div>'
+    })
+    .join('')
+
+  const interruptedRows = interrupted
+    .map(function (t) {
+      return '<div class="preview-file">⚡ ' + escapeHtml(t.name) + '</div>'
+    })
+    .join('')
+
+  return (
+    '<div class="preview-block">' +
+    buildPreviewLabelHtml(STRINGS.previewToolHealth + ' · ' + summaryParts.join(', '), '⚠') +
+    failedRows +
+    interruptedRows +
     '</div>'
   )
 }
@@ -315,6 +404,8 @@ function buildSessionPreviewHtml(project, session) {
     ) +
     buildNativePlanHtml(preview.automaticContext) +
     buildNativeTodosHtml(preview.automaticContext) +
+    buildResearchTrailHtml(preview.automaticContext) +
+    buildToolHealthHtml(preview.automaticContext) +
     (preview.pendingToolName
       ? '<div class="preview-warning">' +
         escapeHtml(fmt(STRINGS.previewPendingTool, { name: preview.pendingToolName })) +
@@ -396,6 +487,92 @@ function isSessionInspectorExpanded(visibleSessions) {
       return session.id === selectedSession.id
     })
   )
+}
+
+/**
+ * Builds the compact Org section for the inspector: tags, group, stack memberships.
+ * Returns "" when no org data is loaded and the session has no tags.
+ */
+function buildOrgInspectorHtml(session, project) {
+  var tags = session.tags || []
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var groups = (orgData && orgData.groups) || []
+  var stacks = (orgData && orgData.stacks) || []
+
+  // Find group name
+  var groupId = assignments[project ? project.id : '']
+  var groupName = null
+  for (var gi = 0; gi < groups.length; gi++) {
+    if (groups[gi].id === groupId) {
+      groupName = groups[gi].name
+      break
+    }
+  }
+
+  // Find stacks containing this session or project
+  var sessionStackNames = []
+  for (var si = 0; si < stacks.length; si++) {
+    var stack = stacks[si]
+    var inStack = stack.items.some(function (item) {
+      if (item.kind === 'project' && project && item.projectId === project.id) return true
+      if (item.kind === 'session' && item.sessionId === session.id) return true
+      return false
+    })
+    if (inStack) sessionStackNames.push(stack.name)
+  }
+
+  if (tags.length === 0 && !groupName && sessionStackNames.length === 0 && !orgData) return ''
+
+  var html = '<div class="insp-org-section">'
+
+  // Tags row
+  html += '<div class="insp-org-row">'
+  html += '<span class="insp-org-label">' + escapeHtml(STRINGS.inspOrgTags) + '</span>'
+  html += '<span class="insp-org-value">'
+  for (var ti = 0; ti < tags.length; ti++) {
+    html +=
+      '<span class="s-tag insp-tag" data-tag="' +
+      escapeHtml(tags[ti]) +
+      '">#' +
+      escapeHtml(tags[ti]) +
+      '</span>'
+  }
+  html +=
+    '<button class="insp-org-add" data-inspector-action="session-tag">' +
+    escapeHtml(STRINGS.inspOrgAddTag) +
+    '</button>'
+  html += '</span></div>'
+
+  // Group row
+  if (groupName || orgData) {
+    html += '<div class="insp-org-row">'
+    html += '<span class="insp-org-label">' + escapeHtml(STRINGS.inspOrgGroup) + '</span>'
+    html +=
+      '<span class="insp-org-value">' +
+      (groupName
+        ? '<span class="insp-org-pill">' + escapeHtml(groupName) + '</span>'
+        : '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>') +
+      '</span>'
+    html += '</div>'
+  }
+
+  // Stacks row
+  if (sessionStackNames.length > 0 || orgData) {
+    html += '<div class="insp-org-row">'
+    html += '<span class="insp-org-label">' + escapeHtml(STRINGS.inspOrgStacks) + '</span>'
+    html += '<span class="insp-org-value">'
+    if (sessionStackNames.length > 0) {
+      for (var sni = 0; sni < sessionStackNames.length; sni++) {
+        html += '<span class="insp-org-pill">' + escapeHtml(sessionStackNames[sni]) + '</span>'
+      }
+    } else {
+      html += '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>'
+    }
+    html += '</span></div>'
+  }
+
+  html += '</div>'
+  return html
 }
 
 /** Re-renders the session inspector panel for the selected session. Hides it when no selection is visible. */
@@ -535,12 +712,30 @@ function renderInspector(visibleSessions) {
     'insp-path',
     'title="' + escapeHtml(session.projectPath) + '"'
   )
+  html += buildOrgInspectorHtml(session, selectedProject)
 
   elements.sessionInspector.innerHTML = html
   elements.sessionInspector.style.display = 'block'
 }
 
 elements.sessionInspector.addEventListener('click', function (event) {
+  // Tag chip in org section — set tag focus filter
+  const inspTag = event.target.closest('.insp-tag')
+  if (inspTag) {
+    var tag = inspTag.dataset.tag
+    if (tag) {
+      focusFilter =
+        focusFilter && focusFilter.kind === 'tag' && focusFilter.tag === tag
+          ? null
+          : { kind: 'tag', tag: tag }
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+    }
+    return
+  }
+
   const actionButton = event.target.closest('[data-inspector-action]')
   if (actionButton && selectedSession) {
     if (actionButton.dataset.inspectorAction === 'inspector-toggle-expanded') {

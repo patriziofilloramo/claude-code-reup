@@ -41,6 +41,7 @@ const STRINGS = {
   sessionActionResume: 'resume',
   sessionActionHandoff: 'copy handoff',
   sessionActionRename: 'rename',
+  sessionActionTag: 'tag…',
   sessionActionArchive: 'archive locally',
   sessionActionUnarchive: 'unarchive',
   sessionActionCopyId: 'copy session ID',
@@ -130,6 +131,11 @@ const STRINGS = {
   previewFilesTouched: 'files touched · {count}',
   previewLoading: 'Loading session preview...',
   previewError: 'Preview unavailable: {error}',
+  previewResearchTrail: 'research trail · {count}',
+  previewReadFiles: 'files read · {count}',
+  previewToolHealth: 'tool health',
+  previewToolFailed: '{count} failed',
+  previewToolInterrupted: '{count} interrupted',
 
   // ── Resume dialog ──────────────────────────────────────────────────────────
   resumeLaunchingFrames: ['launching', 'launching.', 'launching..', 'launching...'],
@@ -190,6 +196,67 @@ const STRINGS = {
   statusBarDiagnosticsPlural: '⚠ {n} issues',
 
   // ── Empty states ──────────────────────────────────────────────────────────
+  // ── Left rail ─────────────────────────────────────────────────────────────
+  railInbox: 'INBOX',
+  railInboxEmpty: 'Nothing to triage.',
+  railStacks: 'STACKS',
+  railGroups: 'GROUPS',
+  railNewStack: '+ new stack',
+  railNewGroup: '+ new group',
+  railStackNamePlaceholder: 'Stack name…',
+  railGroupNamePlaceholder: 'Group name…',
+  railCreateError: 'Failed to create: {message}',
+
+  // ── Rail: delete / manage ─────────────────────────────────────────────────
+  railDeleteStack: 'delete stack',
+  railDeleteGroup: 'delete group',
+  railManageStack: 'manage items…',
+  railManageGroup: 'manage projects…',
+  railManagerEmpty: 'No items.',
+  railManagerRemove: '×',
+  railDeleteStackConfirm:
+    'Delete stack "{name}"?\n\nSessions and projects in it will not be affected.',
+  railDeleteGroupConfirm: 'Delete group "{name}"?\n\nProjects will be unassigned from this group.',
+
+  // Inbox bucket labels (keys referenced from INBOX_BUCKETS[].labelKey)
+  inboxBucketActive: 'Active now',
+  inboxBucketAttention: 'Needs attention',
+  inboxBucketBranchDrift: 'Branch drift',
+  inboxBucketPathMissing: 'Path missing',
+  inboxBucketHighContext: 'High context',
+  inboxBucketExpiring: 'Expiring soon',
+  inboxBucketRecent: 'Recently touched',
+
+  // Focus bar
+  focusBar: 'Focus: {name}',
+  focusBarCount: '{n} of {total}',
+
+  // Tag chips
+  tagChipOverflow: '+{n}',
+
+  // Group/stack picker
+  orgPickerGroupTitle: 'Move project to group',
+  orgPickerStackTitle: 'Add to stack',
+  orgPickerNoItems: 'No items — create one in the rail first.',
+  orgPickerGroupFailed: 'Failed to assign group: {error}',
+  orgPickerStackFailed: 'Failed to add to stack: {error}',
+  orgPickerRemoveGroup: 'Remove from group',
+  sessionActionMoveToGroup: 'move to group…',
+  sessionActionAddToStack: 'add to stack…',
+  projectCtxMoveToGroup: 'move to group…',
+
+  // Inspector org section
+  inspOrgTags: 'TAGS',
+  inspOrgAddTag: '+ tag',
+  inspOrgGroup: 'GROUP',
+  inspOrgStacks: 'STACKS',
+  inspOrgNoGroup: '—',
+
+  // Tag picker dialog
+  tagPickerSessionTitle: 'Tag session',
+  tagPickerPlaceholder: 'Add tag… (Enter to add)',
+  tagPickerSaveFailed: 'Failed to save tags: {error}',
+
   emptyNoMatch: 'No projects or sessions match.',
   emptySelectProject: 'Select a project from the left panel.',
   emptyNoSessions: 'No sessions.',

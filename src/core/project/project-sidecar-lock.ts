@@ -14,6 +14,18 @@ export type SidecarLockInspection =
 
 /**
  * Runs an operation while holding the project's cross-process sidecar lock.
+ * Delegates to {@link withAdvisoryFileLock} using the project directory's
+ * conventional lock path.
+ */
+export async function withProjectSidecarLock<T>(
+  projectDirectory: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  return withAdvisoryFileLock(join(projectDirectory, 'swoop.json.lock'), operation)
+}
+
+/**
+ * General-purpose cross-process advisory file lock.
  *
  * Lock protocol:
  * - `open(..., 'wx')` is the only acquisition primitive.
@@ -21,11 +33,10 @@ export type SidecarLockInspection =
  * - An empty or malformed lock is removed only after a grace period because a
  *   live owner briefly exposes an empty file between create and PID write.
  */
-export async function withProjectSidecarLock<T>(
-  projectDirectory: string,
+export async function withAdvisoryFileLock<T>(
+  lockPath: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  const lockPath = join(projectDirectory, 'swoop.json.lock')
   const acquisitionDeadline = Date.now() + LOCK_ACQUISITION_TIMEOUT_MS
   let lockAcquired = false
 
@@ -60,7 +71,7 @@ export async function withProjectSidecarLock<T>(
     }
   }
 
-  if (!lockAcquired) throw new Error(`swoop: sidecar lock timeout (${lockPath})`)
+  if (!lockAcquired) throw new Error(`swoop: advisory lock timeout (${lockPath})`)
 
   try {
     return await operation()

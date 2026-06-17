@@ -24,6 +24,8 @@ import { mergeProjectSidecarMetadata } from '../session/session-metadata.js'
 import { calculateExpiryDays } from '../session/session-signals.js'
 import { parseSessionTranscript } from '../session/session-transcript.js'
 import { syncRegistry } from '../sync/sync-registry.js'
+import { readOrgData } from '../org/org-prefs.js'
+import { applyOrgMetadata } from '../org/org-filters.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -49,9 +51,10 @@ export async function loadProjects(): Promise<Project[]> {
 
   log.debug('loadProjects: scanning', projectsDirectory)
 
-  const [projectDirectoryNames, liveSessions] = await Promise.all([
+  const [projectDirectoryNames, liveSessions, orgData] = await Promise.all([
     listProjectDirectoryNames(projectsDirectory),
     getLiveSessionRecords(),
+    readOrgData(),
   ])
 
   const discoveredProjects = await Promise.all(
@@ -79,10 +82,13 @@ export async function loadProjects(): Promise<Project[]> {
       isRecentLockRecord(record.startedAt, now)
   )
 
-  const finalProjects =
+  const assembled =
     orphanedRecords.length === 0
       ? projects
       : [...projects, ...buildOrphanProjects(orphanedRecords)].sort(compareProjectsByRecentActivity)
+
+  // Merge group assignments from org.json into project objects.
+  const finalProjects = applyOrgMetadata(assembled, orgData)
 
   setCachedProjects(projectsDirectory, finalProjects)
   return finalProjects

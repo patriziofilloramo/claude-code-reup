@@ -32,6 +32,12 @@
 
       <div class="body">
         <div class="pnl-left">
+          <div class="org-rail" id="rail"></div>
+          <div class="focus-bar" id="focus-bar" style="display: none">
+            <span class="focus-bar-label" id="focus-bar-label"></span>
+            <span class="focus-bar-count" id="focus-bar-count"></span>
+            <button class="focus-clear" id="focus-clear" title="Clear focus">×</button>
+          </div>
           <div class="pnl-label">
             <span id="proj-label">PROJECTS</span>
             <select
@@ -91,6 +97,12 @@
           ><b class="ftr-k">enter</b> resume</span
         >
         <span class="ftr-item" title="Open the search bar"><b class="ftr-k">/</b> search</span>
+        <span class="ftr-item" title="Assign selected project to a group (g)"
+          ><b class="ftr-k">g</b> group</span
+        >
+        <span class="ftr-item" title="Add/remove tags on the selected session (t)"
+          ><b class="ftr-k">t</b> tag</span
+        >
         <span class="ftr-item" title="Rename the selected session (r)"
           ><b class="ftr-k">r</b> rename</span
         >
@@ -108,6 +120,47 @@
         <button class="ftr-theme-btn" id="ftr-theme-btn" title="Switch theme">theme</button>
         <span class="ftr-status" id="ftr-status">loading…</span>
       </footer>
+    </div>
+
+    <!-- Stack / group item manager -->
+    <div class="overlay org-manager-overlay" id="org-manager-overlay">
+      <div class="dlg org-manager-dlg">
+        <div class="dlg-label" id="org-manager-title">Manage items</div>
+        <div class="org-manager-list" id="org-manager-list"></div>
+        <div class="dlg-actions">
+          <button class="btn btn-secondary" id="org-manager-close">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group / stack assignment picker -->
+    <div class="overlay org-picker-overlay" id="org-picker-overlay">
+      <div class="dlg org-picker-dlg">
+        <div class="dlg-label" id="org-picker-title">Assign to…</div>
+        <div class="org-picker-list" id="org-picker-list"></div>
+        <div class="dlg-actions">
+          <button class="btn btn-secondary" id="org-picker-close">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tag picker dialog -->
+    <div class="overlay tag-picker-overlay" id="tag-picker-overlay">
+      <div class="dlg tag-picker-dlg">
+        <div class="dlg-label" id="tag-picker-title">Tag session</div>
+        <div class="tag-picker-chips" id="tag-picker-chips"></div>
+        <input
+          class="tag-picker-input"
+          id="tag-picker-input"
+          placeholder="Add tag… (Enter to add)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="tag-picker-suggestions" id="tag-picker-suggestions"></div>
+        <div class="dlg-actions">
+          <button class="btn btn-secondary" id="tag-picker-close">Done</button>
+        </div>
+      </div>
     </div>
 
     <div class="overlay" id="resume-overlay">

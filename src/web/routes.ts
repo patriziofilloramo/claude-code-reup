@@ -4,6 +4,7 @@ import { getStoredThemeName } from '../core/theme-preference.js'
 import { registerClaudeInstructionRoutes } from './routes/claude-instruction-routes.js'
 import { registerDiagnosticsRoute } from './routes/diagnostics-route.js'
 import { registerEventStreamRoute } from './routes/event-stream-route.js'
+import { registerOrgRoutes } from './routes/org-routes.js'
 import { registerProjectRoutes } from './routes/project-routes.js'
 import { registerResumeRoute } from './routes/resume-route.js'
 import { registerSearchRoute } from './routes/search-route.js'
@@ -24,6 +25,7 @@ export function buildApp(): Hono {
 
   app.get('/', (context) => context.html(buildHtml(getStoredThemeName() ?? 'dark')))
   registerProjectRoutes(app)
+  registerOrgRoutes(app)
   registerResumeRoute(app)
   registerSearchRoute(app)
   registerSessionMetadataRoutes(app)

@@ -21,6 +21,15 @@ interface StatusBadge {
   text: string
 }
 
+const TAG_CHIPS_MAX = 2
+
+export function formatTagChips(tags: string[]): string {
+  const shown = tags.slice(0, TAG_CHIPS_MAX)
+  const overflow = tags.length - shown.length
+  const chips = shown.map((t) => '#' + t).join(' ')
+  return overflow > 0 ? chips + ' +' + overflow : chips
+}
+
 export function formatTokenCount(tokenCount: number): string {
   if (tokenCount < 1_000) return String(tokenCount)
   if (tokenCount < 1_000_000) return `${(tokenCount / 1_000).toFixed(tokenCount < 10_000 ? 1 : 0)}k`
@@ -127,6 +136,11 @@ export default function SessionList({
               : relativeTime(session.updated))
           : null
 
+        const tagChips =
+          showFullSummary && session.tags && session.tags.length > 0
+            ? formatTagChips(session.tags)
+            : null
+
         return (
           <Box key={session.id} marginBottom={0} paddingX={1}>
             <Box flexShrink={0}>
@@ -152,6 +166,11 @@ export default function SessionList({
               <Text color={nameColor} wrap="truncate">
                 {displayName}
               </Text>
+              {tagChips ? (
+                <Text color={COLORS.accent} wrap="truncate">
+                  {'  ' + tagChips}
+                </Text>
+              ) : null}
               {summary ? (
                 <Text color={COLORS.dim} wrap="truncate">
                   {summary}
