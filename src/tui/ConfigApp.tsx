@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
 import { LABELS } from '../config/labels.js'
@@ -475,21 +476,23 @@ function FeaturesTab({
 
   return (
     <Box flexDirection="column" gap={1}>
-      <SelectableRow
-        active={autoCleanupOnStart !== 'off'}
-        description={
-          autoCleanupOnStart === 'off'
-            ? 'No automatic cleanup. Run `swoop cleanup` manually.'
-            : autoCleanupOnStart === 'auto'
-              ? 'Archives high-confidence cleanup candidates automatically on startup.'
-              : 'Shows cleanup picker before opening swoop; you choose what to archive.'
-        }
-        focused={cursor === 0}
-        label="Cleanup on start"
-        status={cleanupLabel}
-      />
+      <FeatureCard focused={cursor === 0}>
+        <SelectableRow
+          active={autoCleanupOnStart !== 'off'}
+          description={
+            autoCleanupOnStart === 'off'
+              ? 'No automatic cleanup. Run `swoop cleanup` manually.'
+              : autoCleanupOnStart === 'auto'
+                ? 'Archives high-confidence cleanup candidates automatically on startup.'
+                : 'Shows cleanup picker before opening swoop; you choose what to archive.'
+          }
+          focused={cursor === 0}
+          label="Cleanup on start"
+          status={cleanupLabel}
+        />
+      </FeatureCard>
 
-      <Box flexDirection="column">
+      <FeatureCard focused={cursor >= 1}>
         <SelectableRow
           active={syncEnabled}
           badge="Alpha"
@@ -501,7 +504,7 @@ function FeaturesTab({
         />
 
         {syncEnabled && (
-          <Box flexDirection="column" paddingLeft={3} marginTop={1}>
+          <Box flexDirection="column" paddingLeft={3} marginTop={1} marginBottom={1}>
             <Box marginBottom={1}>
               <Text bold color={COLORS.text}>
                 {LABELS.configSyncActionsTitle}
@@ -526,7 +529,7 @@ function FeaturesTab({
               suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
             />
 
-            <Box marginTop={1} marginBottom={0}>
+            <Box marginTop={1}>
               <Text bold color={COLORS.text}>
                 {LABELS.configProjectsTitle}
               </Text>
@@ -536,35 +539,47 @@ function FeaturesTab({
                 <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
               </Box>
             ) : (
-              <>
-                {syncRows.map((project, index) => (
-                  <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
-                ))}
-                <SyncLegend />
-              </>
+              syncRows.map((project, index) => (
+                <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
+              ))
             )}
+
+            <CloudIconLegend />
           </Box>
         )}
-      </Box>
+      </FeatureCard>
     </Box>
   )
 }
 
-function SyncLegend() {
+function FeatureCard({ children, focused }: { children: ReactNode; focused: boolean }) {
   return (
-    <Box gap={3} marginTop={1}>
-      <Text color={COLORS.muted}>legend</Text>
+    <Box
+      borderColor={focused ? COLORS.accent : COLORS.border}
+      borderStyle="single"
+      flexDirection="column"
+      paddingX={1}
+    >
+      {children}
+    </Box>
+  )
+}
+
+function CloudIconLegend() {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text color={COLORS.muted}>{LABELS.configCloudIconLegendTitle}</Text>
       <Box gap={1}>
-        <Text color={COLORS.ok}>{LABELS.configSyncLegendLinked}</Text>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendLinkedDesc}</Text>
+        <Text color={COLORS.ok}>☁</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconOnline}</Text>
       </Box>
       <Box gap={1}>
-        <Text color={COLORS.accent}>{LABELS.configSyncLegendCloud}</Text>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendCloudDesc}</Text>
+        <Text color={COLORS.orange}>☁</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconPartial}</Text>
       </Box>
       <Box gap={1}>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendLocal}</Text>
-        <Text color={COLORS.dim}>{LABELS.configSyncLegendLocalDesc}</Text>
+        <Text color={COLORS.muted}>☁</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconOffline}</Text>
       </Box>
     </Box>
   )
