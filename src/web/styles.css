@@ -336,7 +336,7 @@ body {
   display: none;
 }
 
-/* ── Left rail: Inbox, Stacks, Groups ───────────────────────────────────── */
+/* ── Left rail: Review, Stacks, Groups ──────────────────────────────────── */
 .org-rail {
   flex-shrink: 0;
   border-bottom: 2px solid var(--muted);
@@ -371,6 +371,49 @@ body {
   color: var(--muted2);
   flex: 1;
   font-weight: 600;
+}
+.rail-info {
+  align-items: center;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  color: var(--muted2);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 8px;
+  height: 13px;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1;
+  position: relative;
+  text-transform: none;
+  width: 13px;
+}
+.rail-info:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.rail-info:hover::after {
+  background: var(--surface-deep);
+  border: 1px solid var(--dim);
+  border-radius: 4px;
+  box-shadow: var(--shadow-dlg);
+  color: var(--text);
+  content: attr(data-tooltip);
+  font-size: 11px;
+  left: -6px;
+  letter-spacing: 0;
+  line-height: 1.4;
+  padding: 8px 10px;
+  position: absolute;
+  text-transform: none;
+  top: 18px;
+  width: 230px;
+  z-index: 30;
+}
+.rail-section-count {
+  color: var(--muted2);
+  flex-shrink: 0;
+  font-size: 10px;
 }
 .rail-toggle {
   color: var(--muted);
@@ -426,32 +469,6 @@ body {
   color: var(--muted);
   font-size: 11px;
   padding: 4px 12px;
-}
-.rail-add {
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 4px 12px;
-  user-select: none;
-}
-.rail-add:hover {
-  color: var(--fg);
-}
-.rail-create {
-  padding: 4px 10px;
-}
-.rail-create-input {
-  background: var(--input-bg, var(--bg2));
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--fg);
-  font-size: 12px;
-  outline: none;
-  padding: 3px 6px;
-  width: 100%;
-}
-.rail-create-input:focus {
-  border-color: var(--accent);
 }
 /* Bucket colour hints */
 .bucket--active .rail-item-icon {
@@ -787,6 +804,14 @@ body {
   gap: 2px;
   padding: 5px 10px;
 }
+.filter-scope-label {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin-right: 5px;
+  text-transform: uppercase;
+}
 .filter-pill {
   background: none;
   border: 1px solid transparent;
@@ -799,6 +824,9 @@ body {
   transition:
     color 0.1s,
     border-color 0.1s;
+}
+.filter-pill[data-filter='attention'] {
+  display: none;
 }
 .filter-pill:hover {
   color: var(--text);
@@ -1463,6 +1491,32 @@ body {
   color: var(--muted);
   font-size: 12px;
   padding: 10px 12px;
+}
+.org-picker-create-trigger {
+  color: var(--accent);
+}
+.org-picker-create {
+  padding: 7px 12px 4px;
+}
+.org-picker-create-input {
+  background: var(--input-bg, var(--bg2));
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+  padding: 6px 8px;
+  width: 100%;
+}
+.org-picker-create-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.08);
+}
+.org-picker-create-hint {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 5px;
 }
 
 /* ── Org item manager dialog ─────────────────────────────────────────────── */
@@ -2326,4 +2380,14 @@ body {
   margin-left: 6px;
   padding: 1px 5px;
   text-transform: uppercase;
+}
+
+@media (max-width: 1199px) {
+  .rail-section[data-rail-section='inbox'] {
+    display: none;
+  }
+
+  .filter-pill[data-filter='attention'] {
+    display: inline-flex;
+  }
 }

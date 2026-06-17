@@ -30,7 +30,5 @@ let orgData = null
 //             | { kind: 'group', id: string, name: string }
 //             | { kind: 'tag', tag: string }
 let focusFilter = null
-// Which rail section is showing an inline create input: 'stack' | 'group' | null
-let railCreatingSection = null
 // Which rail item is subject to a pending context menu action: null | { kind, id, name }
 let ctxRailItem = null

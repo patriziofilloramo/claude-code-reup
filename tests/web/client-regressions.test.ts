@@ -409,15 +409,15 @@ describe('web client org layer invariants', () => {
     return source.slice(source.indexOf(start), source.indexOf(end))
   }
 
-  it('renders inbox section with only non-zero bucket counts', () => {
-    const inboxSection = sourceBetween(
-      'function buildInboxSectionHtml()',
+  it('renders review section with only non-zero bucket counts', () => {
+    const reviewSection = sourceBetween(
+      'function buildReviewSectionHtml()',
       'function buildStacksSectionHtml()'
     )
-    expect(inboxSection).toContain('countBucketSessions(bucket)')
-    expect(inboxSection).toContain('if (count === 0) continue')
-    expect(inboxSection).toContain('data-rail-action="inbox-bucket"')
-    expect(inboxSection).toContain('data-bucket=')
+    expect(reviewSection).toContain('countBucketSessions(bucket)')
+    expect(reviewSection).toContain('if (count === 0) continue')
+    expect(reviewSection).toContain('data-rail-action="inbox-bucket"')
+    expect(reviewSection).toContain('data-bucket=')
   })
 
   it('focuses by inbox bucket without applying pill filter', () => {
@@ -576,6 +576,17 @@ describe('web client org layer invariants', () => {
     expect(collapse).toContain('localStorage.removeItem(')
   })
 
+  it('hides empty stack and group rail sections and shows collapsed item counts', () => {
+    const railBuilders = sourceBetween(
+      'function buildRailSectionHtml(',
+      '/** Re-renders the org rail.'
+    )
+    expect(railBuilders).toContain('rail-section-count')
+    expect(railBuilders).toContain("if (stacks.length === 0) return ''")
+    expect(railBuilders).toContain("if (groups.length === 0) return ''")
+    expect(railBuilders).not.toContain('rail-add')
+  })
+
   it('org picker calls PUT /api/projects/:id/group for group assignment', () => {
     const apply = sourceBetween(
       'async function applyOrgPickerSelection(',
@@ -595,6 +606,32 @@ describe('web client org layer invariants', () => {
     expect(apply).toContain("'/api/org/stacks/'")
     expect(apply).toContain("'/items'")
     expect(apply).toContain("method: 'POST'")
+  })
+
+  it('org picker can create a group or stack and immediately apply it', () => {
+    const pickerList = sourceBetween(
+      'function renderOrgPickerList()',
+      'async function applyOrgPickerSelection('
+    )
+    const create = sourceBetween(
+      'async function createAndApplyOrgPickerItem(',
+      'async function removeProjectFromGroup('
+    )
+    expect(pickerList).toContain('org-picker-create-trigger')
+    expect(pickerList).toContain('org-picker-create-input')
+    expect(create).toContain("mode === 'group' ? '/api/org/groups' : '/api/org/stacks'")
+    expect(create).toContain('await applyOrgPickerSelection(item.id)')
+  })
+
+  it('project context menu exposes group and stack organization actions', () => {
+    const projectMenu = sourceBetween(
+      'function openProjectContextMenu(',
+      "elements.contextMenu.addEventListener('click'"
+    )
+    expect(projectMenu).toContain('project-move-group')
+    expect(projectMenu).toContain('project-add-stack')
+    expect(projectMenu).toContain('projectCtxMoveToGroup')
+    expect(projectMenu).toContain('projectCtxAddToStack')
   })
 
   it('HTML contains the rail, focus-bar, tag-picker, and org-picker elements', () => {
@@ -617,5 +654,9 @@ describe('web client org layer invariants', () => {
     expect(stylesSource).toContain('.tag-picker-dlg {')
     expect(stylesSource).toContain('.org-picker-dlg {')
     expect(stylesSource).toContain('.insp-org-section {')
+    expect(stylesSource).toContain('.rail-info {')
+    expect(stylesSource).toContain('.filter-scope-label {')
+    expect(stylesSource).toContain(".filter-pill[data-filter='attention']")
+    expect(stylesSource).toContain(".rail-section[data-rail-section='inbox']")
   })
 })

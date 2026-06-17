@@ -87,7 +87,7 @@ function deriveVisibleSessionsForProject(project) {
     // Project is in focus with no session-level restriction — apply pill filter normally.
     sessions = sessionsMatchingFilter(project, selectedFilter)
   } else if (focusFilter && focusFilter.kind === 'inbox') {
-    // Inbox bucket focus overrides the pill filter — show bucket sessions directly.
+    // Review bucket focus overrides the pill filter — show bucket sessions directly.
     sessions = focusSessions
   } else {
     // Tag / specific-session stack focus — intersect with pill filter.

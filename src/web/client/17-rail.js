@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Left rail: Inbox, Stacks, Groups + Focus bar
+// Left rail: Review, Stacks, Groups + Focus bar
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -17,9 +17,9 @@ function getSessionsMatchingFocus(project) {
 
   if (focusFilter.kind === 'inbox') {
     var bucket = null
-    for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
-      if (INBOX_BUCKETS[bi].id === focusFilter.bucket) {
-        bucket = INBOX_BUCKETS[bi]
+    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
+      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
+        bucket = REVIEW_BUCKETS[bi]
         break
       }
     }
@@ -89,7 +89,7 @@ function toggleRailSectionCollapsed(sectionId) {
 }
 
 // ---------------------------------------------------------------------------
-// Inbox bucket count (non-archived sessions matching a bucket)
+// Review bucket count (non-archived sessions matching a bucket)
 // ---------------------------------------------------------------------------
 
 function countBucketSessions(bucket) {
@@ -145,8 +145,23 @@ function countStackSessionsForRail(stack) {
 // Rail HTML builders
 // ---------------------------------------------------------------------------
 
-function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
+function buildRailInfoHtml(tooltip) {
+  if (!tooltip) return ''
+  return (
+    '<span class="rail-info" data-tooltip="' +
+    escapeHtml(tooltip) +
+    '" aria-label="' +
+    escapeHtml(tooltip) +
+    '">i</span>'
+  )
+}
+
+function buildRailSectionHtml(sectionId, title, icon, bodyHtml, collapsedCount, tooltip) {
   var collapsed = isRailSectionCollapsed(sectionId)
+  var countHtml =
+    collapsed && typeof collapsedCount === 'number'
+      ? '<span class="rail-section-count">' + collapsedCount + '</span>'
+      : ''
   return (
     '<div class="rail-section" data-rail-section="' +
     sectionId +
@@ -158,6 +173,8 @@ function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
     '<span class="rail-title">' +
     escapeHtml(title) +
     '</span>' +
+    buildRailInfoHtml(tooltip) +
+    countHtml +
     '<span class="rail-toggle">' +
     (collapsed ? '▸' : '▾') +
     '</span>' +
@@ -167,10 +184,10 @@ function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
   )
 }
 
-function buildInboxSectionHtml() {
+function buildReviewSectionHtml() {
   var rows = ''
-  for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
-    var bucket = INBOX_BUCKETS[bi]
+  for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
+    var bucket = REVIEW_BUCKETS[bi]
     var count = countBucketSessions(bucket)
     if (count === 0) continue
     var isActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket.id
@@ -192,12 +209,21 @@ function buildInboxSectionHtml() {
       '</span>' +
       '</div>'
   }
-  var body = rows || '<div class="rail-empty">' + STRINGS.railInboxEmpty + '</div>'
-  return buildRailSectionHtml('inbox', STRINGS.railInbox, '', body)
+  var body = rows || '<div class="rail-empty">' + STRINGS.railReviewEmpty + '</div>'
+  return buildRailSectionHtml(
+    'inbox',
+    STRINGS.railReview,
+    '',
+    body,
+    null,
+    STRINGS.railReviewTooltip
+  )
 }
 
 function buildStacksSectionHtml() {
   var stacks = (orgData && orgData.stacks) || []
+  if (stacks.length === 0) return ''
+
   var rows = ''
   for (var i = 0; i < stacks.length; i++) {
     var stack = stacks[i]
@@ -219,17 +245,20 @@ function buildStacksSectionHtml() {
       '</span>' +
       '</div>'
   }
-  var createRow =
-    railCreatingSection === 'stack'
-      ? '<div class="rail-create"><input class="rail-create-input" id="rail-create-input" placeholder="' +
-        escapeHtml(STRINGS.railStackNamePlaceholder) +
-        '" /></div>'
-      : '<div class="rail-add" data-rail-action="new-stack">' + STRINGS.railNewStack + '</div>'
-  return buildRailSectionHtml('stacks', STRINGS.railStacks, '⬡', rows + createRow)
+  return buildRailSectionHtml(
+    'stacks',
+    STRINGS.railStacks,
+    '⬡',
+    rows,
+    stacks.length,
+    STRINGS.railStacksTooltip
+  )
 }
 
 function buildGroupsSectionHtml() {
   var groups = (orgData && orgData.groups) || []
+  if (groups.length === 0) return ''
+
   var assignments = (orgData && orgData.projectGroupAssignments) || {}
   var rows = ''
   for (var i = 0; i < groups.length; i++) {
@@ -256,22 +285,21 @@ function buildGroupsSectionHtml() {
       '</span>' +
       '</div>'
   }
-  var createRow =
-    railCreatingSection === 'group'
-      ? '<div class="rail-create"><input class="rail-create-input" id="rail-create-input" placeholder="' +
-        escapeHtml(STRINGS.railGroupNamePlaceholder) +
-        '" /></div>'
-      : '<div class="rail-add" data-rail-action="new-group">' + STRINGS.railNewGroup + '</div>'
-  return buildRailSectionHtml('groups', STRINGS.railGroups, '⊞', rows + createRow)
+  return buildRailSectionHtml(
+    'groups',
+    STRINGS.railGroups,
+    '⊞',
+    rows,
+    groups.length,
+    STRINGS.railGroupsTooltip
+  )
 }
 
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
   elements.rail.innerHTML =
-    buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
-  var createInput = document.getElementById('rail-create-input')
-  if (createInput) createInput.focus()
+    buildReviewSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
 }
 
 // ---------------------------------------------------------------------------
@@ -286,9 +314,9 @@ function renderFocusBar() {
   }
   var name = ''
   if (focusFilter.kind === 'inbox') {
-    for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
-      if (INBOX_BUCKETS[bi].id === focusFilter.bucket) {
-        name = STRINGS[INBOX_BUCKETS[bi].labelKey] || focusFilter.bucket
+    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
+      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
+        name = STRINGS[REVIEW_BUCKETS[bi].labelKey] || focusFilter.bucket
         break
       }
     }
@@ -328,6 +356,7 @@ if (elements.rail) {
     // Section collapse toggle
     var toggleTarget = event.target.closest('[data-rail-toggle]')
     if (toggleTarget) {
+      if (event.target.closest('.rail-info')) return
       toggleRailSectionCollapsed(toggleTarget.dataset.railToggle)
       renderRail()
       return
@@ -362,21 +391,6 @@ if (elements.rail) {
       renderSessions()
       return
     }
-
-    // Inline create button
-    var addBtn = event.target.closest('.rail-add')
-    if (addBtn) {
-      var addAction = addBtn.dataset.railAction
-      if (addAction === 'new-stack') {
-        railCreatingSection = 'stack'
-        toggleRailSectionCollapsed('stacks') // ensure expanded
-        if (isRailSectionCollapsed('stacks')) toggleRailSectionCollapsed('stacks')
-      } else if (addAction === 'new-group') {
-        railCreatingSection = 'group'
-        if (isRailSectionCollapsed('groups')) toggleRailSectionCollapsed('groups')
-      }
-      renderRail()
-    }
   })
 
   // Right-click on stack or group items — open delete / manage menu
@@ -408,41 +422,6 @@ if (elements.rail) {
         { type: 'separator' },
         { action: 'rail-group-delete', label: STRINGS.railDeleteGroup, danger: true },
       ])
-    }
-  })
-
-  // Keyboard handling for inline create input
-  elements.rail.addEventListener('keydown', function (event) {
-    var input = event.target.closest('.rail-create-input')
-    if (!input) return
-
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      var name = input.value.trim()
-      var section = railCreatingSection
-      railCreatingSection = null
-      renderRail()
-
-      if (!name) return
-
-      var endpoint = section === 'stack' ? '/api/org/stacks' : '/api/org/groups'
-      requestJson(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name }),
-      })
-        .then(function () {
-          void refreshProjectData()
-        })
-        .catch(function (error) {
-          showToast(fmt(STRINGS.railCreateError, { message: error.message || String(error) }))
-        })
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      railCreatingSection = null
-      renderRail()
     }
   })
 }

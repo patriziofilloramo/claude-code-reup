@@ -21,6 +21,7 @@ function renderFilterBar() {
   }
 
   elements.filterBar.style.display = 'flex'
+  if (elements.filterScopeLabel) elements.filterScopeLabel.textContent = STRINGS.filterScopeLabel
   const counts = calculateFilterCounts()
   elements.filterBar.querySelectorAll('.filter-pill').forEach(function (pill) {
     const filter = pill.dataset.filter

@@ -30,6 +30,7 @@ const STRINGS = {
   filterActive: 'Active',
   filterArchived: 'Archived',
   filterAttention: 'Needs Attention',
+  filterScopeLabel: 'SESSIONS',
   filterTooltipAll: 'All non-archived sessions',
   filterTooltipActive: 'Sessions currently running in a terminal',
   filterTooltipArchived: 'Locally archived sessions',
@@ -206,15 +207,16 @@ const STRINGS = {
 
   // ── Empty states ──────────────────────────────────────────────────────────
   // ── Left rail ─────────────────────────────────────────────────────────────
-  railInbox: 'INBOX',
-  railInboxEmpty: 'Nothing to triage.',
+  railReview: 'REVIEW',
+  railReviewEmpty: 'No review signals.',
+  railReviewTooltip:
+    'Cross-project review signals. Selecting one focuses the project and session lists.',
   railStacks: 'STACKS',
+  railStacksTooltip:
+    'Temporary work sets. A stack can collect sessions or whole projects you want to revisit together.',
   railGroups: 'GROUPS',
-  railNewStack: '+ new stack',
-  railNewGroup: '+ new group',
-  railStackNamePlaceholder: 'Stack name…',
-  railGroupNamePlaceholder: 'Group name…',
-  railCreateError: 'Failed to create: {message}',
+  railGroupsTooltip:
+    'Project organization. A project can belong to one group, such as work, personal, or client.',
 
   // ── Rail: delete / manage ─────────────────────────────────────────────────
   railDeleteStack: 'delete stack',
@@ -227,7 +229,7 @@ const STRINGS = {
     'Delete stack "{name}"?\n\nSessions and projects in it will not be affected.',
   railDeleteGroupConfirm: 'Delete group "{name}"?\n\nProjects will be unassigned from this group.',
 
-  // Inbox bucket labels (keys referenced from INBOX_BUCKETS[].labelKey)
+  // Review bucket labels (keys referenced from REVIEW_BUCKETS[].labelKey)
   inboxBucketActive: 'Active now',
   inboxBucketAttention: 'Needs attention',
   inboxBucketBranchDrift: 'Branch drift',
@@ -246,13 +248,20 @@ const STRINGS = {
   // Group/stack picker
   orgPickerGroupTitle: 'Move project to group',
   orgPickerStackTitle: 'Add to stack',
-  orgPickerNoItems: 'No items — create one in the rail first.',
+  orgPickerNoItems: 'No existing items.',
+  orgPickerNewGroup: '+ new group',
+  orgPickerNewStack: '+ new stack',
+  orgPickerCreateGroupPlaceholder: 'New group name...',
+  orgPickerCreateStackPlaceholder: 'New stack name...',
+  orgPickerCreateHint: 'Enter to create and apply',
+  orgPickerCreateFailed: 'Failed to create: {error}',
   orgPickerGroupFailed: 'Failed to assign group: {error}',
   orgPickerStackFailed: 'Failed to add to stack: {error}',
   orgPickerRemoveGroup: 'Remove from group',
   sessionActionMoveToGroup: 'move to group…',
   sessionActionAddToStack: 'add to stack…',
   projectCtxMoveToGroup: 'move to group…',
+  projectCtxAddToStack: 'add to stack…',
 
   // Inspector org section
   inspOrgTags: 'TAGS',
@@ -328,11 +337,11 @@ const RECENT_WITHIN_DAYS = 7
 const RAIL_STORAGE_KEY = 'swoop:rail:'
 
 /**
- * Inbox triage bucket definitions in priority order.
+ * Review bucket definitions in priority order.
  * The `test` functions are closures — they capture live state on call, not at definition.
  * Labels are STRINGS keys resolved at render time.
  */
-const INBOX_BUCKETS = [
+const REVIEW_BUCKETS = [
   {
     id: 'active',
     labelKey: 'inboxBucketActive',
@@ -435,8 +444,6 @@ let orgData = null
 //             | { kind: 'group', id: string, name: string }
 //             | { kind: 'tag', tag: string }
 let focusFilter = null
-// Which rail section is showing an inline create input: 'stack' | 'group' | null
-let railCreatingSection = null
 // Which rail item is subject to a pending context menu action: null | { kind, id, name }
 let ctxRailItem = null
 function elementById(id) {
@@ -447,6 +454,7 @@ const elements = {
   alwaysConfirmCheckbox: elementById('dlg-always-confirm'),
   contextMenu: elementById('ctx-menu'),
   filterBar: elementById('filter-bar'),
+  filterScopeLabel: elementById('filter-scope-label'),
   footerStatus: elementById('ftr-status'),
   headerHints: elementById('hdr-hints'),
   instructionsCloseButton: elementById('md-close'),
@@ -1076,7 +1084,7 @@ function deriveVisibleSessionsForProject(project) {
     // Project is in focus with no session-level restriction — apply pill filter normally.
     sessions = sessionsMatchingFilter(project, selectedFilter)
   } else if (focusFilter && focusFilter.kind === 'inbox') {
-    // Inbox bucket focus overrides the pill filter — show bucket sessions directly.
+    // Review bucket focus overrides the pill filter — show bucket sessions directly.
     sessions = focusSessions
   } else {
     // Tag / specific-session stack focus — intersect with pill filter.
@@ -1219,6 +1227,7 @@ function renderFilterBar() {
   }
 
   elements.filterBar.style.display = 'flex'
+  if (elements.filterScopeLabel) elements.filterScopeLabel.textContent = STRINGS.filterScopeLabel
   const counts = calculateFilterCounts()
   elements.filterBar.querySelectorAll('.filter-pill').forEach(function (pill) {
     const filter = pill.dataset.filter
@@ -2972,10 +2981,10 @@ function openProjectContextMenu(event, project) {
   var items = [
     { action: 'project-new-session', label: '+ new session' },
     { action: 'project-copy-path', label: 'copy path' },
+    { type: 'separator' },
+    { action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup },
+    { action: 'project-add-stack', label: STRINGS.projectCtxAddToStack },
   ]
-  if (orgData && orgData.groups && orgData.groups.length > 0) {
-    items.push({ action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup })
-  }
   openContextMenuAt(event.clientX, event.clientY, items)
 }
 
@@ -2995,8 +3004,10 @@ elements.contextMenu.addEventListener('click', function (event) {
     copyTextToClipboard(project.path, STRINGS.projectPathCopied)
   } else if (action === 'project-move-group' && project) {
     openGroupPicker(project)
+  } else if (action === 'project-add-stack' && project) {
+    openStackPicker(project, null)
   } else if (action === 'session-add-stack' && session) {
-    openStackPicker(ctxProject || selectedProject, session)
+    openStackPicker(project || selectedProject, session)
   } else if (action === 'rail-stack-delete' && railItem && railItem.kind === 'stack') {
     deleteRailStack(railItem.id, railItem.name)
   } else if (action === 'rail-group-delete' && railItem && railItem.kind === 'group') {
@@ -3574,7 +3585,7 @@ if (logoEl) {
 // initialise button label from current data-theme (set server-side)
 applyTheme(getActiveTheme())
 // ---------------------------------------------------------------------------
-// Left rail: Inbox, Stacks, Groups + Focus bar
+// Left rail: Review, Stacks, Groups + Focus bar
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -3592,9 +3603,9 @@ function getSessionsMatchingFocus(project) {
 
   if (focusFilter.kind === 'inbox') {
     var bucket = null
-    for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
-      if (INBOX_BUCKETS[bi].id === focusFilter.bucket) {
-        bucket = INBOX_BUCKETS[bi]
+    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
+      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
+        bucket = REVIEW_BUCKETS[bi]
         break
       }
     }
@@ -3664,7 +3675,7 @@ function toggleRailSectionCollapsed(sectionId) {
 }
 
 // ---------------------------------------------------------------------------
-// Inbox bucket count (non-archived sessions matching a bucket)
+// Review bucket count (non-archived sessions matching a bucket)
 // ---------------------------------------------------------------------------
 
 function countBucketSessions(bucket) {
@@ -3720,8 +3731,23 @@ function countStackSessionsForRail(stack) {
 // Rail HTML builders
 // ---------------------------------------------------------------------------
 
-function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
+function buildRailInfoHtml(tooltip) {
+  if (!tooltip) return ''
+  return (
+    '<span class="rail-info" data-tooltip="' +
+    escapeHtml(tooltip) +
+    '" aria-label="' +
+    escapeHtml(tooltip) +
+    '">i</span>'
+  )
+}
+
+function buildRailSectionHtml(sectionId, title, icon, bodyHtml, collapsedCount, tooltip) {
   var collapsed = isRailSectionCollapsed(sectionId)
+  var countHtml =
+    collapsed && typeof collapsedCount === 'number'
+      ? '<span class="rail-section-count">' + collapsedCount + '</span>'
+      : ''
   return (
     '<div class="rail-section" data-rail-section="' +
     sectionId +
@@ -3733,6 +3759,8 @@ function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
     '<span class="rail-title">' +
     escapeHtml(title) +
     '</span>' +
+    buildRailInfoHtml(tooltip) +
+    countHtml +
     '<span class="rail-toggle">' +
     (collapsed ? '▸' : '▾') +
     '</span>' +
@@ -3742,10 +3770,10 @@ function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
   )
 }
 
-function buildInboxSectionHtml() {
+function buildReviewSectionHtml() {
   var rows = ''
-  for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
-    var bucket = INBOX_BUCKETS[bi]
+  for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
+    var bucket = REVIEW_BUCKETS[bi]
     var count = countBucketSessions(bucket)
     if (count === 0) continue
     var isActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket.id
@@ -3767,12 +3795,21 @@ function buildInboxSectionHtml() {
       '</span>' +
       '</div>'
   }
-  var body = rows || '<div class="rail-empty">' + STRINGS.railInboxEmpty + '</div>'
-  return buildRailSectionHtml('inbox', STRINGS.railInbox, '', body)
+  var body = rows || '<div class="rail-empty">' + STRINGS.railReviewEmpty + '</div>'
+  return buildRailSectionHtml(
+    'inbox',
+    STRINGS.railReview,
+    '',
+    body,
+    null,
+    STRINGS.railReviewTooltip
+  )
 }
 
 function buildStacksSectionHtml() {
   var stacks = (orgData && orgData.stacks) || []
+  if (stacks.length === 0) return ''
+
   var rows = ''
   for (var i = 0; i < stacks.length; i++) {
     var stack = stacks[i]
@@ -3794,17 +3831,20 @@ function buildStacksSectionHtml() {
       '</span>' +
       '</div>'
   }
-  var createRow =
-    railCreatingSection === 'stack'
-      ? '<div class="rail-create"><input class="rail-create-input" id="rail-create-input" placeholder="' +
-        escapeHtml(STRINGS.railStackNamePlaceholder) +
-        '" /></div>'
-      : '<div class="rail-add" data-rail-action="new-stack">' + STRINGS.railNewStack + '</div>'
-  return buildRailSectionHtml('stacks', STRINGS.railStacks, '⬡', rows + createRow)
+  return buildRailSectionHtml(
+    'stacks',
+    STRINGS.railStacks,
+    '⬡',
+    rows,
+    stacks.length,
+    STRINGS.railStacksTooltip
+  )
 }
 
 function buildGroupsSectionHtml() {
   var groups = (orgData && orgData.groups) || []
+  if (groups.length === 0) return ''
+
   var assignments = (orgData && orgData.projectGroupAssignments) || {}
   var rows = ''
   for (var i = 0; i < groups.length; i++) {
@@ -3831,22 +3871,21 @@ function buildGroupsSectionHtml() {
       '</span>' +
       '</div>'
   }
-  var createRow =
-    railCreatingSection === 'group'
-      ? '<div class="rail-create"><input class="rail-create-input" id="rail-create-input" placeholder="' +
-        escapeHtml(STRINGS.railGroupNamePlaceholder) +
-        '" /></div>'
-      : '<div class="rail-add" data-rail-action="new-group">' + STRINGS.railNewGroup + '</div>'
-  return buildRailSectionHtml('groups', STRINGS.railGroups, '⊞', rows + createRow)
+  return buildRailSectionHtml(
+    'groups',
+    STRINGS.railGroups,
+    '⊞',
+    rows,
+    groups.length,
+    STRINGS.railGroupsTooltip
+  )
 }
 
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
   elements.rail.innerHTML =
-    buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
-  var createInput = document.getElementById('rail-create-input')
-  if (createInput) createInput.focus()
+    buildReviewSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
 }
 
 // ---------------------------------------------------------------------------
@@ -3861,9 +3900,9 @@ function renderFocusBar() {
   }
   var name = ''
   if (focusFilter.kind === 'inbox') {
-    for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
-      if (INBOX_BUCKETS[bi].id === focusFilter.bucket) {
-        name = STRINGS[INBOX_BUCKETS[bi].labelKey] || focusFilter.bucket
+    for (var bi = 0; bi < REVIEW_BUCKETS.length; bi++) {
+      if (REVIEW_BUCKETS[bi].id === focusFilter.bucket) {
+        name = STRINGS[REVIEW_BUCKETS[bi].labelKey] || focusFilter.bucket
         break
       }
     }
@@ -3903,6 +3942,7 @@ if (elements.rail) {
     // Section collapse toggle
     var toggleTarget = event.target.closest('[data-rail-toggle]')
     if (toggleTarget) {
+      if (event.target.closest('.rail-info')) return
       toggleRailSectionCollapsed(toggleTarget.dataset.railToggle)
       renderRail()
       return
@@ -3937,21 +3977,6 @@ if (elements.rail) {
       renderSessions()
       return
     }
-
-    // Inline create button
-    var addBtn = event.target.closest('.rail-add')
-    if (addBtn) {
-      var addAction = addBtn.dataset.railAction
-      if (addAction === 'new-stack') {
-        railCreatingSection = 'stack'
-        toggleRailSectionCollapsed('stacks') // ensure expanded
-        if (isRailSectionCollapsed('stacks')) toggleRailSectionCollapsed('stacks')
-      } else if (addAction === 'new-group') {
-        railCreatingSection = 'group'
-        if (isRailSectionCollapsed('groups')) toggleRailSectionCollapsed('groups')
-      }
-      renderRail()
-    }
   })
 
   // Right-click on stack or group items — open delete / manage menu
@@ -3983,41 +4008,6 @@ if (elements.rail) {
         { type: 'separator' },
         { action: 'rail-group-delete', label: STRINGS.railDeleteGroup, danger: true },
       ])
-    }
-  })
-
-  // Keyboard handling for inline create input
-  elements.rail.addEventListener('keydown', function (event) {
-    var input = event.target.closest('.rail-create-input')
-    if (!input) return
-
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      var name = input.value.trim()
-      var section = railCreatingSection
-      railCreatingSection = null
-      renderRail()
-
-      if (!name) return
-
-      var endpoint = section === 'stack' ? '/api/org/stacks' : '/api/org/groups'
-      requestJson(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name }),
-      })
-        .then(function () {
-          void refreshProjectData()
-        })
-        .catch(function (error) {
-          showToast(fmt(STRINGS.railCreateError, { message: error.message || String(error) }))
-        })
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      railCreatingSection = null
-      renderRail()
     }
   })
 }
@@ -4170,6 +4160,7 @@ elements.tagPickerClose.addEventListener('click', closeTagPicker)
 
 var orgPickerMode = null // 'group' | 'stack'
 var orgPickerTarget = null // { project } or { project, session }
+var orgPickerCreating = false
 
 function openGroupPicker(project) {
   orgPickerMode = 'group'
@@ -4191,6 +4182,7 @@ function closeOrgPicker() {
   elements.orgPickerOverlay.classList.remove('open')
   orgPickerMode = null
   orgPickerTarget = null
+  orgPickerCreating = false
 }
 
 function renderOrgPickerList() {
@@ -4201,11 +4193,7 @@ function renderOrgPickerList() {
   }
 
   var items = orgPickerMode === 'group' ? orgData.groups : orgData.stacks
-  if (!items || items.length === 0) {
-    elements.orgPickerList.innerHTML =
-      '<div class="org-picker-empty">' + STRINGS.orgPickerNoItems + '</div>'
-    return
-  }
+  if (!items) items = []
 
   var currentGroupId =
     orgPickerMode === 'group' && orgPickerTarget && orgPickerTarget.project
@@ -4213,6 +4201,10 @@ function renderOrgPickerList() {
       : null
 
   var html = ''
+  if (items.length === 0) {
+    html += '<div class="org-picker-empty">' + STRINGS.orgPickerNoItems + '</div>'
+  }
+
   if (orgPickerMode === 'group' && currentGroupId) {
     html +=
       '<div class="org-picker-item org-picker-remove" data-item-id="">' +
@@ -4232,7 +4224,35 @@ function renderOrgPickerList() {
       (isCurrent ? ' ✓' : '') +
       '</div>'
   }
+
+  if (orgPickerCreating) {
+    var placeholder =
+      orgPickerMode === 'group'
+        ? STRINGS.orgPickerCreateGroupPlaceholder
+        : STRINGS.orgPickerCreateStackPlaceholder
+    html +=
+      '<div class="org-picker-create">' +
+      '<input class="org-picker-create-input" placeholder="' +
+      escapeHtml(placeholder) +
+      '" />' +
+      '<div class="org-picker-create-hint">' +
+      escapeHtml(STRINGS.orgPickerCreateHint) +
+      '</div>' +
+      '</div>'
+  } else {
+    var createLabel =
+      orgPickerMode === 'group' ? STRINGS.orgPickerNewGroup : STRINGS.orgPickerNewStack
+    html +=
+      '<div class="org-picker-item org-picker-create-trigger" data-picker-action="create">' +
+      escapeHtml(createLabel) +
+      '</div>'
+  }
+
   elements.orgPickerList.innerHTML = html
+  if (orgPickerCreating) {
+    var input = elements.orgPickerList.querySelector('.org-picker-create-input')
+    if (input) input.focus()
+  }
 }
 
 async function applyOrgPickerSelection(itemId) {
@@ -4265,6 +4285,25 @@ async function applyOrgPickerSelection(itemId) {
   }
 }
 
+async function createAndApplyOrgPickerItem(name) {
+  if (!orgPickerTarget || !orgPickerMode) return
+  var mode = orgPickerMode
+  var endpoint = mode === 'group' ? '/api/org/groups' : '/api/org/stacks'
+
+  try {
+    var created = await requestJson(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name }),
+    })
+    var item = mode === 'group' ? created.group : created.stack
+    if (!item || !item.id) throw new Error('missing created item id')
+    await applyOrgPickerSelection(item.id)
+  } catch (error) {
+    showToast(fmt(STRINGS.orgPickerCreateFailed, { error: error.message || String(error) }), 'err')
+  }
+}
+
 async function removeProjectFromGroup(project) {
   try {
     await requestJson('/api/projects/' + encodeURIComponent(project.id) + '/group', {
@@ -4284,6 +4323,12 @@ elements.orgPickerList.addEventListener('click', function (event) {
   var item = event.target.closest('.org-picker-item')
   if (!item) return
 
+  if (item.dataset.pickerAction === 'create') {
+    orgPickerCreating = true
+    renderOrgPickerList()
+    return
+  }
+
   if (item.classList.contains('org-picker-remove')) {
     if (orgPickerTarget && orgPickerTarget.project) {
       var proj = orgPickerTarget.project
@@ -4295,6 +4340,21 @@ elements.orgPickerList.addEventListener('click', function (event) {
 
   var itemId = item.dataset.itemId
   if (itemId) void applyOrgPickerSelection(itemId)
+})
+
+elements.orgPickerList.addEventListener('keydown', function (event) {
+  var input = event.target.closest('.org-picker-create-input')
+  if (!input) return
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    var name = input.value.trim()
+    if (name) void createAndApplyOrgPickerItem(name)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    orgPickerCreating = false
+    renderOrgPickerList()
+  }
 })
 
 elements.orgPickerOverlay.addEventListener('click', function (event) {

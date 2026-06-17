@@ -21,6 +21,7 @@ const STRINGS = {
   filterActive: 'Active',
   filterArchived: 'Archived',
   filterAttention: 'Needs Attention',
+  filterScopeLabel: 'SESSIONS',
   filterTooltipAll: 'All non-archived sessions',
   filterTooltipActive: 'Sessions currently running in a terminal',
   filterTooltipArchived: 'Locally archived sessions',
@@ -197,15 +198,16 @@ const STRINGS = {
 
   // ── Empty states ──────────────────────────────────────────────────────────
   // ── Left rail ─────────────────────────────────────────────────────────────
-  railInbox: 'INBOX',
-  railInboxEmpty: 'Nothing to triage.',
+  railReview: 'REVIEW',
+  railReviewEmpty: 'No review signals.',
+  railReviewTooltip:
+    'Cross-project review signals. Selecting one focuses the project and session lists.',
   railStacks: 'STACKS',
+  railStacksTooltip:
+    'Temporary work sets. A stack can collect sessions or whole projects you want to revisit together.',
   railGroups: 'GROUPS',
-  railNewStack: '+ new stack',
-  railNewGroup: '+ new group',
-  railStackNamePlaceholder: 'Stack name…',
-  railGroupNamePlaceholder: 'Group name…',
-  railCreateError: 'Failed to create: {message}',
+  railGroupsTooltip:
+    'Project organization. A project can belong to one group, such as work, personal, or client.',
 
   // ── Rail: delete / manage ─────────────────────────────────────────────────
   railDeleteStack: 'delete stack',
@@ -218,7 +220,7 @@ const STRINGS = {
     'Delete stack "{name}"?\n\nSessions and projects in it will not be affected.',
   railDeleteGroupConfirm: 'Delete group "{name}"?\n\nProjects will be unassigned from this group.',
 
-  // Inbox bucket labels (keys referenced from INBOX_BUCKETS[].labelKey)
+  // Review bucket labels (keys referenced from REVIEW_BUCKETS[].labelKey)
   inboxBucketActive: 'Active now',
   inboxBucketAttention: 'Needs attention',
   inboxBucketBranchDrift: 'Branch drift',
@@ -237,13 +239,20 @@ const STRINGS = {
   // Group/stack picker
   orgPickerGroupTitle: 'Move project to group',
   orgPickerStackTitle: 'Add to stack',
-  orgPickerNoItems: 'No items — create one in the rail first.',
+  orgPickerNoItems: 'No existing items.',
+  orgPickerNewGroup: '+ new group',
+  orgPickerNewStack: '+ new stack',
+  orgPickerCreateGroupPlaceholder: 'New group name...',
+  orgPickerCreateStackPlaceholder: 'New stack name...',
+  orgPickerCreateHint: 'Enter to create and apply',
+  orgPickerCreateFailed: 'Failed to create: {error}',
   orgPickerGroupFailed: 'Failed to assign group: {error}',
   orgPickerStackFailed: 'Failed to add to stack: {error}',
   orgPickerRemoveGroup: 'Remove from group',
   sessionActionMoveToGroup: 'move to group…',
   sessionActionAddToStack: 'add to stack…',
   projectCtxMoveToGroup: 'move to group…',
+  projectCtxAddToStack: 'add to stack…',
 
   // Inspector org section
   inspOrgTags: 'TAGS',

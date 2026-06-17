@@ -32,11 +32,11 @@ const RECENT_WITHIN_DAYS = 7
 const RAIL_STORAGE_KEY = 'swoop:rail:'
 
 /**
- * Inbox triage bucket definitions in priority order.
+ * Review bucket definitions in priority order.
  * The `test` functions are closures — they capture live state on call, not at definition.
  * Labels are STRINGS keys resolved at render time.
  */
-const INBOX_BUCKETS = [
+const REVIEW_BUCKETS = [
   {
     id: 'active',
     labelKey: 'inboxBucketActive',

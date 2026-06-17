@@ -63,10 +63,10 @@ function openProjectContextMenu(event, project) {
   var items = [
     { action: 'project-new-session', label: '+ new session' },
     { action: 'project-copy-path', label: 'copy path' },
+    { type: 'separator' },
+    { action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup },
+    { action: 'project-add-stack', label: STRINGS.projectCtxAddToStack },
   ]
-  if (orgData && orgData.groups && orgData.groups.length > 0) {
-    items.push({ action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup })
-  }
   openContextMenuAt(event.clientX, event.clientY, items)
 }
 
@@ -86,8 +86,10 @@ elements.contextMenu.addEventListener('click', function (event) {
     copyTextToClipboard(project.path, STRINGS.projectPathCopied)
   } else if (action === 'project-move-group' && project) {
     openGroupPicker(project)
+  } else if (action === 'project-add-stack' && project) {
+    openStackPicker(project, null)
   } else if (action === 'session-add-stack' && session) {
-    openStackPicker(ctxProject || selectedProject, session)
+    openStackPicker(project || selectedProject, session)
   } else if (action === 'rail-stack-delete' && railItem && railItem.kind === 'stack') {
     deleteRailStack(railItem.id, railItem.name)
   } else if (action === 'rail-group-delete' && railItem && railItem.kind === 'group') {

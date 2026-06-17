@@ -6,6 +6,7 @@ const elements = {
   alwaysConfirmCheckbox: elementById('dlg-always-confirm'),
   contextMenu: elementById('ctx-menu'),
   filterBar: elementById('filter-bar'),
+  filterScopeLabel: elementById('filter-scope-label'),
   footerStatus: elementById('ftr-status'),
   headerHints: elementById('hdr-hints'),
   instructionsCloseButton: elementById('md-close'),
