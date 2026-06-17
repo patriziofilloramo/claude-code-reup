@@ -1790,3 +1790,82 @@ body {
   position: fixed;
   z-index: 9997;
 }
+
+.ftr-sync-btn {
+  background: none;
+  border: none;
+  color: var(--muted2);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  margin-right: 8px;
+  padding: 0;
+}
+.ftr-sync-btn:hover {
+  color: var(--accent);
+}
+.sync-body {
+  gap: 12px;
+  overflow-y: auto;
+}
+.sync-warning {
+  background: rgb(var(--amber-rgb) / 0.08);
+  border: 1px solid rgb(var(--amber-rgb) / 0.22);
+  border-radius: 4px;
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sync-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.sync-summary {
+  border-bottom: 1px solid var(--dim);
+  border-top: 1px solid var(--dim);
+  color: var(--muted2);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 12px;
+  padding: 8px 0;
+}
+.sync-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sync-project {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 0;
+}
+.sync-project-state {
+  color: var(--muted2);
+  flex: 0 0 54px;
+  font-size: 10px;
+}
+.sync-project--linked .sync-project-state {
+  color: var(--green);
+}
+.sync-project--cloud .sync-project-state {
+  color: var(--accent);
+}
+.sync-project--active .sync-project-state {
+  color: var(--orange);
+}
+.sync-project-path {
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,30 +1,43 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { ThemeName } from '../config/theme-tokens.js'
-import { copyToClipboard } from '../utils/system.js'
-import { linkProjectForTUI, unlinkProjectForTUI } from '../cli/sync-command.js'
 import { loadProjects } from '../core/project/project-discovery.js'
 import type { Project } from '../core/session/session-model.js'
-import type { AutoCleanup } from '../core/user-prefs.js'
+import {
+  buildSyncOverview,
+  linkAllCloudProjectsForSync,
+  linkProjectForSync,
+  type SyncOverview,
+  type SyncProjectReport,
+  unlinkAllSyncedProjectsForSync,
+  unlinkProjectForSync,
+} from '../core/sync/sync-actions.js'
+import type { AutoCleanup, ExperimentalSharedSync } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,
   removeUsageStatusLine,
   setupUsageStatusLine,
 } from '../core/usage/usage-statusline-integration.js'
+import { copyToClipboard } from '../utils/system.js'
 
-const TABS = ['Interface', 'Integrations', 'Features', 'Sync'] as const
+const TABS = ['Interface', 'Integrations', 'Experimental'] as const
 type Tab = (typeof TABS)[number]
 
-// Highest cursor index per tab (-1 = no navigable items)
 const TAB_CURSOR_MAX: Record<Tab, number> = {
-  Interface: 2, // 0 = dark, 1 = light, 2 = terminal
-  Integrations: 3, // 0 = usage statusline, 1 = powershell, 2 = bash, 3 = zsh
-  Features: 0, // 0 = autoCleanupOnStart
-  Sync: -1, // info-only
+  Interface: 2,
+  Integrations: 3,
+  Experimental: 1,
 }
+
+const MANAGED_SYNC_SETUP = {
+  updateClaudeMd: true,
+  updateGitignore: true,
+  updatePermissionRules: true,
+} as const
 
 const SHELLS = [
   {
@@ -59,36 +72,48 @@ export function ConfigApp({
   initialTab,
 }: { onClose?: () => void; initialTab?: Tab } = {}) {
   const { exit } = useApp()
-  const [tabIndex, setTabIndex] = useState(initialTab ? TABS.indexOf(initialTab) : 0)
+  const initialTabIndex = initialTab ? Math.max(0, TABS.indexOf(initialTab)) : 0
+  const [tabIndex, setTabIndex] = useState(initialTabIndex)
   const [cursor, setCursor] = useState(0)
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
+  const [experimentalSharedSync, setExperimentalSharedSync] =
+    useState<ExperimentalSharedSync>('off')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
-  const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null)
   const [copiedShellIndex, setCopiedShellIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
+  const [syncOverview, setSyncOverview] = useState<SyncOverview | null>(null)
 
   useEffect(() => {
-    void readUserPrefs().then((p) => {
-      setTheme(p.theme)
-      setAutoCleanupOnStart(p.autoCleanupOnStart)
+    void readUserPrefs().then((prefs) => {
+      setTheme(prefs.theme)
+      setAutoCleanupOnStart(prefs.autoCleanupOnStart)
+      setExperimentalSharedSync(prefs.experimentalSharedSync)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
-    void loadProjects().then(setProjects)
+    void refreshProjectsAndSync()
   }, [])
 
   const currentTab = TABS[tabIndex]!
+  const syncRows = useMemo(() => syncOverview?.projects ?? [], [syncOverview])
+  const experimentalCursorMax =
+    experimentalSharedSync === 'on' ? 4 + Math.max(0, syncRows.length) : 1
+  const maxCursor =
+    currentTab === 'Experimental' ? experimentalCursorMax : TAB_CURSOR_MAX[currentTab]
 
-  const syncLinkable = useMemo(() => projects.filter((p) => !p.isShared), [projects])
-  const syncLinked = useMemo(() => projects.filter((p) => p.isShared), [projects])
-  const syncCursorMax = Math.max(-1, syncLinkable.length + syncLinked.length - 1)
+  async function refreshProjectsAndSync(): Promise<void> {
+    const updatedProjects = await loadProjects()
+    setProjects(updatedProjects)
+    setSyncOverview(await buildSyncOverview(updatedProjects))
+  }
 
-  const maxCursor = currentTab === 'Sync' ? syncCursorMax : TAB_CURSOR_MAX[currentTab]!
-
-  function switchTab(delta: number) {
-    setTabIndex((i) => (i + delta + TABS.length) % TABS.length)
+  function switchTab(delta: number): void {
+    setTabIndex((index) => (index + delta + TABS.length) % TABS.length)
     setCursor(0)
+    setPendingConfirm(null)
     setStatusMsg(null)
   }
 
@@ -98,8 +123,7 @@ export function ConfigApp({
       else exit()
       return
     }
-
-    if (key.tab || (key.rightArrow && !key.shift)) {
+    if (key.tab || key.rightArrow) {
       switchTab(1)
       return
     }
@@ -107,148 +131,176 @@ export function ConfigApp({
       switchTab(-1)
       return
     }
-
     if (key.upArrow) {
-      setCursor((c) => Math.max(0, c - 1))
+      setCursor((value) => Math.max(0, value - 1))
+      setPendingConfirm(null)
       setStatusMsg(null)
       return
     }
     if (key.downArrow && maxCursor >= 0) {
-      setCursor((c) => Math.min(maxCursor, c + 1))
+      setCursor((value) => Math.min(maxCursor, value + 1))
+      setPendingConfirm(null)
       setStatusMsg(null)
       return
     }
-
     if ((input === ' ' || key.return) && !busy) void handleActivate()
   })
 
-  async function handleActivate() {
+  function confirmAction(actionId: string): boolean {
+    if (pendingConfirm === actionId) {
+      setPendingConfirm(null)
+      return true
+    }
+    setPendingConfirm(actionId)
+    setStatusMsg({ ok: false, text: 'Press enter again to confirm this bulk sync action' })
+    return false
+  }
+
+  async function handleActivate(): Promise<void> {
     if (currentTab === 'Interface') {
       const themes: ThemeName[] = ['dark', 'light', 'terminal']
       const next = themes[cursor] ?? 'dark'
       await setUserPref('theme', next)
       setTheme(next)
-      setStatusMsg({ text: `Theme set to ${next} — restart swoop to apply`, ok: true })
+      setStatusMsg({ ok: true, text: `Theme set to ${next}; restart swoop to apply` })
       return
     }
 
-    if (currentTab === 'Features') {
-      if (cursor === 0) {
-        const cycle: Record<AutoCleanup, AutoCleanup> = { off: 'on', on: 'auto', auto: 'off' }
-        const next = cycle[autoCleanupOnStart]
-        await setUserPref('autoCleanupOnStart', next)
-        setAutoCleanupOnStart(next)
-        setStatusMsg({ text: `Cleanup on start: ${next}`, ok: true })
-      }
+    if (currentTab === 'Integrations') {
+      await handleIntegrationAction()
       return
     }
 
-    if (currentTab === 'Sync') {
-      if (syncCursorMax < 0) return
+    await handleExperimentalAction()
+  }
+
+  async function handleIntegrationAction(): Promise<void> {
+    if (cursor === 0) {
+      if (usageConfigured === null) return
       setBusy(true)
       try {
-        let result: { ok: boolean; message: string }
-        if (cursor < syncLinkable.length) {
-          result = await linkProjectForTUI(syncLinkable[cursor]!.path, projects)
+        if (usageConfigured) {
+          const result = await removeUsageStatusLine()
+          setUsageConfigured(false)
+          setStatusMsg({
+            ok: true,
+            text: result.changed
+              ? `Integration removed${result.restoredPrevious ? '; previous status line restored' : ''}`
+              : 'Was not configured',
+          })
         } else {
-          result = await unlinkProjectForTUI(
-            syncLinked[cursor - syncLinkable.length]!.path,
-            projects
-          )
+          await setupUsageStatusLine()
+          setUsageConfigured(true)
+          setStatusMsg({ ok: true, text: 'Integration set up; restart Claude Code to activate' })
         }
-        setStatusMsg({ text: result.message.split('\n')[0]!, ok: result.ok })
-        const updated = await loadProjects()
-        setProjects(updated)
-        const newMax = Math.max(
-          -1,
-          updated.filter((p) => !p.isShared).length + updated.filter((p) => p.isShared).length - 1
-        )
-        if (cursor > newMax) setCursor(Math.max(0, newMax))
-      } catch (e) {
-        setStatusMsg({ text: e instanceof Error ? e.message : 'operation failed', ok: false })
+      } catch (error) {
+        setStatusMsg({
+          ok: false,
+          text: error instanceof Error ? error.message : 'integration setup failed',
+        })
       } finally {
         setBusy(false)
       }
       return
     }
 
-    if (currentTab === 'Integrations') {
-      if (cursor === 0) {
-        if (usageConfigured === null) return
-        setBusy(true)
-        try {
-          if (usageConfigured) {
-            const r = await removeUsageStatusLine()
-            setUsageConfigured(false)
-            setStatusMsg({
-              text: r.changed
-                ? 'Integration removed' +
-                  (r.restoredPrevious ? ' — previous status line restored' : '')
-                : 'Was not configured',
-              ok: true,
+    if (cursor >= 1 && cursor <= 3) {
+      const shell = SHELLS[cursor - 1]!
+      const copiedIndex = cursor
+      copyToClipboard(shell.cmd)
+        .then(() => {
+          setCopiedShellIndex(copiedIndex)
+          setTimeout(() => setCopiedShellIndex(null), 2000)
+        })
+        .catch(() => setStatusMsg({ ok: false, text: 'clipboard unavailable' }))
+    }
+  }
+
+  async function handleExperimentalAction(): Promise<void> {
+    if (cursor === 0) {
+      const cycle: Record<AutoCleanup, AutoCleanup> = { off: 'on', on: 'auto', auto: 'off' }
+      const next = cycle[autoCleanupOnStart]
+      await setUserPref('autoCleanupOnStart', next)
+      setAutoCleanupOnStart(next)
+      setStatusMsg({ ok: true, text: `Cleanup on start: ${next}` })
+      return
+    }
+
+    if (cursor === 1) {
+      const next: ExperimentalSharedSync = experimentalSharedSync === 'on' ? 'off' : 'on'
+      await setUserPref('experimentalSharedSync', next)
+      setExperimentalSharedSync(next)
+      setStatusMsg({
+        ok: true,
+        text:
+          next === 'on'
+            ? 'Shared Session Sync enabled; link actions still require explicit selection'
+            : 'Shared Session Sync disabled',
+      })
+      return
+    }
+
+    if (experimentalSharedSync !== 'on') return
+    setBusy(true)
+    try {
+      if (cursor === 2) {
+        const result = await linkProjectForSync(process.cwd(), {
+          projects,
+          setupOptions: MANAGED_SYNC_SETUP,
+        })
+        setStatusMsg({ ok: !result.error, text: result.message })
+      } else if (cursor === 3) {
+        if (!confirmAction('link-all-cloud')) return
+        const result = await linkAllCloudProjectsForSync({
+          projects,
+          setupOptions: MANAGED_SYNC_SETUP,
+        })
+        setStatusMsg({ ok: true, text: result.message })
+      } else if (cursor === 4) {
+        if (!confirmAction('unlink-all')) return
+        const result = await unlinkAllSyncedProjectsForSync({ projects })
+        setStatusMsg({ ok: true, text: result.message })
+      } else {
+        const report = syncRows[cursor - 5]
+        if (!report || report.isActive) return
+        const result = report.isShared
+          ? await unlinkProjectForSync(report.path, { projects })
+          : await linkProjectForSync(report.path, {
+              projects,
+              setupOptions: MANAGED_SYNC_SETUP,
             })
-          } else {
-            try {
-              await setupUsageStatusLine()
-              setUsageConfigured(true)
-              setStatusMsg({
-                text: 'Integration set up — restart Claude Code to activate',
-                ok: true,
-              })
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : String(err)
-              if (msg.includes('existing') && msg.includes('--replace')) {
-                setStatusMsg({
-                  text: 'An existing status line is set — run: swoop usage setup --replace',
-                  ok: false,
-                })
-              } else {
-                setStatusMsg({ text: `Error: ${msg}`, ok: false })
-              }
-            }
-          }
-        } finally {
-          setBusy(false)
-        }
+        setStatusMsg({ ok: !result.error, text: result.message })
       }
-      if (cursor >= 1 && cursor <= 3) {
-        const shell = SHELLS[cursor - 1]!
-        const copiedIdx = cursor
-        copyToClipboard(shell.cmd)
-          .then(() => {
-            setCopiedShellIndex(copiedIdx)
-            setTimeout(() => setCopiedShellIndex(null), 2000)
-          })
-          .catch(() => setStatusMsg({ text: 'clipboard unavailable', ok: false }))
-      }
+      await refreshProjectsAndSync()
+    } catch (error) {
+      setStatusMsg({ ok: false, text: error instanceof Error ? error.message : 'sync failed' })
+    } finally {
+      setBusy(false)
     }
   }
 
   return (
     <Box flexDirection="column">
-      {/* Header */}
       <Box gap={1} paddingX={1} paddingTop={1}>
         <Text bold color={COLORS.accent}>
-          swoop
+          {LABELS.appName}
         </Text>
-        <Text color={COLORS.muted}>config</Text>
+        <Text color={COLORS.muted}>{LABELS.configPanelTitle}</Text>
       </Box>
 
-      {/* Tab bar */}
       <Box gap={3} paddingX={1} paddingY={1}>
-        {TABS.map((tab, i) => (
+        {TABS.map((tab, index) => (
           <Text
-            bold={i === tabIndex}
-            color={i === tabIndex ? COLORS.text : COLORS.muted}
+            bold={index === tabIndex}
+            color={index === tabIndex ? COLORS.text : COLORS.muted}
             key={tab}
-            underline={i === tabIndex}
+            underline={index === tabIndex}
           >
             {tab}
           </Text>
         ))}
       </Box>
 
-      {/* Content */}
       <Box flexDirection="column" minHeight={12} paddingX={2}>
         {currentTab === 'Interface' && <InterfaceTab cursor={cursor} theme={theme} />}
         {currentTab === 'Integrations' && (
@@ -259,22 +311,25 @@ export function ConfigApp({
             usageConfigured={usageConfigured}
           />
         )}
-        {currentTab === 'Features' && (
-          <FeaturesTab autoCleanupOnStart={autoCleanupOnStart} cursor={cursor} />
-        )}
-        {currentTab === 'Sync' && (
-          <SyncTab busy={busy} cursor={cursor} linkable={syncLinkable} linked={syncLinked} />
+        {currentTab === 'Experimental' && (
+          <ExperimentalTab
+            autoCleanupOnStart={autoCleanupOnStart}
+            busy={busy}
+            cursor={cursor}
+            experimentalSharedSync={experimentalSharedSync}
+            pendingConfirm={pendingConfirm}
+            syncOverview={syncOverview}
+            syncRows={syncRows}
+          />
         )}
       </Box>
 
-      {/* Status message */}
       {statusMsg && (
         <Box paddingBottom={1} paddingX={2}>
           <Text color={statusMsg.ok ? COLORS.ok : COLORS.danger}>{statusMsg.text}</Text>
         </Box>
       )}
 
-      {/* Hints */}
       <Box
         borderBottom={false}
         borderColor={COLORS.border}
@@ -286,13 +341,14 @@ export function ConfigApp({
         paddingX={1}
       >
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text> nav
+          <Text color={COLORS.text}>{LABELS.configKeyUpDown}</Text>{' '}
+          {LABELS.hintNav.replace('↑↓ ', '')}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>enter</Text> select
+          <Text color={COLORS.text}>{LABELS.configKeyEnter}</Text> {LABELS.configSelect}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>tab / ←→</Text> switch
+          <Text color={COLORS.text}>{LABELS.configKeyTabLeftRight}</Text> {LABELS.configHintSwitch}
         </Text>
         <Text color={COLORS.muted}>
           <Text color={COLORS.text}>{onClose ? 'esc / q' : 'q'}</Text>
@@ -304,39 +360,28 @@ export function ConfigApp({
 }
 
 function InterfaceTab({ cursor, theme }: { cursor: number; theme: ThemeName }) {
-  const options: { value: ThemeName; label: string; desc: string }[] = [
-    { value: 'dark', label: 'dark', desc: 'Dark background — default' },
-    { value: 'light', label: 'light', desc: 'Light background — high contrast in bright rooms' },
-    { value: 'terminal', label: 'terminal', desc: 'Phosphor green on near-black — CRT aesthetic' },
+  const options: { desc: string; label: string; value: ThemeName }[] = [
+    { value: 'dark', label: 'dark', desc: 'Dark background; default' },
+    { value: 'light', label: 'light', desc: 'Light background; high contrast in bright rooms' },
+    { value: 'terminal', label: 'terminal', desc: 'Phosphor green on near-black' },
   ]
 
   return (
     <Box flexDirection="column">
       <Text bold color={COLORS.text}>
-        Color theme
+        {LABELS.configColorThemeTitle}
       </Text>
-      <Text color={COLORS.dim}>
-        Takes effect when swoop is restarted. The web UI switches live.
-      </Text>
+      <Text color={COLORS.dim}>{LABELS.configColorThemeDesc}</Text>
       <Box flexDirection="column" marginTop={1}>
-        {options.map((opt, i) => {
-          const focused = i === cursor
-          const active = opt.value === theme
-          return (
-            <Box flexDirection="column" key={opt.value} marginBottom={1}>
-              <Box gap={1}>
-                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ' '}</Text>
-                <Text color={active ? COLORS.accent : COLORS.muted}>{active ? '◉' : '○'}</Text>
-                <Text bold={active} color={focused ? COLORS.text : COLORS.textSub}>
-                  {opt.label}
-                </Text>
-              </Box>
-              <Box paddingLeft={3}>
-                <Text color={COLORS.dim}>{opt.desc}</Text>
-              </Box>
-            </Box>
-          )
-        })}
+        {options.map((option, index) => (
+          <SelectableRow
+            active={option.value === theme}
+            description={option.desc}
+            focused={cursor === index}
+            key={option.value}
+            label={option.label}
+          />
+        ))}
       </Box>
     </Box>
   )
@@ -355,67 +400,49 @@ function IntegrationsTab({
 }) {
   return (
     <Box flexDirection="column" gap={1}>
-      {/* Usage status line */}
       <Box flexDirection="column">
         <Box gap={1}>
-          <Text color={cursor === 0 ? COLORS.accent : COLORS.dim}>{cursor === 0 ? '▶' : ' '}</Text>
+          <Text color={cursor === 0 ? COLORS.accent : COLORS.dim}>{cursor === 0 ? '>' : ' '}</Text>
           <Text bold color={cursor === 0 ? COLORS.text : COLORS.textSub}>
-            Live usage status line
+            {LABELS.configLiveUsageTitle}
           </Text>
-          {usageConfigured === null ? (
-            <Text color={COLORS.dim}>…</Text>
-          ) : usageConfigured ? (
-            <Text color={COLORS.ok}>● on</Text>
-          ) : (
-            <Text color={COLORS.dim}>○ off</Text>
-          )}
-          {busy && <Text color={COLORS.muted}> working…</Text>}
+          <Text color={usageConfigured ? COLORS.ok : COLORS.dim}>
+            {usageConfigured === null ? '...' : usageConfigured ? 'on' : 'off'}
+          </Text>
+          {busy && <Text color={COLORS.muted}> {LABELS.configWorking}</Text>}
         </Box>
         <Box paddingLeft={3}>
-          <Text color={COLORS.dim}>
-            Captures rate-limit data by hooking Claude Code's status line
-          </Text>
+          <Text color={COLORS.dim}>{LABELS.configLiveUsageDesc}</Text>
         </Box>
-        {!busy && usageConfigured !== null && (
-          <Box paddingLeft={3}>
-            <Text color={COLORS.dim}>
-              {usageConfigured ? '— enter to remove' : '— enter to set up'}
-            </Text>
-          </Box>
-        )}
       </Box>
 
-      {/* Shell completion */}
       <Box flexDirection="column" marginTop={1}>
         <Text bold color={COLORS.text}>
-          Shell completion
+          {LABELS.configShellCompletionTitle}
         </Text>
         <Box paddingLeft={2}>
-          <Text color={COLORS.dim}>Tab-complete session IDs for resume and handoff</Text>
+          <Text color={COLORS.dim}>{LABELS.configShellCompletionDesc}</Text>
         </Box>
-        {SHELLS.map((shell, i) => {
-          const shellCursor = i + 1
+        {SHELLS.map((shell, index) => {
+          const shellCursor = index + 1
           const focused = cursor === shellCursor
-          const detected = DETECTED_SHELL === i
           return (
-            <Box key={shell.label} flexDirection="column" marginTop={1}>
+            <Box flexDirection="column" key={shell.label} marginTop={1}>
               <Box gap={1}>
-                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ' '}</Text>
+                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
                 <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
                   {shell.label}
                 </Text>
-                {detected && <Text color={COLORS.ok}>● detected</Text>}
+                {DETECTED_SHELL === index && <Text color={COLORS.ok}>{LABELS.configDetected}</Text>}
               </Box>
               {focused && (
                 <Box flexDirection="column" paddingLeft={3}>
                   <Text color={COLORS.muted}>{shell.cmd}</Text>
-                  {copiedShellIndex === shellCursor ? (
-                    <Text color={COLORS.ok}>command copied — paste in your terminal</Text>
-                  ) : (
-                    <Text color={COLORS.dim}>
-                      enter to copy · add to {shell.profile} for permanent setup
-                    </Text>
-                  )}
+                  <Text color={copiedShellIndex === shellCursor ? COLORS.ok : COLORS.dim}>
+                    {copiedShellIndex === shellCursor
+                      ? 'command copied; paste in your terminal'
+                      : `enter to copy; add to ${shell.profile} for permanent setup`}
+                  </Text>
                 </Box>
               )}
             </Box>
@@ -426,151 +453,170 @@ function IntegrationsTab({
   )
 }
 
-function FeaturesTab({
+function ExperimentalTab({
   autoCleanupOnStart,
+  busy,
   cursor,
+  experimentalSharedSync,
+  pendingConfirm,
+  syncOverview,
+  syncRows,
 }: {
   autoCleanupOnStart: AutoCleanup
+  busy: boolean
   cursor: number
+  experimentalSharedSync: ExperimentalSharedSync
+  pendingConfirm: string | null
+  syncOverview: SyncOverview | null
+  syncRows: SyncProjectReport[]
 }) {
-  const stateColor = autoCleanupOnStart !== 'off' ? COLORS.ok : COLORS.dim
-  const stateLabel =
-    autoCleanupOnStart === 'on' ? '● on' : autoCleanupOnStart === 'auto' ? '● auto' : '○ off'
+  const syncEnabled = experimentalSharedSync === 'on'
+  const cleanupLabel =
+    autoCleanupOnStart === 'on' ? 'on' : autoCleanupOnStart === 'auto' ? 'auto' : 'off'
+
   return (
     <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        <Box gap={1}>
-          <Text color={cursor === 0 ? COLORS.accent : COLORS.dim}>{cursor === 0 ? '▶' : ' '}</Text>
-          <Text bold color={cursor === 0 ? COLORS.text : COLORS.textSub}>
-            Cleanup on start
-          </Text>
-          <Text color={stateColor}>{stateLabel}</Text>
-        </Box>
-        <Box paddingLeft={3}>
-          <Text color={COLORS.dim}>
-            {autoCleanupOnStart === 'on' &&
-              'Shows cleanup picker before opening swoop — you choose what to archive.'}
-            {autoCleanupOnStart === 'auto' &&
-              'Archives high-confidence cleanup candidates automatically on startup.'}
-            {autoCleanupOnStart === 'off' && 'No automatic cleanup. Run `swoop cleanup` manually.'}
-          </Text>
-        </Box>
-        {autoCleanupOnStart !== 'off' && (
-          <Box paddingLeft={3}>
-            <Text color={COLORS.dim}>Skipped if no candidates are found.</Text>
+      <SelectableRow
+        active={autoCleanupOnStart !== 'off'}
+        description={
+          autoCleanupOnStart === 'off'
+            ? 'No automatic cleanup. Run `swoop cleanup` manually.'
+            : autoCleanupOnStart === 'auto'
+              ? 'Archives high-confidence cleanup candidates automatically on startup.'
+              : 'Shows cleanup picker before opening swoop; you choose what to archive.'
+        }
+        focused={cursor === 0}
+        label="Cleanup on start"
+        status={cleanupLabel}
+      />
+
+      <SelectableRow
+        active={syncEnabled}
+        description="Experimental. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/."
+        focused={cursor === 1}
+        label="Shared Session Sync"
+        status={syncEnabled ? 'on' : 'off'}
+      />
+
+      {syncEnabled && (
+        <Box flexDirection="column" marginTop={1}>
+          <SyncActionRow
+            confirm={false}
+            focused={cursor === 2}
+            label={LABELS.configSyncLinkCurrent}
+            suffix={busy && cursor === 2 ? LABELS.configWorking : process.cwd()}
+          />
+          <SyncActionRow
+            confirm={pendingConfirm === 'link-all-cloud'}
+            focused={cursor === 3}
+            label={LABELS.configSyncLinkAllCloud}
+            suffix={`${syncOverview?.cloudProjectCandidates.length ?? 0} ${LABELS.configSyncCandidates}`}
+          />
+          <SyncActionRow
+            confirm={pendingConfirm === 'unlink-all'}
+            focused={cursor === 4}
+            label={LABELS.configSyncUnlinkAll}
+            suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
+          />
+          <Box marginTop={1}>
+            <Text bold color={COLORS.text}>
+              {LABELS.configProjectsTitle}
+            </Text>
           </Box>
-        )}
+          {syncRows.length === 0 && (
+            <Box paddingLeft={2}>
+              <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
+            </Box>
+          )}
+          {syncRows.map((project, index) => (
+            <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
+          ))}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+function SelectableRow({
+  active,
+  description,
+  focused,
+  label,
+  status,
+}: {
+  active: boolean
+  description: string
+  focused: boolean
+  label: string
+  status?: string
+}) {
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Box gap={1}>
+        <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
+        <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+          {label}
+        </Text>
+        {status && <Text color={active ? COLORS.ok : COLORS.dim}>{status}</Text>}
+      </Box>
+      <Box paddingLeft={3}>
+        <Text color={COLORS.dim}>{description}</Text>
       </Box>
     </Box>
   )
 }
 
-function projectSyncStatusLabel(project: Project): string {
-  if (project.cloudOffline) return 'offline'
-  if (project.unlinkedDevices?.length)
-    return `${project.unlinkedDevices.length} device(s) not linked`
-  return 'online'
+function SyncActionRow({
+  confirm,
+  focused,
+  label,
+  suffix,
+}: {
+  confirm: boolean
+  focused: boolean
+  label: string
+  suffix: string
+}) {
+  return (
+    <Box gap={1}>
+      <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
+      <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+        {label}
+      </Text>
+      <Text color={confirm ? COLORS.orange : COLORS.dim}>
+        {confirm ? 'press enter again' : suffix}
+      </Text>
+    </Box>
+  )
 }
 
-function SyncTab({
-  busy,
-  cursor,
-  linkable,
-  linked,
-}: {
-  busy: boolean
-  cursor: number
-  linkable: Project[]
-  linked: Project[]
-}) {
-  const cursorInLinkable = linkable.length > 0 && cursor < linkable.length
-  const cursorInLinked = linked.length > 0 && cursor >= linkable.length
+function SyncProjectRow({ focused, project }: { focused: boolean; project: SyncProjectReport }) {
+  const action = project.isActive
+    ? 'active - disabled'
+    : project.isShared
+      ? 'enter to unlink'
+      : 'enter to link'
+  const state = project.isShared ? 'linked' : project.isCloudProject ? 'cloud' : 'local'
+  const color = project.isActive
+    ? COLORS.orange
+    : project.isShared
+      ? project.cloudOffline
+        ? COLORS.muted
+        : COLORS.ok
+      : project.isCloudProject
+        ? COLORS.accent
+        : COLORS.dim
 
   return (
-    <Box flexDirection="column" gap={1}>
-      {/* Legend */}
-      <Box flexDirection="column">
-        <Text bold color={COLORS.text}>
-          Legend
-        </Text>
-        <Box gap={1}>
-          <Text color={COLORS.ok}>☁</Text>
-          <Text color={COLORS.textSub}>online — sessions syncing to cloud</Text>
-        </Box>
-        <Box gap={1}>
-          <Text color={COLORS.orange}>☁</Text>
-          <Text color={COLORS.textSub}>partial — linked here, missing on other devices</Text>
-        </Box>
-        <Box gap={1}>
-          <Text color={COLORS.muted}>☁</Text>
-          <Text color={COLORS.textSub}>offline — cloud folder temporarily unreachable</Text>
-        </Box>
+    <Box gap={1}>
+      <Box width={2} flexShrink={0}>
+        <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ''}</Text>
       </Box>
-
-      {/* Unsynced projects */}
-      {linkable.length > 0 && (
-        <Box flexDirection="column" marginTop={1}>
-          <Box gap={2}>
-            <Text bold color={COLORS.text}>{`Unsynced projects (${linkable.length})`}</Text>
-            {cursorInLinkable && (
-              <Text color={COLORS.dim}>{busy ? 'linking…' : 'enter to link →'}</Text>
-            )}
-          </Box>
-          {linkable.map((p, i) => {
-            const focused = cursor === i
-            return (
-              <Box key={p.id}>
-                <Box width={2} flexShrink={0}>
-                  <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ''}</Text>
-                </Box>
-                <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
-                  {p.path}
-                </Text>
-              </Box>
-            )
-          })}
-        </Box>
-      )}
-
-      {/* Synced projects */}
-      {linked.length > 0 && (
-        <Box flexDirection="column" marginTop={1}>
-          <Box gap={2}>
-            <Text bold color={COLORS.text}>{`Synced projects (${linked.length})`}</Text>
-            {cursorInLinked && (
-              <Text color={COLORS.dim}>{busy ? 'unlinking…' : 'enter to unlink →'}</Text>
-            )}
-          </Box>
-          {linked.map((p, i) => {
-            const globalIdx = linkable.length + i
-            const focused = cursor === globalIdx
-            const iconColor = p.cloudOffline
-              ? COLORS.muted
-              : p.unlinkedDevices?.length
-                ? COLORS.orange
-                : COLORS.ok
-            return (
-              <Box key={p.id} gap={1}>
-                <Box width={2} flexShrink={0}>
-                  <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '▶' : ''}</Text>
-                </Box>
-                <Text color={iconColor}>☁</Text>
-                <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
-                  {p.path}
-                </Text>
-                <Text color={COLORS.dim}>{projectSyncStatusLabel(p)}</Text>
-              </Box>
-            )
-          })}
-        </Box>
-      )}
-
-      {/* Empty state */}
-      {linkable.length === 0 && linked.length === 0 && (
-        <Box marginTop={1}>
-          <Text color={COLORS.dim}>loading…</Text>
-        </Box>
-      )}
+      <Text color={color}>{state}</Text>
+      <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+        {project.path}
+      </Text>
+      <Text color={COLORS.dim}>{action}</Text>
     </Box>
   )
 }

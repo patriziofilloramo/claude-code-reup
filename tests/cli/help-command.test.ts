@@ -30,7 +30,7 @@ describe('CLI help', () => {
     expect(help).toContain('Configuration')
     expect(help).toContain('swoop completion <shell>')
     expect(help).toContain('Experimental')
-    expect(help).toContain('swoop sync [link|unlink] [path]')
+    expect(help).toContain('swoop sync [link|unlink|status] [path]')
     expect(help).not.toContain('swoop --theme')
   })
 

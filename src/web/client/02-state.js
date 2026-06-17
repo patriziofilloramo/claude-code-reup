@@ -21,3 +21,4 @@ let deepSearchLoading = false
 let deepSearchQueryTerm = ''
 let sessionInspectorExpanded = false
 let sessionPreviewCache = new Map()
+let syncOverview = null

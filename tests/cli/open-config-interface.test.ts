@@ -30,10 +30,10 @@ describe('openConfigInterface', () => {
   it('opens the requested tab after releasing terminal input', async () => {
     setTTYState(true, true)
 
-    await openConfigInterface({ commandName: 'swoop sync', initialTab: 'Sync' })
+    await openConfigInterface({ commandName: 'swoop sync', initialTab: 'Experimental' })
 
     expect(releaseTerminalInput).toHaveBeenCalledOnce()
-    expect(runConfigApp).toHaveBeenCalledWith({ initialTab: 'Sync' })
+    expect(runConfigApp).toHaveBeenCalledWith({ initialTab: 'Experimental' })
     expect(process.exitCode).toBeUndefined()
   })
 

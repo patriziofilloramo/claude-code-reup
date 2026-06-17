@@ -102,6 +102,9 @@
         >
         <span class="ftr-sp"></span>
         <button class="ftr-diagnostics" id="ftr-diagnostics" style="display: none"></button>
+        <button class="ftr-sync-btn" id="ftr-sync" title="Experimental shared session sync">
+          sync
+        </button>
         <button class="ftr-theme-btn" id="ftr-theme-btn" title="Switch theme">theme</button>
         <span class="ftr-status" id="ftr-status">loading…</span>
       </footer>
@@ -156,6 +159,21 @@
         </div>
         <div class="drawer-body lf-body" id="lf-body">
           <div class="lf-loading">Scanning…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer" id="sync-drawer">
+      <div class="drawer-pane">
+        <div class="drawer-hdr">
+          <div>
+            <div class="drawer-title">Experimental Sync</div>
+            <div class="drawer-path" id="sync-subtitle"></div>
+          </div>
+          <button class="drawer-close" id="sync-close">x</button>
+        </div>
+        <div class="drawer-body sync-body" id="sync-body">
+          <div class="lf-loading">Loading...</div>
         </div>
       </div>
     </div>

@@ -106,7 +106,10 @@ Options:
 Usage:
   swoop sync
   swoop sync link [project-path]
+  swoop sync link --all-cloud
   swoop sync unlink [project-path]
+  swoop sync unlink --all
+  swoop sync status
 
 Moves session storage into the project and links Claude Code to it, allowing an
 existing file-sync provider to carry sessions across devices. Back up session
@@ -169,7 +172,7 @@ export function renderMainHelp(useColor = process.stdout.isTTY === true): string
     row('swoop completion <shell>', 'Print shell completion setup'),
     '',
     bold('Experimental'),
-    row('swoop sync [link|unlink] [path]', 'Manage shared session storage'),
+    row('swoop sync [link|unlink|status] [path]', 'Manage shared session storage'),
     '',
     bold('Options'),
     row('-h, --help', 'Show help'),

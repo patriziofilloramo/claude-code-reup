@@ -30,6 +30,7 @@ describe('user preferences', () => {
 
     expect(readUserPrefsSync()).toEqual({
       autoCleanupOnStart: 'off',
+      experimentalSharedSync: 'off',
       theme: 'dark',
     })
   })

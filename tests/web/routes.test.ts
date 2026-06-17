@@ -63,6 +63,55 @@ describe('web routes', () => {
     expect(response.status).toBe(403)
   })
 
+  it('returns experimental sync status without mutating state', async () => {
+    const response = await buildApp().request('/api/sync')
+    const body = (await response.json()) as { enabled: boolean; projects: unknown[] }
+
+    expect(response.status).toBe(200)
+    expect(body.enabled).toBe(false)
+    expect(body.projects).toEqual([])
+  })
+
+  it('protects experimental sync feature toggles from non-local origins', async () => {
+    const response = await buildApp().request('/api/sync/feature', {
+      body: JSON.stringify({ enabled: true }),
+      headers: {
+        'Content-Type': 'application/json',
+        Host: 'localhost',
+        Origin: 'https://example.com',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects sync mutations while the experimental feature is disabled', async () => {
+    const response = await buildApp().request('/api/sync/link', {
+      body: JSON.stringify({ path: claudeDirectory }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      error: 'experimental shared sync is disabled',
+    })
+  })
+
+  it('enables sync globally without linking projects automatically', async () => {
+    const response = await buildApp().request('/api/sync/feature', {
+      body: JSON.stringify({ enabled: true }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+    const body = (await response.json()) as { enabled: boolean; linkedProjects: unknown[] }
+
+    expect(response.status).toBe(200)
+    expect(body.enabled).toBe(true)
+    expect(body.linkedProjects).toEqual([])
+  })
+
   it('rejects inherited object properties as theme names', async () => {
     const response = await buildApp().request('/api/theme', {
       body: JSON.stringify({ name: 'toString' }),

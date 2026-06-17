@@ -43,4 +43,9 @@ const elements = {
   diagnosticsCloseButton: elementById('lf-close'),
   searchDeepBtn: elementById('search-deep-btn'),
   searchModeLabel: elementById('search-mode-label'),
+  syncButton: elementById('ftr-sync'),
+  syncDrawer: elementById('sync-drawer'),
+  syncBody: elementById('sync-body'),
+  syncSubtitle: elementById('sync-subtitle'),
+  syncCloseButton: elementById('sync-close'),
 }

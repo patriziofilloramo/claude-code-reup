@@ -29,6 +29,7 @@ const SEGMENTS = [
   '09-resume.js', // resume confirmation dialog and terminal launch
   '10-instructions-drawer.js', // CLAUDE.md editor drawer
   '11-diagnostics-drawer.js', // Lost & Found diagnostics drawer
+  '12-sync-drawer.js', // Experimental shared session sync drawer
   '12-new-session.js', // start-new-session action
   '13-ctx-menu.js', // context menu (project and session)
   '14-search.js', // search bar, deep-search mode, keyboard shortcuts
