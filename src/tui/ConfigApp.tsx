@@ -508,11 +508,9 @@ function FeaturesTab({
 
         {syncEnabled && (
           <Box flexDirection="column" paddingLeft={3} marginTop={1} marginBottom={1}>
-            <Box marginBottom={1}>
-              <Text bold color={COLORS.text}>
-                {LABELS.configSyncActionsTitle}
-              </Text>
-            </Box>
+            <Text bold color={COLORS.text}>
+              {LABELS.configSyncActionsTitle}
+            </Text>
             <SyncActionRow
               confirm={false}
               focused={cursor === 2}
@@ -540,7 +538,7 @@ function FeaturesTab({
               <>
                 {(() => {
                   const linkedRows = syncRows.filter((p) => p.isShared)
-                  const unlinkedRows = syncRows.filter((p) => !p.isShared)
+                  const unlinkedRows = syncRows.filter((p) => !p.isShared && p.isCloudProject)
                   const unlinkedOffset = 5 + linkedRows.length
                   return (
                     <>
@@ -711,15 +709,11 @@ function SyncUnlinkedProjectRow({
   focused: boolean
   project: SyncProjectReport
 }) {
-  const typeLabel = project.isCloudProject ? 'cloud' : 'local'
-  const typeColor = project.isCloudProject ? COLORS.accent : COLORS.dim
-
   return (
     <Box gap={1}>
       <Box flexShrink={0} width={2}>
         <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ''}</Text>
       </Box>
-      <Text color={typeColor}>{typeLabel}</Text>
       <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
         {project.path}
       </Text>
