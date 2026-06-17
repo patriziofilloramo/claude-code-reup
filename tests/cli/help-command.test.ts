@@ -29,7 +29,7 @@ describe('CLI help', () => {
 
     expect(help).toContain('Configuration')
     expect(help).toContain('swoop completion <shell>')
-    expect(help).toContain('Experimental')
+    expect(help).toContain('Features')
     expect(help).toContain('swoop sync [link|unlink|status] [path]')
     expect(help).not.toContain('swoop --theme')
   })
@@ -52,7 +52,7 @@ describe('CLI help', () => {
     await runCli(['help', '--help'])
     await runCli(['-h'])
 
-    expect(String(log.mock.calls[0][0])).toContain('experimental')
+    expect(String(log.mock.calls[0][0])).toContain('cross-device session storage (Alpha)')
     expect(log).toHaveBeenCalledTimes(4)
     expect(process.exitCode).toBeUndefined()
   })

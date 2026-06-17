@@ -5,22 +5,22 @@ import type { ThemeName } from '../config/theme-tokens.js'
 import { getSwoopDirectory } from './project/claude-paths.js'
 
 export type AutoCleanup = 'off' | 'on' | 'auto'
-export type ExperimentalSharedSync = 'off' | 'on'
+export type CrossDeviceSessionStorage = 'off' | 'on'
 
 export interface UserPrefs {
   autoCleanupOnStart: AutoCleanup
-  experimentalSharedSync: ExperimentalSharedSync
+  crossDeviceSessionStorage: CrossDeviceSessionStorage
   theme: ThemeName
 }
 
 const DEFAULT_PREFS: UserPrefs = {
   autoCleanupOnStart: 'off',
-  experimentalSharedSync: 'off',
+  crossDeviceSessionStorage: 'off',
   theme: 'dark',
 }
 
 const VALID_AUTO_CLEANUP_VALUES = new Set<AutoCleanup>(['off', 'on', 'auto'])
-const VALID_EXPERIMENTAL_SYNC_VALUES = new Set<ExperimentalSharedSync>(['off', 'on'])
+const VALID_CROSS_DEVICE_STORAGE_VALUES = new Set<CrossDeviceSessionStorage>(['off', 'on'])
 const VALID_THEME_NAMES = new Set<ThemeName>(['dark', 'light', 'terminal'])
 
 export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: string[] }> = {
@@ -32,8 +32,8 @@ export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: 
     description: 'Cleanup mode on startup: off=disabled, on=show picker, auto=silent archive',
     values: ['off', 'on', 'auto'],
   },
-  experimentalSharedSync: {
-    description: 'Experimental shared session sync in TUI and web',
+  crossDeviceSessionStorage: {
+    description: 'Alpha cross-device Claude session storage sync',
     values: ['off', 'on'],
   },
 }
@@ -54,9 +54,11 @@ export function readUserPrefsSync(): UserPrefs {
       autoCleanupOnStart: isAutoCleanup(parsed['autoCleanupOnStart'])
         ? parsed['autoCleanupOnStart']
         : DEFAULT_PREFS.autoCleanupOnStart,
-      experimentalSharedSync: isExperimentalSharedSync(parsed['experimentalSharedSync'])
-        ? parsed['experimentalSharedSync']
-        : DEFAULT_PREFS.experimentalSharedSync,
+      crossDeviceSessionStorage: isCrossDeviceSessionStorage(parsed['crossDeviceSessionStorage'])
+        ? parsed['crossDeviceSessionStorage']
+        : isCrossDeviceSessionStorage(parsed['experimentalSharedSync'])
+          ? parsed['experimentalSharedSync']
+          : DEFAULT_PREFS.crossDeviceSessionStorage,
       theme: isThemeName(parsed['theme']) ? parsed['theme'] : DEFAULT_PREFS.theme,
     }
   } catch {
@@ -68,9 +70,10 @@ function isAutoCleanup(value: unknown): value is AutoCleanup {
   return typeof value === 'string' && VALID_AUTO_CLEANUP_VALUES.has(value as AutoCleanup)
 }
 
-function isExperimentalSharedSync(value: unknown): value is ExperimentalSharedSync {
+function isCrossDeviceSessionStorage(value: unknown): value is CrossDeviceSessionStorage {
   return (
-    typeof value === 'string' && VALID_EXPERIMENTAL_SYNC_VALUES.has(value as ExperimentalSharedSync)
+    typeof value === 'string' &&
+    VALID_CROSS_DEVICE_STORAGE_VALUES.has(value as CrossDeviceSessionStorage)
   )
 }
 

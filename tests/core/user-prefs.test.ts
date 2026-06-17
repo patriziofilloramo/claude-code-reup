@@ -30,8 +30,17 @@ describe('user preferences', () => {
 
     expect(readUserPrefsSync()).toEqual({
       autoCleanupOnStart: 'off',
-      experimentalSharedSync: 'off',
+      crossDeviceSessionStorage: 'off',
       theme: 'dark',
     })
+  })
+
+  it('migrates the old experimental sync flag to the cross-device storage preference', async () => {
+    await writeFile(
+      join(temporaryClaudeDirectory, 'swoop', 'prefs.json'),
+      JSON.stringify({ experimentalSharedSync: 'on', theme: 'dark' })
+    )
+
+    expect(readUserPrefsSync().crossDeviceSessionStorage).toBe('on')
   })
 })

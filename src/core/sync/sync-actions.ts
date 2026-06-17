@@ -118,7 +118,7 @@ export async function buildSyncOverview(projects?: Project[]): Promise<SyncOverv
   return {
     cloudProjectCandidates: reports.filter((project) => project.kind === 'cloud-candidate'),
     cloudRoots,
-    enabled: readUserPrefsSync().experimentalSharedSync === 'on',
+    enabled: readUserPrefsSync().crossDeviceSessionStorage === 'on',
     linkedProjects: reports.filter((project) => project.kind === 'linked'),
     localProjectCandidates: reports.filter((project) => project.kind === 'local-candidate'),
     projects: reports,
@@ -327,12 +327,12 @@ export async function patchClaudeMdSection(
 
   const section = [
     SWOOP_MARKER_START,
-    '## Swoop: Shared Session Sync',
+    '## Swoop: Cross-device Session Storage',
     '',
     `Cloud storage for this project: \`${cloudDir}\``,
     `Linked from device: \`${deviceId}\``,
     '',
-    'Swoop manages these project files for experimental cross-device sync:',
+    'Swoop manages these project files for Alpha cross-device session storage:',
     '- CLAUDE.md, this bounded section only',
     '- .claude/settings.local.json, optional scoped permission rules only',
     '- .gitignore, the .claude-memory/ entry only',

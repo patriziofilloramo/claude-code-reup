@@ -64,7 +64,7 @@ export async function runSyncCommand(args: string[]): Promise<void> {
     case undefined:
       await openConfigInterface({
         commandName: 'swoop sync',
-        initialTab: 'Experimental',
+        initialTab: 'Features',
         nonInteractiveAlternative:
           'use `swoop sync link <path>` or `swoop sync unlink <path>` in scripts',
       })
@@ -82,9 +82,9 @@ async function linkSync(args: string[]): Promise<void> {
     return
   }
 
-  printExperimentalWarning([
+  printAlphaWarning([
     'Sessions are moved into the cloud directory through a filesystem link.',
-    'Swoop updates CLAUDE.md. Managed .gitignore and permission rules are only added from the Experimental UI.',
+    'Swoop updates CLAUDE.md. Managed .gitignore and permission rules are only added from the Features UI.',
     'Run `swoop sync unlink <path>` to restore local-only storage.',
   ])
 
@@ -121,7 +121,7 @@ async function unlinkSync(args: string[]): Promise<void> {
     return
   }
 
-  printExperimentalWarning(['Sessions are copied from the cloud directory back to local storage.'])
+  printAlphaWarning(['Sessions are copied from the cloud directory back to local storage.'])
 
   const projects = await loadProjects()
 
@@ -197,7 +197,7 @@ async function printSyncStatus(): Promise<void> {
   const overview = await buildSyncOverview()
   writeOutput(
     [
-      `experimental shared sync: ${overview.enabled ? 'on' : 'off'}`,
+      `cross-device session storage: ${overview.enabled ? 'on' : 'off'}`,
       `cloud roots: ${overview.cloudRoots.length === 0 ? 'none detected' : overview.cloudRoots.join(', ')}`,
       `linked projects: ${overview.linkedProjects.length}`,
       `cloud candidates: ${overview.cloudProjectCandidates.length}`,
@@ -228,10 +228,8 @@ async function unlinkProjectSafely(
   }
 }
 
-function printExperimentalWarning(lines: string[]): void {
-  writeOutput(
-    ['WARNING: swoop sync is experimental - use at your own risk.', ...lines, ''].join('\n')
-  )
+function printAlphaWarning(lines: string[]): void {
+  writeOutput(['Alpha: cross-device session storage sync.', ...lines, ''].join('\n'))
 }
 
 function printBulkReport(report: SyncBulkResult): void {

@@ -106,7 +106,7 @@ export const APP = {
 
   /**
    * Subdirectory name created inside the project root by `swoop sync link` to hold
-   * the shared session files that are kept in sync with local storage.
+   * the cross-device session files that are kept in sync with local storage.
    */
   cloudMemoryDir: '.claude-memory',
   /**

@@ -2318,3 +2318,12 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.alpha-badge {
+  border: 1px solid rgb(var(--amber-rgb) / 0.35);
+  border-radius: 3px;
+  color: var(--amber);
+  font-size: 9px;
+  margin-left: 6px;
+  padding: 1px 5px;
+  text-transform: uppercase;
+}

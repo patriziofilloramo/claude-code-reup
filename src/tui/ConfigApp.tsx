@@ -15,7 +15,7 @@ import {
   unlinkAllSyncedProjectsForSync,
   unlinkProjectForSync,
 } from '../core/sync/sync-actions.js'
-import type { AutoCleanup, ExperimentalSharedSync } from '../core/user-prefs.js'
+import type { AutoCleanup, CrossDeviceSessionStorage } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,
@@ -24,13 +24,13 @@ import {
 } from '../core/usage/usage-statusline-integration.js'
 import { copyToClipboard } from '../utils/system.js'
 
-const TABS = ['Interface', 'Integrations', 'Experimental'] as const
+const TABS = ['Interface', 'Integrations', 'Features'] as const
 type Tab = (typeof TABS)[number]
 
 const TAB_CURSOR_MAX: Record<Tab, number> = {
   Interface: 2,
   Integrations: 3,
-  Experimental: 1,
+  Features: 1,
 }
 
 const MANAGED_SYNC_SETUP = {
@@ -77,8 +77,8 @@ export function ConfigApp({
   const [cursor, setCursor] = useState(0)
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
-  const [experimentalSharedSync, setExperimentalSharedSync] =
-    useState<ExperimentalSharedSync>('off')
+  const [crossDeviceSessionStorage, setCrossDeviceSessionStorage] =
+    useState<CrossDeviceSessionStorage>('off')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null)
@@ -91,7 +91,7 @@ export function ConfigApp({
     void readUserPrefs().then((prefs) => {
       setTheme(prefs.theme)
       setAutoCleanupOnStart(prefs.autoCleanupOnStart)
-      setExperimentalSharedSync(prefs.experimentalSharedSync)
+      setCrossDeviceSessionStorage(prefs.crossDeviceSessionStorage)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
     void refreshProjectsAndSync()
@@ -99,10 +99,9 @@ export function ConfigApp({
 
   const currentTab = TABS[tabIndex]!
   const syncRows = useMemo(() => syncOverview?.projects ?? [], [syncOverview])
-  const experimentalCursorMax =
-    experimentalSharedSync === 'on' ? 4 + Math.max(0, syncRows.length) : 1
-  const maxCursor =
-    currentTab === 'Experimental' ? experimentalCursorMax : TAB_CURSOR_MAX[currentTab]
+  const featuresCursorMax =
+    crossDeviceSessionStorage === 'on' ? 4 + Math.max(0, syncRows.length) : 1
+  const maxCursor = currentTab === 'Features' ? featuresCursorMax : TAB_CURSOR_MAX[currentTab]
 
   async function refreshProjectsAndSync(): Promise<void> {
     const updatedProjects = await loadProjects()
@@ -171,7 +170,7 @@ export function ConfigApp({
       return
     }
 
-    await handleExperimentalAction()
+    await handleFeaturesAction()
   }
 
   async function handleIntegrationAction(): Promise<void> {
@@ -216,7 +215,7 @@ export function ConfigApp({
     }
   }
 
-  async function handleExperimentalAction(): Promise<void> {
+  async function handleFeaturesAction(): Promise<void> {
     if (cursor === 0) {
       const cycle: Record<AutoCleanup, AutoCleanup> = { off: 'on', on: 'auto', auto: 'off' }
       const next = cycle[autoCleanupOnStart]
@@ -227,20 +226,20 @@ export function ConfigApp({
     }
 
     if (cursor === 1) {
-      const next: ExperimentalSharedSync = experimentalSharedSync === 'on' ? 'off' : 'on'
-      await setUserPref('experimentalSharedSync', next)
-      setExperimentalSharedSync(next)
+      const next: CrossDeviceSessionStorage = crossDeviceSessionStorage === 'on' ? 'off' : 'on'
+      await setUserPref('crossDeviceSessionStorage', next)
+      setCrossDeviceSessionStorage(next)
       setStatusMsg({
         ok: true,
         text:
           next === 'on'
-            ? 'Shared Session Sync enabled; link actions still require explicit selection'
-            : 'Shared Session Sync disabled',
+            ? 'Cross-device Session Storage enabled; link actions still require explicit selection'
+            : 'Cross-device Session Storage disabled',
       })
       return
     }
 
-    if (experimentalSharedSync !== 'on') return
+    if (crossDeviceSessionStorage !== 'on') return
     setBusy(true)
     try {
       if (cursor === 2) {
@@ -311,12 +310,12 @@ export function ConfigApp({
             usageConfigured={usageConfigured}
           />
         )}
-        {currentTab === 'Experimental' && (
-          <ExperimentalTab
+        {currentTab === 'Features' && (
+          <FeaturesTab
             autoCleanupOnStart={autoCleanupOnStart}
             busy={busy}
             cursor={cursor}
-            experimentalSharedSync={experimentalSharedSync}
+            crossDeviceSessionStorage={crossDeviceSessionStorage}
             pendingConfirm={pendingConfirm}
             syncOverview={syncOverview}
             syncRows={syncRows}
@@ -453,11 +452,11 @@ function IntegrationsTab({
   )
 }
 
-function ExperimentalTab({
+function FeaturesTab({
   autoCleanupOnStart,
   busy,
   cursor,
-  experimentalSharedSync,
+  crossDeviceSessionStorage,
   pendingConfirm,
   syncOverview,
   syncRows,
@@ -465,12 +464,12 @@ function ExperimentalTab({
   autoCleanupOnStart: AutoCleanup
   busy: boolean
   cursor: number
-  experimentalSharedSync: ExperimentalSharedSync
+  crossDeviceSessionStorage: CrossDeviceSessionStorage
   pendingConfirm: string | null
   syncOverview: SyncOverview | null
   syncRows: SyncProjectReport[]
 }) {
-  const syncEnabled = experimentalSharedSync === 'on'
+  const syncEnabled = crossDeviceSessionStorage === 'on'
   const cleanupLabel =
     autoCleanupOnStart === 'on' ? 'on' : autoCleanupOnStart === 'auto' ? 'auto' : 'off'
 
@@ -492,10 +491,10 @@ function ExperimentalTab({
 
       <SelectableRow
         active={syncEnabled}
-        description="Experimental. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/."
+        description="Alpha. Syncs Claude session storage between your own devices through a cloud-synced project folder. It does not share sessions with other users."
         focused={cursor === 1}
-        label="Shared Session Sync"
-        status={syncEnabled ? 'on' : 'off'}
+        label="Cross-device Session Storage"
+        status={syncEnabled ? 'Alpha on' : 'Alpha off'}
       />
 
       {syncEnabled && (

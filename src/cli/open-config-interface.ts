@@ -1,7 +1,7 @@
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { failCommand } from './output.js'
 
-type ConfigTab = 'Experimental' | 'Integrations' | 'Interface'
+type ConfigTab = 'Features' | 'Integrations' | 'Interface'
 
 interface OpenConfigInterfaceOptions {
   commandName: string

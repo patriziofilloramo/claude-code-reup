@@ -101,7 +101,7 @@ Usage:
 Options:
   --deep  Search transcript content instead of session metadata`,
 
-  sync: `swoop sync - manage shared session storage (experimental)
+  sync: `swoop sync - manage cross-device session storage (Alpha)
 
 Usage:
   swoop sync
@@ -112,8 +112,8 @@ Usage:
   swoop sync status
 
 Moves session storage into the project and links Claude Code to it, allowing an
-existing file-sync provider to carry sessions across devices. Back up session
-data before enabling this experimental feature.`,
+existing file-sync provider to carry sessions across your own devices. It does
+not share sessions with other users.`,
 
   usage: `swoop usage - monitor Claude usage limits
 
@@ -171,8 +171,8 @@ export function renderMainHelp(useColor = process.stdout.isTTY === true): string
     row('swoop config', 'Open configuration panel'),
     row('swoop completion <shell>', 'Print shell completion setup'),
     '',
-    bold('Experimental'),
-    row('swoop sync [link|unlink|status] [path]', 'Manage shared session storage'),
+    bold('Features'),
+    row('swoop sync [link|unlink|status] [path]', 'Manage cross-device session storage', 'Alpha'),
     '',
     bold('Options'),
     row('-h, --help', 'Show help'),

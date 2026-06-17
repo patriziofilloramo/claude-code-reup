@@ -176,11 +176,11 @@ const STRINGS = {
   syncLoading: 'Loading sync status...',
   syncLoadFailed: 'Failed to load sync status.',
   syncWarning:
-    'Experimental. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/.',
-  syncEnabled: 'Shared Session Sync is on',
-  syncDisabled: 'Shared Session Sync is off',
-  syncEnable: 'Enable Shared Sync',
-  syncDisable: 'Disable Shared Sync',
+    'Alpha. Syncs Claude session storage between your own devices through a cloud-synced project folder. It does not share sessions with other users. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/.',
+  syncEnabled: 'Cross-device Session Storage is on',
+  syncDisabled: 'Cross-device Session Storage is off',
+  syncEnable: 'Enable Cross-device Storage',
+  syncDisable: 'Disable Cross-device Storage',
   syncLinkSelected: 'Link selected project',
   syncUnlinkSelected: 'Unlink selected project',
   syncLinkAllCloud: 'Link all cloud projects',
@@ -2718,7 +2718,7 @@ elements.instructionsSaveButton.addEventListener('click', function () {
   void saveClaudeInstructions()
 })
 // ---------------------------------------------------------------------------
-// Experimental sync drawer
+// Cross-device session storage drawer
 // ---------------------------------------------------------------------------
 
 function openSyncDrawer() {

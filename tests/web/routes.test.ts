@@ -95,7 +95,7 @@ describe('web routes', () => {
 
     expect(response.status).toBe(409)
     await expect(response.json()).resolves.toEqual({
-      error: 'experimental shared sync is disabled',
+      error: 'cross-device session storage is disabled',
     })
   })
 

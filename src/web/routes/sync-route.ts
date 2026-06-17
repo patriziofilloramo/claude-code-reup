@@ -34,7 +34,7 @@ export function registerSyncRoute(app: Hono): void {
       if (typeof body.enabled !== 'boolean') {
         return context.json({ error: 'enabled must be boolean' }, 400)
       }
-      await setUserPref('experimentalSharedSync', body.enabled ? 'on' : 'off')
+      await setUserPref('crossDeviceSessionStorage', body.enabled ? 'on' : 'off')
       return context.json(await buildSyncOverview())
     })
   )
@@ -106,7 +106,7 @@ export function registerSyncRoute(app: Hono): void {
 async function rejectWhenSyncDisabled(context: Context): Promise<Response | null> {
   const overview = await buildSyncOverview()
   if (overview.enabled) return null
-  return context.json({ error: 'experimental shared sync is disabled' }, 409)
+  return context.json({ error: 'cross-device session storage is disabled' }, 409)
 }
 
 async function jsonSyncOperation(
