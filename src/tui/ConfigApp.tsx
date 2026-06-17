@@ -489,73 +489,112 @@ function FeaturesTab({
         status={cleanupLabel}
       />
 
-      <SelectableRow
-        active={syncEnabled}
-        description="Alpha. Syncs Claude session storage between your own devices through a cloud-synced project folder. It does not share sessions with other users."
-        focused={cursor === 1}
-        label="Cross-device Session Storage"
-        status={syncEnabled ? 'Alpha on' : 'Alpha off'}
-      />
+      <Box flexDirection="column">
+        <SelectableRow
+          active={syncEnabled}
+          badge="Alpha"
+          description="Syncs your Claude session history across your own devices using a shared cloud folder (e.g. OneDrive, Dropbox). Each project must be linked individually. Sessions are private to you."
+          focused={cursor === 1}
+          label="Cross-device Session Storage"
+          noBottomMargin={syncEnabled}
+          status={syncEnabled ? 'on' : 'off'}
+        />
 
-      {syncEnabled && (
-        <Box flexDirection="column" marginTop={1}>
-          <SyncActionRow
-            confirm={false}
-            focused={cursor === 2}
-            label={LABELS.configSyncLinkCurrent}
-            suffix={busy && cursor === 2 ? LABELS.configWorking : process.cwd()}
-          />
-          <SyncActionRow
-            confirm={pendingConfirm === 'link-all-cloud'}
-            focused={cursor === 3}
-            label={LABELS.configSyncLinkAllCloud}
-            suffix={`${syncOverview?.cloudProjectCandidates.length ?? 0} ${LABELS.configSyncCandidates}`}
-          />
-          <SyncActionRow
-            confirm={pendingConfirm === 'unlink-all'}
-            focused={cursor === 4}
-            label={LABELS.configSyncUnlinkAll}
-            suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
-          />
-          <Box marginTop={1}>
-            <Text bold color={COLORS.text}>
-              {LABELS.configProjectsTitle}
-            </Text>
-          </Box>
-          {syncRows.length === 0 && (
-            <Box paddingLeft={2}>
-              <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
+        {syncEnabled && (
+          <Box flexDirection="column" paddingLeft={3} marginTop={1}>
+            <Box marginBottom={1}>
+              <Text bold color={COLORS.text}>
+                {LABELS.configSyncActionsTitle}
+              </Text>
             </Box>
-          )}
-          {syncRows.map((project, index) => (
-            <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
-          ))}
-        </Box>
-      )}
+            <SyncActionRow
+              confirm={false}
+              focused={cursor === 2}
+              label={LABELS.configSyncLinkCurrent}
+              suffix={busy && cursor === 2 ? LABELS.configWorking : process.cwd()}
+            />
+            <SyncActionRow
+              confirm={pendingConfirm === 'link-all-cloud'}
+              focused={cursor === 3}
+              label={LABELS.configSyncLinkAllCloud}
+              suffix={`${syncOverview?.cloudProjectCandidates.length ?? 0} ${LABELS.configSyncCandidates}`}
+            />
+            <SyncActionRow
+              confirm={pendingConfirm === 'unlink-all'}
+              focused={cursor === 4}
+              label={LABELS.configSyncUnlinkAll}
+              suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
+            />
+
+            <Box marginTop={1} marginBottom={0}>
+              <Text bold color={COLORS.text}>
+                {LABELS.configProjectsTitle}
+              </Text>
+            </Box>
+            {syncRows.length === 0 ? (
+              <Box paddingLeft={2}>
+                <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
+              </Box>
+            ) : (
+              <>
+                {syncRows.map((project, index) => (
+                  <SyncProjectRow focused={cursor === index + 5} key={project.id} project={project} />
+                ))}
+                <SyncLegend />
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
+function SyncLegend() {
+  return (
+    <Box gap={3} marginTop={1}>
+      <Text color={COLORS.muted}>legend</Text>
+      <Box gap={1}>
+        <Text color={COLORS.ok}>{LABELS.configSyncLegendLinked}</Text>
+        <Text color={COLORS.dim}>{LABELS.configSyncLegendLinkedDesc}</Text>
+      </Box>
+      <Box gap={1}>
+        <Text color={COLORS.accent}>{LABELS.configSyncLegendCloud}</Text>
+        <Text color={COLORS.dim}>{LABELS.configSyncLegendCloudDesc}</Text>
+      </Box>
+      <Box gap={1}>
+        <Text color={COLORS.dim}>{LABELS.configSyncLegendLocal}</Text>
+        <Text color={COLORS.dim}>{LABELS.configSyncLegendLocalDesc}</Text>
+      </Box>
     </Box>
   )
 }
 
 function SelectableRow({
   active,
+  badge,
   description,
   focused,
   label,
+  noBottomMargin,
   status,
 }: {
   active: boolean
+  badge?: string
   description: string
   focused: boolean
   label: string
+  noBottomMargin?: boolean
   status?: string
 }) {
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column" marginBottom={noBottomMargin ? 0 : 1}>
       <Box gap={1}>
         <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
         <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
           {label}
         </Text>
+        {badge && <Text color={COLORS.muted}>{badge}</Text>}
         {status && <Text color={active ? COLORS.ok : COLORS.dim}>{status}</Text>}
       </Box>
       <Box paddingLeft={3}>
