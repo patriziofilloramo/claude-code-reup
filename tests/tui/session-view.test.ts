@@ -203,4 +203,67 @@ describe('deriveSearchResults search qualifiers', () => {
     )
     expect(results).toEqual([{ ...releaseProject, sessions: [activeSession] }])
   })
+
+  it('tag: filters to sessions with a matching tag', () => {
+    const taggedSession = createSession({
+      id: '00000000-0000-0000-0000-000000000010',
+      name: 'Deploy task',
+      tags: ['deploy', 'prod'],
+    })
+    const untaggedSession = createSession({
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'Refactor auth',
+    })
+    const project: Project = {
+      id: 'my-project',
+      path: '/work/app',
+      sessions: [taggedSession, untaggedSession],
+    }
+
+    const results = deriveSearchResults([project], 'tag:deploy', false)
+    expect(results).toEqual([{ ...project, sessions: [taggedSession] }])
+  })
+
+  it('#tagname is equivalent to tag:<tagname>', () => {
+    const taggedSession = createSession({
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'Deploy task',
+      tags: ['deploy'],
+    })
+    const project: Project = {
+      id: 'my-project',
+      path: '/work/app',
+      sessions: [taggedSession],
+    }
+
+    expect(deriveSearchResults([project], '#deploy', false)).toEqual([
+      { ...project, sessions: [taggedSession] },
+    ])
+  })
+
+  it('tag: returns no results when no session matches', () => {
+    const project: Project = {
+      id: 'my-project',
+      path: '/work/app',
+      sessions: [createSession({ id: '00000000-0000-0000-0000-000000000013', tags: ['prod'] })],
+    }
+    expect(deriveSearchResults([project], 'tag:staging', false)).toEqual([])
+  })
+
+  it('free-text search also matches session tags', () => {
+    const taggedSession = createSession({
+      id: '00000000-0000-0000-0000-000000000014',
+      name: 'Boring task',
+      tags: ['urgent'],
+    })
+    const project: Project = {
+      id: 'my-project',
+      path: '/work/app',
+      sessions: [taggedSession],
+    }
+
+    expect(deriveSearchResults([project], 'urgent', false)).toEqual([
+      { ...project, sessions: [taggedSession] },
+    ])
+  })
 })

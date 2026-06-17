@@ -10,6 +10,10 @@ interface ProjectListProps {
   totalCount: number
 }
 
+function abbreviate(text: string, maxLength: number): string {
+  return text.length <= maxLength ? text : text.slice(0, maxLength - 1) + '…'
+}
+
 export default function ProjectList({
   isFocused,
   projects,
@@ -52,6 +56,13 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
+            {project.groupName ? (
+              <Box flexShrink={0} paddingLeft={1}>
+                <Text color={COLORS.dim} wrap="truncate">
+                  {'[' + abbreviate(project.groupName, 8) + ']'}
+                </Text>
+              </Box>
+            ) : null}
             {project.isShared ? (
               <Box flexShrink={0} paddingLeft={1}>
                 <Text

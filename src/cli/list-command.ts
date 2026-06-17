@@ -1,5 +1,9 @@
 import { getActiveSessions } from '../core/session/active-sessions.js'
 import { loadProjects } from '../core/project/project-discovery.js'
+import { filterProjectsByOrg } from '../core/org/org-filters.js'
+import type { OrgProjectFilter } from '../core/org/org-filters.js'
+import { emptyOrgData, readOrgData } from '../core/org/org-prefs.js'
+import type { OrgData } from '../core/org/org-model.js'
 import type {
   Project,
   Session,
@@ -30,11 +34,14 @@ export interface ListOptions {
   activeOnly: boolean
   archivedOnly: boolean
   attentionOnly: boolean
+  group?: string
   json: boolean
   limit?: number
   projectQuery?: string
   query?: string
+  stack?: string
   status?: SessionStatus
+  tag?: string
 }
 
 export interface ListedSession {
@@ -44,6 +51,8 @@ export interface ListedSession {
   created: string
   currentBranch?: string
   gitBranch?: string
+  group?: string
+  groupName?: string
   id: string
   messageCount: number
   name: string
@@ -51,7 +60,9 @@ export interface ListedSession {
   projectId: string
   projectName: string
   projectPath: string
+  projectTags?: string[]
   signals: SessionSignals
+  tags?: string[]
   updated: string
 }
 
@@ -112,6 +123,24 @@ export function parseListOptions(commandArguments: string[]): ListOptionResult {
         options.limit = limit
         break
       }
+      case '--tag': {
+        const value = commandArguments[++index]
+        if (!value) return { error: '--tag requires a value' }
+        options.tag = value
+        break
+      }
+      case '--group': {
+        const value = commandArguments[++index]
+        if (!value) return { error: '--group requires a value' }
+        options.group = value
+        break
+      }
+      case '--stack': {
+        const value = commandArguments[++index]
+        if (!value) return { error: '--stack requires a value' }
+        options.stack = value
+        break
+      }
       default:
         if (argument.startsWith('-')) return { error: `unknown list option: ${argument}` }
         queryParts.push(argument)
@@ -130,15 +159,77 @@ export async function runListCommand(commandArguments: string[]): Promise<void> 
     return
   }
 
-  const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
-  const allSessions = createListedSessions(projects, activeSessionIds)
-  const visibleSessions = filterListedSessions(allSessions, parsedOptions.options)
+  const { options } = parsedOptions
+  const needsOrgFilter =
+    options.tag !== undefined || options.group !== undefined || options.stack !== undefined
 
-  if (parsedOptions.options.json) {
+  const [projects, activeSessionIds, orgData] = await Promise.all([
+    loadProjects(),
+    getActiveSessions(),
+    needsOrgFilter ? readOrgData() : Promise.resolve(emptyOrgData()),
+  ])
+
+  let projectsToList = projects
+  if (needsOrgFilter) {
+    const filterResult = resolveOrgFilter(orgData, options)
+    if ('error' in filterResult) {
+      failCommand(filterResult.error)
+      return
+    }
+    projectsToList = filterProjectsByOrg(projects, orgData, filterResult.filter)
+  }
+
+  const allSessions = createListedSessions(projects, activeSessionIds)
+  const baseSessions =
+    projectsToList === projects
+      ? allSessions
+      : createListedSessions(projectsToList, activeSessionIds)
+  const visibleSessions = filterListedSessions(baseSessions, options)
+
+  if (options.json) {
     console.log(JSON.stringify(createSessionListDocument(visibleSessions), null, 2))
     return
   }
   writeOutput(formatSessionTable(visibleSessions, process.stdout.isTTY === true, allSessions))
+}
+
+/**
+ * Resolves org filter names (group name, stack name, tag) into an OrgProjectFilter
+ * ready for filterProjectsByOrg. At most one of group/stack/tag may be active at a time;
+ * priority order: group → stack → tag.
+ */
+export function resolveOrgFilter(
+  orgData: OrgData,
+  options: Pick<ListOptions, 'group' | 'stack' | 'tag'>
+): { filter: OrgProjectFilter } | { error: string } {
+  if (options.group !== undefined) {
+    const query = options.group.toLowerCase()
+    const matches = orgData.groups.filter((g) => g.name.toLowerCase().includes(query))
+    if (matches.length === 0) return { error: `no group matching "${options.group}"` }
+    if (matches.length > 1) {
+      const names = matches.map((g) => g.name).join(', ')
+      return {
+        error: `"${options.group}" matches multiple groups: ${names} — be more specific`,
+      }
+    }
+    return { filter: { groupId: matches[0]!.id } }
+  }
+  if (options.stack !== undefined) {
+    const query = options.stack.toLowerCase()
+    const matches = orgData.stacks.filter((s) => s.name.toLowerCase().includes(query))
+    if (matches.length === 0) return { error: `no stack matching "${options.stack}"` }
+    if (matches.length > 1) {
+      const names = matches.map((s) => s.name).join(', ')
+      return {
+        error: `"${options.stack}" matches multiple stacks: ${names} — be more specific`,
+      }
+    }
+    return { filter: { stackId: matches[0]!.id } }
+  }
+  if (options.tag !== undefined) {
+    return { filter: { tag: options.tag.toLowerCase() } }
+  }
+  return { filter: {} }
 }
 
 /** Builds a stable JSON document from an already selected set of sessions. */
@@ -245,6 +336,8 @@ function serializeListedSession(
     created: session.created,
     ...(session.currentBranch ? { currentBranch: session.currentBranch } : {}),
     ...(session.gitBranch ? { gitBranch: session.gitBranch } : {}),
+    ...(project.group ? { group: project.group } : {}),
+    ...(project.groupName ? { groupName: project.groupName } : {}),
     id: session.id,
     messageCount: session.messageCount,
     name: session.name,
@@ -252,7 +345,9 @@ function serializeListedSession(
     projectId: project.id,
     projectName: displayNameFromPath(project.path),
     projectPath: session.projectPath,
+    ...(project.projectTags?.length ? { projectTags: project.projectTags } : {}),
     signals: session.signals,
+    ...(session.tags?.length ? { tags: session.tags } : {}),
     updated: session.updated,
   }
 }

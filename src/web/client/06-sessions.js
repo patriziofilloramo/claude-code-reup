@@ -78,7 +78,29 @@ function deriveVisibleSessionsForProject(project) {
       return matchedIds.has(s.id)
     })
   }
-  const sessions = sessionsMatchingFilter(project, selectedFilter)
+
+  // Apply focus filter (getSessionsMatchingFocus defined in 17-rail.js; hoisted).
+  var focusSessions = getSessionsMatchingFocus(project)
+  var sessions
+
+  if (focusSessions === undefined || focusSessions === null) {
+    // Project is in focus with no session-level restriction — apply pill filter normally.
+    sessions = sessionsMatchingFilter(project, selectedFilter)
+  } else if (focusFilter && focusFilter.kind === 'inbox') {
+    // Inbox bucket focus overrides the pill filter — show bucket sessions directly.
+    sessions = focusSessions
+  } else {
+    // Tag / specific-session stack focus — intersect with pill filter.
+    var pilledIds = new Set(
+      sessionsMatchingFilter(project, selectedFilter).map(function (s) {
+        return s.id
+      })
+    )
+    sessions = focusSessions.filter(function (s) {
+      return pilledIds.has(s.id)
+    })
+  }
+
   const normalizedQuery = searchQuery.trim().toLowerCase()
   if (!normalizedQuery || projectMatchesSearch(project, normalizedQuery)) return sessions
 

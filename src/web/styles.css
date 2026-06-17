@@ -50,6 +50,11 @@
   --accent-hi: #38e8ff; /* lighter hover highlight */
   --accent-fg: #000000; /* foreground on accent backgrounds */
 
+  /* ── Missing-but-referenced tokens ─────────────────────────────────────── */
+  --border: var(--dim);
+  --bg2: var(--surface);
+  --input-bg: var(--surface);
+
   /* ── Typography ──────────────────────────────────────────────────────────── */
   --font:
     'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, 'SF Mono', Menlo, Consolas,
@@ -308,13 +313,15 @@ body {
 }
 .pnl-label {
   align-items: center;
-  color: var(--muted);
+  border-top: 1px solid var(--muted);
+  color: var(--muted2);
   display: flex;
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 600;
   justify-content: space-between;
   letter-spacing: 0.09em;
-  padding: 8px 12px 6px;
+  padding: 9px 12px 6px;
   text-transform: uppercase;
 }
 .pnl-label.active {
@@ -327,6 +334,182 @@ body {
 }
 .proj-list::-webkit-scrollbar {
   display: none;
+}
+
+/* ── Left rail: Inbox, Stacks, Groups ───────────────────────────────────── */
+.org-rail {
+  flex-shrink: 0;
+  border-bottom: 2px solid var(--muted);
+}
+.rail-section {
+  border-bottom: 1px solid var(--muted);
+}
+.rail-section:last-child {
+  border-bottom: none;
+}
+.rail-hdr {
+  align-items: center;
+  background: rgb(0 0 0 / 0.2);
+  cursor: pointer;
+  display: flex;
+  font-size: 10px;
+  gap: 5px;
+  letter-spacing: 0.08em;
+  padding: 5px 10px 5px 12px;
+  text-transform: uppercase;
+  user-select: none;
+}
+.rail-hdr:hover {
+  background: var(--row-hover);
+}
+.rail-icon {
+  color: var(--muted2);
+  font-size: 11px;
+  line-height: 1;
+}
+.rail-title {
+  color: var(--muted2);
+  flex: 1;
+  font-weight: 600;
+}
+.rail-toggle {
+  color: var(--muted);
+  font-size: 9px;
+}
+.rail-body {
+  padding: 2px 0 4px;
+}
+.rail-item {
+  align-items: center;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  padding: 4px 10px 4px 12px;
+}
+.rail-item:hover {
+  background: var(--row-hover);
+}
+.rail-item.active {
+  border-left-color: var(--accent);
+  color: var(--accent);
+}
+.rail-item-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 11px;
+  width: 14px;
+  text-align: center;
+}
+.rail-item.active .rail-item-icon {
+  color: var(--accent);
+}
+.rail-item-label {
+  color: var(--fg);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-item.active .rail-item-label {
+  color: var(--accent);
+}
+.rail-item-cnt {
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 10px;
+  min-width: 18px;
+  text-align: right;
+}
+.rail-empty {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px 12px;
+}
+.rail-add {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 12px;
+  user-select: none;
+}
+.rail-add:hover {
+  color: var(--fg);
+}
+.rail-create {
+  padding: 4px 10px;
+}
+.rail-create-input {
+  background: var(--input-bg, var(--bg2));
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg);
+  font-size: 12px;
+  outline: none;
+  padding: 3px 6px;
+  width: 100%;
+}
+.rail-create-input:focus {
+  border-color: var(--accent);
+}
+/* Bucket colour hints */
+.bucket--active .rail-item-icon {
+  color: #4caf50;
+}
+.bucket--attention .rail-item-icon {
+  color: #f4a261;
+}
+.bucket--drift .rail-item-icon {
+  color: #5fb3f7;
+}
+.bucket--missing .rail-item-icon {
+  color: #e76f51;
+}
+.bucket--ctx .rail-item-icon {
+  color: #a78bfa;
+}
+.bucket--expiring .rail-item-icon {
+  color: #ffd166;
+}
+.bucket--recent .rail-item-icon {
+  color: var(--muted2);
+}
+
+/* ── Focus bar ───────────────────────────────────────────────────────────── */
+.focus-bar {
+  align-items: center;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  font-size: 11px;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+}
+.focus-bar-label {
+  color: var(--accent);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.focus-bar-count {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.focus-clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.focus-clear:hover {
+  color: var(--fg);
 }
 
 .proj-row {
@@ -548,6 +731,34 @@ body {
 .s-archive {
   flex-shrink: 0;
   margin-left: auto;
+}
+
+/* ── Tag chips in session rows ────────────────────────────────────────────── */
+.s-tags {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  margin-left: 2px;
+}
+.s-tag {
+  background: var(--surface-chip);
+  border-radius: 2px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 10px;
+  max-width: 80px;
+  overflow: hidden;
+  padding: 1px 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s-tag:hover {
+  background: rgb(var(--accent-rgb) / 0.15);
+}
+.s-tag-overflow {
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .s-rename-input {
@@ -955,6 +1166,66 @@ body {
   white-space: nowrap;
 }
 
+/* ── Inspector org section ───────────────────────────────────────────────── */
+.insp-org-section {
+  border-top: 1px solid var(--dim);
+  margin-top: 4px;
+  padding: 8px 12px;
+}
+.insp-org-row {
+  align-items: flex-start;
+  display: flex;
+  font-size: 11px;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.insp-org-row:last-child {
+  margin-bottom: 0;
+}
+.insp-org-label {
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  min-width: 44px;
+  padding-top: 2px;
+  text-transform: uppercase;
+}
+.insp-org-value {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.insp-org-pill {
+  background: var(--surface-chip);
+  border-radius: 2px;
+  color: var(--muted2);
+  font-size: 10px;
+  padding: 1px 5px;
+}
+.insp-org-muted {
+  color: var(--muted);
+}
+.insp-org-add {
+  background: none;
+  border: 1px dashed var(--muted);
+  border-radius: 2px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 1px 5px;
+}
+.insp-org-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* reuse s-tag style but in inspector context */
+.insp-tag {
+  cursor: pointer;
+}
+
 .btn-ghost {
   background: none;
   border: none;
@@ -1159,6 +1430,163 @@ body {
 .dlg-pref input {
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+/* ── Group / stack org picker ───────────────────────────────────────────── */
+.org-picker-dlg {
+  max-width: 320px;
+  width: 100%;
+}
+.org-picker-list {
+  margin-bottom: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.org-picker-item {
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 7px 12px;
+}
+.org-picker-item:hover {
+  background: var(--row-hover);
+}
+.org-picker-item.active {
+  color: var(--accent);
+}
+.org-picker-remove {
+  color: var(--muted2);
+  font-size: 11px;
+}
+.org-picker-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
+/* ── Org item manager dialog ─────────────────────────────────────────────── */
+.org-manager-dlg {
+  max-width: 360px;
+  width: 100%;
+}
+.org-manager-list {
+  margin-bottom: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.org-manager-item {
+  align-items: center;
+  border-radius: 3px;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  padding: 6px 12px;
+}
+.org-manager-item:hover {
+  background: var(--row-hover);
+}
+.org-manager-icon {
+  flex-shrink: 0;
+}
+.org-manager-indent {
+  color: var(--muted2);
+  font-size: 10px;
+}
+.org-manager-sub {
+  color: var(--muted2);
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.org-manager-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-manager-remove {
+  background: none;
+  border: none;
+  color: var(--muted2);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.org-manager-remove:hover {
+  color: var(--red);
+}
+.org-manager-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
+/* ── Tag picker dialog ───────────────────────────────────────────────────── */
+.tag-picker-dlg {
+  max-width: 380px;
+  width: 100%;
+}
+.tag-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  min-height: 24px;
+}
+.tp-chip {
+  align-items: center;
+  background: rgb(var(--accent-rgb) / 0.12);
+  border-radius: 3px;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  padding: 2px 6px;
+}
+.tp-chip-remove {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+}
+.tp-chip-remove:hover {
+  color: var(--red);
+}
+.tag-picker-input {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--strong);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+  padding: 6px 10px;
+  width: 100%;
+}
+.tag-picker-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+  min-height: 0;
+}
+.tp-suggestion {
+  background: var(--surface-chip);
+  border-radius: 3px;
+  color: var(--muted2);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+.tp-suggestion:hover {
+  background: rgb(var(--accent-rgb) / 0.1);
+  color: var(--accent);
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -1402,6 +1830,25 @@ body {
   border-top: 1px solid var(--dim);
   margin: 3px 0;
 }
+.ctx-hdr {
+  color: var(--muted2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  padding: 6px 14px 3px;
+  text-transform: uppercase;
+  user-select: none;
+}
+.ctx-item-danger {
+  color: var(--red);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 7px 14px;
+  user-select: none;
+}
+.ctx-item-danger:hover {
+  background: rgb(var(--red-rgb) / 0.08);
+}
 
 /* ── Project row action buttons ────────────────────────────────────────────── */
 
@@ -1436,6 +1883,8 @@ body {
   flex-shrink: 0;
   font-size: 10px;
   font-style: italic;
+  min-width: 28px;
+  text-align: right;
 }
 
 /* ── Session row ⋯ menu button ─────────────────────────────────────────────── */

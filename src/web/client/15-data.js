@@ -26,15 +26,19 @@ async function refreshUsageSummary() {
  */
 async function refreshProjectData() {
   try {
-    const [loadedProjects, activeData, diagnosticsData] = await Promise.all([
+    const [loadedProjects, activeData, diagnosticsData, loadedOrgData] = await Promise.all([
       requestJson('/api/projects'),
       requestJson('/api/active'),
       requestJson('/api/diagnostics').catch(function () {
         return null
       }),
+      requestJson('/api/org').catch(function () {
+        return null
+      }),
     ])
     projects = loadedProjects
     activeSessionIds = new Set(activeData.sessionIds || [])
+    if (loadedOrgData) orgData = loadedOrgData
 
     if (diagnosticsData) {
       const issueCount =
@@ -69,7 +73,9 @@ async function refreshProjectData() {
     }
 
     synchronizeSelectedProjectWithView()
+    renderRail()
     renderProjects()
+    renderFocusBar()
     renderSessions()
 
     // Deep-link: on first load, auto-select session if URL has a session hash

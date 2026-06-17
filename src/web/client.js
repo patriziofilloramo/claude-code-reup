@@ -50,6 +50,7 @@ const STRINGS = {
   sessionActionResume: 'resume',
   sessionActionHandoff: 'copy handoff',
   sessionActionRename: 'rename',
+  sessionActionTag: 'tag…',
   sessionActionArchive: 'archive locally',
   sessionActionUnarchive: 'unarchive',
   sessionActionCopyId: 'copy session ID',
@@ -139,6 +140,11 @@ const STRINGS = {
   previewFilesTouched: 'files touched · {count}',
   previewLoading: 'Loading session preview...',
   previewError: 'Preview unavailable: {error}',
+  previewResearchTrail: 'research trail · {count}',
+  previewReadFiles: 'files read · {count}',
+  previewToolHealth: 'tool health',
+  previewToolFailed: '{count} failed',
+  previewToolInterrupted: '{count} interrupted',
 
   // ── Resume dialog ──────────────────────────────────────────────────────────
   resumeLaunchingFrames: ['launching', 'launching.', 'launching..', 'launching...'],
@@ -181,6 +187,67 @@ const STRINGS = {
   statusBarDiagnosticsPlural: '⚠ {n} issues',
 
   // ── Empty states ──────────────────────────────────────────────────────────
+  // ── Left rail ─────────────────────────────────────────────────────────────
+  railInbox: 'INBOX',
+  railInboxEmpty: 'Nothing to triage.',
+  railStacks: 'STACKS',
+  railGroups: 'GROUPS',
+  railNewStack: '+ new stack',
+  railNewGroup: '+ new group',
+  railStackNamePlaceholder: 'Stack name…',
+  railGroupNamePlaceholder: 'Group name…',
+  railCreateError: 'Failed to create: {message}',
+
+  // ── Rail: delete / manage ─────────────────────────────────────────────────
+  railDeleteStack: 'delete stack',
+  railDeleteGroup: 'delete group',
+  railManageStack: 'manage items…',
+  railManageGroup: 'manage projects…',
+  railManagerEmpty: 'No items.',
+  railManagerRemove: '×',
+  railDeleteStackConfirm:
+    'Delete stack "{name}"?\n\nSessions and projects in it will not be affected.',
+  railDeleteGroupConfirm: 'Delete group "{name}"?\n\nProjects will be unassigned from this group.',
+
+  // Inbox bucket labels (keys referenced from INBOX_BUCKETS[].labelKey)
+  inboxBucketActive: 'Active now',
+  inboxBucketAttention: 'Needs attention',
+  inboxBucketBranchDrift: 'Branch drift',
+  inboxBucketPathMissing: 'Path missing',
+  inboxBucketHighContext: 'High context',
+  inboxBucketExpiring: 'Expiring soon',
+  inboxBucketRecent: 'Recently touched',
+
+  // Focus bar
+  focusBar: 'Focus: {name}',
+  focusBarCount: '{n} of {total}',
+
+  // Tag chips
+  tagChipOverflow: '+{n}',
+
+  // Group/stack picker
+  orgPickerGroupTitle: 'Move project to group',
+  orgPickerStackTitle: 'Add to stack',
+  orgPickerNoItems: 'No items — create one in the rail first.',
+  orgPickerGroupFailed: 'Failed to assign group: {error}',
+  orgPickerStackFailed: 'Failed to add to stack: {error}',
+  orgPickerRemoveGroup: 'Remove from group',
+  sessionActionMoveToGroup: 'move to group…',
+  sessionActionAddToStack: 'add to stack…',
+  projectCtxMoveToGroup: 'move to group…',
+
+  // Inspector org section
+  inspOrgTags: 'TAGS',
+  inspOrgAddTag: '+ tag',
+  inspOrgGroup: 'GROUP',
+  inspOrgStacks: 'STACKS',
+  inspOrgNoGroup: '—',
+
+  // Tag picker dialog
+  tagPickerSessionTitle: 'Tag session',
+  tagPickerPlaceholder: 'Add tag… (Enter to add)',
+  tagPickerSaveFailed: 'Failed to save tags: {error}',
+
   emptyNoMatch: 'No projects or sessions match.',
   emptySelectProject: 'Select a project from the left panel.',
   emptyNoSessions: 'No sessions.',
@@ -234,6 +301,90 @@ const RISK_RANK = {
   'heavily-compacted': 3,
   ok: 4,
 }
+
+/** Token count above which a session is shown in the "high context" inbox bucket. */
+const CONTEXT_HIGH_THRESHOLD = 150_000
+/** Sessions updated within this many days appear in "recently touched". */
+const RECENT_WITHIN_DAYS = 7
+/** localStorage key prefix for rail collapse state. */
+const RAIL_STORAGE_KEY = 'swoop:rail:'
+
+/**
+ * Inbox triage bucket definitions in priority order.
+ * The `test` functions are closures — they capture live state on call, not at definition.
+ * Labels are STRINGS keys resolved at render time.
+ */
+const INBOX_BUCKETS = [
+  {
+    id: 'active',
+    labelKey: 'inboxBucketActive',
+    icon: '●',
+    cssClass: 'bucket--active',
+    test: function (session) {
+      return activeSessionIds.has(session.id)
+    },
+  },
+  {
+    id: 'attention',
+    labelKey: 'inboxBucketAttention',
+    icon: '!',
+    cssClass: 'bucket--attention',
+    test: function (session) {
+      return !!(session.signals.interrupted || session.signals.lastToolFailed)
+    },
+  },
+  {
+    id: 'branch-drift',
+    labelKey: 'inboxBucketBranchDrift',
+    icon: '⎇',
+    cssClass: 'bucket--drift',
+    test: function (session) {
+      return !!(
+        session.gitBranch &&
+        session.currentBranch &&
+        session.gitBranch !== session.currentBranch
+      )
+    },
+  },
+  {
+    id: 'path-missing',
+    labelKey: 'inboxBucketPathMissing',
+    icon: '⊗',
+    cssClass: 'bucket--missing',
+    test: function (session) {
+      return !session.signals.pathExists
+    },
+  },
+  {
+    id: 'high-context',
+    labelKey: 'inboxBucketHighContext',
+    icon: '◉',
+    cssClass: 'bucket--ctx',
+    test: function (session) {
+      return (session.context.latestContextTokens || 0) >= CONTEXT_HIGH_THRESHOLD
+    },
+  },
+  {
+    id: 'expiring',
+    labelKey: 'inboxBucketExpiring',
+    icon: '⏱',
+    cssClass: 'bucket--expiring',
+    test: function (session) {
+      return session.signals.expiresInDays !== null && session.signals.expiresInDays <= 7
+    },
+  },
+  {
+    id: 'recent',
+    labelKey: 'inboxBucketRecent',
+    icon: '⊙',
+    cssClass: 'bucket--recent',
+    test: function (session) {
+      if (!session.updated) return false
+      var cutoff = Date.now() - RECENT_WITHIN_DAYS * 86400000
+      return new Date(session.updated).getTime() >= cutoff
+    },
+  },
+]
 let projects = []
 let activeSessionIds = new Set()
 let liveUsage = null
@@ -257,6 +408,18 @@ let deepSearchLoading = false
 let deepSearchQueryTerm = ''
 let sessionInspectorExpanded = false
 let sessionPreviewCache = new Map()
+// Org data fetched from /api/org; null before first load.
+let orgData = null
+// Active focus filter — narrows both the project list and session list.
+// Shape: null | { kind: 'inbox', bucket: string }
+//             | { kind: 'stack', id: string, name: string }
+//             | { kind: 'group', id: string, name: string }
+//             | { kind: 'tag', tag: string }
+let focusFilter = null
+// Which rail section is showing an inline create input: 'stack' | 'group' | null
+let railCreatingSection = null
+// Which rail item is subject to a pending context menu action: null | { kind, id, name }
+let ctxRailItem = null
 function elementById(id) {
   return document.getElementById(id)
 }
@@ -302,6 +465,25 @@ const elements = {
   diagnosticsCloseButton: elementById('lf-close'),
   searchDeepBtn: elementById('search-deep-btn'),
   searchModeLabel: elementById('search-mode-label'),
+  rail: elementById('rail'),
+  focusBar: elementById('focus-bar'),
+  focusBarLabel: elementById('focus-bar-label'),
+  focusBarCount: elementById('focus-bar-count'),
+  focusClearBtn: elementById('focus-clear'),
+  orgPickerOverlay: elementById('org-picker-overlay'),
+  orgPickerTitle: elementById('org-picker-title'),
+  orgPickerList: elementById('org-picker-list'),
+  orgPickerClose: elementById('org-picker-close'),
+  tagPickerOverlay: elementById('tag-picker-overlay'),
+  tagPickerTitle: elementById('tag-picker-title'),
+  tagPickerChips: elementById('tag-picker-chips'),
+  tagPickerInput: elementById('tag-picker-input'),
+  tagPickerSuggestions: elementById('tag-picker-suggestions'),
+  tagPickerClose: elementById('tag-picker-close'),
+  orgManagerOverlay: elementById('org-manager-overlay'),
+  orgManagerTitle: elementById('org-manager-title'),
+  orgManagerList: elementById('org-manager-list'),
+  orgManagerClose: elementById('org-manager-close'),
 }
 // ---------------------------------------------------------------------------
 // Shared presentation and request helpers
@@ -650,14 +832,13 @@ function buildProjectRowHtml(project) {
             escapeHtml(STRINGS.projectCloudOk) +
             '">☁</span>'
       : '') +
-    (lastLabel ? '<span class="p-last">' + lastLabel + '</span>' : '') +
+    '<span class="p-last">' +
+    lastLabel +
+    '</span>' +
     '<span class="p-cnt">' +
     sessionCount +
     '</span>' +
     '<div class="p-actions">' +
-    '<button class="p-act-btn p-new-btn" title="' +
-    escapeHtml(STRINGS.projectNewSession) +
-    '">+</button>' +
     '<button class="p-act-btn p-menu-btn" title="' +
     escapeHtml(STRINGS.projectMoreActions) +
     '">⋯</button>' +
@@ -710,15 +891,27 @@ function deriveVisibleProjects() {
       return matchedProjectIds.has(p.id)
     })
   }
+
+  // Apply focus filter (defined in 17-rail.js; hoisted function declaration).
+  var baseProjects = projects
+  if (focusFilter) {
+    baseProjects = projects.filter(function (project) {
+      var focusSessions = getSessionsMatchingFocus(project)
+      if (focusSessions === undefined) return false
+      if (focusSessions === null) return true
+      return focusSessions.length > 0
+    })
+  }
+
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const visibleProjects = normalizedQuery
-    ? projects.filter(function (project) {
+    ? baseProjects.filter(function (project) {
         return (
           projectMatchesSearch(project, normalizedQuery) ||
           deriveVisibleSessionsForProject(project).length > 0
         )
       })
-    : projects
+    : baseProjects
   if (selectedProjectSort !== 'name') return visibleProjects
 
   return visibleProjects.slice().sort(function (left, right) {
@@ -748,14 +941,6 @@ function selectProject(project) {
 }
 
 elements.projectList.addEventListener('click', function (event) {
-  const newBtn = event.target.closest('.p-new-btn')
-  if (newBtn) {
-    event.stopPropagation()
-    const project = resolveProjectFromRow(newBtn.closest('.proj-row'))
-    if (project) void startNewSession(project)
-    return
-  }
-
   const menuBtn = event.target.closest('.p-menu-btn')
   if (menuBtn) {
     event.stopPropagation()
@@ -858,7 +1043,29 @@ function deriveVisibleSessionsForProject(project) {
       return matchedIds.has(s.id)
     })
   }
-  const sessions = sessionsMatchingFilter(project, selectedFilter)
+
+  // Apply focus filter (getSessionsMatchingFocus defined in 17-rail.js; hoisted).
+  var focusSessions = getSessionsMatchingFocus(project)
+  var sessions
+
+  if (focusSessions === undefined || focusSessions === null) {
+    // Project is in focus with no session-level restriction — apply pill filter normally.
+    sessions = sessionsMatchingFilter(project, selectedFilter)
+  } else if (focusFilter && focusFilter.kind === 'inbox') {
+    // Inbox bucket focus overrides the pill filter — show bucket sessions directly.
+    sessions = focusSessions
+  } else {
+    // Tag / specific-session stack focus — intersect with pill filter.
+    var pilledIds = new Set(
+      sessionsMatchingFilter(project, selectedFilter).map(function (s) {
+        return s.id
+      })
+    )
+    sessions = focusSessions.filter(function (s) {
+      return pilledIds.has(s.id)
+    })
+  }
+
   const normalizedQuery = searchQuery.trim().toLowerCase()
   if (!normalizedQuery || projectMatchesSearch(project, normalizedQuery)) return sessions
 
@@ -1189,17 +1396,30 @@ function buildTouchedFilesHtml(preview, session) {
   )
 }
 
+/**
+ * Maps AutomaticFactSource values to reader-friendly labels.
+ * Returns the raw value for any unknown source so new sources surface visibly.
+ */
+function friendlySource(source) {
+  if (source === 'summary-event') return 'compaction'
+  if (source === 'assistant-tool' || source === 'tool-result') return 'tool result'
+  if (source === 'attachment') return 'attachment'
+  if (source === 'transcript-event') return 'transcript'
+  return source || ''
+}
+
 /** Returns the latest Claude-native plan section when the transcript contains one. */
 function buildNativePlanHtml(automaticContext) {
   const plan = automaticContext && automaticContext.plan
-  return plan
-    ? buildPreviewMarkdownBlockHtml(
-        STRINGS.previewNativePlan,
-        plan.text,
-        'preview-block--scrollable',
-        '▤'
-      )
-    : ''
+  if (!plan) return ''
+  const labelParts = [STRINGS.previewNativePlan]
+  if (plan.source) labelParts.push(friendlySource(plan.source))
+  return buildPreviewMarkdownBlockHtml(
+    labelParts.join(' · '),
+    plan.text,
+    'preview-block--scrollable',
+    '▤'
+  )
 }
 
 /** Returns a compact, read-only view of Claude-native TodoWrite state. */
@@ -1225,25 +1445,101 @@ function buildNativeTodosHtml(automaticContext) {
     })
     .join('')
 
+  const summaryLabelParts = [
+    STRINGS.previewNativeTodos,
+    escapeHtml(
+      fmt(STRINGS.previewNativeTodosSummary, {
+        done: todos.counts?.completed || 0,
+        open:
+          (todos.counts?.pending || 0) +
+          (todos.counts?.in_progress || 0) +
+          (todos.counts?.unknown || 0),
+      })
+    ),
+  ]
+  if (todos.source) summaryLabelParts.push(escapeHtml(friendlySource(todos.source)))
+
   return (
     '<div class="preview-block preview-block--scrollable">' +
-    buildPreviewLabelHtml(
-      STRINGS.previewNativeTodos +
-        ' · ' +
-        escapeHtml(
-          fmt(STRINGS.previewNativeTodosSummary, {
-            done: todos.counts?.completed || 0,
-            open:
-              (todos.counts?.pending || 0) +
-              (todos.counts?.in_progress || 0) +
-              (todos.counts?.unknown || 0),
-          })
-        ),
-      '☑'
-    ) +
+    buildPreviewLabelHtml(summaryLabelParts.join(' · '), '☑') +
     '<div class="preview-todos-body">' +
     rows +
     '</div>' +
+    '</div>'
+  )
+}
+
+/** Returns a compact summary of files read and research actions taken in the session. */
+function buildResearchTrailHtml(automaticContext) {
+  const readFiles = (automaticContext && automaticContext.readFiles) || []
+  const researchActions = (automaticContext && automaticContext.researchActions) || []
+  const totalCount = readFiles.length + researchActions.length
+  if (totalCount === 0) return ''
+
+  const kindPrefix = { grep: '~', glob: '*', 'web-search': '?', 'web-fetch': '→' }
+
+  const fileRows = readFiles
+    .map(function (file) {
+      return (
+        '<div class="preview-file" title="' +
+        escapeHtml(file) +
+        '">r ' +
+        escapeHtml(file) +
+        '</div>'
+      )
+    })
+    .join('')
+
+  const actionRows = researchActions
+    .map(function (action) {
+      const prefix = (kindPrefix[action.kind] || '?') + ' ' + escapeHtml(action.kind)
+      const detail = action.query ? ': ' + escapeHtml(action.query) : ''
+      return '<div class="preview-file">' + prefix + detail + '</div>'
+    })
+    .join('')
+
+  return (
+    '<div class="preview-block">' +
+    buildPreviewLabelHtml(fmt(STRINGS.previewResearchTrail, { count: totalCount }), '⌕') +
+    '<div class="preview-todos-body">' +
+    fileRows +
+    actionRows +
+    '</div>' +
+    '</div>'
+  )
+}
+
+/** Returns a compact summary of tool failures and interruptions, or empty string when clean. */
+function buildToolHealthHtml(automaticContext) {
+  const health = automaticContext && automaticContext.toolHealth
+  if (!health) return ''
+
+  const failed = health.failed || []
+  const interrupted = health.interrupted || []
+  if (failed.length === 0 && interrupted.length === 0) return ''
+
+  const summaryParts = []
+  if (failed.length > 0) summaryParts.push(fmt(STRINGS.previewToolFailed, { count: failed.length }))
+  if (interrupted.length > 0)
+    summaryParts.push(fmt(STRINGS.previewToolInterrupted, { count: interrupted.length }))
+
+  const failedRows = failed
+    .map(function (t) {
+      return '<div class="preview-file">✗ ' + escapeHtml(t.name) + '</div>'
+    })
+    .join('')
+
+  const interruptedRows = interrupted
+    .map(function (t) {
+      return '<div class="preview-file">⚡ ' + escapeHtml(t.name) + '</div>'
+    })
+    .join('')
+
+  return (
+    '<div class="preview-block">' +
+    buildPreviewLabelHtml(STRINGS.previewToolHealth + ' · ' + summaryParts.join(', '), '⚠') +
+    failedRows +
+    interruptedRows +
     '</div>'
   )
 }
@@ -1282,6 +1578,8 @@ function buildSessionPreviewHtml(project, session) {
     ) +
     buildNativePlanHtml(preview.automaticContext) +
     buildNativeTodosHtml(preview.automaticContext) +
+    buildResearchTrailHtml(preview.automaticContext) +
+    buildToolHealthHtml(preview.automaticContext) +
     (preview.pendingToolName
       ? '<div class="preview-warning">' +
         escapeHtml(fmt(STRINGS.previewPendingTool, { name: preview.pendingToolName })) +
@@ -1363,6 +1661,92 @@ function isSessionInspectorExpanded(visibleSessions) {
       return session.id === selectedSession.id
     })
   )
+}
+
+/**
+ * Builds the compact Org section for the inspector: tags, group, stack memberships.
+ * Returns "" when no org data is loaded and the session has no tags.
+ */
+function buildOrgInspectorHtml(session, project) {
+  var tags = session.tags || []
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var groups = (orgData && orgData.groups) || []
+  var stacks = (orgData && orgData.stacks) || []
+
+  // Find group name
+  var groupId = assignments[project ? project.id : '']
+  var groupName = null
+  for (var gi = 0; gi < groups.length; gi++) {
+    if (groups[gi].id === groupId) {
+      groupName = groups[gi].name
+      break
+    }
+  }
+
+  // Find stacks containing this session or project
+  var sessionStackNames = []
+  for (var si = 0; si < stacks.length; si++) {
+    var stack = stacks[si]
+    var inStack = stack.items.some(function (item) {
+      if (item.kind === 'project' && project && item.projectId === project.id) return true
+      if (item.kind === 'session' && item.sessionId === session.id) return true
+      return false
+    })
+    if (inStack) sessionStackNames.push(stack.name)
+  }
+
+  if (tags.length === 0 && !groupName && sessionStackNames.length === 0 && !orgData) return ''
+
+  var html = '<div class="insp-org-section">'
+
+  // Tags row
+  html += '<div class="insp-org-row">'
+  html += '<span class="insp-org-label">' + escapeHtml(STRINGS.inspOrgTags) + '</span>'
+  html += '<span class="insp-org-value">'
+  for (var ti = 0; ti < tags.length; ti++) {
+    html +=
+      '<span class="s-tag insp-tag" data-tag="' +
+      escapeHtml(tags[ti]) +
+      '">#' +
+      escapeHtml(tags[ti]) +
+      '</span>'
+  }
+  html +=
+    '<button class="insp-org-add" data-inspector-action="session-tag">' +
+    escapeHtml(STRINGS.inspOrgAddTag) +
+    '</button>'
+  html += '</span></div>'
+
+  // Group row
+  if (groupName || orgData) {
+    html += '<div class="insp-org-row">'
+    html += '<span class="insp-org-label">' + escapeHtml(STRINGS.inspOrgGroup) + '</span>'
+    html +=
+      '<span class="insp-org-value">' +
+      (groupName
+        ? '<span class="insp-org-pill">' + escapeHtml(groupName) + '</span>'
+        : '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>') +
+      '</span>'
+    html += '</div>'
+  }
+
+  // Stacks row
+  if (sessionStackNames.length > 0 || orgData) {
+    html += '<div class="insp-org-row">'
+    html += '<span class="insp-org-label">' + escapeHtml(STRINGS.inspOrgStacks) + '</span>'
+    html += '<span class="insp-org-value">'
+    if (sessionStackNames.length > 0) {
+      for (var sni = 0; sni < sessionStackNames.length; sni++) {
+        html += '<span class="insp-org-pill">' + escapeHtml(sessionStackNames[sni]) + '</span>'
+      }
+    } else {
+      html += '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>'
+    }
+    html += '</span></div>'
+  }
+
+  html += '</div>'
+  return html
 }
 
 /** Re-renders the session inspector panel for the selected session. Hides it when no selection is visible. */
@@ -1502,12 +1886,30 @@ function renderInspector(visibleSessions) {
     'insp-path',
     'title="' + escapeHtml(session.projectPath) + '"'
   )
+  html += buildOrgInspectorHtml(session, selectedProject)
 
   elements.sessionInspector.innerHTML = html
   elements.sessionInspector.style.display = 'block'
 }
 
 elements.sessionInspector.addEventListener('click', function (event) {
+  // Tag chip in org section — set tag focus filter
+  const inspTag = event.target.closest('.insp-tag')
+  if (inspTag) {
+    var tag = inspTag.dataset.tag
+    if (tag) {
+      focusFilter =
+        focusFilter && focusFilter.kind === 'tag' && focusFilter.tag === tag
+          ? null
+          : { kind: 'tag', tag: tag }
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+    }
+    return
+  }
+
   const actionButton = event.target.closest('[data-inspector-action]')
   if (actionButton && selectedSession) {
     if (actionButton.dataset.inspectorAction === 'inspector-toggle-expanded') {
@@ -1542,6 +1944,33 @@ elements.sortSelect.addEventListener('change', function () {
 // ---------------------------------------------------------------------------
 // Session list rendering and metadata actions
 // ---------------------------------------------------------------------------
+
+const TAG_CHIPS_MAX = 2
+
+/**
+ * Renders up to TAG_CHIPS_MAX tag chips for a session, with a "+N" overflow badge.
+ * Returns "" when there are no tags.
+ */
+function buildTagChipsHtml(tags) {
+  if (!tags || tags.length === 0) return ''
+  var shown = tags.slice(0, TAG_CHIPS_MAX)
+  var overflow = tags.length - shown.length
+  var html = '<span class="s-tags">'
+  for (var i = 0; i < shown.length; i++) {
+    html +=
+      '<span class="s-tag" data-tag="' +
+      escapeHtml(shown[i]) +
+      '">#' +
+      escapeHtml(shown[i]) +
+      '</span>'
+  }
+  if (overflow > 0) {
+    html +=
+      '<span class="s-tag-overflow">' + fmt(STRINGS.tagChipOverflow, { n: overflow }) + '</span>'
+  }
+  html += '</span>'
+  return html
+}
 
 /** Renders a single session row (two lines + optional deep-search snippet) as an HTML string. */
 function buildSessionRowHtml(session) {
@@ -1614,6 +2043,7 @@ function buildSessionRowHtml(session) {
         ' ctx</span>'
       : '') +
     buildStatusBadgeHtml(session) +
+    buildTagChipsHtml(session.tags) +
     '</div>' +
     (deepSearchActive ? buildDeepSnippetHtml(getDeepMatchForSession(session.id)) : '') +
     '</div>'
@@ -1777,6 +2207,10 @@ function executeSessionAction(action, session) {
     copySessionId(session)
   } else if (action === 'session-handoff') {
     void copySessionHandoff(session)
+  } else if (action === 'session-tag') {
+    openTagPicker(session, selectedProject)
+  } else if (action === 'session-add-stack') {
+    openStackPicker(selectedProject, session)
   }
 }
 
@@ -1785,20 +2219,42 @@ function sessionActionItems(session) {
   return [
     { action: 'session-resume', label: STRINGS.sessionActionResume },
     { action: 'session-handoff', label: STRINGS.sessionActionHandoff },
+    { type: 'separator' },
     { action: 'session-rename', label: STRINGS.sessionActionRename },
+    { action: 'session-tag', label: STRINGS.sessionActionTag },
+    { action: 'session-add-stack', label: STRINGS.sessionActionAddToStack },
     {
       action: 'session-archive',
       label: session.signals.archived
         ? STRINGS.sessionActionUnarchive
         : STRINGS.sessionActionArchive,
     },
+    { type: 'separator' },
     { action: 'session-copy-id', label: STRINGS.sessionActionCopyId },
-    { action: 'session-delete', label: STRINGS.sessionActionDelete },
+    { action: 'session-delete', label: STRINGS.sessionActionDelete, danger: true },
   ]
 }
 
 // Event delegation keeps handlers valid when renderSessions replaces rows.
 elements.sessionList.addEventListener('click', function (event) {
+  // Tag chip click — set tag focus filter
+  const tagChip = event.target.closest('.s-tag')
+  if (tagChip) {
+    event.stopPropagation()
+    var tag = tagChip.dataset.tag
+    if (tag) {
+      focusFilter =
+        focusFilter && focusFilter.kind === 'tag' && focusFilter.tag === tag
+          ? null
+          : { kind: 'tag', tag: tag }
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+    }
+    return
+  }
+
   const menuBtn = event.target.closest('.s-menu-btn')
   if (menuBtn) {
     event.stopPropagation()
@@ -2283,8 +2739,14 @@ function openContextMenuAt(x, y, items) {
   const menu = elements.contextMenu
   menu.innerHTML = items
     .map(function (item) {
+      if (item.type === 'separator') return '<div class="ctx-item-sep"></div>'
+      if (item.type === 'header') {
+        return '<div class="ctx-hdr">' + escapeHtml(item.label) + '</div>'
+      }
       return (
-        '<div class="ctx-item" data-action="' +
+        '<div class="ctx-item' +
+        (item.danger ? ' ctx-item-danger' : '') +
+        '" data-action="' +
         escapeHtml(item.action) +
         '">' +
         escapeHtml(item.label) +
@@ -2304,6 +2766,7 @@ function closeContextMenu() {
   elements.contextMenu.classList.remove('open')
   ctxProject = null
   ctxSession = null
+  ctxRailItem = null
 }
 
 /** Opens the session action menu for a concrete session row. */
@@ -2320,10 +2783,14 @@ function openProjectContextMenu(event, project) {
   event.preventDefault()
   ctxProject = project
   ctxSession = null
-  openContextMenuAt(event.clientX, event.clientY, [
+  var items = [
     { action: 'project-new-session', label: '+ new session' },
     { action: 'project-copy-path', label: 'copy path' },
-  ])
+  ]
+  if (orgData && orgData.groups && orgData.groups.length > 0) {
+    items.push({ action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup })
+  }
+  openContextMenuAt(event.clientX, event.clientY, items)
 }
 
 elements.contextMenu.addEventListener('click', function (event) {
@@ -2333,16 +2800,59 @@ elements.contextMenu.addEventListener('click', function (event) {
   const action = item.dataset.action
   const project = ctxProject
   const session = ctxSession
+  const railItem = ctxRailItem
   closeContextMenu()
 
   if (action === 'project-new-session' && project) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
     copyTextToClipboard(project.path, STRINGS.projectPathCopied)
+  } else if (action === 'project-move-group' && project) {
+    openGroupPicker(project)
+  } else if (action === 'session-add-stack' && session) {
+    openStackPicker(ctxProject || selectedProject, session)
+  } else if (action === 'rail-stack-delete' && railItem && railItem.kind === 'stack') {
+    deleteRailStack(railItem.id, railItem.name)
+  } else if (action === 'rail-group-delete' && railItem && railItem.kind === 'group') {
+    deleteRailGroup(railItem.id, railItem.name)
+  } else if (action === 'rail-stack-manage' && railItem && railItem.kind === 'stack') {
+    openOrgManager('stack', railItem.id, railItem.name)
+  } else if (action === 'rail-group-manage' && railItem && railItem.kind === 'group') {
+    openOrgManager('group', railItem.id, railItem.name)
   } else if (session) {
     executeSessionAction(action, session)
   }
 })
+
+function deleteRailStack(stackId, stackName) {
+  if (!confirm(fmt(STRINGS.railDeleteStackConfirm, { name: stackName }))) return
+  requestJson('/api/org/stacks/' + stackId, { method: 'DELETE' })
+    .then(function () {
+      if (focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId) {
+        focusFilter = null
+        renderFocusBar()
+      }
+      return refreshProjectData()
+    })
+    .catch(function (error) {
+      showToast('Failed to delete stack: ' + (error.message || String(error)), 'err')
+    })
+}
+
+function deleteRailGroup(groupId, groupName) {
+  if (!confirm(fmt(STRINGS.railDeleteGroupConfirm, { name: groupName }))) return
+  requestJson('/api/org/groups/' + groupId, { method: 'DELETE' })
+    .then(function () {
+      if (focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId) {
+        focusFilter = null
+        renderFocusBar()
+      }
+      return refreshProjectData()
+    })
+    .catch(function (error) {
+      showToast('Failed to delete group: ' + (error.message || String(error)), 'err')
+    })
+}
 
 elements.sessionList.addEventListener('contextmenu', function (event) {
   const row = event.target.closest('.sess-row')
@@ -2488,6 +2998,14 @@ document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeSearch()
     return
   }
+  if (elements.tagPickerOverlay.classList.contains('open')) {
+    // Tag picker handles its own keydown — nothing to do here
+    return
+  }
+  if (elements.orgPickerOverlay.classList.contains('open')) {
+    // Org picker handles its own Escape — nothing to do here
+    return
+  }
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
 
   if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
@@ -2499,7 +3017,19 @@ document.addEventListener('keydown', function (event) {
     else void resumeSelectedSession()
   }
 
+  if (selectedProject) {
+    if (event.key === 'g') {
+      event.preventDefault()
+      openGroupPicker(selectedProject)
+      return
+    }
+  }
   if (selectedSession && selectedProject) {
+    if (event.key === 't') {
+      event.preventDefault()
+      openTagPicker(selectedSession, selectedProject)
+      return
+    }
     if (event.key === 'r') {
       event.preventDefault()
       executeSessionAction('session-rename', selectedSession)
@@ -2608,15 +3138,19 @@ async function refreshUsageSummary() {
  */
 async function refreshProjectData() {
   try {
-    const [loadedProjects, activeData, diagnosticsData] = await Promise.all([
+    const [loadedProjects, activeData, diagnosticsData, loadedOrgData] = await Promise.all([
       requestJson('/api/projects'),
       requestJson('/api/active'),
       requestJson('/api/diagnostics').catch(function () {
         return null
       }),
+      requestJson('/api/org').catch(function () {
+        return null
+      }),
     ])
     projects = loadedProjects
     activeSessionIds = new Set(activeData.sessionIds || [])
+    if (loadedOrgData) orgData = loadedOrgData
 
     if (diagnosticsData) {
       const issueCount =
@@ -2651,7 +3185,9 @@ async function refreshProjectData() {
     }
 
     synchronizeSelectedProjectWithView()
+    renderRail()
     renderProjects()
+    renderFocusBar()
     renderSessions()
 
     // Deep-link: on first load, auto-select session if URL has a session hash
@@ -2851,4 +3387,916 @@ if (logoEl) {
 
 // initialise button label from current data-theme (set server-side)
 applyTheme(getActiveTheme())
+// ---------------------------------------------------------------------------
+// Left rail: Inbox, Stacks, Groups + Focus bar
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Focus filter — session scope resolver
+// Called by 05-projects.js and 06-sessions.js (hoisted function declaration).
+//
+// Returns:
+//   undefined  — project is NOT in the current focus (exclude from list)
+//   null       — project IS in focus, no session-level restriction
+//   Session[]  — project IS in focus, show only these sessions
+// ---------------------------------------------------------------------------
+
+function getSessionsMatchingFocus(project) {
+  if (!focusFilter) return null
+
+  if (focusFilter.kind === 'inbox') {
+    var bucket = null
+    for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
+      if (INBOX_BUCKETS[bi].id === focusFilter.bucket) {
+        bucket = INBOX_BUCKETS[bi]
+        break
+      }
+    }
+    if (!bucket) return undefined
+    return project.sessions.filter(function (s) {
+      return !s.signals.archived && bucket.test(s)
+    })
+  }
+
+  if (focusFilter.kind === 'stack') {
+    if (!orgData) return undefined
+    var stack = null
+    for (var si = 0; si < orgData.stacks.length; si++) {
+      if (orgData.stacks[si].id === focusFilter.id) {
+        stack = orgData.stacks[si]
+        break
+      }
+    }
+    if (!stack) return undefined
+    var projectInStack = stack.items.some(function (item) {
+      return item.kind === 'project' && item.projectId === project.id
+    })
+    if (projectInStack) return null
+    var stackSessionIds = new Set()
+    for (var ii = 0; ii < stack.items.length; ii++) {
+      var item = stack.items[ii]
+      if (item.kind === 'session' && item.projectId === project.id && item.sessionId) {
+        stackSessionIds.add(item.sessionId)
+      }
+    }
+    if (stackSessionIds.size === 0) return undefined
+    return project.sessions.filter(function (s) {
+      return stackSessionIds.has(s.id)
+    })
+  }
+
+  if (focusFilter.kind === 'group') {
+    if (!orgData) return undefined
+    var assignments = orgData.projectGroupAssignments || {}
+    if (assignments[project.id] !== focusFilter.id) return undefined
+    return null
+  }
+
+  if (focusFilter.kind === 'tag') {
+    var tag = focusFilter.tag
+    if (project.projectTags && project.projectTags.indexOf(tag) !== -1) return null
+    return project.sessions.filter(function (s) {
+      return s.tags && s.tags.indexOf(tag) !== -1
+    })
+  }
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Rail section collapse state
+// ---------------------------------------------------------------------------
+
+function isRailSectionCollapsed(sectionId) {
+  return localStorage.getItem(RAIL_STORAGE_KEY + sectionId + ':collapsed') === '1'
+}
+
+function toggleRailSectionCollapsed(sectionId) {
+  var collapsed = isRailSectionCollapsed(sectionId)
+  if (collapsed) localStorage.removeItem(RAIL_STORAGE_KEY + sectionId + ':collapsed')
+  else localStorage.setItem(RAIL_STORAGE_KEY + sectionId + ':collapsed', '1')
+}
+
+// ---------------------------------------------------------------------------
+// Inbox bucket count (non-archived sessions matching a bucket)
+// ---------------------------------------------------------------------------
+
+function countBucketSessions(bucket) {
+  var count = 0
+  for (var pi = 0; pi < projects.length; pi++) {
+    var proj = projects[pi]
+    for (var si = 0; si < proj.sessions.length; si++) {
+      var sess = proj.sessions[si]
+      if (!sess.signals.archived && bucket.test(sess)) count++
+    }
+  }
+  return count
+}
+
+// ---------------------------------------------------------------------------
+// Stack session count (unique non-archived sessions referenced by stack items)
+// ---------------------------------------------------------------------------
+
+function countStackSessionsForRail(stack) {
+  var seenKeys = new Set()
+  for (var ii = 0; ii < stack.items.length; ii++) {
+    var item = stack.items[ii]
+    var proj = null
+    for (var pi = 0; pi < projects.length; pi++) {
+      if (projects[pi].id === item.projectId) {
+        proj = projects[pi]
+        break
+      }
+    }
+    if (!proj) continue
+    if (item.kind === 'project') {
+      for (var si = 0; si < proj.sessions.length; si++) {
+        var sess = proj.sessions[si]
+        if (!sess.signals.archived) seenKeys.add(proj.id + ':' + sess.id)
+      }
+    } else if (item.kind === 'session' && item.sessionId) {
+      var matchSess = null
+      for (var ms = 0; ms < proj.sessions.length; ms++) {
+        if (proj.sessions[ms].id === item.sessionId) {
+          matchSess = proj.sessions[ms]
+          break
+        }
+      }
+      if (matchSess && !matchSess.signals.archived) {
+        seenKeys.add(proj.id + ':' + item.sessionId)
+      }
+    }
+  }
+  return seenKeys.size
+}
+
+// ---------------------------------------------------------------------------
+// Rail HTML builders
+// ---------------------------------------------------------------------------
+
+function buildRailSectionHtml(sectionId, title, icon, bodyHtml) {
+  var collapsed = isRailSectionCollapsed(sectionId)
+  return (
+    '<div class="rail-section" data-rail-section="' +
+    sectionId +
+    '">' +
+    '<div class="rail-hdr" data-rail-toggle="' +
+    sectionId +
+    '">' +
+    (icon ? '<span class="rail-icon">' + icon + '</span>' : '') +
+    '<span class="rail-title">' +
+    escapeHtml(title) +
+    '</span>' +
+    '<span class="rail-toggle">' +
+    (collapsed ? '▸' : '▾') +
+    '</span>' +
+    '</div>' +
+    (collapsed ? '' : '<div class="rail-body">' + bodyHtml + '</div>') +
+    '</div>'
+  )
+}
+
+function buildInboxSectionHtml() {
+  var rows = ''
+  for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
+    var bucket = INBOX_BUCKETS[bi]
+    var count = countBucketSessions(bucket)
+    if (count === 0) continue
+    var isActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket.id
+    rows +=
+      '<div class="rail-item ' +
+      bucket.cssClass +
+      (isActive ? ' active' : '') +
+      '" data-rail-action="inbox-bucket" data-bucket="' +
+      bucket.id +
+      '">' +
+      '<span class="rail-item-icon">' +
+      bucket.icon +
+      '</span>' +
+      '<span class="rail-item-label">' +
+      escapeHtml(STRINGS[bucket.labelKey] || bucket.labelKey) +
+      '</span>' +
+      '<span class="rail-item-cnt">' +
+      count +
+      '</span>' +
+      '</div>'
+  }
+  var body = rows || '<div class="rail-empty">' + STRINGS.railInboxEmpty + '</div>'
+  return buildRailSectionHtml('inbox', STRINGS.railInbox, '', body)
+}
+
+function buildStacksSectionHtml() {
+  var stacks = (orgData && orgData.stacks) || []
+  var rows = ''
+  for (var i = 0; i < stacks.length; i++) {
+    var stack = stacks[i]
+    var isActive = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stack.id
+    var count = countStackSessionsForRail(stack)
+    rows +=
+      '<div class="rail-item' +
+      (isActive ? ' active' : '') +
+      '" data-rail-action="stack" data-stack-id="' +
+      escapeHtml(stack.id) +
+      '" data-stack-name="' +
+      escapeHtml(stack.name) +
+      '">' +
+      '<span class="rail-item-label">' +
+      escapeHtml(stack.name) +
+      '</span>' +
+      '<span class="rail-item-cnt">' +
+      count +
+      '</span>' +
+      '</div>'
+  }
+  var createRow =
+    railCreatingSection === 'stack'
+      ? '<div class="rail-create"><input class="rail-create-input" id="rail-create-input" placeholder="' +
+        escapeHtml(STRINGS.railStackNamePlaceholder) +
+        '" /></div>'
+      : '<div class="rail-add" data-rail-action="new-stack">' + STRINGS.railNewStack + '</div>'
+  return buildRailSectionHtml('stacks', STRINGS.railStacks, '⬡', rows + createRow)
+}
+
+function buildGroupsSectionHtml() {
+  var groups = (orgData && orgData.groups) || []
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var rows = ''
+  for (var i = 0; i < groups.length; i++) {
+    var group = groups[i]
+    var isActive = focusFilter && focusFilter.kind === 'group' && focusFilter.id === group.id
+    var count = 0
+    var keys = Object.keys(assignments)
+    for (var k = 0; k < keys.length; k++) {
+      if (assignments[keys[k]] === group.id) count++
+    }
+    rows +=
+      '<div class="rail-item' +
+      (isActive ? ' active' : '') +
+      '" data-rail-action="group" data-group-id="' +
+      escapeHtml(group.id) +
+      '" data-group-name="' +
+      escapeHtml(group.name) +
+      '">' +
+      '<span class="rail-item-label">' +
+      escapeHtml(group.name) +
+      '</span>' +
+      '<span class="rail-item-cnt">' +
+      count +
+      '</span>' +
+      '</div>'
+  }
+  var createRow =
+    railCreatingSection === 'group'
+      ? '<div class="rail-create"><input class="rail-create-input" id="rail-create-input" placeholder="' +
+        escapeHtml(STRINGS.railGroupNamePlaceholder) +
+        '" /></div>'
+      : '<div class="rail-add" data-rail-action="new-group">' + STRINGS.railNewGroup + '</div>'
+  return buildRailSectionHtml('groups', STRINGS.railGroups, '⊞', rows + createRow)
+}
+
+/** Re-renders the org rail. Safe to call at any time. */
+function renderRail() {
+  if (!elements.rail) return
+  elements.rail.innerHTML =
+    buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var createInput = document.getElementById('rail-create-input')
+  if (createInput) createInput.focus()
+}
+
+// ---------------------------------------------------------------------------
+// Focus bar
+// ---------------------------------------------------------------------------
+
+/** Re-renders the focus bar above the project list. Hides it when no focus is active. */
+function renderFocusBar() {
+  if (!focusFilter) {
+    elements.focusBar.style.display = 'none'
+    return
+  }
+  var name = ''
+  if (focusFilter.kind === 'inbox') {
+    for (var bi = 0; bi < INBOX_BUCKETS.length; bi++) {
+      if (INBOX_BUCKETS[bi].id === focusFilter.bucket) {
+        name = STRINGS[INBOX_BUCKETS[bi].labelKey] || focusFilter.bucket
+        break
+      }
+    }
+  } else if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
+    name = focusFilter.name
+  } else if (focusFilter.kind === 'tag') {
+    name = '#' + focusFilter.tag
+  }
+  var visibleCount = deriveVisibleProjects().length
+  var totalCount = projects.length
+  elements.focusBarLabel.textContent = fmt(STRINGS.focusBar, { name: name })
+  elements.focusBarCount.textContent = fmt(STRINGS.focusBarCount, {
+    n: visibleCount,
+    total: totalCount,
+  })
+  elements.focusBar.style.display = 'flex'
+}
+
+function clearFocusFilter() {
+  focusFilter = null
+  renderRail()
+  renderFocusBar()
+  renderProjects()
+  renderSessions()
+}
+
+if (elements.focusClearBtn) {
+  elements.focusClearBtn.addEventListener('click', clearFocusFilter)
+}
+
+// ---------------------------------------------------------------------------
+// Rail event handlers
+// ---------------------------------------------------------------------------
+
+if (elements.rail) {
+  elements.rail.addEventListener('click', function (event) {
+    // Section collapse toggle
+    var toggleTarget = event.target.closest('[data-rail-toggle]')
+    if (toggleTarget) {
+      toggleRailSectionCollapsed(toggleTarget.dataset.railToggle)
+      renderRail()
+      return
+    }
+
+    // Rail item — set or clear focus filter
+    var item = event.target.closest('.rail-item')
+    if (item) {
+      var action = item.dataset.railAction
+
+      if (action === 'inbox-bucket') {
+        var bucket = item.dataset.bucket
+        var wasActive = focusFilter && focusFilter.kind === 'inbox' && focusFilter.bucket === bucket
+        focusFilter = wasActive ? null : { kind: 'inbox', bucket: bucket }
+      } else if (action === 'stack') {
+        var stackId = item.dataset.stackId
+        var stackName = item.dataset.stackName
+        var wasActiveStack =
+          focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId
+        focusFilter = wasActiveStack ? null : { kind: 'stack', id: stackId, name: stackName }
+      } else if (action === 'group') {
+        var groupId = item.dataset.groupId
+        var groupName = item.dataset.groupName
+        var wasActiveGroup =
+          focusFilter && focusFilter.kind === 'group' && focusFilter.id === groupId
+        focusFilter = wasActiveGroup ? null : { kind: 'group', id: groupId, name: groupName }
+      }
+
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+      return
+    }
+
+    // Inline create button
+    var addBtn = event.target.closest('.rail-add')
+    if (addBtn) {
+      var addAction = addBtn.dataset.railAction
+      if (addAction === 'new-stack') {
+        railCreatingSection = 'stack'
+        toggleRailSectionCollapsed('stacks') // ensure expanded
+        if (isRailSectionCollapsed('stacks')) toggleRailSectionCollapsed('stacks')
+      } else if (addAction === 'new-group') {
+        railCreatingSection = 'group'
+        if (isRailSectionCollapsed('groups')) toggleRailSectionCollapsed('groups')
+      }
+      renderRail()
+    }
+  })
+
+  // Right-click on stack or group items — open delete / manage menu
+  elements.rail.addEventListener('contextmenu', function (event) {
+    event.preventDefault()
+    var item = event.target.closest('.rail-item')
+    if (!item) return
+
+    var action = item.dataset.railAction
+    if (action === 'stack') {
+      var stackId = item.dataset.stackId
+      var stackName = item.dataset.stackName
+      if (!stackId) return
+      ctxRailItem = { kind: 'stack', id: stackId, name: stackName }
+      openContextMenuAt(event.clientX, event.clientY, [
+        { type: 'header', label: stackName },
+        { action: 'rail-stack-manage', label: STRINGS.railManageStack },
+        { type: 'separator' },
+        { action: 'rail-stack-delete', label: STRINGS.railDeleteStack, danger: true },
+      ])
+    } else if (action === 'group') {
+      var groupId = item.dataset.groupId
+      var groupName = item.dataset.groupName
+      if (!groupId) return
+      ctxRailItem = { kind: 'group', id: groupId, name: groupName }
+      openContextMenuAt(event.clientX, event.clientY, [
+        { type: 'header', label: groupName },
+        { action: 'rail-group-manage', label: STRINGS.railManageGroup },
+        { type: 'separator' },
+        { action: 'rail-group-delete', label: STRINGS.railDeleteGroup, danger: true },
+      ])
+    }
+  })
+
+  // Keyboard handling for inline create input
+  elements.rail.addEventListener('keydown', function (event) {
+    var input = event.target.closest('.rail-create-input')
+    if (!input) return
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      var name = input.value.trim()
+      var section = railCreatingSection
+      railCreatingSection = null
+      renderRail()
+
+      if (!name) return
+
+      var endpoint = section === 'stack' ? '/api/org/stacks' : '/api/org/groups'
+      requestJson(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name }),
+      })
+        .then(function () {
+          void refreshProjectData()
+        })
+        .catch(function (error) {
+          showToast(fmt(STRINGS.railCreateError, { message: error.message || String(error) }))
+        })
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      railCreatingSection = null
+      renderRail()
+    }
+  })
+}
+// ---------------------------------------------------------------------------
+// Tag picker — floating dialog for adding/removing session tags (key: t)
+// ---------------------------------------------------------------------------
+
+var tagPickerSession = null // Session currently being tagged
+var tagPickerProject = null // Project owning the session
+var tagPickerTags = [] // Working copy of tags for the open session
+
+function openTagPicker(session, project) {
+  tagPickerSession = session
+  tagPickerProject = project
+  tagPickerTags = (session.tags || []).slice()
+  elements.tagPickerTitle.textContent = STRINGS.tagPickerSessionTitle
+  elements.tagPickerInput.placeholder = STRINGS.tagPickerPlaceholder
+  renderTagPickerChips()
+  renderTagPickerSuggestions('')
+  elements.tagPickerOverlay.classList.add('open')
+  elements.tagPickerInput.value = ''
+  elements.tagPickerInput.focus()
+}
+
+function closeTagPicker() {
+  if (!elements.tagPickerOverlay.classList.contains('open')) return
+  elements.tagPickerOverlay.classList.remove('open')
+  tagPickerSession = null
+  tagPickerProject = null
+  tagPickerTags = []
+  elements.tagPickerSuggestions.innerHTML = ''
+  elements.tagPickerChips.innerHTML = ''
+}
+
+function renderTagPickerChips() {
+  var html = ''
+  for (var i = 0; i < tagPickerTags.length; i++) {
+    html +=
+      '<span class="tp-chip">#' +
+      escapeHtml(tagPickerTags[i]) +
+      '<button class="tp-chip-remove" data-tag="' +
+      escapeHtml(tagPickerTags[i]) +
+      '">×</button></span>'
+  }
+  elements.tagPickerChips.innerHTML = html
+}
+
+function renderTagPickerSuggestions(query) {
+  var palette = (orgData && orgData.tagPalette) || []
+  var lq = query.toLowerCase()
+  var filtered = palette.filter(function (tag) {
+    return tag.indexOf(lq) !== -1 && tagPickerTags.indexOf(tag) === -1
+  })
+  if (!filtered.length || !query) {
+    elements.tagPickerSuggestions.innerHTML = ''
+    return
+  }
+  var html = ''
+  for (var i = 0; i < Math.min(filtered.length, 8); i++) {
+    html +=
+      '<span class="tp-suggestion" data-tag="' +
+      escapeHtml(filtered[i]) +
+      '">#' +
+      escapeHtml(filtered[i]) +
+      '</span>'
+  }
+  elements.tagPickerSuggestions.innerHTML = html
+}
+
+async function saveTagPickerTags() {
+  if (!tagPickerSession || !tagPickerProject) return
+  try {
+    await requestJson(
+      '/api/projects/' + tagPickerProject.id + '/sessions/' + tagPickerSession.id + '/tags',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: tagPickerTags }),
+      }
+    )
+    await refreshProjectData()
+  } catch (error) {
+    showToast(fmt(STRINGS.tagPickerSaveFailed, { error: error.message || String(error) }), 'err')
+  }
+}
+
+function addTagInPicker(rawTag) {
+  var tag = rawTag.trim().replace(/^#+/, '')
+  if (!tag) return
+  if (tagPickerTags.indexOf(tag) === -1) {
+    tagPickerTags.push(tag)
+    renderTagPickerChips()
+    void saveTagPickerTags()
+  }
+  elements.tagPickerInput.value = ''
+  renderTagPickerSuggestions('')
+  elements.tagPickerInput.focus()
+}
+
+function removeTagInPicker(tag) {
+  var idx = tagPickerTags.indexOf(tag)
+  if (idx !== -1) {
+    tagPickerTags.splice(idx, 1)
+    renderTagPickerChips()
+    void saveTagPickerTags()
+  }
+}
+
+// ---- Event wiring ----
+
+elements.tagPickerInput.addEventListener('input', function () {
+  renderTagPickerSuggestions(elements.tagPickerInput.value)
+})
+
+elements.tagPickerInput.addEventListener('keydown', function (event) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    addTagInPicker(elements.tagPickerInput.value)
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeTagPicker()
+  }
+})
+
+elements.tagPickerChips.addEventListener('click', function (event) {
+  var removeBtn = event.target.closest('.tp-chip-remove')
+  if (removeBtn) {
+    removeTagInPicker(removeBtn.dataset.tag)
+  }
+})
+
+elements.tagPickerSuggestions.addEventListener('click', function (event) {
+  var suggestion = event.target.closest('.tp-suggestion')
+  if (suggestion) {
+    addTagInPicker(suggestion.dataset.tag)
+  }
+})
+
+elements.tagPickerOverlay.addEventListener('click', function (event) {
+  if (event.target === elements.tagPickerOverlay) closeTagPicker()
+})
+
+elements.tagPickerClose.addEventListener('click', closeTagPicker)
+
+// t key — opens tag picker for selected session
+// ---------------------------------------------------------------------------
+// Org picker — assign a project to a group, or add a session/project to a stack
+// ---------------------------------------------------------------------------
+
+var orgPickerMode = null // 'group' | 'stack'
+var orgPickerTarget = null // { project } or { project, session }
+
+function openGroupPicker(project) {
+  orgPickerMode = 'group'
+  orgPickerTarget = { project: project }
+  elements.orgPickerTitle.textContent = STRINGS.orgPickerGroupTitle
+  renderOrgPickerList()
+  elements.orgPickerOverlay.classList.add('open')
+}
+
+function openStackPicker(project, session) {
+  orgPickerMode = 'stack'
+  orgPickerTarget = { project: project, session: session || null }
+  elements.orgPickerTitle.textContent = STRINGS.orgPickerStackTitle
+  renderOrgPickerList()
+  elements.orgPickerOverlay.classList.add('open')
+}
+
+function closeOrgPicker() {
+  elements.orgPickerOverlay.classList.remove('open')
+  orgPickerMode = null
+  orgPickerTarget = null
+}
+
+function renderOrgPickerList() {
+  if (!orgData) {
+    elements.orgPickerList.innerHTML =
+      '<div class="org-picker-empty">' + STRINGS.orgPickerNoItems + '</div>'
+    return
+  }
+
+  var items = orgPickerMode === 'group' ? orgData.groups : orgData.stacks
+  if (!items || items.length === 0) {
+    elements.orgPickerList.innerHTML =
+      '<div class="org-picker-empty">' + STRINGS.orgPickerNoItems + '</div>'
+    return
+  }
+
+  var currentGroupId =
+    orgPickerMode === 'group' && orgPickerTarget && orgPickerTarget.project
+      ? (orgData.projectGroupAssignments || {})[orgPickerTarget.project.id]
+      : null
+
+  var html = ''
+  if (orgPickerMode === 'group' && currentGroupId) {
+    html +=
+      '<div class="org-picker-item org-picker-remove" data-item-id="">' +
+      escapeHtml(STRINGS.orgPickerRemoveGroup) +
+      '</div>'
+  }
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i]
+    var isCurrent = orgPickerMode === 'group' && item.id === currentGroupId
+    html +=
+      '<div class="org-picker-item' +
+      (isCurrent ? ' active' : '') +
+      '" data-item-id="' +
+      escapeHtml(item.id) +
+      '">' +
+      escapeHtml(item.name) +
+      (isCurrent ? ' ✓' : '') +
+      '</div>'
+  }
+  elements.orgPickerList.innerHTML = html
+}
+
+async function applyOrgPickerSelection(itemId) {
+  if (!orgPickerTarget) return
+  var mode = orgPickerMode
+  var target = orgPickerTarget
+  closeOrgPicker()
+
+  try {
+    if (mode === 'group') {
+      await requestJson('/api/projects/' + encodeURIComponent(target.project.id) + '/group', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: itemId }),
+      })
+    } else {
+      var body = target.session
+        ? { kind: 'session', projectId: target.project.id, sessionId: target.session.id }
+        : { kind: 'project', projectId: target.project.id }
+      await requestJson('/api/org/stacks/' + encodeURIComponent(itemId) + '/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    }
+    void refreshProjectData()
+  } catch (error) {
+    var key = mode === 'group' ? 'orgPickerGroupFailed' : 'orgPickerStackFailed'
+    showToast(fmt(STRINGS[key], { error: error.message || String(error) }), 'err')
+  }
+}
+
+async function removeProjectFromGroup(project) {
+  try {
+    await requestJson('/api/projects/' + encodeURIComponent(project.id) + '/group', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId: null }),
+    })
+    void refreshProjectData()
+  } catch (error) {
+    showToast(fmt(STRINGS.orgPickerGroupFailed, { error: error.message || String(error) }), 'err')
+  }
+}
+
+// ---- Event wiring ----
+
+elements.orgPickerList.addEventListener('click', function (event) {
+  var item = event.target.closest('.org-picker-item')
+  if (!item) return
+
+  if (item.classList.contains('org-picker-remove')) {
+    if (orgPickerTarget && orgPickerTarget.project) {
+      var proj = orgPickerTarget.project
+      closeOrgPicker()
+      void removeProjectFromGroup(proj)
+    }
+    return
+  }
+
+  var itemId = item.dataset.itemId
+  if (itemId) void applyOrgPickerSelection(itemId)
+})
+
+elements.orgPickerOverlay.addEventListener('click', function (event) {
+  if (event.target === elements.orgPickerOverlay) closeOrgPicker()
+})
+
+elements.orgPickerClose.addEventListener('click', closeOrgPicker)
+
+document.addEventListener('keydown', function (event) {
+  if (elements.orgPickerOverlay.classList.contains('open') && event.key === 'Escape') {
+    event.preventDefault()
+    closeOrgPicker()
+  }
+})
+// ---------------------------------------------------------------------------
+// Org item manager — view and remove members from stacks and groups
+// ---------------------------------------------------------------------------
+
+var orgManagerKind = null // 'stack' | 'group'
+var orgManagerId = null
+
+function openOrgManager(kind, id, name) {
+  if (!elements.orgManagerOverlay) return
+  orgManagerKind = kind
+  orgManagerId = id
+  elements.orgManagerTitle.textContent = (kind === 'stack' ? 'Stack: ' : 'Group: ') + name
+  renderOrgManagerList()
+  elements.orgManagerOverlay.classList.add('open')
+}
+
+function closeOrgManager() {
+  if (!elements.orgManagerOverlay) return
+  elements.orgManagerOverlay.classList.remove('open')
+  orgManagerKind = null
+  orgManagerId = null
+}
+
+function renderOrgManagerList() {
+  if (!elements.orgManagerList) return
+  var html = ''
+
+  if (orgManagerKind === 'stack') {
+    var stack = null
+    if (orgData && orgData.stacks) {
+      for (var si = 0; si < orgData.stacks.length; si++) {
+        if (orgData.stacks[si].id === orgManagerId) {
+          stack = orgData.stacks[si]
+          break
+        }
+      }
+    }
+    if (!stack || stack.items.length === 0) {
+      elements.orgManagerList.innerHTML =
+        '<div class="org-manager-empty">' + escapeHtml(STRINGS.railManagerEmpty) + '</div>'
+      return
+    }
+    for (var ii = 0; ii < stack.items.length; ii++) {
+      var stackItem = stack.items[ii]
+      var proj = null
+      for (var pi = 0; pi < projects.length; pi++) {
+        if (projects[pi].id === stackItem.projectId) {
+          proj = projects[pi]
+          break
+        }
+      }
+      var projName = proj ? compactPath(proj.path) : stackItem.projectId
+      if (stackItem.kind === 'project') {
+        html +=
+          '<div class="org-manager-item">' +
+          '<span class="org-manager-icon">📁</span>' +
+          '<span class="org-manager-label">' +
+          escapeHtml(projName) +
+          '</span>' +
+          '<button class="org-manager-remove" data-item-ref="' +
+          escapeHtml(stackItem.projectId) +
+          '" title="Remove">' +
+          escapeHtml(STRINGS.railManagerRemove) +
+          '</button>' +
+          '</div>'
+      } else if (stackItem.kind === 'session' && stackItem.sessionId) {
+        var sess = null
+        if (proj) {
+          for (var xs = 0; xs < proj.sessions.length; xs++) {
+            if (proj.sessions[xs].id === stackItem.sessionId) {
+              sess = proj.sessions[xs]
+              break
+            }
+          }
+        }
+        var sessName = sess ? sess.alias || sess.name : stackItem.sessionId.slice(0, 8) + '…'
+        var sessionRef = stackItem.projectId + ':' + stackItem.sessionId
+        html +=
+          '<div class="org-manager-item org-manager-item-session">' +
+          '<span class="org-manager-icon org-manager-indent">↳</span>' +
+          '<span class="org-manager-sub">' +
+          escapeHtml(projName) +
+          ' / </span>' +
+          '<span class="org-manager-label">' +
+          escapeHtml(sessName) +
+          '</span>' +
+          '<button class="org-manager-remove" data-item-ref="' +
+          escapeHtml(sessionRef) +
+          '" title="Remove">' +
+          escapeHtml(STRINGS.railManagerRemove) +
+          '</button>' +
+          '</div>'
+      }
+    }
+  } else if (orgManagerKind === 'group') {
+    var assignments = (orgData && orgData.projectGroupAssignments) || {}
+    var assigned = []
+    for (var gi = 0; gi < projects.length; gi++) {
+      if (assignments[projects[gi].id] === orgManagerId) assigned.push(projects[gi])
+    }
+    if (assigned.length === 0) {
+      elements.orgManagerList.innerHTML =
+        '<div class="org-manager-empty">' + escapeHtml(STRINGS.railManagerEmpty) + '</div>'
+      return
+    }
+    for (var ai = 0; ai < assigned.length; ai++) {
+      var assignedProj = assigned[ai]
+      html +=
+        '<div class="org-manager-item">' +
+        '<span class="org-manager-icon">📁</span>' +
+        '<span class="org-manager-label">' +
+        escapeHtml(compactPath(assignedProj.path)) +
+        '</span>' +
+        '<button class="org-manager-remove" data-project-id="' +
+        escapeHtml(assignedProj.id) +
+        '" title="Remove">' +
+        escapeHtml(STRINGS.railManagerRemove) +
+        '</button>' +
+        '</div>'
+    }
+  }
+
+  elements.orgManagerList.innerHTML =
+    html || '<div class="org-manager-empty">' + escapeHtml(STRINGS.railManagerEmpty) + '</div>'
+}
+
+if (elements.orgManagerList) {
+  elements.orgManagerList.addEventListener('click', function (event) {
+    var btn = event.target.closest('.org-manager-remove')
+    if (!btn) return
+
+    if (orgManagerKind === 'stack') {
+      var itemRef = btn.dataset.itemRef
+      if (!itemRef || !orgManagerId) return
+      requestJson('/api/org/stacks/' + orgManagerId + '/items/' + encodeURIComponent(itemRef), {
+        method: 'DELETE',
+      })
+        .then(function () {
+          return refreshProjectData()
+        })
+        .then(function () {
+          renderOrgManagerList()
+        })
+        .catch(function (error) {
+          showToast('Failed to remove item: ' + (error.message || String(error)), 'err')
+        })
+    } else if (orgManagerKind === 'group') {
+      var projectId = btn.dataset.projectId
+      if (!projectId) return
+      requestJson('/api/projects/' + projectId + '/group', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: null }),
+      })
+        .then(function () {
+          return refreshProjectData()
+        })
+        .then(function () {
+          renderOrgManagerList()
+        })
+        .catch(function (error) {
+          showToast('Failed to remove from group: ' + (error.message || String(error)), 'err')
+        })
+    }
+  })
+}
+
+if (elements.orgManagerClose) {
+  elements.orgManagerClose.addEventListener('click', closeOrgManager)
+}
+
+if (elements.orgManagerOverlay) {
+  elements.orgManagerOverlay.addEventListener('click', function (event) {
+    if (event.target === elements.orgManagerOverlay) closeOrgManager()
+  })
+}
 })()

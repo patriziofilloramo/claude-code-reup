@@ -16,10 +16,12 @@ const RETRYABLE_REPLACE_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
 interface SessionSidecarMetadata {
   alias?: string
   archived?: boolean
+  tags?: string[]
 }
 
 interface ProjectSidecarMetadata {
   sessions?: Record<string, SessionSidecarMetadata>
+  projectTags?: string[]
 }
 
 export class ActiveSessionDeletionError extends Error {
@@ -131,23 +133,29 @@ function sessionMetadataEntry(
 // Public metadata API
 // -----------------------------------------------------------------------------
 
-/** Merges Swoop-owned aliases and archive state into a discovered project. */
+/** Merges Swoop-owned aliases, archive state, and tags into a discovered project. */
 export async function mergeProjectSidecarMetadata(
   projectDirectory: string,
   project: Project
 ): Promise<Project> {
   const sidecarMetadata = await readProjectSidecar(projectDirectory)
-  if (!sidecarMetadata.sessions) return project
+
+  const projectWithTags: Project = sidecarMetadata.projectTags
+    ? { ...project, projectTags: sidecarMetadata.projectTags }
+    : project
+
+  if (!sidecarMetadata.sessions) return projectWithTags
 
   return {
-    ...project,
-    sessions: project.sessions.map((session) => {
+    ...projectWithTags,
+    sessions: projectWithTags.sessions.map((session) => {
       const sessionMetadata = sidecarMetadata.sessions?.[session.id]
       if (!sessionMetadata) return session
 
       return {
         ...session,
         alias: sessionMetadata.alias || session.alias,
+        tags: sessionMetadata.tags ?? session.tags,
         signals: {
           ...session.signals,
           archived: sessionMetadata.archived ?? session.signals.archived,
@@ -198,6 +206,35 @@ export async function deleteSession(projectId: string, sessionId: string): Promi
     log.warn('delete: transcript removed but sidecar cleanup failed:', error)
   }
 
+  invalidateProjectCache()
+}
+
+/**
+ * Replaces the complete tag list for a session.
+ * Tags must already be normalized and validated by the caller.
+ */
+export async function setSessionTags(
+  projectId: string,
+  sessionId: string,
+  normalizedTags: string[]
+): Promise<void> {
+  await enqueueProjectSidecarUpdate(getProjectDirectory(projectId), (metadata) => {
+    const entry = sessionMetadataEntry(metadata, sessionId)
+    if (normalizedTags.length > 0) entry.tags = normalizedTags
+    else delete entry.tags
+  })
+  invalidateProjectCache()
+}
+
+/**
+ * Replaces the project-level tag list stored in swoop.json.
+ * Tags must already be normalized and validated by the caller.
+ */
+export async function setProjectTags(projectId: string, normalizedTags: string[]): Promise<void> {
+  await enqueueProjectSidecarUpdate(getProjectDirectory(projectId), (metadata) => {
+    if (normalizedTags.length > 0) metadata.projectTags = normalizedTags
+    else delete metadata.projectTags
+  })
   invalidateProjectCache()
 }
 

@@ -6,9 +6,13 @@ import {
   filterListedSessions,
   formatSessionTable,
   parseListOptions,
+  resolveOrgFilter,
   shortestUniqueIdPrefix,
 } from '../../src/cli/list-command.js'
 import type { ListOptions, ListedSession } from '../../src/cli/list-command.js'
+import { applyOrgMetadata, filterProjectsByOrg } from '../../src/core/org/org-filters.js'
+import type { OrgData } from '../../src/core/org/org-model.js'
+import { emptyOrgData } from '../../src/core/org/org-prefs.js'
 import type { Project, Session } from '../../src/core/session/session-model.js'
 
 const GENERATED_AT = '2026-06-10T15:00:00.000Z'
@@ -128,6 +132,21 @@ describe('list command', () => {
     })
   })
 
+  it('parses --tag, --group, and --stack flags', () => {
+    expect(parseListOptions(['--tag', 'deploy'])).toEqual({
+      options: expect.objectContaining({ tag: 'deploy' }),
+    })
+    expect(parseListOptions(['--group', 'My Group'])).toEqual({
+      options: expect.objectContaining({ group: 'My Group' }),
+    })
+    expect(parseListOptions(['--stack', 'Sprint 1'])).toEqual({
+      options: expect.objectContaining({ stack: 'Sprint 1' }),
+    })
+    expect(parseListOptions(['--tag'])).toEqual({ error: '--tag requires a value' })
+    expect(parseListOptions(['--group'])).toEqual({ error: '--group requires a value' })
+    expect(parseListOptions(['--stack'])).toEqual({ error: '--stack requires a value' })
+  })
+
   it('rejects unknown options and invalid values', () => {
     expect(parseListOptions(['--unknown'])).toEqual({ error: 'unknown list option: --unknown' })
     expect(parseListOptions(['--limit', '0'])).toEqual({
@@ -196,5 +215,198 @@ describe('list command', () => {
 
     expect(output).toContain('First line Second line')
     expect(output.split('\n')).toHaveLength(2)
+  })
+})
+
+describe('resolveOrgFilter', () => {
+  const orgData: OrgData = {
+    ...emptyOrgData(),
+    groups: [
+      { id: 'g-alpha', name: 'Alpha Team' },
+      { id: 'g-beta', name: 'Beta Team' },
+      { id: 'g-other', name: 'Other' },
+    ],
+    stacks: [
+      { id: 's-sprint1', name: 'Sprint 1', items: [] },
+      { id: 's-sprint2', name: 'Sprint 2', items: [] },
+      { id: 's-hotfix', name: 'Hotfix', items: [] },
+    ],
+  }
+
+  it('resolves group name (case-insensitive substring) to groupId', () => {
+    expect(resolveOrgFilter(orgData, { group: 'alpha' })).toEqual({
+      filter: { groupId: 'g-alpha' },
+    })
+    expect(resolveOrgFilter(orgData, { group: 'Alpha Team' })).toEqual({
+      filter: { groupId: 'g-alpha' },
+    })
+  })
+
+  it('resolves stack name (case-insensitive substring) to stackId', () => {
+    expect(resolveOrgFilter(orgData, { stack: 'hotfix' })).toEqual({
+      filter: { stackId: 's-hotfix' },
+    })
+    expect(resolveOrgFilter(orgData, { stack: 'Sprint 1' })).toEqual({
+      filter: { stackId: 's-sprint1' },
+    })
+  })
+
+  it('normalizes tag to lowercase', () => {
+    expect(resolveOrgFilter(orgData, { tag: 'Deploy' })).toEqual({ filter: { tag: 'deploy' } })
+    expect(resolveOrgFilter(orgData, { tag: 'CI/CD' })).toEqual({ filter: { tag: 'ci/cd' } })
+  })
+
+  it('returns error when no group matches', () => {
+    const result = resolveOrgFilter(orgData, { group: 'nonexistent' })
+    expect(result).toEqual({ error: 'no group matching "nonexistent"' })
+  })
+
+  it('returns error when no stack matches', () => {
+    const result = resolveOrgFilter(orgData, { stack: 'nonexistent' })
+    expect(result).toEqual({ error: 'no stack matching "nonexistent"' })
+  })
+
+  it('returns error when multiple groups match', () => {
+    const result = resolveOrgFilter(orgData, { group: 'team' })
+    expect(result).toEqual({
+      error: '"team" matches multiple groups: Alpha Team, Beta Team — be more specific',
+    })
+  })
+
+  it('returns error when multiple stacks match', () => {
+    const result = resolveOrgFilter(orgData, { stack: 'sprint' })
+    expect(result).toEqual({
+      error: '"sprint" matches multiple stacks: Sprint 1, Sprint 2 — be more specific',
+    })
+  })
+
+  it('returns empty filter when no org options are set', () => {
+    expect(resolveOrgFilter(orgData, {})).toEqual({ filter: {} })
+    expect(resolveOrgFilter(emptyOrgData(), {})).toEqual({ filter: {} })
+  })
+
+  it('group takes priority over stack and tag when both are provided', () => {
+    expect(resolveOrgFilter(orgData, { group: 'alpha', stack: 'hotfix', tag: 'prod' })).toEqual({
+      filter: { groupId: 'g-alpha' },
+    })
+  })
+})
+
+describe('CLI org filter pipeline (3c integration)', () => {
+  function makeSession(id: string, overrides: Partial<Session> = {}): Session {
+    return {
+      context: {
+        latestContextTokens: null,
+        latestModel: null,
+        latestOutputTokens: null,
+        models: [],
+      },
+      created: '2026-01-01T00:00:00.000Z',
+      id,
+      messageCount: 1,
+      name: `Session ${id}`,
+      projectPath: '/project',
+      signals: {
+        analysisComplete: true,
+        archived: false,
+        compactionCount: 0,
+        expiresInDays: 20,
+        interrupted: false,
+        lastToolFailed: false,
+        pathExists: true,
+      },
+      updated: '2026-01-01T00:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  const deploySession = makeSession('s1', { tags: ['deploy', 'prod'] })
+  const plainSession = makeSession('s2', { name: 'Plain session' })
+  const prodSession = makeSession('s3', { tags: ['prod'] })
+
+  const projectA: Project = {
+    id: 'proj-a',
+    path: '/work/app-a',
+    sessions: [deploySession, plainSession],
+    isShared: false,
+  }
+  const projectB: Project = {
+    id: 'proj-b',
+    path: '/work/app-b',
+    sessions: [prodSession],
+    isShared: false,
+  }
+  const projectC: Project = {
+    id: 'proj-c',
+    path: '/work/app-c',
+    sessions: [makeSession('s4')],
+    isShared: false,
+  }
+
+  const orgData: OrgData = {
+    ...emptyOrgData(),
+    groups: [
+      { id: 'g-work', name: 'Work' },
+      { id: 'g-personal', name: 'Personal' },
+    ],
+    stacks: [
+      {
+        id: 'stack-launch',
+        name: 'Launch week',
+        items: [
+          { kind: 'project', projectId: 'proj-a' },
+          { kind: 'session', projectId: 'proj-b', sessionId: 's3' },
+        ],
+      },
+    ],
+    projectGroupAssignments: { 'proj-a': 'g-work', 'proj-b': 'g-work' },
+  }
+
+  function applyAndList(
+    projects: Project[],
+    filterOptions: Parameters<typeof resolveOrgFilter>[1]
+  ): ListedSession[] {
+    const filterResult = resolveOrgFilter(orgData, filterOptions)
+    if ('error' in filterResult) throw new Error(filterResult.error)
+    // Mirror the real pipeline: applyOrgMetadata populates group/groupName before filtering
+    const withMeta = applyOrgMetadata(projects, orgData)
+    const filtered = filterProjectsByOrg(withMeta, orgData, filterResult.filter)
+    return createListedSessions(filtered, new Set())
+  }
+
+  it('--tag deploy returns only sessions with that tag', () => {
+    const sessions = applyAndList([projectA, projectB, projectC], { tag: 'deploy' })
+    expect(sessions.map((s) => s.id)).toEqual(['s1'])
+  })
+
+  it('--tag prod returns all sessions tagged prod across all projects', () => {
+    const sessions = applyAndList([projectA, projectB, projectC], { tag: 'prod' })
+    expect(sessions.map((s) => s.id)).toEqual(['s1', 's3'])
+  })
+
+  it('--group work returns all sessions from projects in the group', () => {
+    const sessions = applyAndList([projectA, projectB, projectC], { group: 'work' })
+    expect(sessions.map((s) => s.id)).toContain('s1')
+    expect(sessions.map((s) => s.id)).toContain('s2')
+    expect(sessions.map((s) => s.id)).toContain('s3')
+    expect(sessions.map((s) => s.id)).not.toContain('s4')
+  })
+
+  it('--stack "launch week" returns stack members only', () => {
+    const sessions = applyAndList([projectA, projectB, projectC], { stack: 'launch week' })
+    // proj-a has a project-level item → all its sessions; proj-b contributes s3 only
+    const ids = sessions.map((s) => s.id)
+    expect(ids).toContain('s1')
+    expect(ids).toContain('s2')
+    expect(ids).toContain('s3')
+    expect(ids).not.toContain('s4')
+    // proj-b plainSession (s4 is in proj-c, not in stack)
+  })
+
+  it('serialized listed sessions include tags, group, and groupName', () => {
+    const sessions = applyAndList([projectA], { tag: 'deploy' })
+    const session = sessions.find((s) => s.id === 's1')!
+    expect(session.tags).toEqual(['deploy', 'prod'])
+    expect(session.group).toBe('g-work')
   })
 })

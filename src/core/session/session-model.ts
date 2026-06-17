@@ -39,6 +39,15 @@ export interface Project {
   path: string
   sessions: Session[]
   /**
+   * ID of the ProjectGroup this project belongs to, from org.json.
+   * Populated by applyOrgMetadata() in the route/CLI layer; undefined when not grouped.
+   */
+  group?: string
+  /** Human-readable name of the group, resolved from org.json by applyOrgMetadata(). */
+  groupName?: string
+  /** Swoop tags applied to the project itself (all its sessions inherit them). */
+  projectTags?: string[]
+  /**
    * True when the project's storage directory is linked to a cloud location
    * (either via a .swoop-link file or a legacy NTFS junction / symlink).
    * Used to show the cloud shared-storage indicator in the UI.
@@ -68,6 +77,8 @@ export interface Project {
 
 export interface Session {
   alias?: string
+  /** Swoop-owned tags stored in swoop.json per-project. Never written to Claude transcripts. */
+  tags?: string[]
   context: SessionContextMetrics
   created: string
   /**

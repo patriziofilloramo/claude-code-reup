@@ -388,3 +388,234 @@ describe('web client session-row invariants', () => {
     expect(source).toContain('USAGE_POLL_INTERVAL_MS')
   })
 })
+
+describe('web client org layer invariants', () => {
+  let source: string
+  let stylesSource: string
+  let uiSource: string
+
+  beforeAll(async () => {
+    const files = await Promise.all([
+      readFile(CLIENT_PATH, 'utf8'),
+      readFile(STYLES_PATH, 'utf8'),
+      readFile(UI_PATH, 'utf8'),
+    ])
+    source = files[0]
+    stylesSource = files[1]
+    uiSource = files[2]
+  })
+
+  function sourceBetween(start: string, end: string): string {
+    return source.slice(source.indexOf(start), source.indexOf(end))
+  }
+
+  it('renders inbox section with only non-zero bucket counts', () => {
+    const inboxSection = sourceBetween(
+      'function buildInboxSectionHtml()',
+      'function buildStacksSectionHtml()'
+    )
+    expect(inboxSection).toContain('countBucketSessions(bucket)')
+    expect(inboxSection).toContain('if (count === 0) continue')
+    expect(inboxSection).toContain('data-rail-action="inbox-bucket"')
+    expect(inboxSection).toContain('data-bucket=')
+  })
+
+  it('focuses by inbox bucket without applying pill filter', () => {
+    const focusResolver = sourceBetween(
+      'function getSessionsMatchingFocus(project)',
+      'function isRailSectionCollapsed('
+    )
+    expect(focusResolver).toContain("focusFilter.kind === 'inbox'")
+    expect(focusResolver).toContain('bucket.test(s)')
+    expect(focusResolver).toContain('!s.signals.archived')
+  })
+
+  it('focuses by stack resolving project and session items separately', () => {
+    const focusResolver = sourceBetween(
+      'function getSessionsMatchingFocus(project)',
+      'function isRailSectionCollapsed('
+    )
+    expect(focusResolver).toContain("focusFilter.kind === 'stack'")
+    expect(focusResolver).toContain("item.kind === 'project'")
+    expect(focusResolver).toContain("item.kind === 'session'")
+    expect(focusResolver).toContain('return null')
+    expect(focusResolver).toContain('return undefined')
+  })
+
+  it('focuses by group using projectGroupAssignments', () => {
+    const focusResolver = sourceBetween(
+      'function getSessionsMatchingFocus(project)',
+      'function isRailSectionCollapsed('
+    )
+    expect(focusResolver).toContain("focusFilter.kind === 'group'")
+    expect(focusResolver).toContain('orgData.projectGroupAssignments')
+    expect(focusResolver).toContain('focusFilter.id')
+  })
+
+  it('focuses by tag on session-level tags and project-level tags', () => {
+    const focusResolver = sourceBetween(
+      'function getSessionsMatchingFocus(project)',
+      'function isRailSectionCollapsed('
+    )
+    expect(focusResolver).toContain("focusFilter.kind === 'tag'")
+    expect(focusResolver).toContain('project.projectTags')
+    expect(focusResolver).toContain('s.tags')
+    expect(focusResolver).toContain('indexOf(tag) !== -1')
+  })
+
+  it('derives visible projects through the focus filter before applying search', () => {
+    const deriveProjects = sourceBetween(
+      'function deriveVisibleProjects()',
+      'function renderProjects()'
+    )
+    expect(deriveProjects).toContain('if (focusFilter)')
+    expect(deriveProjects).toContain('getSessionsMatchingFocus(project)')
+    expect(deriveProjects).toContain('if (focusSessions === undefined) return false')
+    expect(deriveProjects).toContain('if (focusSessions === null) return true')
+    expect(deriveProjects).toContain('focusSessions.length > 0')
+  })
+
+  it('inbox bucket focus bypasses pill filter for session list', () => {
+    const deriveSessions = sourceBetween(
+      'function deriveVisibleSessionsForProject(',
+      'function deriveVisibleSessions()'
+    )
+    expect(deriveSessions).toContain("focusFilter.kind === 'inbox'")
+    expect(deriveSessions).toContain('sessions = focusSessions')
+  })
+
+  it('tag + stack focus intersects with pill filter', () => {
+    const deriveSessions = sourceBetween(
+      'function deriveVisibleSessionsForProject(',
+      'function deriveVisibleSessions()'
+    )
+    expect(deriveSessions).toContain('var pilledIds = new Set(')
+    expect(deriveSessions).toContain('sessionsMatchingFilter(project, selectedFilter)')
+    expect(deriveSessions).toContain('pilledIds.has(s.id)')
+  })
+
+  it('clears focus filter and re-renders all panels', () => {
+    const clearFocus = sourceBetween('function clearFocusFilter()', 'if (elements.focusClearBtn)')
+    expect(clearFocus).toContain('focusFilter = null')
+    expect(clearFocus).toContain('renderRail()')
+    expect(clearFocus).toContain('renderFocusBar()')
+    expect(clearFocus).toContain('renderProjects()')
+    expect(clearFocus).toContain('renderSessions()')
+  })
+
+  it('tag chips render up to TAG_CHIPS_MAX tags with +N overflow', () => {
+    const tagChips = sourceBetween('function buildTagChipsHtml(', 'function buildSessionRowHtml(')
+    expect(tagChips).toContain('TAG_CHIPS_MAX')
+    expect(tagChips).toContain('tags.slice(0, TAG_CHIPS_MAX)')
+    expect(tagChips).toContain('tags.length - shown.length')
+    expect(tagChips).toContain('">#')
+    expect(tagChips).toContain('s-tag')
+    expect(tagChips).toContain('tagChipOverflow')
+  })
+
+  it('clicking an s-tag chip in the session list sets a tag focus filter', () => {
+    const clickHandler = sourceBetween(
+      "elements.sessionList.addEventListener('click'",
+      "elements.sessionList.addEventListener('keydown'"
+    )
+    expect(clickHandler).toContain("closest('.s-tag')")
+    expect(clickHandler).toContain("focusFilter.kind === 'tag'")
+    expect(clickHandler).toContain("kind: 'tag', tag: tag")
+    expect(clickHandler).toContain('renderRail()')
+    expect(clickHandler).toContain('event.stopPropagation()')
+  })
+
+  it('tag picker opens on t key and adds tags to the session via PUT', () => {
+    const shortcuts = sourceBetween(
+      "document.addEventListener('keydown'",
+      '// j / k - navigate sessions up/down'
+    )
+    const tagPicker = sourceBetween('function openTagPicker(', 'function closeTagPicker(')
+    const save = sourceBetween('async function saveTagPickerTags()', 'function addTagInPicker(')
+    expect(shortcuts).toContain("event.key === 't'")
+    expect(shortcuts).toContain('openTagPicker(selectedSession, selectedProject)')
+    expect(tagPicker).toContain('tagPickerTags')
+    expect(tagPicker).toContain('elements.tagPickerOverlay.classList.add')
+    expect(save).toContain("'/api/projects/'")
+    expect(save).toContain("'/sessions/'")
+    expect(save).toContain("'/tags'")
+    expect(save).toContain("method: 'PUT'")
+  })
+
+  it('org inspector section shows tags, group, and stack memberships', () => {
+    const orgSection = sourceBetween('function buildOrgInspectorHtml(', 'function renderInspector(')
+    expect(orgSection).toContain('session.tags')
+    expect(orgSection).toContain('orgData.projectGroupAssignments')
+    expect(orgSection).toContain('orgData.groups')
+    expect(orgSection).toContain('orgData.stacks')
+    expect(orgSection).toContain('data-inspector-action="session-tag"')
+    expect(orgSection).toContain('insp-tag')
+  })
+
+  it('org rail fetches from /api/org in the project data refresh', () => {
+    const refresh = sourceBetween(
+      'async function refreshProjectData()',
+      'function connectLiveUpdates()'
+    )
+    expect(refresh).toContain("requestJson('/api/org')")
+    expect(refresh).toContain('loadedOrgData')
+    expect(refresh).toContain('orgData = loadedOrgData')
+    expect(refresh).toContain('renderRail()')
+    expect(refresh).toContain('renderFocusBar()')
+  })
+
+  it('rail persists collapse state in localStorage by section id', () => {
+    const collapse = sourceBetween(
+      'function isRailSectionCollapsed(',
+      'function countBucketSessions('
+    )
+    expect(collapse).toContain('RAIL_STORAGE_KEY')
+    expect(collapse).toContain("':collapsed'")
+    expect(collapse).toContain('localStorage.getItem(')
+    expect(collapse).toContain('localStorage.setItem(')
+    expect(collapse).toContain('localStorage.removeItem(')
+  })
+
+  it('org picker calls PUT /api/projects/:id/group for group assignment', () => {
+    const apply = sourceBetween(
+      'async function applyOrgPickerSelection(',
+      'async function removeProjectFromGroup('
+    )
+    expect(apply).toContain("'/api/projects/'")
+    expect(apply).toContain("'/group'")
+    expect(apply).toContain('groupId: itemId')
+    expect(apply).toContain("method: 'PUT'")
+  })
+
+  it('org picker adds stack items via POST /api/org/stacks/:id/items', () => {
+    const apply = sourceBetween(
+      'async function applyOrgPickerSelection(',
+      'async function removeProjectFromGroup('
+    )
+    expect(apply).toContain("'/api/org/stacks/'")
+    expect(apply).toContain("'/items'")
+    expect(apply).toContain("method: 'POST'")
+  })
+
+  it('HTML contains the rail, focus-bar, tag-picker, and org-picker elements', () => {
+    expect(uiSource).toContain('id="rail"')
+    expect(uiSource).toContain('id="focus-bar"')
+    expect(uiSource).toContain('id="tag-picker-overlay"')
+    expect(uiSource).toContain('id="tag-picker-input"')
+    expect(uiSource).toContain('id="org-picker-overlay"')
+    expect(uiSource).toContain('id="org-picker-list"')
+  })
+
+  it('styles contain rail section, focus bar, and tag chip rules', () => {
+    expect(stylesSource).toContain('.org-rail {')
+    expect(stylesSource).toContain('.rail-section {')
+    expect(stylesSource).toContain('.rail-item {')
+    expect(stylesSource).toContain('.focus-bar {')
+    expect(stylesSource).toContain('.s-tags {')
+    expect(stylesSource).toContain('.s-tag {')
+    expect(stylesSource).toContain('.s-tag-overflow {')
+    expect(stylesSource).toContain('.tag-picker-dlg {')
+    expect(stylesSource).toContain('.org-picker-dlg {')
+    expect(stylesSource).toContain('.insp-org-section {')
+  })
+})

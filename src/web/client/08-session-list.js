@@ -2,6 +2,33 @@
 // Session list rendering and metadata actions
 // ---------------------------------------------------------------------------
 
+const TAG_CHIPS_MAX = 2
+
+/**
+ * Renders up to TAG_CHIPS_MAX tag chips for a session, with a "+N" overflow badge.
+ * Returns "" when there are no tags.
+ */
+function buildTagChipsHtml(tags) {
+  if (!tags || tags.length === 0) return ''
+  var shown = tags.slice(0, TAG_CHIPS_MAX)
+  var overflow = tags.length - shown.length
+  var html = '<span class="s-tags">'
+  for (var i = 0; i < shown.length; i++) {
+    html +=
+      '<span class="s-tag" data-tag="' +
+      escapeHtml(shown[i]) +
+      '">#' +
+      escapeHtml(shown[i]) +
+      '</span>'
+  }
+  if (overflow > 0) {
+    html +=
+      '<span class="s-tag-overflow">' + fmt(STRINGS.tagChipOverflow, { n: overflow }) + '</span>'
+  }
+  html += '</span>'
+  return html
+}
+
 /** Renders a single session row (two lines + optional deep-search snippet) as an HTML string. */
 function buildSessionRowHtml(session) {
   const isSelected = selectedSession && session.id === selectedSession.id
@@ -73,6 +100,7 @@ function buildSessionRowHtml(session) {
         ' ctx</span>'
       : '') +
     buildStatusBadgeHtml(session) +
+    buildTagChipsHtml(session.tags) +
     '</div>' +
     (deepSearchActive ? buildDeepSnippetHtml(getDeepMatchForSession(session.id)) : '') +
     '</div>'
@@ -236,6 +264,10 @@ function executeSessionAction(action, session) {
     copySessionId(session)
   } else if (action === 'session-handoff') {
     void copySessionHandoff(session)
+  } else if (action === 'session-tag') {
+    openTagPicker(session, selectedProject)
+  } else if (action === 'session-add-stack') {
+    openStackPicker(selectedProject, session)
   }
 }
 
@@ -244,20 +276,42 @@ function sessionActionItems(session) {
   return [
     { action: 'session-resume', label: STRINGS.sessionActionResume },
     { action: 'session-handoff', label: STRINGS.sessionActionHandoff },
+    { type: 'separator' },
     { action: 'session-rename', label: STRINGS.sessionActionRename },
+    { action: 'session-tag', label: STRINGS.sessionActionTag },
+    { action: 'session-add-stack', label: STRINGS.sessionActionAddToStack },
     {
       action: 'session-archive',
       label: session.signals.archived
         ? STRINGS.sessionActionUnarchive
         : STRINGS.sessionActionArchive,
     },
+    { type: 'separator' },
     { action: 'session-copy-id', label: STRINGS.sessionActionCopyId },
-    { action: 'session-delete', label: STRINGS.sessionActionDelete },
+    { action: 'session-delete', label: STRINGS.sessionActionDelete, danger: true },
   ]
 }
 
 // Event delegation keeps handlers valid when renderSessions replaces rows.
 elements.sessionList.addEventListener('click', function (event) {
+  // Tag chip click — set tag focus filter
+  const tagChip = event.target.closest('.s-tag')
+  if (tagChip) {
+    event.stopPropagation()
+    var tag = tagChip.dataset.tag
+    if (tag) {
+      focusFilter =
+        focusFilter && focusFilter.kind === 'tag' && focusFilter.tag === tag
+          ? null
+          : { kind: 'tag', tag: tag }
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+    }
+    return
+  }
+
   const menuBtn = event.target.closest('.s-menu-btn')
   if (menuBtn) {
     event.stopPropagation()

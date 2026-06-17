@@ -43,6 +43,7 @@ export function isRelevantClaudeFile(fileName: string | null): boolean {
     fileName?.endsWith('sessions-index.json') === true ||
     fileName?.endsWith('swoop.json') === true ||
     fileName === 'settings.json' ||
+    /^swoop[/\\]org\.json$/i.test(fileName ?? '') ||
     /^swoop[/\\](account-usage|statusline-integration|usage-capture-error)\.json$/i.test(
       fileName ?? ''
     ) ||

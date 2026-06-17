@@ -46,6 +46,7 @@ export default tseslint.config(
         cancelAnimationFrame: 'readonly',
         clearInterval: 'readonly',
         clearTimeout: 'readonly',
+        confirm: 'readonly',
         console: 'readonly',
         document: 'readonly',
         fetch: 'readonly',
