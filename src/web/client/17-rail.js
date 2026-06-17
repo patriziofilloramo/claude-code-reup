@@ -121,6 +121,33 @@ function countGroupProjectsForRail(groupId) {
   return count
 }
 
+function reconcileFocusFilterAfterOrgChange() {
+  if (!focusFilter || !orgData) return
+
+  if (focusFilter.kind === 'stack') {
+    var stack = null
+    for (var si = 0; si < (orgData.stacks || []).length; si++) {
+      if (orgData.stacks[si].id === focusFilter.id) {
+        stack = orgData.stacks[si]
+        break
+      }
+    }
+    if (!stack || countStackSessionsForRail(stack) === 0) focusFilter = null
+    return
+  }
+
+  if (focusFilter.kind === 'group') {
+    var groupExists = false
+    for (var gi = 0; gi < (orgData.groups || []).length; gi++) {
+      if (orgData.groups[gi].id === focusFilter.id) {
+        groupExists = true
+        break
+      }
+    }
+    if (!groupExists || countGroupProjectsForRail(focusFilter.id) === 0) focusFilter = null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Rail HTML builders
 // ---------------------------------------------------------------------------

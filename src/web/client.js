@@ -278,6 +278,8 @@ const STRINGS = {
   emptyNoSessionsFilter: 'No sessions in this filter.',
   emptyNoSessionsSearch: 'No sessions match.',
   emptyArchivedHint: '{n} archived.',
+  clientUnexpectedStatus: 'UI error',
+  clientUnexpectedError: 'Something went wrong in the UI. The view kept running.',
 }
 
 /**
@@ -862,6 +864,27 @@ function showToast(message, variant) {
     elements.toast.classList.remove('show')
   }, TOAST_DURATION_MS)
 }
+
+function reportClientError(error, context) {
+  console.error('[swoop] unhandled client error' + (context ? ' (' + context + ')' : ''), error)
+  try {
+    if (elements.footerStatus) {
+      elements.footerStatus.textContent = STRINGS.clientUnexpectedStatus
+      elements.footerStatus.className = 'ftr-status err'
+    }
+    showToast(STRINGS.clientUnexpectedError, 'err')
+  } catch (reportError) {
+    console.error('[swoop] failed to report client error:', reportError)
+  }
+}
+
+window.addEventListener('error', function (event) {
+  reportClientError(event.error || event.message, 'runtime')
+})
+
+window.addEventListener('unhandledrejection', function (event) {
+  reportClientError(event.reason, 'promise')
+})
 
 /** Returns true unless the user has explicitly opted out of the resume-confirmation dialog. */
 function shouldConfirmResume() {
@@ -3573,6 +3596,7 @@ async function refreshProjectData() {
       }
     }
 
+    reconcileFocusFilterAfterOrgChange()
     synchronizeSelectedProjectWithView()
     renderRail()
     renderProjects()
@@ -3897,6 +3921,33 @@ function countGroupProjectsForRail(groupId) {
     if (assignments[keys[i]] === groupId) count++
   }
   return count
+}
+
+function reconcileFocusFilterAfterOrgChange() {
+  if (!focusFilter || !orgData) return
+
+  if (focusFilter.kind === 'stack') {
+    var stack = null
+    for (var si = 0; si < (orgData.stacks || []).length; si++) {
+      if (orgData.stacks[si].id === focusFilter.id) {
+        stack = orgData.stacks[si]
+        break
+      }
+    }
+    if (!stack || countStackSessionsForRail(stack) === 0) focusFilter = null
+    return
+  }
+
+  if (focusFilter.kind === 'group') {
+    var groupExists = false
+    for (var gi = 0; gi < (orgData.groups || []).length; gi++) {
+      if (orgData.groups[gi].id === focusFilter.id) {
+        groupExists = true
+        break
+      }
+    }
+    if (!groupExists || countGroupProjectsForRail(focusFilter.id) === 0) focusFilter = null
+  }
 }
 
 // ---------------------------------------------------------------------------

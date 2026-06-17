@@ -361,6 +361,14 @@ describe('web client session-row invariants', () => {
     expect(refresh).toContain('diagnosticsData.staleLocks')
   })
 
+  it('installs global client error handlers with visible recovery feedback', () => {
+    expect(source).toContain("window.addEventListener('error'")
+    expect(source).toContain("window.addEventListener('unhandledrejection'")
+    expect(source).toContain('function reportClientError(error, context)')
+    expect(source).toContain('STRINGS.clientUnexpectedError')
+    expect(source).toContain('elements.footerStatus.textContent = STRINGS.clientUnexpectedStatus')
+  })
+
   it('keeps live usage prominent and applies warning thresholds', () => {
     const usageRendering = sourceBetween('function usageLevel(', 'function compactPath(')
     const usageRefresh = sourceBetween(
@@ -567,6 +575,7 @@ describe('web client org layer invariants', () => {
     expect(refresh).toContain("requestJson('/api/org')")
     expect(refresh).toContain('loadedOrgData')
     expect(refresh).toContain('orgData = loadedOrgData')
+    expect(refresh).toContain('reconcileFocusFilterAfterOrgChange()')
     expect(refresh).toContain('renderRail()')
     expect(refresh).toContain('renderFocusBar()')
   })
@@ -592,6 +601,18 @@ describe('web client org layer invariants', () => {
     expect(railBuilders).toContain('visibleStacks.length === 0')
     expect(railBuilders).toContain('visibleGroups.length === 0')
     expect(railBuilders).not.toContain('rail-add')
+  })
+
+  it('clears stale group or stack focus after org membership changes', () => {
+    const reconcile = sourceBetween(
+      'function reconcileFocusFilterAfterOrgChange()',
+      'function buildRailInfoHtml('
+    )
+    expect(reconcile).toContain("focusFilter.kind === 'stack'")
+    expect(reconcile).toContain('countStackSessionsForRail(stack) === 0')
+    expect(reconcile).toContain("focusFilter.kind === 'group'")
+    expect(reconcile).toContain('countGroupProjectsForRail(focusFilter.id) === 0')
+    expect(reconcile).toContain('focusFilter = null')
   })
 
   it('org picker calls PUT /api/projects/:id/group for group assignment', () => {

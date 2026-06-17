@@ -269,6 +269,8 @@ const STRINGS = {
   emptyNoSessionsFilter: 'No sessions in this filter.',
   emptyNoSessionsSearch: 'No sessions match.',
   emptyArchivedHint: '{n} archived.',
+  clientUnexpectedStatus: 'UI error',
+  clientUnexpectedError: 'Something went wrong in the UI. The view kept running.',
 }
 
 /**

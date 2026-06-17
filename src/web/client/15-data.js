@@ -72,6 +72,7 @@ async function refreshProjectData() {
       }
     }
 
+    reconcileFocusFilterAfterOrgChange()
     synchronizeSelectedProjectWithView()
     renderRail()
     renderProjects()

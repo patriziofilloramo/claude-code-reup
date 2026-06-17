@@ -340,6 +340,27 @@ function showToast(message, variant) {
   }, TOAST_DURATION_MS)
 }
 
+function reportClientError(error, context) {
+  console.error('[swoop] unhandled client error' + (context ? ' (' + context + ')' : ''), error)
+  try {
+    if (elements.footerStatus) {
+      elements.footerStatus.textContent = STRINGS.clientUnexpectedStatus
+      elements.footerStatus.className = 'ftr-status err'
+    }
+    showToast(STRINGS.clientUnexpectedError, 'err')
+  } catch (reportError) {
+    console.error('[swoop] failed to report client error:', reportError)
+  }
+}
+
+window.addEventListener('error', function (event) {
+  reportClientError(event.error || event.message, 'runtime')
+})
+
+window.addEventListener('unhandledrejection', function (event) {
+  reportClientError(event.reason, 'promise')
+})
+
 /** Returns true unless the user has explicitly opted out of the resume-confirmation dialog. */
 function shouldConfirmResume() {
   return localStorage.getItem(CONFIRM_RESUME_PREFERENCE) !== 'false'
