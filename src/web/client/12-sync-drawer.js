@@ -36,6 +36,13 @@ async function renderSyncPanel() {
       ? STRINGS.syncUnlinkSelected
       : STRINGS.syncLinkSelected
   const selectedDisabled = !syncOverview.enabled || !selectedStatus || selectedStatus.isActive
+  const selectedForgettable =
+    syncOverview.enabled &&
+    selectedStatus &&
+    !selectedStatus.isShared &&
+    !selectedStatus.isRemoteProject &&
+    selectedStatus.cloudPath &&
+    !selectedStatus.isActive
 
   elements.syncBody.innerHTML =
     '<div class="sync-warning">' +
@@ -48,6 +55,7 @@ async function renderSyncPanel() {
       false
     ) +
     syncButtonHtml(selectedAction, selectedLabel, selectedDisabled) +
+    syncButtonHtml('sync-forget-selected', STRINGS.syncForgetSelected, !selectedForgettable) +
     syncButtonHtml('sync-link-all-cloud', STRINGS.syncLinkAllCloud, !syncOverview.enabled) +
     syncButtonHtml('sync-unlink-all', STRINGS.syncUnlinkAll, !syncOverview.enabled) +
     '</div>' +
@@ -128,6 +136,17 @@ async function runSyncDrawerAction(action) {
         return
       }
       await requestJson('/api/sync/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedProject.path }),
+      })
+    } else if (action === 'sync-forget-selected') {
+      if (!selectedProject) {
+        showToast(STRINGS.syncNoSelectedProject, 'err')
+        return
+      }
+      if (!window.confirm(STRINGS.syncForgetConfirm)) return
+      await requestJson('/api/sync/forget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: selectedProject.path }),

@@ -55,8 +55,8 @@ export interface Project {
   isShared: boolean
   /**
    * Absolute path to the cloud directory that sessions are synced with.
-   * Set when a .swoop-link file is present; undefined for local-only projects
-   * or legacy junctions that have not yet been migrated.
+   * Set for linked projects and for cloud-linked projects discovered before
+   * this device has created its local Claude storage link.
    */
   cloudPath?: string
   /**
@@ -66,6 +66,11 @@ export interface Project {
    * Shown as grey cloud in the UI so the user knows sync is paused.
    */
   cloudOffline?: boolean
+  /**
+   * Device names with an active marker under {cloudDir}/linked/.
+   * This is evidence that those devices intentionally linked the project.
+   */
+  linkedDevices?: string[]
   /**
    * Device names that wrote a presence file to the cloud directory while not
    * linked (i.e. they opened the project without running `swoop sync link`).

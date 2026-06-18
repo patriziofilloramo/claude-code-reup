@@ -11,6 +11,11 @@ import type { Project, Session, SessionStatus } from '../core/session/session-mo
 import type { TranscriptHandoffContext } from '../core/session/session-handoff.js'
 import type { SessionPreview } from '../core/session/session-preview.js'
 import { primaryStatus } from '../core/session/session-signals.js'
+import {
+  getProjectSyncStatus,
+  isProjectMemorySyncEnabled,
+  type ProjectSyncStatus,
+} from '../core/sync/project-sync-status.js'
 
 // ---------------------------------------------------------------------------
 // Core entity types
@@ -26,7 +31,10 @@ export type ApiSession = Session & { primaryStatus: SessionStatus }
  * A project whose session list contains {@link ApiSession} entries rather than
  * bare {@link Session} entries.
  */
-export type ApiProject = Omit<Project, 'sessions'> & { sessions: ApiSession[] }
+export type ApiProject = Omit<Project, 'sessions'> & {
+  sessions: ApiSession[]
+  syncStatus: ProjectSyncStatus | null
+}
 
 // ---------------------------------------------------------------------------
 // Search responses
@@ -172,8 +180,15 @@ export function serializeSession(session: Session): ApiSession {
  * Serialises a {@link Project} and all its sessions for API responses.
  * Use for the `/api/projects` endpoint and any response that embeds project data.
  */
-export function serializeProject(project: Project): ApiProject {
-  return { ...project, sessions: project.sessions.map(serializeSession) }
+export function serializeProject(
+  project: Project,
+  projectMemorySyncEnabled = isProjectMemorySyncEnabled()
+): ApiProject {
+  return {
+    ...project,
+    sessions: project.sessions.map(serializeSession),
+    syncStatus: getProjectSyncStatus(project, projectMemorySyncEnabled),
+  }
 }
 
 /**

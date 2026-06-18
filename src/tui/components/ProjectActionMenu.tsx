@@ -9,6 +9,7 @@ export type ProjectActionCommand =
   | 'browse-sessions'
   | 'open-directory'
   | 'copy-path'
+  | 'forget-project'
 
 interface Action {
   /** Single character pressed to trigger directly, or null for key-only actions. */
@@ -26,6 +27,13 @@ const ACTIONS: Action[] = [
   { directKey: 'c', keyLabel: 'c', description: 'Copy path', command: 'copy-path' },
 ]
 
+const FORGET_ACTION: Action = {
+  command: 'forget-project',
+  description: 'Forget local copy (recoverable)',
+  directKey: 'f',
+  keyLabel: 'f',
+}
+
 interface ProjectActionMenuProps {
   project: Project
   onExecute: (command: ProjectActionCommand) => void
@@ -34,6 +42,7 @@ interface ProjectActionMenuProps {
 
 export default function ProjectActionMenu({ project, onExecute, onClose }: ProjectActionMenuProps) {
   const [focusedIndex, setFocusedIndex] = useState(0)
+  const actions = project.cloudPath && !project.isShared ? [...ACTIONS, FORGET_ACTION] : ACTIONS
 
   const projectLabel = project.path.split(/[/\\]/).filter(Boolean).slice(-2).join('/')
 
@@ -48,7 +57,7 @@ export default function ProjectActionMenu({ project, onExecute, onClose }: Proje
       return
     }
     if (key.downArrow) {
-      setFocusedIndex((i) => Math.min(ACTIONS.length - 1, i + 1))
+      setFocusedIndex((i) => Math.min(actions.length - 1, i + 1))
       return
     }
     if (key.rightArrow) {
@@ -56,12 +65,12 @@ export default function ProjectActionMenu({ project, onExecute, onClose }: Proje
       return
     }
     if (key.return) {
-      const action = ACTIONS[focusedIndex]
+      const action = actions[focusedIndex]
       if (action) onExecute(action.command)
       return
     }
     // Direct single-key execution
-    const direct = ACTIONS.find((a) => a.directKey === input)
+    const direct = actions.find((a) => a.directKey === input)
     if (direct) {
       onExecute(direct.command)
     }
@@ -81,7 +90,7 @@ export default function ProjectActionMenu({ project, onExecute, onClose }: Proje
 
       {/* Action list */}
       <Box flexDirection="column" gap={0}>
-        {ACTIONS.map((action, index) => {
+        {actions.map((action, index) => {
           const isFocused = index === focusedIndex
           return (
             <Box key={action.command} gap={2}>

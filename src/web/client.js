@@ -184,6 +184,9 @@ const STRINGS = {
   syncDisable: 'Disable Cross-device Storage',
   syncLinkSelected: 'Link selected project',
   syncUnlinkSelected: 'Unlink selected project',
+  syncForgetSelected: 'Forget local copy',
+  syncForgetConfirm:
+    'Forget this local project copy? Project Memory remains available and local data is archived for recovery.',
   syncLinkAllCloud: 'Link all cloud projects',
   syncUnlinkAll: 'Unlink all synced projects',
   syncNoSelectedProject: 'Select a project to link or unlink it.',
@@ -931,12 +934,12 @@ function buildProjectRowHtml(project) {
     '<span class="p-name">' +
     escapeHtml(compactPath(project.path)) +
     '</span>' +
-    (project.isShared
-      ? project.cloudOffline
+    (project.syncStatus && project.syncStatus !== 'none'
+      ? project.syncStatus === 'grey'
         ? '<span class="p-cloud p-cloud--stale" title="' +
           escapeHtml(STRINGS.projectCloudOffline) +
           '">☁</span>'
-        : project.unlinkedDevices && project.unlinkedDevices.length > 0
+        : project.syncStatus === 'orange'
           ? '<span class="p-cloud p-cloud--unlinked" title="' +
             escapeHtml(
               fmt(STRINGS.projectCloudUnlinked, { devices: project.unlinkedDevices.join(', ') })
@@ -2979,6 +2982,13 @@ async function renderSyncPanel() {
       ? STRINGS.syncUnlinkSelected
       : STRINGS.syncLinkSelected
   const selectedDisabled = !syncOverview.enabled || !selectedStatus || selectedStatus.isActive
+  const selectedForgettable =
+    syncOverview.enabled &&
+    selectedStatus &&
+    !selectedStatus.isShared &&
+    !selectedStatus.isRemoteProject &&
+    selectedStatus.cloudPath &&
+    !selectedStatus.isActive
 
   elements.syncBody.innerHTML =
     '<div class="sync-warning">' +
@@ -2991,6 +3001,7 @@ async function renderSyncPanel() {
       false
     ) +
     syncButtonHtml(selectedAction, selectedLabel, selectedDisabled) +
+    syncButtonHtml('sync-forget-selected', STRINGS.syncForgetSelected, !selectedForgettable) +
     syncButtonHtml('sync-link-all-cloud', STRINGS.syncLinkAllCloud, !syncOverview.enabled) +
     syncButtonHtml('sync-unlink-all', STRINGS.syncUnlinkAll, !syncOverview.enabled) +
     '</div>' +
@@ -3071,6 +3082,17 @@ async function runSyncDrawerAction(action) {
         return
       }
       await requestJson('/api/sync/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedProject.path }),
+      })
+    } else if (action === 'sync-forget-selected') {
+      if (!selectedProject) {
+        showToast(STRINGS.syncNoSelectedProject, 'err')
+        return
+      }
+      if (!window.confirm(STRINGS.syncForgetConfirm)) return
+      await requestJson('/api/sync/forget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: selectedProject.path }),

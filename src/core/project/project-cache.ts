@@ -1,7 +1,7 @@
 import type { Project } from '../session/session-model.js'
 
 interface ProjectCacheEntry {
-  projectsDirectory: string
+  cacheKey: string
   projects: Project[]
   timestamp: number
 }
@@ -11,16 +11,16 @@ interface ProjectCacheEntry {
  *
  * The TTL protects bursts of related API requests. Filesystem events and
  * sidecar mutations call `invalidateProjectCache()` before clients refresh.
- * The cache is keyed on the resolved projects directory so test runs that swap
- * CLAUDE_CONFIG_DIR always get a fresh scan for the new path.
+ * Callers include the resolved projects directory plus discovery-mode bits in
+ * the key, so test runs and preference toggles get the right scan scope.
  */
 const CACHE_TTL_MS = 2_000
 
 let cachedEntry: ProjectCacheEntry | null = null
 
-export function getCachedProjects(projectsDirectory: string): Project[] | null {
+export function getCachedProjects(cacheKey: string): Project[] | null {
   if (!cachedEntry) return null
-  if (cachedEntry.projectsDirectory !== projectsDirectory) {
+  if (cachedEntry.cacheKey !== cacheKey) {
     cachedEntry = null
     return null
   }
@@ -31,8 +31,8 @@ export function getCachedProjects(projectsDirectory: string): Project[] | null {
   return cachedEntry.projects
 }
 
-export function setCachedProjects(projectsDirectory: string, projects: Project[]): void {
-  cachedEntry = { projectsDirectory, projects, timestamp: Date.now() }
+export function setCachedProjects(cacheKey: string, projects: Project[]): void {
+  cachedEntry = { cacheKey, projects, timestamp: Date.now() }
 }
 
 export function invalidateProjectCache(): void {

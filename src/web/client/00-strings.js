@@ -175,6 +175,9 @@ const STRINGS = {
   syncDisable: 'Disable Cross-device Storage',
   syncLinkSelected: 'Link selected project',
   syncUnlinkSelected: 'Unlink selected project',
+  syncForgetSelected: 'Forget local copy',
+  syncForgetConfirm:
+    'Forget this local project copy? Project Memory remains available and local data is archived for recovery.',
   syncLinkAllCloud: 'Link all cloud projects',
   syncUnlinkAll: 'Unlink all synced projects',
   syncNoSelectedProject: 'Select a project to link or unlink it.',

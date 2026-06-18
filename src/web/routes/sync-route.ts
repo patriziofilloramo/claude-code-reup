@@ -3,10 +3,12 @@ import type { Context, Hono } from 'hono'
 import { setUserPref } from '../../core/user-prefs.js'
 import {
   buildSyncOverview,
+  forgetProjectForSync,
   linkAllCloudProjectsForSync,
   linkProjectForSync,
   SyncNoCloudProjectsError,
   SyncProjectActiveError,
+  SyncProjectNotForgettableError,
   SyncSetupPatchError,
   unlinkAllSyncedProjectsForSync,
   unlinkProjectForSync,
@@ -72,6 +74,21 @@ export function registerSyncRoute(app: Hono): void {
   )
 
   app.post(
+    '/api/sync/forget',
+    guardedRoute(async (context) => {
+      const disabled = await rejectWhenSyncDisabled(context)
+      if (disabled) return disabled
+
+      const body = await context.req.json<{ path?: unknown }>()
+      if (typeof body.path !== 'string' || body.path.trim() === '') {
+        return context.json({ error: 'path is required' }, 400)
+      }
+
+      return jsonSyncOperation(context, () => forgetProjectForSync(body.path as string))
+    })
+  )
+
+  app.post(
     '/api/sync/link-all-cloud',
     guardedRoute(async (context) => {
       const disabled = await rejectWhenSyncDisabled(context)
@@ -117,6 +134,9 @@ async function jsonSyncOperation(
     return context.json(await operation())
   } catch (error) {
     if (error instanceof SyncProjectActiveError) return context.json({ error: error.message }, 409)
+    if (error instanceof SyncProjectNotForgettableError) {
+      return context.json({ error: error.message }, 409)
+    }
     if (error instanceof SyncSetupPatchError) return context.json({ error: error.message }, 400)
     throw error
   }

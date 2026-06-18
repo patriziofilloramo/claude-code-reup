@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
@@ -6,13 +6,17 @@ import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { ThemeName } from '../config/theme-tokens.js'
 import { loadProjects } from '../core/project/project-discovery.js'
+import { pathsReferToSameLocation } from '../core/project/path-comparison.js'
 import type { Project } from '../core/session/session-model.js'
 import {
   buildSyncOverview,
+  forgetProjectForSync,
+  getCurrentProjectSyncAction,
   linkAllCloudProjectsForSync,
   linkProjectForSync,
   type SyncOverview,
   type SyncProjectReport,
+  type CurrentProjectSyncAction,
   unlinkAllSyncedProjectsForSync,
   unlinkProjectForSync,
 } from '../core/sync/sync-actions.js'
@@ -27,6 +31,14 @@ import { copyToClipboard } from '../utils/system.js'
 
 const TABS = ['Interface', 'Integrations', 'Features'] as const
 type Tab = (typeof TABS)[number]
+type SyncSection = 'linked' | 'local' | 'remote'
+type FeatureCursorItem =
+  | { kind: 'cleanup' }
+  | { kind: 'sync-toggle' }
+  | { action: 'current-project' | 'link-all-cloud' | 'unlink-all'; kind: 'action' }
+  | { kind: 'legend' }
+  | { kind: 'section'; section: SyncSection }
+  | { kind: 'project'; project: SyncProjectReport }
 
 const TAB_CURSOR_MAX: Record<Tab, number> = {
   Interface: 2,
@@ -39,6 +51,7 @@ const MANAGED_SYNC_SETUP = {
   updateGitignore: true,
   updatePermissionRules: true,
 } as const
+const SPINNER_FRAMES = ['|', '/', '-', '\\']
 
 const SHELLS = [
   {
@@ -67,11 +80,20 @@ function detectShell(): 0 | 1 | 2 | null {
 }
 
 const DETECTED_SHELL = detectShell()
+const DISPLAY_SHELLS = SHELLS.map((shell, index) => ({
+  ...shell,
+  detected: DETECTED_SHELL === index,
+})).sort((left, right) => Number(right.detected) - Number(left.detected))
 
 export function ConfigApp({
   onClose,
   initialTab,
-}: { onClose?: () => void; initialTab?: Tab } = {}) {
+  onProjectsChanged,
+}: {
+  onClose?: () => void
+  initialTab?: Tab
+  onProjectsChanged?: (projects: Project[]) => void
+} = {}) {
   const { exit } = useApp()
   const initialTabIndex = initialTab ? Math.max(0, TABS.indexOf(initialTab)) : 0
   const [tabIndex, setTabIndex] = useState(initialTabIndex)
@@ -87,6 +109,14 @@ export function ConfigApp({
   const [busy, setBusy] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [syncOverview, setSyncOverview] = useState<SyncOverview | null>(null)
+  const [remoteScanning, setRemoteScanning] = useState(false)
+  const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const [expandedSyncSections, setExpandedSyncSections] = useState<Record<SyncSection, boolean>>({
+    linked: false,
+    local: false,
+    remote: false,
+  })
+  const syncRefreshId = useRef(0)
 
   useEffect(() => {
     void readUserPrefs().then((prefs) => {
@@ -95,23 +125,83 @@ export function ConfigApp({
       setCrossDeviceSessionStorage(prefs.crossDeviceSessionStorage)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
-    void refreshProjectsAndSync()
+    void loadProjects().then(setProjects)
   }, [])
 
   const currentTab = TABS[tabIndex]!
-  const syncRows = useMemo(() => {
+  const syncSections = useMemo(() => {
     const all = syncOverview?.projects ?? []
-    return [...all.filter((p) => p.isShared), ...all.filter((p) => !p.isShared)]
+    return {
+      linked: all.filter((project) => project.isShared),
+      local: all.filter((project) => !project.isShared && !project.isRemoteProject),
+      remote: all.filter((project) => project.isRemoteProject),
+    }
   }, [syncOverview])
-  const featuresCursorMax =
-    crossDeviceSessionStorage === 'on' ? 4 + Math.max(0, syncRows.length) : 1
+  const currentSyncProject = useMemo(
+    () =>
+      syncOverview?.projects.find((project) =>
+        pathsReferToSameLocation(project.path, process.cwd())
+      ),
+    [syncOverview]
+  )
+  const currentProjectAction = getCurrentProjectSyncAction(currentSyncProject)
+  const featureCursorItems = useMemo<FeatureCursorItem[]>(() => {
+    const items: FeatureCursorItem[] = [{ kind: 'cleanup' }, { kind: 'sync-toggle' }]
+    if (crossDeviceSessionStorage !== 'on') return items
+
+    items.push(
+      { kind: 'action', action: 'current-project' },
+      { kind: 'action', action: 'link-all-cloud' },
+      { kind: 'action', action: 'unlink-all' }
+    )
+    for (const section of ['linked', 'local', 'remote'] as const) {
+      items.push({ kind: 'section', section })
+      if (expandedSyncSections[section]) {
+        items.push(
+          ...syncSections[section].map(
+            (project): FeatureCursorItem => ({ kind: 'project', project })
+          )
+        )
+      }
+    }
+    items.push({ kind: 'legend' })
+    return items
+  }, [crossDeviceSessionStorage, expandedSyncSections, syncSections])
+  const featuresCursorMax = featureCursorItems.length - 1
   const maxCursor = currentTab === 'Features' ? featuresCursorMax : TAB_CURSOR_MAX[currentTab]
 
-  async function refreshProjectsAndSync(): Promise<void> {
+  async function refreshProjectsAndSync(showRemoteSpinner = false): Promise<void> {
+    const refreshId = ++syncRefreshId.current
+    if (showRemoteSpinner) setRemoteScanning(true)
     const updatedProjects = await loadProjects()
-    setProjects(updatedProjects)
-    setSyncOverview(await buildSyncOverview(updatedProjects))
+    if (refreshId === syncRefreshId.current) {
+      setProjects(updatedProjects)
+      onProjectsChanged?.(updatedProjects)
+    }
+    try {
+      const overview = await buildSyncOverview(updatedProjects)
+      if (refreshId === syncRefreshId.current) setSyncOverview(overview)
+    } finally {
+      if (showRemoteSpinner && refreshId === syncRefreshId.current) setRemoteScanning(false)
+    }
   }
+
+  useEffect(() => {
+    if (currentTab === 'Features') void refreshProjectsAndSync(true)
+  }, [currentTab])
+
+  useEffect(() => {
+    if (!remoteScanning) return
+    const timer = setInterval(
+      () => setSpinnerFrame((frame) => (frame + 1) % SPINNER_FRAMES.length),
+      80
+    )
+    return () => clearInterval(timer)
+  }, [remoteScanning])
+
+  useEffect(() => {
+    setCursor((value) => Math.min(value, featuresCursorMax))
+  }, [featuresCursorMax])
 
   function switchTab(delta: number): void {
     setTabIndex((index) => (index + delta + TABS.length) % TABS.length)
@@ -146,6 +236,10 @@ export function ConfigApp({
       setStatusMsg(null)
       return
     }
+    if (input === 'f' && !busy) {
+      void handleForgetShortcut()
+      return
+    }
     if ((input === ' ' || key.return) && !busy) void handleActivate()
   })
 
@@ -157,6 +251,42 @@ export function ConfigApp({
     setPendingConfirm(actionId)
     setStatusMsg({ ok: false, text: 'Press enter again to confirm this bulk sync action' })
     return false
+  }
+
+  async function handleForgetShortcut(): Promise<void> {
+    if (currentTab !== 'Features' || crossDeviceSessionStorage !== 'on') return
+    const item = featureCursorItems[cursor]
+    if (
+      item?.kind !== 'project' ||
+      item.project.isShared ||
+      item.project.isRemoteProject ||
+      !item.project.cloudPath ||
+      item.project.isActive
+    ) {
+      return
+    }
+
+    const confirmationId = `forget:${item.project.id}`
+    if (pendingConfirm !== confirmationId) {
+      setPendingConfirm(confirmationId)
+      setStatusMsg({ ok: false, text: LABELS.configSyncForgetConfirm })
+      return
+    }
+
+    setPendingConfirm(null)
+    setBusy(true)
+    try {
+      const result = await forgetProjectForSync(item.project.path, { projects })
+      setStatusMsg({ ok: true, text: result.message })
+      await refreshProjectsAndSync(true)
+    } catch (error) {
+      setStatusMsg({
+        ok: false,
+        text: error instanceof Error ? error.message : 'forget project failed',
+      })
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleActivate(): Promise<void> {
@@ -208,7 +338,7 @@ export function ConfigApp({
     }
 
     if (cursor >= 1 && cursor <= 3) {
-      const shell = SHELLS[cursor - 1]!
+      const shell = DISPLAY_SHELLS[cursor - 1]!
       const copiedIndex = cursor
       copyToClipboard(shell.cmd)
         .then(() => {
@@ -220,7 +350,10 @@ export function ConfigApp({
   }
 
   async function handleFeaturesAction(): Promise<void> {
-    if (cursor === 0) {
+    const item = featureCursorItems[cursor]
+    if (!item) return
+
+    if (item.kind === 'cleanup') {
       const cycle: Record<AutoCleanup, AutoCleanup> = { off: 'on', on: 'auto', auto: 'off' }
       const next = cycle[autoCleanupOnStart]
       await setUserPref('autoCleanupOnStart', next)
@@ -229,7 +362,7 @@ export function ConfigApp({
       return
     }
 
-    if (cursor === 1) {
+    if (item.kind === 'sync-toggle') {
       const next: CrossDeviceSessionStorage = crossDeviceSessionStorage === 'on' ? 'off' : 'on'
       await setUserPref('crossDeviceSessionStorage', next)
       setCrossDeviceSessionStorage(next)
@@ -240,35 +373,54 @@ export function ConfigApp({
             ? 'Cross-device Session Storage enabled; link actions still require explicit selection'
             : 'Cross-device Session Storage disabled',
       })
+      if (next === 'on') void refreshProjectsAndSync(true)
       return
     }
 
     if (crossDeviceSessionStorage !== 'on') return
+    if (item.kind === 'section') {
+      setExpandedSyncSections((current) => {
+        const shouldExpand = !current[item.section]
+        return {
+          linked: shouldExpand && item.section === 'linked',
+          local: shouldExpand && item.section === 'local',
+          remote: shouldExpand && item.section === 'remote',
+        }
+      })
+      return
+    }
+    if (item.kind === 'legend') {
+      return
+    }
+
     setBusy(true)
     try {
-      if (cursor === 2) {
-        const result = await linkProjectForSync(process.cwd(), {
-          projects,
-          setupOptions: MANAGED_SYNC_SETUP,
-        })
+      if (item.kind === 'action' && item.action === 'current-project') {
+        if (currentProjectAction.startsWith('blocked-')) return
+        const result =
+          currentProjectAction === 'unlink'
+            ? await unlinkProjectForSync(process.cwd(), { projects })
+            : await linkProjectForSync(process.cwd(), {
+                projects,
+                setupOptions: MANAGED_SYNC_SETUP,
+              })
         setStatusMsg({ ok: !result.error, text: result.message })
-      } else if (cursor === 3) {
+      } else if (item.kind === 'action' && item.action === 'link-all-cloud') {
         if (!confirmAction('link-all-cloud')) return
         const result = await linkAllCloudProjectsForSync({
           projects,
           setupOptions: MANAGED_SYNC_SETUP,
         })
         setStatusMsg({ ok: true, text: result.message })
-      } else if (cursor === 4) {
+      } else if (item.kind === 'action' && item.action === 'unlink-all') {
         if (!confirmAction('unlink-all')) return
         const result = await unlinkAllSyncedProjectsForSync({ projects })
         setStatusMsg({ ok: true, text: result.message })
-      } else {
-        const report = syncRows[cursor - 5]
-        if (!report || report.isActive) return
-        const result = report.isShared
-          ? await unlinkProjectForSync(report.path, { projects })
-          : await linkProjectForSync(report.path, {
+      } else if (item.kind === 'project') {
+        if (item.project.isActive) return
+        const result = item.project.isShared
+          ? await unlinkProjectForSync(item.project.path, { projects })
+          : await linkProjectForSync(item.project.path, {
               projects,
               setupOptions: MANAGED_SYNC_SETUP,
             })
@@ -320,9 +472,14 @@ export function ConfigApp({
             busy={busy}
             cursor={cursor}
             crossDeviceSessionStorage={crossDeviceSessionStorage}
+            currentProjectAction={currentProjectAction}
+            expandedSyncSections={expandedSyncSections}
+            featureCursorItems={featureCursorItems}
             pendingConfirm={pendingConfirm}
+            remoteScanning={remoteScanning}
+            spinner={SPINNER_FRAMES[spinnerFrame]!}
             syncOverview={syncOverview}
-            syncRows={syncRows}
+            syncSections={syncSections}
           />
         )}
       </Box>
@@ -403,10 +560,10 @@ function IntegrationsTab({
 }) {
   return (
     <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
+      <FeatureCard focused={cursor === 0}>
         <Box gap={1}>
           <Text color={cursor === 0 ? COLORS.accent : COLORS.dim}>{cursor === 0 ? '>' : ' '}</Text>
-          <Text bold color={cursor === 0 ? COLORS.text : COLORS.textSub}>
+          <Text bold={cursor === 0} color={cursor === 0 ? COLORS.text : COLORS.textSub}>
             {LABELS.configLiveUsageTitle}
           </Text>
           <Text color={usageConfigured ? COLORS.ok : COLORS.dim}>
@@ -414,44 +571,53 @@ function IntegrationsTab({
           </Text>
           {busy && <Text color={COLORS.muted}> {LABELS.configWorking}</Text>}
         </Box>
-        <Box paddingLeft={3}>
+        <Box paddingLeft={2}>
           <Text color={COLORS.dim}>{LABELS.configLiveUsageDesc}</Text>
         </Box>
-      </Box>
+      </FeatureCard>
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text bold color={COLORS.text}>
-          {LABELS.configShellCompletionTitle}
-        </Text>
+      <FeatureCard focused={cursor >= 1}>
+        <Box paddingLeft={2}>
+          <Text bold color={cursor >= 1 ? COLORS.text : COLORS.textSub}>
+            {LABELS.configShellCompletionTitle}
+          </Text>
+        </Box>
         <Box paddingLeft={2}>
           <Text color={COLORS.dim}>{LABELS.configShellCompletionDesc}</Text>
         </Box>
-        {SHELLS.map((shell, index) => {
-          const shellCursor = index + 1
-          const focused = cursor === shellCursor
-          return (
-            <Box flexDirection="column" key={shell.label} marginTop={1}>
-              <Box gap={1}>
-                <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
-                <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
-                  {shell.label}
-                </Text>
-                {DETECTED_SHELL === index && <Text color={COLORS.ok}>{LABELS.configDetected}</Text>}
-              </Box>
-              {focused && (
-                <Box flexDirection="column" paddingLeft={3}>
-                  <Text color={COLORS.muted}>{shell.cmd}</Text>
-                  <Text color={copiedShellIndex === shellCursor ? COLORS.ok : COLORS.dim}>
-                    {copiedShellIndex === shellCursor
-                      ? 'command copied; paste in your terminal'
-                      : `enter to copy; add to ${shell.profile} for permanent setup`}
+        <Box flexDirection="column" marginTop={1}>
+          {DISPLAY_SHELLS.map((shell, index) => {
+            const shellCursor = index + 1
+            const focused = cursor === shellCursor
+            return (
+              <Box flexDirection="column" key={shell.label} marginBottom={1}>
+                <Box gap={1}>
+                  <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
+                  <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+                    {shell.label}
                   </Text>
+                  {shell.detected && (
+                    <Text bold color={COLORS.ok} inverse>
+                      {' '}
+                      {LABELS.configDetected}{' '}
+                    </Text>
+                  )}
                 </Box>
-              )}
-            </Box>
-          )
-        })}
-      </Box>
+                {focused && (
+                  <Box flexDirection="column" paddingLeft={2}>
+                    <Text color={COLORS.muted}>{shell.cmd}</Text>
+                    <Text color={copiedShellIndex === shellCursor ? COLORS.ok : COLORS.dim}>
+                      {copiedShellIndex === shellCursor
+                        ? 'command copied; paste in your terminal'
+                        : `enter to copy; add to ${shell.profile} for permanent setup`}
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            )
+          })}
+        </Box>
+      </FeatureCard>
     </Box>
   )
 }
@@ -461,21 +627,63 @@ function FeaturesTab({
   busy,
   cursor,
   crossDeviceSessionStorage,
+  currentProjectAction,
+  expandedSyncSections,
+  featureCursorItems,
   pendingConfirm,
+  remoteScanning,
+  spinner,
   syncOverview,
-  syncRows,
+  syncSections,
 }: {
   autoCleanupOnStart: AutoCleanup
   busy: boolean
   cursor: number
   crossDeviceSessionStorage: CrossDeviceSessionStorage
+  currentProjectAction: CurrentProjectSyncAction
+  expandedSyncSections: Record<SyncSection, boolean>
+  featureCursorItems: FeatureCursorItem[]
   pendingConfirm: string | null
+  remoteScanning: boolean
+  spinner: string
   syncOverview: SyncOverview | null
-  syncRows: SyncProjectReport[]
+  syncSections: Record<SyncSection, SyncProjectReport[]>
 }) {
   const syncEnabled = crossDeviceSessionStorage === 'on'
+  const syncCardFocused = cursor >= 1
   const cleanupLabel =
     autoCleanupOnStart === 'on' ? 'on' : autoCleanupOnStart === 'auto' ? 'auto' : 'off'
+  const cursorFor = (predicate: (item: FeatureCursorItem) => boolean): number =>
+    featureCursorItems.findIndex(predicate)
+  const actionCursor = (action: 'current-project' | 'link-all-cloud' | 'unlink-all'): number =>
+    cursorFor((item) => item.kind === 'action' && item.action === action)
+  const currentProjectPresentation =
+    currentProjectAction === 'blocked-linked'
+      ? {
+          disabled: true,
+          label: LABELS.configSyncCurrentLinked,
+          suffix: LABELS.configSyncCurrentLinkedActive,
+        }
+      : currentProjectAction === 'blocked-local'
+        ? {
+            disabled: true,
+            label: LABELS.configSyncLinkCurrent,
+            suffix: LABELS.configSyncCurrentLocalActive,
+          }
+        : currentProjectAction === 'unlink'
+          ? {
+              disabled: false,
+              label: LABELS.configSyncUnlinkCurrent,
+              suffix: process.cwd(),
+            }
+          : {
+              disabled: false,
+              label: LABELS.configSyncLinkCurrent,
+              suffix: process.cwd(),
+            }
+  const sectionCursor = (section: SyncSection): number =>
+    cursorFor((item) => item.kind === 'section' && item.section === section)
+  const legendCursor = cursorFor((item) => item.kind === 'legend')
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -499,83 +707,75 @@ function FeaturesTab({
         <SelectableRow
           active={syncEnabled}
           badge="Alpha"
-          description="Syncs your Claude session history across your own devices using a shared cloud folder (e.g. OneDrive, Dropbox). Each project must be linked individually. Sessions are private to you."
+          description={
+            cursor === 1
+              ? LABELS.configSyncFeatureDescriptionExpanded
+              : LABELS.configSyncFeatureDescription
+          }
           focused={cursor === 1}
           label="Cross-device Session Storage"
           noBottomMargin={syncEnabled}
           status={syncEnabled ? 'on' : 'off'}
         />
 
-        {syncEnabled && (
+        {!syncCardFocused && <CloudIconLegend focused={false} />}
+
+        {syncEnabled && syncCardFocused && (
           <Box flexDirection="column" paddingLeft={3} marginTop={1} marginBottom={1}>
             <Text bold color={COLORS.text}>
               {LABELS.configSyncActionsTitle}
             </Text>
             <SyncActionRow
               confirm={false}
-              focused={cursor === 2}
-              label={LABELS.configSyncLinkCurrent}
-              suffix={busy && cursor === 2 ? LABELS.configWorking : process.cwd()}
+              disabled={currentProjectPresentation.disabled}
+              focused={cursor === actionCursor('current-project')}
+              label={currentProjectPresentation.label}
+              suffix={
+                busy && cursor === actionCursor('current-project')
+                  ? LABELS.configWorking
+                  : currentProjectPresentation.suffix
+              }
             />
             <SyncActionRow
               confirm={pendingConfirm === 'link-all-cloud'}
-              focused={cursor === 3}
+              focused={cursor === actionCursor('link-all-cloud')}
               label={LABELS.configSyncLinkAllCloud}
               suffix={`${syncOverview?.cloudProjectCandidates.length ?? 0} ${LABELS.configSyncCandidates}`}
             />
             <SyncActionRow
               confirm={pendingConfirm === 'unlink-all'}
-              focused={cursor === 4}
+              focused={cursor === actionCursor('unlink-all')}
               label={LABELS.configSyncUnlinkAll}
               suffix={`${syncOverview?.linkedProjects.length ?? 0} ${LABELS.configSyncLinked}`}
             />
 
-            {syncRows.length === 0 ? (
-              <Box marginTop={1} paddingLeft={2}>
-                <Text color={COLORS.dim}>{LABELS.configLoading}</Text>
-              </Box>
-            ) : (
-              <>
-                {(() => {
-                  const linkedRows = syncRows.filter((p) => p.isShared)
-                  const unlinkedRows = syncRows.filter((p) => !p.isShared && p.isCloudProject)
-                  const unlinkedOffset = 5 + linkedRows.length
-                  return (
-                    <>
-                      {linkedRows.length > 0 && (
-                        <Box flexDirection="column" marginTop={1}>
-                          <Text bold color={COLORS.text}>
-                            {LABELS.configSyncLinkedProjectsTitle}
-                          </Text>
-                          {linkedRows.map((project, i) => (
-                            <SyncLinkedProjectRow
-                              focused={cursor === 5 + i}
-                              key={project.id}
-                              project={project}
-                            />
-                          ))}
-                        </Box>
-                      )}
-                      {unlinkedRows.length > 0 && (
-                        <Box flexDirection="column" marginTop={1}>
-                          <Text bold color={COLORS.text}>
-                            {LABELS.configSyncUnlinkedProjectsTitle}
-                          </Text>
-                          {unlinkedRows.map((project, i) => (
-                            <SyncUnlinkedProjectRow
-                              focused={cursor === unlinkedOffset + i}
-                              key={project.id}
-                              project={project}
-                            />
-                          ))}
-                        </Box>
-                      )}
-                    </>
-                  )
-                })()}
-                <CloudIconLegend />
-              </>
-            )}
+            <Box flexDirection="column" marginTop={1}>
+              <SyncProjectSection
+                cursor={cursor}
+                expanded={expandedSyncSections.linked}
+                projects={syncSections.linked}
+                sectionCursor={sectionCursor('linked')}
+                title={LABELS.configSyncLinkedProjectsTitle}
+              />
+              <SyncProjectSection
+                cursor={cursor}
+                expanded={expandedSyncSections.local}
+                projects={syncSections.local}
+                sectionCursor={sectionCursor('local')}
+                title={LABELS.configSyncUnlinkedProjectsTitle}
+              />
+              <SyncProjectSection
+                cursor={cursor}
+                expanded={expandedSyncSections.remote}
+                projects={syncSections.remote}
+                remoteScanning={remoteScanning}
+                sectionCursor={sectionCursor('remote')}
+                spinner={spinner}
+                title={LABELS.configSyncRemoteProjectsTitle}
+              />
+            </Box>
+
+            <CloudIconLegend focused={cursor === legendCursor} />
           </Box>
         )}
       </FeatureCard>
@@ -596,22 +796,99 @@ function FeatureCard({ children, focused }: { children: ReactNode; focused: bool
   )
 }
 
-function CloudIconLegend() {
+function SyncProjectSection({
+  cursor,
+  expanded,
+  projects,
+  remoteScanning = false,
+  sectionCursor,
+  spinner = '',
+  title,
+}: {
+  cursor: number
+  expanded: boolean
+  projects: SyncProjectReport[]
+  remoteScanning?: boolean
+  sectionCursor: number
+  spinner?: string
+  title: string
+}) {
+  const focused = cursor === sectionCursor
+  const hint = expanded ? LABELS.configSyncCollapseSection : LABELS.configSyncExpandSection
+
   return (
-    <Box flexDirection="column" marginTop={1}>
-      <Text color={COLORS.muted}>{LABELS.configCloudIconLegendTitle}</Text>
+    <Box flexDirection="column" marginBottom={1}>
       <Box gap={1}>
+        <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
+        <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+          {expanded ? '[-]' : '[+]'} {title}
+        </Text>
+        <Text color={COLORS.muted}>({projects.length})</Text>
+        {remoteScanning ? (
+          <Text color={COLORS.accent}>
+            {spinner} {LABELS.configSyncRemoteScanning}
+          </Text>
+        ) : (
+          <Text color={COLORS.dim}>{hint}</Text>
+        )}
+      </Box>
+
+      {expanded && (
+        <Box flexDirection="column" paddingLeft={2}>
+          {projects.length === 0 && !remoteScanning ? (
+            <Text color={COLORS.dim}>{LABELS.configSyncNone}</Text>
+          ) : (
+            projects.map((project, index) =>
+              project.isShared ? (
+                <SyncLinkedProjectRow
+                  focused={cursor === sectionCursor + index + 1}
+                  key={project.id}
+                  project={project}
+                />
+              ) : (
+                <SyncUnlinkedProjectRow
+                  focused={cursor === sectionCursor + index + 1}
+                  key={project.id}
+                  project={project}
+                />
+              )
+            )
+          )}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+function CloudIconLegend({ focused }: { focused: boolean }) {
+  return (
+    <Box flexDirection="column" marginBottom={1} marginTop={1} paddingLeft={focused ? 0 : 3}>
+      <Box gap={1}>
+        <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
+        <Text color={COLORS.muted}>{LABELS.configCloudIconLegendTitle}:</Text>
         <Text color={COLORS.ok}>☁</Text>
-        <Text color={COLORS.dim}>{LABELS.configCloudIconOnline}</Text>
-      </Box>
-      <Box gap={1}>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconLinkedShort}</Text>
         <Text color={COLORS.orange}>☁</Text>
-        <Text color={COLORS.dim}>{LABELS.configCloudIconPartial}</Text>
-      </Box>
-      <Box gap={1}>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconUnlinkedUseShort}</Text>
         <Text color={COLORS.muted}>☁</Text>
-        <Text color={COLORS.dim}>{LABELS.configCloudIconOffline}</Text>
+        <Text color={COLORS.dim}>{LABELS.configCloudIconOfflineShort}</Text>
       </Box>
+      {focused && (
+        <Box flexDirection="column" paddingLeft={2}>
+          <Box gap={1}>
+            <Text color={COLORS.ok}>☁</Text>
+            <Text color={COLORS.dim}>{LABELS.configCloudIconOnline}</Text>
+          </Box>
+          <Box gap={1}>
+            <Text color={COLORS.orange}>☁</Text>
+            <Text color={COLORS.dim}>{LABELS.configCloudIconPartial}</Text>
+          </Box>
+          <Box gap={1}>
+            <Text color={COLORS.muted}>☁</Text>
+            <Text color={COLORS.dim}>{LABELS.configCloudIconOffline}</Text>
+          </Box>
+        </Box>
+      )}
     </Box>
   )
 }
@@ -652,22 +929,24 @@ function SelectableRow({
 
 function SyncActionRow({
   confirm,
+  disabled = false,
   focused,
   label,
   suffix,
 }: {
   confirm: boolean
+  disabled?: boolean
   focused: boolean
   label: string
   suffix: string
 }) {
   return (
     <Box gap={1}>
-      <Text color={focused ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
-      <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
+      <Text color={focused && !disabled ? COLORS.accent : COLORS.dim}>{focused ? '>' : ' '}</Text>
+      <Text bold={focused} color={disabled ? COLORS.muted : focused ? COLORS.text : COLORS.textSub}>
         {label}
       </Text>
-      <Text color={confirm ? COLORS.orange : COLORS.dim}>
+      <Text color={disabled ? COLORS.muted : confirm ? COLORS.orange : COLORS.dim}>
         {confirm ? 'press enter again' : suffix}
       </Text>
     </Box>
@@ -709,6 +988,13 @@ function SyncUnlinkedProjectRow({
   focused: boolean
   project: SyncProjectReport
 }) {
+  const forgettable = !project.isRemoteProject && Boolean(project.cloudPath) && !project.isActive
+  const action = project.isActive
+    ? 'active — cannot change'
+    : forgettable
+      ? `enter to link · ${LABELS.configSyncForgetHint}`
+      : 'enter to link'
+
   return (
     <Box gap={1}>
       <Box flexShrink={0} width={2}>
@@ -717,7 +1003,7 @@ function SyncUnlinkedProjectRow({
       <Text bold={focused} color={focused ? COLORS.text : COLORS.textSub}>
         {project.path}
       </Text>
-      <Text color={COLORS.dim}>enter to link</Text>
+      <Text color={COLORS.dim}>{action}</Text>
     </Box>
   )
 }

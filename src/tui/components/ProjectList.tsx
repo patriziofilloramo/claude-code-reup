@@ -2,6 +2,10 @@ import { Box, Text } from 'ink'
 
 import { COLORS, SIZES } from '../../config/theme.js'
 import type { Project } from '../../core/session/session-model.js'
+import {
+  getProjectSyncStatus,
+  isProjectMemorySyncEnabled,
+} from '../../core/sync/project-sync-status.js'
 
 interface ProjectListProps {
   isFocused: boolean
@@ -10,7 +14,6 @@ interface ProjectListProps {
   totalCount: number
 }
 
-
 export default function ProjectList({
   isFocused,
   projects,
@@ -18,6 +21,7 @@ export default function ProjectList({
   totalCount,
 }: ProjectListProps) {
   const labelColor = isFocused ? COLORS.accent : COLORS.dim
+  const projectMemorySyncEnabled = isProjectMemorySyncEnabled()
 
   return (
     <Box
@@ -42,6 +46,9 @@ export default function ProjectList({
         const isSelected = index === selectedIndex
         const isFocusedSelected = isSelected && isFocused
         const projectLabel = project.path.split(/[/\\]/).filter(Boolean).slice(-2).join('/')
+        const syncStatus = getProjectSyncStatus(project, projectMemorySyncEnabled)
+        const cloudColor =
+          syncStatus === 'grey' ? COLORS.muted : syncStatus === 'orange' ? COLORS.orange : COLORS.ok
 
         return (
           <Box key={project.id} paddingX={1}>
@@ -53,19 +60,9 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
-            {project.isShared ? (
+            {syncStatus && syncStatus !== 'none' ? (
               <Box flexShrink={0} paddingLeft={1}>
-                <Text
-                  color={
-                    project.cloudOffline
-                      ? COLORS.muted
-                      : project.unlinkedDevices?.length
-                        ? COLORS.orange
-                        : COLORS.ok
-                  }
-                >
-                  {'☁'}
-                </Text>
+                <Text color={cloudColor}>{'☁'}</Text>
               </Box>
             ) : null}
             <Box flexShrink={0}>

@@ -24,6 +24,7 @@ import { mergeProjectSidecarMetadata } from '../session/session-metadata.js'
 import { calculateExpiryDays } from '../session/session-signals.js'
 import { parseSessionTranscript } from '../session/session-transcript.js'
 import { syncRegistry } from '../sync/sync-registry.js'
+import { readUserPrefsSync } from '../user-prefs.js'
 import { readOrgData } from '../org/org-prefs.js'
 import { applyOrgMetadata } from '../org/org-filters.js'
 
@@ -46,7 +47,10 @@ const LOCK_FILE_GRACE_PERIOD_MS = 2 * 60 * 1000
 /** Loads every project containing sessions, newest project activity first. */
 export async function loadProjects(): Promise<Project[]> {
   const projectsDirectory = getClaudeProjectsDirectory()
-  const cached = getCachedProjects(projectsDirectory)
+  const syncEnabled =
+    APP.enableProjectMemorySync && readUserPrefsSync().crossDeviceSessionStorage === 'on'
+  const cacheKey = `${projectsDirectory}\0sync:${syncEnabled ? 'on' : 'off'}`
+  const cached = getCachedProjects(cacheKey)
   if (cached) return cached
 
   log.debug('loadProjects: scanning', projectsDirectory)
@@ -59,14 +63,15 @@ export async function loadProjects(): Promise<Project[]> {
 
   const discoveredProjects = await Promise.all(
     projectDirectoryNames.map((directoryName) =>
-      loadProjectDirectory(directoryName, projectsDirectory, liveSessions)
+      loadProjectDirectory(directoryName, projectsDirectory, liveSessions, syncEnabled)
     )
   )
 
   const projects = discoveredProjects
     .filter(
       (project): project is Project =>
-        project !== null && (project.sessions.length > 0 || project.cloudOffline === true)
+        project !== null &&
+        (project.sessions.length > 0 || project.cloudOffline === true || project.isShared)
     )
     .sort(compareProjectsByRecentActivity)
 
@@ -90,7 +95,7 @@ export async function loadProjects(): Promise<Project[]> {
   // Merge group assignments from org.json into project objects.
   const finalProjects = applyOrgMetadata(assembled, orgData)
 
-  setCachedProjects(projectsDirectory, finalProjects)
+  setCachedProjects(cacheKey, finalProjects)
   return finalProjects
 }
 
@@ -121,19 +126,19 @@ async function listProjectDirectoryNames(projectsDirectory: string): Promise<str
 async function loadProjectDirectory(
   directoryName: string,
   projectsDirectory: string,
-  liveSessions: SessionLockRecord[]
+  liveSessions: SessionLockRecord[],
+  syncEnabled: boolean
 ): Promise<Project | null> {
   try {
     const projectDirectory = join(projectsDirectory, directoryName)
     const decodedProjectPath = await resolveProjectPath(directoryName)
-    const { isShared, cloudPath, cloudOffline } = await readLinkState(projectDirectory)
-    const unlinkedDevices = isShared && cloudPath ? await readUnlinkedDevices(cloudPath) : undefined
+    const linkState = await readLinkState(projectDirectory)
 
     // Detect offline cloud storage before attempting to read sessions.
     // An inaccessible junction target means the drive is unmounted; surfacing
     // the project with cloudOffline=true lets the UI warn the user rather
     // than silently hiding the project.
-    if (isShared && !(await isAccessible(projectDirectory))) {
+    if (linkState.isShared && !(await isAccessible(projectDirectory))) {
       return {
         id: directoryName,
         isShared: true,
@@ -156,13 +161,17 @@ async function loadProjectDirectory(
     const sessionsWithPathStatus = await annotatePathExistence(sessionsWithGhosts)
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
+    const sharedMemoryState = syncEnabled
+      ? await readProjectMemoryState(canonicalProjectPath, linkState.cloudPath)
+      : null
 
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
-      isShared,
-      cloudPath,
-      cloudOffline,
-      unlinkedDevices,
+      isShared: linkState.isShared,
+      cloudPath: linkState.cloudPath ?? sharedMemoryState?.cloudPath,
+      cloudOffline: linkState.cloudOffline,
+      linkedDevices: sharedMemoryState?.linkedDevices,
+      unlinkedDevices: sharedMemoryState?.unlinkedDevices,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
@@ -224,13 +233,38 @@ async function readLinkState(
  * Files are written by unlinked devices following CLAUDE.md instructions.
  * Returns undefined (not an empty array) when the directory is absent or empty.
  */
-async function readUnlinkedDevices(cloudDir: string): Promise<string[] | undefined> {
+async function readProjectMemoryState(
+  projectPath: string,
+  linkedCloudPath?: string
+): Promise<{
+  cloudPath: string
+  linkedDevices?: string[]
+  unlinkedDevices?: string[]
+} | null> {
+  const cloudPath = linkedCloudPath ?? join(projectPath, APP.sharedMemoryDir)
+  if (!(await isAccessible(cloudPath))) return null
+
   try {
-    const entries = await readdir(join(cloudDir, 'device-presence'))
-    const devices = entries.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5))
-    return devices.length > 0 ? devices : undefined
+    const [presenceEntries, linkedEntries] = await Promise.all([
+      readdir(join(cloudPath, 'device-presence')),
+      readdir(join(cloudPath, 'linked')).catch(() => []),
+    ])
+    const linkedDevices = new Set(linkedEntries)
+    const unlinkedDevices = presenceEntries
+      .filter((fileName) => fileName.endsWith('.json'))
+      .map((fileName) => fileName.slice(0, -5))
+      .filter((device) => !linkedDevices.has(device))
+    return {
+      cloudPath,
+      linkedDevices: linkedEntries.length > 0 ? linkedEntries.sort() : undefined,
+      unlinkedDevices: unlinkedDevices.length > 0 ? unlinkedDevices.sort() : undefined,
+    }
   } catch {
-    return undefined
+    const linkedEntries = await readdir(join(cloudPath, 'linked')).catch(() => [])
+    return {
+      cloudPath,
+      linkedDevices: linkedEntries.length > 0 ? linkedEntries.sort() : undefined,
+    }
   }
 }
 
