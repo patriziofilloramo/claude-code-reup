@@ -6,10 +6,20 @@ import {
   sessionMatchesWorkspace,
   type ExtensionSession,
 } from '../../extension/src/swoop-data.js'
+import type { ResumeAdvice } from '../../src/core/session/resume-advice.js'
 
 function session(overrides: Partial<ExtensionSession>): ExtensionSession {
   return {
+    advice: {
+      code: 'ready',
+      explanation: 'Ready',
+      recommendedAction: 'resume',
+      severity: 'info',
+      title: 'Ready',
+    } satisfies ResumeAdvice,
+    archived: false,
     branch: null,
+    branchDrift: false,
     contextTokens: null,
     currentBranch: null,
     id: crypto.randomUUID(),
@@ -21,6 +31,7 @@ function session(overrides: Partial<ExtensionSession>): ExtensionSession {
     projectId: 'project',
     projectName: 'project',
     projectPath: '/work/project',
+    tags: [],
     title: 'Session',
     todoSummary: null,
     updated: '2026-01-01T00:00:00.000Z',

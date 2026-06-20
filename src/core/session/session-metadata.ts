@@ -12,6 +12,7 @@ import { log } from '../../utils/logger.js'
 const SIDECAR_REPLACE_ATTEMPTS = 20
 const SIDECAR_REPLACE_RETRY_MS = 40
 const RETRYABLE_REPLACE_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
+export const SESSION_ALIAS_MAX_LENGTH = 160
 
 interface SessionSidecarMetadata {
   alias?: string
@@ -171,12 +172,24 @@ export async function setSessionAlias(
   sessionId: string,
   alias: string | undefined
 ): Promise<void> {
+  const normalizedAlias = normalizeSessionAlias(alias)
   await enqueueProjectSidecarUpdate(getProjectDirectory(projectId), (metadata) => {
     const sessionMetadata = sessionMetadataEntry(metadata, sessionId)
-    if (alias) sessionMetadata.alias = alias
+    if (normalizedAlias) sessionMetadata.alias = normalizedAlias
     else delete sessionMetadata.alias
   })
   invalidateProjectCache()
+}
+
+export function normalizeSessionAlias(alias: unknown): string | undefined {
+  if (alias === undefined || alias === null) return undefined
+  if (typeof alias !== 'string') throw new TypeError('session alias must be a string')
+  const normalized = alias.trim()
+  if (!normalized) return undefined
+  if (normalized.length > SESSION_ALIAS_MAX_LENGTH) {
+    throw new RangeError(`session alias must be at most ${SESSION_ALIAS_MAX_LENGTH} characters`)
+  }
+  return normalized
 }
 
 /**

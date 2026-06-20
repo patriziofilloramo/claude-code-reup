@@ -11,6 +11,13 @@ import {
   sessionTranscriptPath,
 } from '../../src/core/session/session-preview.js'
 import { primaryStatus } from '../../src/core/session/session-signals.js'
+import { getResumeAdvice, type ResumeAdvice } from '../../src/core/session/resume-advice.js'
+import { getProjectSyncStatus, type ProjectSyncStatus } from '../../src/core/sync/project-sync-status.js'
+import {
+  buildCockpitModel,
+  type CockpitContext,
+  type ExtensionCockpitModel,
+} from './cockpit-model.js'
 import { compactProjectName, compactText } from './formatting.js'
 import type { SwoopLogger } from './logger.js'
 
@@ -18,6 +25,7 @@ const PREVIEW_HINT_LIMIT = 80
 
 export interface ExtensionProject {
   id: string
+  memoryStatus: ProjectSyncStatus | null
   name: string
   path: string
   sessionCount: number
@@ -25,7 +33,10 @@ export interface ExtensionProject {
 }
 
 export interface ExtensionSession {
+  advice: ResumeAdvice
+  archived: boolean
   branch: string | null
+  branchDrift: boolean
   contextTokens: number | null
   currentBranch: string | null
   id: string
@@ -37,6 +48,7 @@ export interface ExtensionSession {
   projectId: string
   projectName: string
   projectPath: string
+  tags: string[]
   title: string
   todoSummary: string | null
   updated: string | null
@@ -75,6 +87,37 @@ export class SwoopDataSource {
       projects: extensionProjects,
       sessions: rankSessionsForWorkspace(sessions, options.workspacePath),
     }
+  }
+
+  async loadCockpitModel(context: CockpitContext): Promise<ExtensionCockpitModel> {
+    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const sessions = await createExtensionSessions(projects, activeSessionIds, {
+      includeArchived: context.includeArchived ?? false,
+      includePreviewHints: false,
+      workspacePath: context.workspaceRoots[0],
+    })
+    const visibleProjectIds = new Set(sessions.map((session) => session.projectId))
+    const extensionProjects = projects
+      .filter((project) => visibleProjectIds.has(project.id) || context.includeArchived)
+      .map((project) => createExtensionProject(project, sessions))
+    const model = buildCockpitModel(extensionProjects, sessions, context)
+    this.logger.debug('loaded Swoop cockpit model', {
+      attention: model.summary.attentionCount,
+      projects: extensionProjects.length,
+      sessions: sessions.length,
+      workspaceSessions: model.summary.workspaceSessionCount,
+    })
+    return model
+  }
+
+  async resolveSession(projectId: string, sessionId: string): Promise<ExtensionSession | null> {
+    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const project = projects.find((candidate) => candidate.id === projectId)
+    const session = project?.sessions.find((candidate) => candidate.id === sessionId)
+    if (!project || !session) return null
+    return createExtensionSession(project, session, activeSessionIds, {
+      includePreviewHints: false,
+    })
   }
 }
 
@@ -143,7 +186,13 @@ async function createExtensionSession(
     : { planSummary: null, todoSummary: null }
 
   return {
+    advice: getResumeAdvice(session, activeSessionIds.has(session.id)),
+    archived: session.signals.archived,
     branch: session.gitBranch ?? null,
+    branchDrift:
+      Boolean(session.gitBranch) &&
+      Boolean(session.currentBranch) &&
+      session.gitBranch !== session.currentBranch,
     contextTokens: session.context.latestContextTokens,
     currentBranch: session.currentBranch ?? null,
     id: session.id,
@@ -155,6 +204,7 @@ async function createExtensionSession(
     projectId: project.id,
     projectName: compactProjectName(project.path),
     projectPath: session.projectPath,
+    tags: session.tags ?? [],
     title: session.alias ?? session.name,
     todoSummary: previewHints.todoSummary,
     updated: session.updated,
@@ -169,6 +219,7 @@ function createExtensionProject(project: Project, sessions: ExtensionSession[]):
   const projectSessions = sessions.filter((session) => session.projectId === project.id)
   return {
     id: project.id,
+    memoryStatus: getProjectSyncStatus(project),
     name: compactProjectName(project.path),
     path: project.path,
     sessionCount: projectSessions.length,

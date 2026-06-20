@@ -9,7 +9,16 @@ import { extractSessionPreview } from '../../src/core/session/session-preview.js
 
 function session(overrides: Partial<ExtensionSession> = {}): ExtensionSession {
   return {
+    advice: {
+      code: 'already-active',
+      explanation: 'Already active',
+      recommendedAction: 'inspect',
+      severity: 'blocked',
+      title: 'Session already active',
+    },
+    archived: false,
     branch: 'feat/demo',
+    branchDrift: true,
     contextTokens: 12000,
     currentBranch: 'main',
     id: '00000000-0000-0000-0000-000000000001',
@@ -21,6 +30,7 @@ function session(overrides: Partial<ExtensionSession> = {}): ExtensionSession {
     projectId: 'p--demo',
     projectName: 'demo',
     projectPath: 'P:\\Projects\\demo',
+    tags: [],
     title: 'Fix markdown',
     todoSummary: null,
     updated: '2026-01-01T00:00:00.000Z',
