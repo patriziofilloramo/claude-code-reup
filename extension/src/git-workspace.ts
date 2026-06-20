@@ -12,5 +12,7 @@ export async function resolveGitDirectory(workspacePath: string): Promise<string
   const match = content.match(/^\s*gitdir:\s*(.+)\s*$/im)
   if (!match) return null
   const configuredPath = match[1]!.trim()
-  return resolve(isAbsolute(configuredPath) ? configuredPath : join(dirname(dotGitPath), configuredPath))
+  return resolve(
+    isAbsolute(configuredPath) ? configuredPath : join(dirname(dotGitPath), configuredPath)
+  )
 }

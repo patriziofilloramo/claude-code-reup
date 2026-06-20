@@ -155,7 +155,9 @@ export class SwoopRefreshController implements vscode.Disposable {
   }
 
   private addWatcher(root: string, pattern: string, label: string): void {
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, pattern))
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(root, pattern)
+    )
     this.watchers.push(watcher)
     watcher.onDidChange(
       () => this.requestRefresh(`${label} change`),

@@ -152,7 +152,10 @@ function branchMatches(session: ExtensionSession): boolean {
 }
 
 function projectContainsPath(projectPath: string, candidatePath: string | null): boolean {
-  return candidatePath !== null && (projectPath === candidatePath || isPathInside(candidatePath, projectPath))
+  return (
+    candidatePath !== null &&
+    (projectPath === candidatePath || isPathInside(candidatePath, projectPath))
+  )
 }
 
 function pathsOverlap(left: string, right: string): boolean {

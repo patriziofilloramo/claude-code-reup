@@ -1,92 +1,272 @@
+import { stat } from 'node:fs/promises'
+import { isAbsolute, resolve } from 'node:path'
+
 import * as vscode from 'vscode'
 
+import { readOrgData, recordTagInPalette } from '../../src/core/org/org-prefs.js'
+import { validateAndNormalizeTags } from '../../src/core/org/org-validation.js'
+import { normalizePathForComparison } from '../../src/core/project/path-comparison.js'
+import {
+  normalizeSessionAlias,
+  setSessionAlias,
+  setSessionArchived,
+  setSessionTags,
+} from '../../src/core/session/session-metadata.js'
 import {
   loadSessionPreview,
   sessionTranscriptPath,
+  type SessionPreview,
 } from '../../src/core/session/session-preview.js'
+import { copySessionHandoff } from './handoff.js'
 import { formatRelativeTime, statusCodicon } from './formatting.js'
+import {
+  emptyInspectorHtml,
+  isInspectorMessage,
+  renderInspectorHtml,
+  type InspectorMessage,
+} from './inspector-html.js'
 import type { SwoopLogger } from './logger.js'
-import { renderSessionDetailMarkdown } from './session-detail-markdown.js'
+import { resumeSessionInTerminal } from './terminal.js'
 import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
 
-const DETAIL_SCHEME = 'swoop'
+const INSPECTOR_VIEW_ID = 'swoop.inspector'
+const ADD_TAG_BUTTON: vscode.QuickInputButton = {
+  iconPath: new vscode.ThemeIcon('add'),
+  tooltip: 'Add a new tag',
+}
 
-/**
- * Read-only Markdown provider for lightweight Resume Cards.
- *
- * The provider keeps the VS Code surface editor-native: no webview, no
- * transcript streaming, no writes. Documents are generated on demand from the
- * same preview extractor used by Swoop's TUI/web surfaces.
- */
-export class SwoopSessionDetailProvider
-  implements vscode.TextDocumentContentProvider, vscode.Disposable
-{
-  private readonly changedEmitter = new vscode.EventEmitter<vscode.Uri>()
-  private readonly documentCloseListener: vscode.Disposable
-  private readonly sessionsByUri = new Map<string, ExtensionSession>()
+interface PreviewCacheEntry {
+  mtimeMs: number
+  preview: SessionPreview
+}
 
-  readonly onDidChange = this.changedEmitter.event
+interface SessionReference {
+  projectId: string
+  sessionId: string
+}
 
-  constructor(private readonly logger: SwoopLogger) {
-    this.documentCloseListener = vscode.workspace.onDidCloseTextDocument((document) => {
-      if (document.uri.scheme === DETAIL_SCHEME) this.sessionsByUri.delete(document.uri.toString())
-    })
+export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+  private readonly disposables: vscode.Disposable[] = []
+  private readonly previewCache = new Map<string, PreviewCacheEntry>()
+  private selectedReference: SessionReference | null = null
+  private selectedSession: ExtensionSession | null = null
+  private selectedPreview: SessionPreview | null = null
+  private view: vscode.WebviewView | null = null
+
+  constructor(
+    private readonly dataSource: SwoopDataSource,
+    private readonly logger: SwoopLogger,
+    private readonly onDidMutate: () => Promise<void>
+  ) {}
+
+  resolveWebviewView(view: vscode.WebviewView): void {
+    this.view = view
+    view.webview.options = { enableScripts: true, localResourceRoots: [] }
+    this.disposables.push(
+      view.webview.onDidReceiveMessage((message: unknown) => {
+        if (!isInspectorMessage(message)) {
+          this.logger.error('rejected invalid inspector message', message)
+          return
+        }
+        void this.handleMessage(message)
+      }),
+      view.onDidDispose(() => {
+        if (this.view === view) this.view = null
+      })
+    )
+    void this.render()
   }
 
-  registerSession(session: ExtensionSession): vscode.Uri {
-    const uri = vscode.Uri.from({
-      path: `/session/${encodeURIComponent(session.projectId)}/${session.id}.md`,
-      scheme: DETAIL_SCHEME,
-    })
-    this.sessionsByUri.set(uri.toString(), session)
-    this.changedEmitter.fire(uri)
-    return uri
+  async showSession(session: ExtensionSession, reveal = true): Promise<void> {
+    this.selectedReference = { projectId: session.projectId, sessionId: session.id }
+    this.selectedSession = session
+    this.selectedPreview = null
+    if (reveal) await vscode.commands.executeCommand(`${INSPECTOR_VIEW_ID}.focus`)
+    await this.render()
   }
 
-  async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
-    const session = this.sessionsByUri.get(uri.toString())
-    if (!session) return '# Swoop Resume Card\n\nSession details are no longer available.'
+  async refreshSelected(): Promise<void> {
+    if (!this.selectedReference) return
+    const session = await this.dataSource.resolveSession(
+      this.selectedReference.projectId,
+      this.selectedReference.sessionId
+    )
+    this.selectedSession = session
+    if (!session) this.selectedReference = null
+    await this.render()
+  }
 
-    try {
-      const preview = await loadSessionPreview(sessionTranscriptPath(session.projectId, session.id))
-      return renderSessionDetailMarkdown(session, preview)
-    } catch (error) {
-      this.logger.error('failed to render session detail', error)
-      return [
-        '# Swoop Resume Card',
-        '',
-        'Could not render this session detail.',
-        '',
-        `Session ID: \`${escapeInlineCode(session.id)}\``,
-      ].join('\n')
+  async editAlias(session = this.selectedSession): Promise<void> {
+    const current = await this.resolveCurrent(session)
+    if (!current) return
+    const alias = await vscode.window.showInputBox({
+      ignoreFocusOut: true,
+      placeHolder: 'Leave empty to restore the transcript title',
+      prompt: 'Set a local Swoop alias for this session',
+      value: current.title,
+      validateInput: (value) => {
+        try {
+          normalizeSessionAlias(value)
+          return null
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error)
+        }
+      },
+    })
+    if (alias === undefined) return
+    await setSessionAlias(current.projectId, current.id, normalizeSessionAlias(alias))
+    await this.afterMutation('Session alias updated.')
+  }
+
+  async toggleArchive(session = this.selectedSession): Promise<void> {
+    const current = await this.resolveCurrent(session)
+    if (!current) return
+    if (current.isActive) {
+      void vscode.window.showWarningMessage('Active sessions cannot be archived.')
+      return
+    }
+
+    const nextArchived = !current.archived
+    await setSessionArchived(current.projectId, current.id, nextArchived)
+    await this.onDidMutate()
+    await this.refreshSelected()
+    const undo = await vscode.window.showInformationMessage(
+      nextArchived ? 'Session archived.' : 'Session restored.',
+      'Undo'
+    )
+    if (undo === 'Undo') {
+      await setSessionArchived(current.projectId, current.id, !nextArchived)
+      await this.afterMutation('Archive change undone.')
     }
   }
 
+  async editTags(session = this.selectedSession): Promise<void> {
+    const current = await this.resolveCurrent(session)
+    if (!current) return
+    const tags = await pickTags(current.tags)
+    if (!tags) return
+    const normalizedTags = validateAndNormalizeTags(tags)
+    await setSessionTags(current.projectId, current.id, normalizedTags)
+    await Promise.all(normalizedTags.map((tag) => recordTagInPalette(tag)))
+    await this.afterMutation('Session tags updated.')
+  }
+
   dispose(): void {
-    this.documentCloseListener.dispose()
-    this.changedEmitter.dispose()
-    this.sessionsByUri.clear()
+    for (const disposable of this.disposables.splice(0)) disposable.dispose()
+    this.previewCache.clear()
+    this.view = null
+  }
+
+  private async handleMessage(message: InspectorMessage): Promise<void> {
+    const current = await this.resolveCurrent()
+    if (!current) return
+
+    try {
+      switch (message.type) {
+        case 'resume':
+          await resumeSessionInTerminal(current)
+          break
+        case 'copyHandoff':
+          await copySessionHandoff(current, this.logger)
+          void vscode.window.showInformationMessage('Swoop handoff packet copied.')
+          break
+        case 'editAlias':
+          await this.editAlias(current)
+          break
+        case 'archive':
+          await this.toggleArchive(current)
+          break
+        case 'editTags':
+          await this.editTags(current)
+          break
+        case 'revealProject':
+          await vscode.commands.executeCommand(
+            'revealFileInOS',
+            vscode.Uri.file(current.projectPath)
+          )
+          break
+        case 'openFile':
+          await this.openPreviewFile(current, message.path)
+          break
+      }
+    } catch (error) {
+      this.logger.error(`inspector action failed: ${message.type}`, error)
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  private async resolveCurrent(
+    candidate: ExtensionSession | null = this.selectedSession
+  ): Promise<ExtensionSession | null> {
+    if (!candidate) {
+      void vscode.window.showInformationMessage('Select a Swoop session first.')
+      return null
+    }
+    const current = await this.dataSource.resolveSession(candidate.projectId, candidate.id)
+    if (!current) {
+      void vscode.window.showWarningMessage('This session is no longer available locally.')
+      await this.refreshSelected()
+      return null
+    }
+    this.selectedReference = { projectId: current.projectId, sessionId: current.id }
+    this.selectedSession = current
+    return current
+  }
+
+  private async afterMutation(message: string): Promise<void> {
+    await this.onDidMutate()
+    await this.refreshSelected()
+    void vscode.window.showInformationMessage(message)
+  }
+
+  private async render(): Promise<void> {
+    if (!this.view) return
+    if (!this.selectedSession) {
+      this.view.webview.html = emptyInspectorHtml()
+      return
+    }
+    this.selectedPreview = await this.loadPreview(this.selectedSession)
+    this.view.webview.html = renderInspectorHtml(this.selectedSession, this.selectedPreview)
+  }
+
+  private async loadPreview(session: ExtensionSession): Promise<SessionPreview> {
+    const transcriptPath = sessionTranscriptPath(session.projectId, session.id)
+    const mtimeMs = await stat(transcriptPath)
+      .then((value) => value.mtimeMs)
+      .catch(() => -1)
+    const cached = this.previewCache.get(transcriptPath)
+    if (cached?.mtimeMs === mtimeMs) return cached.preview
+    const preview = await loadSessionPreview(transcriptPath)
+    this.previewCache.set(transcriptPath, { mtimeMs, preview })
+    return preview
+  }
+
+  private async openPreviewFile(session: ExtensionSession, requestedPath: string): Promise<void> {
+    const preview = this.selectedPreview ?? (await this.loadPreview(session))
+    const allowedPaths = [...preview.touchedFiles, ...preview.automaticContext.readFiles].map(
+      (path) =>
+        normalizePathForComparison(isAbsolute(path) ? path : resolve(session.projectPath, path))
+    )
+    const absolutePath = isAbsolute(requestedPath)
+      ? requestedPath
+      : resolve(session.projectPath, requestedPath)
+    if (!allowedPaths.includes(normalizePathForComparison(absolutePath))) {
+      throw new Error('The requested file is not part of the current session preview.')
+    }
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath))
+    await vscode.window.showTextDocument(document, { preview: true })
   }
 }
 
 export async function openSessionDetail(
-  provider: SwoopSessionDetailProvider,
+  provider: SwoopInspectorProvider,
   session: ExtensionSession
 ): Promise<void> {
-  const uri = provider.registerSession(session)
-  try {
-    await vscode.commands.executeCommand('markdown.showPreview', uri)
-  } catch {
-    const document = await vscode.workspace.openTextDocument(uri)
-    await vscode.window.showTextDocument(document, {
-      preview: true,
-      viewColumn: vscode.ViewColumn.Active,
-    })
-  }
+  await provider.showSession(session)
 }
 
 export async function showSessionDetailPicker(
-  provider: SwoopSessionDetailProvider,
+  provider: SwoopInspectorProvider,
   dataSource: SwoopDataSource,
   logger: SwoopLogger
 ): Promise<void> {
@@ -95,41 +275,85 @@ export async function showSessionDetailPicker(
       includeArchived: vscode.workspace
         .getConfiguration('swoop')
         .get<boolean>('includeArchived', false),
-      includePreviewHints: true,
+      includePreviewHints: false,
       workspacePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     })
     if (model.sessions.length === 0) {
       void vscode.window.showInformationMessage('No Swoop sessions found.')
       return
     }
-
     const selected = await vscode.window.showQuickPick(
       model.sessions.map((session) => ({
-        description: `${session.projectName} - ${formatRelativeTime(session.updated)}`,
-        detail: [session.branch, session.todoSummary ? `todos ${session.todoSummary}` : null]
-          .filter(Boolean)
-          .join(' - '),
+        description: `${session.projectName} · ${formatRelativeTime(session.updated)}`,
+        detail: session.advice.explanation,
         label: `${statusCodicon(session.primaryStatus, session.isActive)} ${session.title}`,
         session,
       })),
       {
         matchOnDescription: true,
         matchOnDetail: true,
-        placeHolder: 'Open a read-only Swoop Resume Card',
-        title: 'Swoop: Open Resume Card',
+        placeHolder: 'Open a Swoop Session Inspector',
+        title: 'Swoop: Open Session Inspector',
       }
     )
-    if (!selected) return
-
-    await openSessionDetail(provider, selected.session)
+    if (selected) await provider.showSession(selected.session)
   } catch (error) {
-    logger.error('session detail picker failed', error)
+    logger.error('session inspector picker failed', error)
     void vscode.window.showErrorMessage(
-      error instanceof Error ? error.message : 'Could not open Swoop Resume Card.'
+      error instanceof Error ? error.message : 'Could not open Swoop Session Inspector.'
     )
   }
 }
 
-function escapeInlineCode(value: string): string {
-  return value.replace(/`/g, '\\`')
+async function pickTags(currentTags: string[]): Promise<string[] | null> {
+  const orgData = await readOrgData()
+  const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem>()
+  quickPick.canSelectMany = true
+  quickPick.ignoreFocusOut = true
+  quickPick.matchOnDescription = true
+  quickPick.placeholder = 'Select up to 8 tags'
+  quickPick.title = 'Swoop: Edit Session Tags'
+  quickPick.buttons = [ADD_TAG_BUTTON]
+
+  let values = [...new Set([...currentTags, ...orgData.tagPalette])].sort()
+  const rebuild = (): void => {
+    quickPick.items = values.map((tag) => ({ label: tag }))
+    quickPick.selectedItems = quickPick.items.filter((item) => currentTags.includes(item.label))
+  }
+  rebuild()
+
+  return new Promise<string[] | null>((resolvePromise) => {
+    let resolved = false
+    const finish = (value: string[] | null): void => {
+      if (resolved) return
+      resolved = true
+      quickPick.dispose()
+      resolvePromise(value)
+    }
+    quickPick.onDidAccept(() => finish(quickPick.selectedItems.map((item) => item.label)))
+    quickPick.onDidHide(() => finish(null))
+    quickPick.onDidTriggerButton(async (button) => {
+      if (button !== ADD_TAG_BUTTON) return
+      const rawTag = await vscode.window.showInputBox({
+        prompt: 'Add a lowercase tag (letters, numbers, and hyphens)',
+        validateInput: (value) => {
+          try {
+            validateAndNormalizeTags([value])
+            return null
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error)
+          }
+        },
+      })
+      if (rawTag === undefined) return
+      const [tag] = validateAndNormalizeTags([rawTag])
+      if (!tag) return
+      const selectedTags = new Set(quickPick.selectedItems.map((item) => item.label))
+      selectedTags.add(tag)
+      values = [...new Set([...values, tag])].sort()
+      rebuild()
+      quickPick.selectedItems = quickPick.items.filter((item) => selectedTags.has(item.label))
+    })
+    quickPick.show()
+  })
 }

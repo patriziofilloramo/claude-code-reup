@@ -25,6 +25,7 @@ function session(overrides: Partial<ExtensionSession>): ExtensionSession {
     id: crypto.randomUUID(),
     isActive: false,
     messageCount: 1,
+    memoryStatus: null,
     needsAttention: false,
     planSummary: null,
     primaryStatus: 'ok',

@@ -7,7 +7,7 @@ import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-pick
 import {
   openSessionDetail,
   showSessionDetailPicker,
-  SwoopSessionDetailProvider,
+  SwoopInspectorProvider,
 } from './session-detail.js'
 import { asProjectTreeNode, asSessionTreeNode, SwoopSessionTreeProvider } from './session-tree.js'
 import { SwoopDataSource } from './swoop-data.js'
@@ -16,8 +16,10 @@ import { resumeSessionInTerminal } from './terminal.js'
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = createLogger()
   const dataSource = new SwoopDataSource(logger)
-  const detailProvider = new SwoopSessionDetailProvider(logger)
   const treeProvider = new SwoopSessionTreeProvider(dataSource, logger)
+  const inspectorProvider = new SwoopInspectorProvider(dataSource, logger, () =>
+    treeProvider.refresh()
+  )
   const treeView = vscode.window.createTreeView('swoop.sessions', {
     showCollapseAll: true,
     treeDataProvider: treeProvider,
@@ -29,12 +31,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     logger,
-    detailProvider,
+    inspectorProvider,
     refreshController,
     treeProvider,
     treeView,
     treeView.onDidChangeVisibility((event) => refreshController.setVisible(event.visible)),
-    vscode.workspace.registerTextDocumentContentProvider('swoop', detailProvider),
+    treeView.onDidChangeSelection((event) => {
+      const sessionNode = asSessionTreeNode(event.selection[0])
+      if (sessionNode) void inspectorProvider.showSession(sessionNode.session, false)
+    }),
+    treeProvider.onDidChangeModel(() => {
+      void inspectorProvider.refreshSelected()
+    }),
+    vscode.window.registerWebviewViewProvider('swoop.inspector', inspectorProvider, {
+      webviewOptions: { retainContextWhenHidden: false },
+    }),
     vscode.commands.registerCommand('swoop.diagnostics', async () => {
       await runDiagnostics(dataSource, logger)
     }),
@@ -42,23 +53,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await treeProvider.refresh()
     }),
     vscode.commands.registerCommand('swoop.resumeHere', async () => {
-      await showWorkspaceResumePicker(dataSource, logger)
+      await showWorkspaceResumePicker(dataSource, logger, (session) =>
+        inspectorProvider.showSession(session)
+      )
     }),
     vscode.commands.registerCommand('swoop.resumeSession', async () => {
-      await showGlobalResumePicker(dataSource, logger)
+      await showGlobalResumePicker(dataSource, logger, (session) =>
+        inspectorProvider.showSession(session)
+      )
     }),
     vscode.commands.registerCommand('swoop.openSessionDetail', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (!sessionNode) {
-        await showSessionDetailPicker(detailProvider, dataSource, logger)
+        await showSessionDetailPicker(inspectorProvider, dataSource, logger)
         return
       }
       try {
-        await openSessionDetail(detailProvider, sessionNode.session)
+        await openSessionDetail(inspectorProvider, sessionNode.session)
       } catch (error) {
         logger.error('open session detail failed', error)
         void vscode.window.showErrorMessage(
-          error instanceof Error ? error.message : 'Could not open Swoop Resume Card.'
+          error instanceof Error ? error.message : 'Could not open Swoop Session Inspector.'
         )
       }
     }),
@@ -91,6 +106,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           error instanceof Error ? error.message : 'Could not copy Swoop handoff packet.'
         )
       }
+    }),
+    vscode.commands.registerCommand('swoop.tree.editAlias', async (node: unknown) => {
+      const sessionNode = asSessionTreeNode(node)
+      if (sessionNode) await inspectorProvider.editAlias(sessionNode.session)
+    }),
+    vscode.commands.registerCommand('swoop.tree.toggleArchive', async (node: unknown) => {
+      const sessionNode = asSessionTreeNode(node)
+      if (sessionNode) await inspectorProvider.toggleArchive(sessionNode.session)
+    }),
+    vscode.commands.registerCommand('swoop.tree.editTags', async (node: unknown) => {
+      const sessionNode = asSessionTreeNode(node)
+      if (sessionNode) await inspectorProvider.editTags(sessionNode.session)
     }),
     vscode.commands.registerCommand('swoop.tree.revealProjectFolder', async (node: unknown) => {
       const projectNode = asProjectTreeNode(node)

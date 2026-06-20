@@ -69,12 +69,18 @@ export class SwoopSessionTreeProvider
         includeArchived: vscode.workspace
           .getConfiguration('swoop')
           .get<boolean>('includeArchived', false),
-        workspaceRoots: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+        workspaceRoots: (vscode.workspace.workspaceFolders ?? []).map(
+          (folder) => folder.uri.fsPath
+        ),
       })
       this.model = model
       this.rebuildNodeCache(model)
       await Promise.all([
-        vscode.commands.executeCommand('setContext', 'swoop.hasSessions', model.sessions.length > 0),
+        vscode.commands.executeCommand(
+          'setContext',
+          'swoop.hasSessions',
+          model.sessions.length > 0
+        ),
         vscode.commands.executeCommand(
           'setContext',
           'swoop.hasWorkspaceSessions',
@@ -278,7 +284,9 @@ function projectTreeItem(project: ExtensionProject): vscode.TreeItem {
   ]
     .filter(Boolean)
     .join('\n')
-  item.iconPath = new vscode.ThemeIcon(project.memoryStatus === 'orange' ? 'cloud-upload' : 'folder')
+  item.iconPath = new vscode.ThemeIcon(
+    project.memoryStatus === 'orange' ? 'cloud-upload' : 'folder'
+  )
   return item
 }
 
@@ -300,7 +308,8 @@ function sessionTreeItem(session: ExtensionSession): vscode.TreeItem {
   const context = formatContextTokens(session.contextTokens)
   if (context) tooltip.appendMarkdown(`- Context: ${context}\n`)
   if (session.branch) tooltip.appendMarkdown(`- Recorded branch: \`${session.branch}\`\n`)
-  if (session.currentBranch) tooltip.appendMarkdown(`- Current branch: \`${session.currentBranch}\`\n`)
+  if (session.currentBranch)
+    tooltip.appendMarkdown(`- Current branch: \`${session.currentBranch}\`\n`)
   item.tooltip = tooltip
   item.iconPath = new vscode.ThemeIcon(
     statusThemeIconId(session.primaryStatus, session.isActive),

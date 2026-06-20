@@ -12,7 +12,10 @@ import {
 } from '../../src/core/session/session-preview.js'
 import { primaryStatus } from '../../src/core/session/session-signals.js'
 import { getResumeAdvice, type ResumeAdvice } from '../../src/core/session/resume-advice.js'
-import { getProjectSyncStatus, type ProjectSyncStatus } from '../../src/core/sync/project-sync-status.js'
+import {
+  getProjectSyncStatus,
+  type ProjectSyncStatus,
+} from '../../src/core/sync/project-sync-status.js'
 import {
   buildCockpitModel,
   type CockpitContext,
@@ -42,6 +45,7 @@ export interface ExtensionSession {
   id: string
   isActive: boolean
   messageCount: number
+  memoryStatus: ProjectSyncStatus | null
   needsAttention: boolean
   planSummary: string | null
   primaryStatus: SessionStatus
@@ -198,6 +202,7 @@ async function createExtensionSession(
     id: session.id,
     isActive: activeSessionIds.has(session.id),
     messageCount: session.messageCount,
+    memoryStatus: getProjectSyncStatus(project),
     needsAttention: isAttentionStatus(status),
     planSummary: previewHints.planSummary,
     primaryStatus: status,

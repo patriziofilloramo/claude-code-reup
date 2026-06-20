@@ -22,9 +22,13 @@
     "onCommand:swoop.resumeSession",
     "onCommand:swoop.tree.copyHandoff",
     "onCommand:swoop.tree.copySessionId",
+    "onCommand:swoop.tree.editAlias",
+    "onCommand:swoop.tree.editTags",
     "onCommand:swoop.tree.resumeSession",
     "onCommand:swoop.tree.revealProjectFolder",
-    "onView:swoop.sessions"
+    "onCommand:swoop.tree.toggleArchive",
+    "onView:swoop.sessions",
+    "onView:swoop.inspector"
   ],
   "contributes": {
     "commands": [
@@ -59,6 +63,21 @@
         "command": "swoop.tree.copyHandoff",
         "title": "Copy Handoff",
         "icon": "$(clippy)"
+      },
+      {
+        "command": "swoop.tree.editAlias",
+        "title": "Edit Session Alias",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "swoop.tree.editTags",
+        "title": "Edit Session Tags",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "swoop.tree.toggleArchive",
+        "title": "Archive / Unarchive Session",
+        "icon": "$(archive)"
       },
       {
         "command": "swoop.tree.resumeSession",
@@ -136,6 +155,21 @@
           "group": "navigation@2"
         },
         {
+          "command": "swoop.tree.editAlias",
+          "when": "view == swoop.sessions && (viewItem == swoopSession || viewItem == swoopSessionActive)",
+          "group": "navigation@3"
+        },
+        {
+          "command": "swoop.tree.editTags",
+          "when": "view == swoop.sessions && (viewItem == swoopSession || viewItem == swoopSessionActive)",
+          "group": "navigation@4"
+        },
+        {
+          "command": "swoop.tree.toggleArchive",
+          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "group": "navigation@5"
+        },
+        {
           "command": "swoop.tree.revealProjectFolder",
           "when": "view == swoop.sessions && viewItem == swoopProject",
           "group": "navigation"
@@ -147,6 +181,11 @@
         {
           "id": "swoop.sessions",
           "name": "Sessions"
+        },
+        {
+          "id": "swoop.inspector",
+          "name": "Session Inspector",
+          "type": "webview"
         }
       ]
     },

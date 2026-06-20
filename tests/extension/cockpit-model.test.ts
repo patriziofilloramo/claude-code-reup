@@ -18,13 +18,13 @@ describe('buildCockpitModel', () => {
       workspaceRoots: ['/work/a', '/work/b'],
     })
 
-    expect(model.workspaceProjects.flatMap((group) => group.sessions).map((item) => item.id)).toEqual(
-      ['workspace-b', 'workspace-a']
-    )
+    expect(
+      model.workspaceProjects.flatMap((group) => group.sessions).map((item) => item.id)
+    ).toEqual(['workspace-b', 'workspace-a'])
     expect(model.attentionElsewhere.map((item) => item.id)).toEqual(['attention'])
-    expect(model.recentElsewhere.flatMap((group) => group.sessions).map((item) => item.id)).toEqual([
-      'recent',
-    ])
+    expect(model.recentElsewhere.flatMap((group) => group.sessions).map((item) => item.id)).toEqual(
+      ['recent']
+    )
     expect(
       new Set([
         ...model.workspaceProjects.flatMap((group) => group.sessions),
@@ -84,6 +84,7 @@ function session(
     id,
     isActive: false,
     messageCount: 1,
+    memoryStatus: null,
     needsAttention: false,
     planSummary: null,
     primaryStatus: 'ok',
