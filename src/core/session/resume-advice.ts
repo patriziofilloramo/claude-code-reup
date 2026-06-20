@@ -46,11 +46,7 @@ export function getResumeAdvice(session: Session, isActive: boolean): ResumeAdvi
     }
   }
 
-  if (
-    session.gitBranch &&
-    session.currentBranch &&
-    session.gitBranch !== session.currentBranch
-  ) {
+  if (session.gitBranch && session.currentBranch && session.gitBranch !== session.currentBranch) {
     return {
       code: 'branch-drift',
       explanation: `The session recorded "${session.gitBranch}", while the project is currently on "${session.currentBranch}". Verify the branch before resuming.`,
@@ -94,7 +90,8 @@ export function getResumeAdvice(session: Session, isActive: boolean): ResumeAdvi
 
   return {
     code: 'ready',
-    explanation: 'The project path and branch context are consistent. This session is ready to resume.',
+    explanation:
+      'The project path and branch context are consistent. This session is ready to resume.',
     recommendedAction: 'resume',
     severity: 'info',
     title: 'Ready to resume',

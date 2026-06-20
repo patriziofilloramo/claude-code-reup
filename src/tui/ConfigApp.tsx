@@ -20,7 +20,11 @@ import {
   unlinkAllSyncedProjectsForSync,
   unlinkProjectForSync,
 } from '../core/sync/sync-actions.js'
-import type { AdvancedDiscovery, AutoCleanup, CrossDeviceSessionStorage } from '../core/user-prefs.js'
+import type {
+  AdvancedDiscovery,
+  AutoCleanup,
+  CrossDeviceSessionStorage,
+} from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,

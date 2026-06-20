@@ -102,13 +102,33 @@ function renderSyncProjectList(items, syncEnabled) {
   }
 
   const sections = [
-    { key: 'linked', label: 'Linked', projects: items.filter(function (p) { return p.isShared }) },
-    { key: 'local', label: 'Local (unlinked)', projects: items.filter(function (p) { return !p.isShared && !p.isRemoteProject }) },
-    { key: 'remote', label: 'Remote (other device)', projects: items.filter(function (p) { return p.isRemoteProject }) },
+    {
+      key: 'linked',
+      label: 'Linked',
+      projects: items.filter(function (p) {
+        return p.isShared
+      }),
+    },
+    {
+      key: 'local',
+      label: 'Local (unlinked)',
+      projects: items.filter(function (p) {
+        return !p.isShared && !p.isRemoteProject
+      }),
+    },
+    {
+      key: 'remote',
+      label: 'Remote (other device)',
+      projects: items.filter(function (p) {
+        return p.isRemoteProject
+      }),
+    },
   ]
 
   return sections
-    .filter(function (s) { return s.projects.length > 0 })
+    .filter(function (s) {
+      return s.projects.length > 0
+    })
     .map(function (section) {
       return (
         '<div class="sync-section">' +
@@ -129,8 +149,12 @@ function renderSyncProjectList(items, syncEnabled) {
             const canUnlink = syncEnabled && project.isShared && !project.isActive
 
             return (
-              '<div class="sync-project' + (project.isActive ? ' sync-project--active' : '') + '">' +
-              '<span class="sync-project-path" title="' + escapeHtml(project.path) + '">' +
+              '<div class="sync-project' +
+              (project.isActive ? ' sync-project--active' : '') +
+              '">' +
+              '<span class="sync-project-path" title="' +
+              escapeHtml(project.path) +
+              '">' +
               escapeHtml(project.path) +
               '</span>' +
               (project.isActive

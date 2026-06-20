@@ -85,7 +85,9 @@ export function readUserPrefsSync(): UserPrefs {
 }
 
 function isAdvancedDiscovery(value: unknown): value is AdvancedDiscovery {
-  return typeof value === 'string' && VALID_ADVANCED_DISCOVERY_VALUES.has(value as AdvancedDiscovery)
+  return (
+    typeof value === 'string' && VALID_ADVANCED_DISCOVERY_VALUES.has(value as AdvancedDiscovery)
+  )
 }
 
 function isAutoCleanup(value: unknown): value is AutoCleanup {
