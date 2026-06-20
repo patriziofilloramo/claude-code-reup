@@ -202,16 +202,18 @@ function renderSessions() {
 
   if (deepSearchActive) {
     elements.sessionPanelTitle.textContent = deepSearchLoading
-      ? 'searching transcripts…'
+      ? STRINGS.sessionSearching
       : '⌕ ' + deepSearchQueryTerm
     elements.sessionCount.textContent = deepSearchLoading
       ? ''
-      : deepSearchMatches.length + ' sessions found'
+      : fmt(STRINGS.sessionDeepFound, { n: deepSearchMatches.length })
   } else {
     elements.sessionPanelTitle.textContent = selectedProject
       ? compactPath(selectedProject.path)
-      : 'Select a project'
-    elements.sessionCount.textContent = selectedProject ? visibleSessions.length + ' sessions' : ''
+      : STRINGS.sessionPanelPlaceholder
+    elements.sessionCount.textContent = selectedProject
+      ? fmt(STRINGS.sessionCountLabel, { n: visibleSessions.length })
+      : ''
   }
   renderReviewSignals()
   renderFilterBar()

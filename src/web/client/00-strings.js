@@ -161,7 +161,90 @@ const STRINGS = {
   diagnosticsExpiresSoon: 'Expires soon · {path}',
   diagnosticsPathMissing: 'Path missing · {path}',
 
-  // ── CLAUDE.md drawer ───────────────────────────────────────────────────────
+  // ── App chrome ────────────────────────────────────────────────────────────
+  usageLoading: 'usage loading…',
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  searchPlaceholder: 'project / session / is:attention — tab: search all context',
+  searchInputTitle:
+    'Search projects and sessions. Try is:attention, is:drift, is:high-context. Tab searches full transcripts.',
+  searchDeepTitle: 'Deep search (Tab)',
+  searchModeActive: '⌕ deep',
+
+  // ── Navigation chrome ─────────────────────────────────────────────────────
+  backBtnAriaLabel: 'Back to projects',
+  mdTagTitle: 'Edit project instructions (CLAUDE.md)',
+  reviewSignalsAriaLabel: 'Review signals',
+
+  // ── Sort options ──────────────────────────────────────────────────────────
+  sortRecent: 'Recent',
+  sortName: 'Name',
+  sortRisk: 'Risk',
+  sortContext: 'Context',
+
+  // ── Focus bar ─────────────────────────────────────────────────────────────
+  focusClearTitle: 'Clear focus',
+
+  // ── Footer hints ──────────────────────────────────────────────────────────
+  footerHintSelect: 'select',
+  footerHintActions: 'actions',
+  footerHintResume: 'resume',
+  footerHintSearch: 'search',
+  footerHintGroup: 'group',
+  footerHintTag: 'tag',
+  footerHintRename: 'rename',
+  footerHintHandoff: 'handoff',
+  footerHintDelete: 'delete',
+  footerTitleClick: 'Click to select a session',
+  footerTitleRightClick: 'Right-click a session or project row for actions',
+  footerTitleEnter: 'Resume the selected session in a terminal',
+  footerTitleSlash: 'Open the search bar',
+  footerTitleG: 'Assign selected project to a group (g)',
+  footerTitleT: 'Add/remove tags on the selected session (t)',
+  footerTitleR: 'Rename the selected session (r)',
+  footerTitleH: 'Copy a handoff packet for the selected session (H)',
+  footerTitleD: 'Delete the selected session permanently (D)',
+  footerSyncBtn: 'sync',
+  footerSyncTitle: 'Project Memory Sync (Alpha)',
+  footerThemeBtn: 'theme',
+  footerThemeTitle: 'Switch theme',
+  footerStatusLoading: 'loading…',
+
+  // ── Right panel ───────────────────────────────────────────────────────────
+  sessionPanelPlaceholder: 'Select a project',
+  sessionSearching: 'searching transcripts…',
+  sessionDeepFound: '{n} sessions found',
+  sessionCountLabel: '{n} sessions',
+
+  // ── Resume dialog ─────────────────────────────────────────────────────────
+  resumeDialogTitle: 'Resume Session',
+  resumeDialogCancel: 'Cancel',
+  resumeAlwaysConfirm: 'Always confirm before resuming',
+
+  // ── Drawers (shared) ──────────────────────────────────────────────────────
+  drawerCloseIcon: '✕',
+
+  // ── Drawer titles and chrome ───────────────────────────────────────────────
+  claudeMdTitle: 'CLAUDE.md',
+  claudeMdEditorPlaceholder: 'No CLAUDE.md found for this project.',
+  claudeMdSaveBtn: 'Save',
+  claudeMdCloseBtn: 'Close',
+  lfTitle: 'Lost & Found',
+  syncTitle: 'Project Memory Sync',
+  syncAlphaLabel: 'Alpha',
+
+  // ── Org manager dialog ────────────────────────────────────────────────────
+  orgManagerStackTitle: 'Stack: {name}',
+  orgManagerGroupTitle: 'Group: {name}',
+  orgManagerDone: 'Done',
+
+  // ── Org picker dialog ─────────────────────────────────────────────────────
+  orgPickerCancelBtn: 'Cancel',
+
+  // ── Tag picker dialog ─────────────────────────────────────────────────────
+  tagPickerDone: 'Done',
+
+  // ── CLAUDE.md drawer (save status) ────────────────────────────────────────
   claudeMdSaved: 'saved',
   claudeMdUnsaved: 'unsaved',
   claudeMdSaveError: 'error: {message}',
