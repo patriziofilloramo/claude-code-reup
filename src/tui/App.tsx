@@ -13,6 +13,7 @@ import type { LiveUsageSummary } from '../core/usage/live-usage.js'
 import { loadProjects } from '../core/project/project-discovery.js'
 import type { Project, Session } from '../core/session/session-model.js'
 import { deleteSession, setSessionArchived } from '../core/session/session-metadata.js'
+import { forgetProjectForSync } from '../core/sync/sync-actions.js'
 import { copyToClipboard, openDirectory } from '../utils/system.js'
 import { ConfigApp } from './ConfigApp.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
@@ -348,6 +349,17 @@ function App({ onResume }: AppProps) {
         copyToClipboard(selectedProject.path)
           .then(() => flashMessage('path copied'))
           .catch(() => flashMessage('clipboard unavailable'))
+        break
+      case 'forget-project':
+        forgetProjectForSync(selectedProject.path, { projects })
+          .then((result) => loadProjects().then((loaded) => ({ loaded, result })))
+          .then(({ loaded, result }) => {
+            setProjects(loaded)
+            flashMessage(result.message)
+          })
+          .catch((error: unknown) =>
+            flashMessage(error instanceof Error ? error.message : 'forget project failed')
+          )
         break
     }
   }
@@ -709,7 +721,7 @@ function App({ onResume }: AppProps) {
   }
 
   if (isConfigOpen) {
-    return <ConfigApp onClose={() => setIsConfigOpen(false)} />
+    return <ConfigApp onClose={() => setIsConfigOpen(false)} onProjectsChanged={setProjects} />
   }
 
   if (isHelpOpen) {

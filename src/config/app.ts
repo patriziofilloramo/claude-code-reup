@@ -105,10 +105,27 @@ export const APP = {
   // ── Cloud sync ──────────────────────────────────────────────────────────────
 
   /**
+   * Master switch for the Project Memory Sync feature. When false, no cloud
+   * icons are shown in the UI and cloud-linked project discovery is skipped
+   * entirely, regardless of other sync settings.
+   */
+  enableProjectMemorySync: true,
+  /**
+   * When false, swoop performs a focused scan of common workspace folders
+   * inside detected cloud roots. When true, it recursively scans only
+   * `projectSearchPaths`, allowing uncommon layouts without crawling disks.
+   */
+  enableAdvancedDiscovery: false,
+  /**
+   * Directories to search recursively when `enableAdvancedDiscovery` is true.
+   * Ignored in the default focused-discovery mode.
+   */
+  projectSearchPaths: [] as string[],
+  /**
    * Subdirectory name created inside the project root by `swoop sync link` to hold
    * the cross-device session files that are kept in sync with local storage.
    */
-  cloudMemoryDir: '.claude-memory',
+  sharedMemoryDir: '.claude-memory',
   /**
    * Marker file written inside ~/.claude/projects/<id>/ to record which cloud
    * directory the project is linked to. Its presence means local-first sync

@@ -42,10 +42,10 @@ export function registerProjectRoutes(app: Hono): void {
       if (groupId || stackId || tag) {
         const orgData = await readOrgData()
         const filtered = filterProjectsByOrg(projects, orgData, { groupId, stackId, tag })
-        return context.json(filtered.map(serializeProject))
+        return context.json(filtered.map((project) => serializeProject(project)))
       }
 
-      return context.json(projects.map(serializeProject))
+      return context.json(projects.map((project) => serializeProject(project)))
     })
   )
 

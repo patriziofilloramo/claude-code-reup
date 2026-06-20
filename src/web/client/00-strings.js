@@ -175,6 +175,9 @@ const STRINGS = {
   syncDisable: 'Disable Cross-device Storage',
   syncLinkSelected: 'Link selected project',
   syncUnlinkSelected: 'Unlink selected project',
+  syncForgetSelected: 'Forget local copy',
+  syncForgetConfirm:
+    'Forget this local project copy? Project Memory remains available and local data is archived for recovery.',
   syncLinkAllCloud: 'Link all cloud projects',
   syncUnlinkAll: 'Unlink all synced projects',
   syncNoSelectedProject: 'Select a project to link or unlink it.',
@@ -183,6 +186,15 @@ const STRINGS = {
   syncConfirmBulk: 'Run this bulk sync operation sequentially?',
   syncOperationDone: 'Sync operation complete',
   syncOperationFailed: 'Sync failed: {error}',
+  syncAdvancedDiscoveryLabel: 'Advanced Discovery',
+  syncAdvancedDiscoveryOn: 'on',
+  syncAdvancedDiscoveryOff: 'off',
+  syncAdvancedDiscoveryDesc:
+    'Scan specific folders for projects linked on other devices. Slower than auto-detection; useful when projects live outside detected cloud roots.',
+  syncSearchPathsLabel: 'Search paths',
+  syncSearchPathsPlaceholder: 'One path per line, e.g. ~/Documents/Projects',
+  syncSearchPathsSave: 'Save paths',
+  syncSearchPathsSaved: 'Paths saved',
 
   // ── New session ────────────────────────────────────────────────────────────
   newSessionStarted: 'New session started in terminal',

@@ -1,29 +1,50 @@
-import { access, lstat, mkdir, readFile, readlink, rm, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { lstat, mkdir, readFile, readlink, rename, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
 import { APP } from '../../config/app.js'
 import { log } from '../../utils/logger.js'
-import { encodeProjectPath, getClaudeProjectsDirectory } from '../project/claude-paths.js'
-import { pathsReferToSameLocation } from '../project/path-comparison.js'
+import {
+  encodeProjectPath,
+  getClaudeProjectsDirectory,
+  getSwoopDirectory,
+} from '../project/claude-paths.js'
+import { invalidateProjectCache } from '../project/project-cache.js'
+import { normalizePathForComparison, pathsReferToSameLocation } from '../project/path-comparison.js'
 import { loadProjects } from '../project/project-discovery.js'
 import { getLiveSessionRecords } from '../session/active-sessions.js'
 import type { Project } from '../session/session-model.js'
 import { readUserPrefsSync } from '../user-prefs.js'
+import { isProjectMemorySyncEnabled } from './project-sync-status.js'
+import {
+  detectCloudRoots,
+  discoverCloudLinkedProjectPaths,
+  isUnderCloudRoot,
+  type CloudLinkedProject,
+  type CloudProjectDiscoveryOptions,
+} from './cloud-project-discovery.js'
 import {
   createLinkAt,
   replaceDirectoryWithLink,
   replaceLinkWithDirectory,
   repointLink,
   syncBidirectional,
+  unregisterProjectSync,
 } from './cloud-sync.js'
 import { getOrCreateDeviceId } from './device-id.js'
 
+export {
+  detectCloudRoots,
+  isUnderCloudRoot,
+  normalizeCloudRoot,
+} from './cloud-project-discovery.js'
+
 export type SyncProjectKind = 'linked' | 'cloud-candidate' | 'local-candidate' | 'active-disabled'
+export type CurrentProjectSyncAction = 'blocked-linked' | 'blocked-local' | 'link' | 'unlink'
 export type SyncOperationStatus =
   | 'already-linked'
   | 'already-local'
   | 'failed'
+  | 'forgotten'
   | 'linked'
   | 're-linked'
   | 'skipped-active'
@@ -41,19 +62,23 @@ export interface SyncProjectReport {
   id: string
   isActive: boolean
   isCloudProject: boolean
+  isRemoteProject: boolean
   isShared: boolean
   kind: SyncProjectKind
+  linkedDevices: string[]
   path: string
   unlinkedDevices: string[]
 }
 
 export interface SyncOverview {
+  advancedDiscovery: boolean
   cloudProjectCandidates: SyncProjectReport[]
   cloudRoots: string[]
   enabled: boolean
   linkedProjects: SyncProjectReport[]
   localProjectCandidates: SyncProjectReport[]
   projects: SyncProjectReport[]
+  projectSearchPaths: string[]
   skippedActiveProjects: SyncProjectReport[]
 }
 
@@ -70,11 +95,17 @@ export interface SyncBulkResult {
   results: SyncOperationResult[]
 }
 
+export function getCurrentProjectSyncAction(project?: SyncProjectReport): CurrentProjectSyncAction {
+  if (!project) return 'link'
+  if (project.isActive) return project.isShared ? 'blocked-linked' : 'blocked-local'
+  return project.isShared ? 'unlink' : 'link'
+}
+
 export const MANAGED_PERMISSION_RULES = [
-  `Read(${APP.cloudMemoryDir}/**)`,
-  `Write(${APP.cloudMemoryDir}/device-presence/**)`,
-  `Write(${APP.cloudMemoryDir}/sync-ignored/**)`,
-  `Edit(${APP.cloudMemoryDir}/memory/shared.md)`,
+  `Read(${APP.sharedMemoryDir}/**)`,
+  `Write(${APP.sharedMemoryDir}/device-presence/**)`,
+  `Write(${APP.sharedMemoryDir}/sync-ignored/**)`,
+  `Edit(${APP.sharedMemoryDir}/memory/shared.md)`,
 ] as const
 
 export class SyncProjectActiveError extends Error {
@@ -94,6 +125,13 @@ export class SyncNoCloudProjectsError extends Error {
   }
 }
 
+export class SyncProjectNotForgettableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SyncProjectNotForgettableError'
+  }
+}
+
 export class SyncSetupPatchError extends Error {
   constructor(message: string) {
     super(message)
@@ -103,6 +141,10 @@ export class SyncSetupPatchError extends Error {
 
 export async function buildSyncOverview(projects?: Project[]): Promise<SyncOverview> {
   const discoveredProjects = projects ?? (await loadProjects())
+  const syncEnabled = isProjectMemorySyncEnabled()
+  const prefs = readUserPrefsSync()
+  const advancedDiscovery = prefs.advancedDiscovery === 'on'
+  const projectSearchPaths = prefs.projectSearchPaths
   const [cloudRoots, liveSessions] = await Promise.all([
     detectCloudRoots(),
     getLiveSessionRecords(),
@@ -111,18 +153,46 @@ export async function buildSyncOverview(projects?: Project[]): Promise<SyncOverv
     .map((session) => session.cwd)
     .filter((cwd): cwd is string => cwd !== null)
 
-  const reports = discoveredProjects.map((project) =>
-    classifyProjectForSync(project, cloudRoots, activeProjectPaths)
-  )
+  const reports = discoveredProjects
+    .map((project) => classifyProjectForSync(project, cloudRoots, activeProjectPaths))
+    .filter((report, index) => {
+      // Drop cloud candidates whose local project path no longer exists on disk.
+      // A project unlinked via swoop and then deleted from the cloud folder leaves a
+      // local ~/.claude/projects/ directory behind; its sessions all report pathExists=false.
+      // Showing it as a linkable cloud candidate would be misleading.
+      if (report.kind !== 'cloud-candidate') return true
+      const project = discoveredProjects[index]
+      if (!project?.sessions.length) return true
+      return project.sessions.some((session) => session.signals.pathExists !== false)
+    })
+
+  // Scan for projects linked from other devices but not yet known locally.
+  // When advanced discovery is on, use the user-defined search paths (falling
+  // back to auto-detected cloud roots if none are configured); otherwise use
+  // the fast scan over detected cloud roots.
+  const knownPaths = new Set(discoveredProjects.map((p) => normalizePathForComparison(p.path)))
+  const discoveryRoots = advancedDiscovery
+    ? projectSearchPaths.length > 0
+      ? projectSearchPaths
+      : cloudRoots
+    : cloudRoots
+  const cloudOnlyProjects = syncEnabled
+    ? await discoverCloudLinkedProjects(discoveryRoots, knownPaths, {
+        scanMode: advancedDiscovery ? 'full' : 'fast',
+      })
+    : []
+  const allReports = [...reports, ...cloudOnlyProjects]
 
   return {
-    cloudProjectCandidates: reports.filter((project) => project.kind === 'cloud-candidate'),
+    advancedDiscovery,
+    cloudProjectCandidates: allReports.filter((project) => project.kind === 'cloud-candidate'),
     cloudRoots,
-    enabled: readUserPrefsSync().crossDeviceSessionStorage === 'on',
-    linkedProjects: reports.filter((project) => project.kind === 'linked'),
-    localProjectCandidates: reports.filter((project) => project.kind === 'local-candidate'),
-    projects: reports,
-    skippedActiveProjects: reports.filter((project) => project.kind === 'active-disabled'),
+    enabled: syncEnabled,
+    linkedProjects: allReports.filter((project) => project.kind === 'linked'),
+    localProjectCandidates: allReports.filter((project) => project.kind === 'local-candidate'),
+    projects: allReports,
+    projectSearchPaths,
+    skippedActiveProjects: allReports.filter((project) => project.kind === 'active-disabled'),
   }
 }
 
@@ -140,6 +210,7 @@ export function classifyProjectForSync(
     id: project.id,
     isActive,
     isCloudProject,
+    isRemoteProject: false,
     isShared: project.isShared,
     kind: project.isShared
       ? 'linked'
@@ -148,6 +219,7 @@ export function classifyProjectForSync(
         : isCloudProject
           ? 'cloud-candidate'
           : 'local-candidate',
+    linkedDevices: project.linkedDevices ?? [],
     path: project.path,
     unlinkedDevices: project.unlinkedDevices ?? [],
   }
@@ -160,7 +232,7 @@ export async function linkProjectForSync(
   const projects = options.projects ?? (await loadProjects())
   const resolvedProjectPath = resolve(projectPath)
   const project = projects.find((candidate) => samePath(candidate.path, resolvedProjectPath))
-  const cloudDir = join(resolvedProjectPath, APP.cloudMemoryDir)
+  const cloudDir = join(resolvedProjectPath, APP.sharedMemoryDir)
 
   if (project?.isShared) {
     return {
@@ -180,6 +252,7 @@ export async function linkProjectForSync(
 
   await mkdir(cloudDir, { recursive: true })
   await mkdir(join(cloudDir, 'memory'), { recursive: true })
+  await mkdir(getClaudeProjectsDirectory(), { recursive: true })
 
   const localStat = await lstat(localDir).catch(() => null)
   let status: SyncOperationStatus = 'linked'
@@ -197,6 +270,7 @@ export async function linkProjectForSync(
   } else {
     await createLinkAt(localDir, cloudDir)
   }
+  invalidateProjectCache()
 
   const deviceId = await getOrCreateDeviceId()
   await writeLinkedMarker(cloudDir, deviceId)
@@ -238,7 +312,7 @@ export async function unlinkProjectForSync(
 
   await assertProjectPathIsInactive(project.path)
 
-  const cloudDir = join(project.path, APP.cloudMemoryDir)
+  const cloudDir = join(project.path, APP.sharedMemoryDir)
   const localDir = join(getClaudeProjectsDirectory(), project.id)
   const localStat = await lstat(localDir).catch(() => null)
 
@@ -248,6 +322,8 @@ export async function unlinkProjectForSync(
   } else if (localStat?.isDirectory()) {
     await rm(join(localDir, APP.cloudLinkFile), { force: true })
   }
+  unregisterProjectSync(localDir)
+  invalidateProjectCache()
 
   const deviceId = await getOrCreateDeviceId()
   await removeLinkedMarker(cloudDir, deviceId)
@@ -259,6 +335,94 @@ export async function unlinkProjectForSync(
     path: project.path,
     projectId: project.id,
     status: 'unlinked',
+  }
+}
+
+/**
+ * Removes an unlinked cloud-backed project from this device's Claude index
+ * without deleting either Project Memory or the local session copy.
+ *
+ * The local directory is moved into Swoop's recovery area. Consequently the
+ * project disappears from the main local list and may be rediscovered as
+ * Remote Project Memory in Config.
+ */
+export async function forgetProjectForSync(
+  projectPath: string,
+  options: { projects?: Project[] } = {}
+): Promise<SyncOperationResult> {
+  const projects = options.projects ?? (await loadProjects())
+  const resolvedProjectPath = resolve(projectPath)
+  const project = projects.find((candidate) => samePath(candidate.path, resolvedProjectPath))
+
+  if (!project) {
+    throw new SyncProjectNotForgettableError('project is not known on this device')
+  }
+  if (project.isShared) {
+    throw new SyncProjectNotForgettableError('unlink the project before forgetting it')
+  }
+  if (!project.cloudPath) {
+    throw new SyncProjectNotForgettableError(
+      'forget is available only for projects with reachable Project Memory'
+    )
+  }
+
+  await assertProjectPathIsInactive(project.path)
+
+  const cloudStat = await lstat(project.cloudPath).catch(() => null)
+  if (!cloudStat?.isDirectory()) {
+    throw new SyncProjectNotForgettableError('Project Memory is currently unavailable')
+  }
+
+  const localDir = join(getClaudeProjectsDirectory(), project.id)
+  const localStat = await lstat(localDir).catch(() => null)
+  if (!localStat) {
+    invalidateProjectCache()
+    return {
+      message: `already forgotten: ${project.path}`,
+      path: project.path,
+      projectId: project.id,
+      status: 'forgotten',
+    }
+  }
+  if (!localStat.isDirectory() || localStat.isSymbolicLink()) {
+    throw new SyncProjectNotForgettableError('project storage must be unlinked before forgetting')
+  }
+
+  const archiveDirectory = join(
+    getSwoopDirectory(),
+    'forgotten',
+    project.id,
+    safeArchiveTimestamp()
+  )
+  await mkdir(archiveDirectory, { recursive: true })
+  const archivedProjectDirectory = join(archiveDirectory, 'project-data')
+  await rename(localDir, archivedProjectDirectory)
+  await writeFile(
+    join(archiveDirectory, 'manifest.json'),
+    `${JSON.stringify(
+      {
+        archivedAt: new Date().toISOString(),
+        cloudPath: project.cloudPath,
+        projectId: project.id,
+        projectPath: project.path,
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  )
+  invalidateProjectCache()
+
+  log.debug('sync project forgotten locally', {
+    archiveDirectory,
+    projectId: project.id,
+    projectPath: project.path,
+  })
+  return {
+    message: `forgotten locally: ${project.path}`,
+    path: project.path,
+    projectId: project.id,
+    status: 'forgotten',
   }
 }
 
@@ -378,7 +542,7 @@ export async function removeClaudeMdSection(projectPath: string): Promise<void> 
 
 export async function patchGitignoreForSync(projectPath: string): Promise<void> {
   const gitignorePath = join(projectPath, '.gitignore')
-  const entry = `${APP.cloudMemoryDir}/`
+  const entry = `${APP.sharedMemoryDir}/`
   let content = ''
 
   try {
@@ -390,7 +554,7 @@ export async function patchGitignoreForSync(projectPath: string): Promise<void> 
   const hasEntry = content
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .some((line) => line === entry || line === APP.cloudMemoryDir)
+    .some((line) => line === entry || line === APP.sharedMemoryDir)
   if (hasEntry) return
 
   const next = content.trimEnd() ? `${content.trimEnd()}\n${entry}\n` : `${entry}\n`
@@ -426,60 +590,36 @@ export async function patchClaudeLocalSettingsForSync(projectPath: string): Prom
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8')
 }
 
-export async function detectCloudRoots(): Promise<string[]> {
-  const home = homedir()
-  const roots: string[] = []
-
-  for (const key of ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial', 'ONEDRIVE']) {
-    const value = process.env[key]
-    if (value) roots.push(value)
-  }
-
-  const dropboxInfo =
-    process.platform === 'win32'
-      ? join(process.env['LOCALAPPDATA'] ?? home, 'Dropbox', 'info.json')
-      : join(home, '.dropbox', 'info.json')
-  try {
-    const info = JSON.parse(await readFile(dropboxInfo, 'utf8')) as Record<string, unknown>
-    for (const account of Object.values(info)) {
-      const path = (account as Record<string, unknown>)?.['path']
-      if (typeof path === 'string') roots.push(path)
-    }
-  } catch {
-    /* cloud provider not installed */
-  }
-
-  const pcloudCandidates =
-    process.platform === 'win32'
-      ? [join(home, 'pCloud Drive'), 'P:\\']
-      : [join(home, 'pCloud Drive'), join(home, 'pCloudDrive')]
-  for (const candidate of pcloudCandidates) {
-    if (await pathExists(candidate)) roots.push(candidate)
-  }
-
-  for (const candidate of [join(home, 'Google Drive'), join(home, 'My Drive')]) {
-    if (await pathExists(candidate)) roots.push(candidate)
-  }
-
-  const icloud =
-    process.platform === 'win32'
-      ? join(home, 'iCloudDrive')
-      : join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs')
-  if (await pathExists(icloud)) roots.push(icloud)
-
-  return [...new Set(roots.map((root) => root.replace(/[/\\]+$/, '')))]
+/**
+ * Scans cloud roots for project directories that were linked by another device
+ * but have never been opened locally (so they are absent from ~/.claude/projects/).
+ * Presence of `.claude-memory/linked/<hostname>` proves at least one device has
+ * linked the project; the directory is offered as a cloud-candidate so the user
+ * can link it here without needing to open a session first.
+ */
+export async function discoverCloudLinkedProjects(
+  cloudRoots: string[],
+  knownPaths: Set<string>,
+  options: CloudProjectDiscoveryOptions = {}
+): Promise<SyncProjectReport[]> {
+  const cloudProjects = await discoverCloudLinkedProjectPaths(cloudRoots, knownPaths, options)
+  return cloudProjects.map(syncProjectReportForCloudCandidate)
 }
 
-export function isUnderCloudRoot(projectPath: string, roots: string[]): boolean {
-  const normalizedProjectPath = projectPath.replace(/[/\\]+$/, '').toLowerCase()
-  return roots.some((root) => {
-    const normalizedRoot = root.replace(/[/\\]+$/, '').toLowerCase()
-    return (
-      normalizedProjectPath === normalizedRoot ||
-      normalizedProjectPath.startsWith(`${normalizedRoot}/`) ||
-      normalizedProjectPath.startsWith(`${normalizedRoot}\\`)
-    )
-  })
+function syncProjectReportForCloudCandidate(project: CloudLinkedProject): SyncProjectReport {
+  return {
+    cloudOffline: false,
+    cloudPath: project.cloudPath,
+    id: project.id,
+    isActive: false,
+    isCloudProject: true,
+    isRemoteProject: true,
+    isShared: false,
+    kind: 'cloud-candidate',
+    linkedDevices: project.linkedDevices,
+    path: project.path,
+    unlinkedDevices: project.unlinkedDevices,
+  }
 }
 
 async function runOperationForReport(
@@ -553,12 +693,6 @@ async function removeLinkedMarker(cloudDir: string, deviceId: string): Promise<v
   await rm(join(cloudDir, 'linked', deviceId), { force: true })
 }
 
-async function pathExists(path: string): Promise<boolean> {
-  return access(path)
-    .then(() => true)
-    .catch(() => false)
-}
-
 function samePath(leftPath: string, rightPath: string): boolean {
   return pathsReferToSameLocation(leftPath, rightPath)
 }
@@ -577,6 +711,10 @@ function ensureObject(value: unknown, label: string): Record<string, unknown> {
 
 function isString(value: unknown): value is string {
   return typeof value === 'string'
+}
+
+function safeArchiveTimestamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-')
 }
 
 const SWOOP_MARKER_START = '<!-- swoop:sync:start -->'

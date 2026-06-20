@@ -30,12 +30,12 @@ import {
   readlink,
   rename,
   rm,
-  stat,
   symlink,
   unlink,
   writeFile,
 } from 'node:fs/promises'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { basename, dirname, extname, join } from 'node:path'
 
 import { APP } from '../../config/app.js'
 import { getLiveSessionRecords } from '../session/active-sessions.js'
@@ -55,6 +55,9 @@ interface SyncState extends ProjectSyncInfo {
   projectPath: string
 }
 
+type FileStat = Awaited<ReturnType<typeof lstat>>
+type ConflictSide = 'a' | 'b'
+
 export class CloudSyncConflictError extends Error {
   constructor(pathA: string, pathB: string) {
     super(`sync conflict: both copies changed independently (${pathA}, ${pathB})`)
@@ -71,6 +74,7 @@ export class CloudSyncUnavailableError extends Error {
 
 const syncStates = new Map<string, SyncState>()
 let syncTimer: ReturnType<typeof setInterval> | null = null
+const CONFLICT_DIRECTORY_NAME = '.swoop-conflicts'
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -84,6 +88,26 @@ export function stopSyncLoop(): void {
 }
 
 /**
+ * Removes one project from the runtime offline guard after it has been
+ * explicitly unlinked. The registry otherwise remains authoritative over the
+ * filesystem and would make project discovery report the new local directory
+ * as still linked.
+ */
+export function unregisterProjectSync(junctionPath: string): void {
+  for (const registeredPath of syncStates.keys()) {
+    if (pathsReferToSameLocation(registeredPath, junctionPath)) {
+      syncStates.delete(registeredPath)
+    }
+  }
+  for (const registeredPath of syncRegistry.keys()) {
+    if (pathsReferToSameLocation(registeredPath, junctionPath)) {
+      syncRegistry.delete(registeredPath)
+    }
+  }
+  if (syncStates.size === 0) stopSyncLoop()
+}
+
+/**
  * Discovers all linked projects, migrates any .swoop-link files to junctions,
  * initialises the local backup for every linked project, and starts the
  * background offline-guard loop.
@@ -93,8 +117,14 @@ export function stopSyncLoop(): void {
  * @returns Number of cloud-linked projects initialised.
  */
 export async function initCloudSync(): Promise<number> {
+  const { isProjectMemorySyncEnabled } = await import('./project-sync-status.js')
   const { loadProjects } = await import('../project/project-discovery.js')
   const { invalidateProjectCache } = await import('../project/project-cache.js')
+
+  stopSyncLoop()
+  syncStates.clear()
+  syncRegistry.clear()
+  if (!isProjectMemorySyncEnabled()) return 0
 
   const projects = await loadProjects()
   const liveSessions = await getLiveSessionRecords()
@@ -363,8 +393,8 @@ export async function syncBidirectional(dirA: string, dirB: string): Promise<voi
 async function syncOneFile(
   pathA: string,
   pathB: string,
-  statA: Awaited<ReturnType<typeof stat>> | null,
-  statB: Awaited<ReturnType<typeof stat>> | null
+  statA: FileStat | null,
+  statB: FileStat | null
 ): Promise<void> {
   if (statA?.isFile() && !statB) {
     await copyFileAtomically(pathA, pathB)
@@ -390,16 +420,12 @@ async function syncOneFile(
   }
 
   if (pathA.toLowerCase().endsWith('.md')) {
-    await mergeMarkdownFilesUnion(pathA, pathB, contentA, contentB)
-    return
+    if (await mergeMarkdownFilesUnion(pathA, pathB, contentA, contentB)) return
   }
 
   // Both copies diverged independently (e.g. offline session writes on two devices).
-  // Keep the longer copy — it has more accumulated data — and propagate it to both sides.
-  const [sourcePath, destinationPath] =
-    contentA.length >= contentB.length ? [pathA, pathB] : [pathB, pathA]
-  await copyFileAtomically(sourcePath, destinationPath)
-  log.debug(`cloud-sync: resolved conflict by keeping longer copy: ${sourcePath}`)
+  // Preserve both originals before making either side converge.
+  await preserveConflictCopiesAndConverge(pathA, pathB, contentA, contentB, statA, statB)
 }
 
 /**
@@ -418,7 +444,7 @@ async function mergeMarkdownFilesUnion(
   pathB: string,
   contentA: Buffer,
   contentB: Buffer
-): Promise<void> {
+): Promise<boolean> {
   let textA: string
   let textB: string
   try {
@@ -426,7 +452,7 @@ async function mergeMarkdownFilesUnion(
     textA = decoder.decode(contentA)
     textB = decoder.decode(contentB)
   } catch {
-    throw new CloudSyncConflictError(pathA, pathB)
+    return false
   }
 
   const splitLines = (text: string): string[] => {
@@ -450,6 +476,191 @@ async function mergeMarkdownFilesUnion(
   await copyFileAtomically(pathA, pathB)
 
   log.debug(`cloud-sync: auto-merged .md conflict: ${pathA}`)
+  return true
+}
+
+async function preserveConflictCopiesAndConverge(
+  pathA: string,
+  pathB: string,
+  contentA: Buffer,
+  contentB: Buffer,
+  statA: FileStat,
+  statB: FileStat
+): Promise<void> {
+  const resolution = chooseConflictCanonical(pathA, pathB, contentA, contentB, statA, statB)
+  await writeConflictArtifacts(pathA, pathB, contentA, contentB, statA, statB, resolution)
+
+  if (resolution.canonicalSide === 'a') {
+    await writeFileAtomically(pathB, contentA)
+  } else {
+    await writeFileAtomically(pathA, contentB)
+  }
+
+  log.debug(
+    `cloud-sync: preserved conflict copies for ${pathA} and ${pathB}; canonical side=${resolution.canonicalSide} (${resolution.reason})`
+  )
+}
+
+function chooseConflictCanonical(
+  pathA: string,
+  pathB: string,
+  contentA: Buffer,
+  contentB: Buffer,
+  statA: FileStat,
+  statB: FileStat
+): {
+  canonicalSide: ConflictSide
+  latestTimestampA: string | null
+  latestTimestampB: string | null
+  reason: string
+} {
+  const latestTimestampA = latestJsonlTimestamp(contentA)
+  const latestTimestampB = latestJsonlTimestamp(contentB)
+  const timestampA = latestTimestampA ? Date.parse(latestTimestampA) : Number.NaN
+  const timestampB = latestTimestampB ? Date.parse(latestTimestampB) : Number.NaN
+
+  if (Number.isFinite(timestampA) && Number.isFinite(timestampB) && timestampA !== timestampB) {
+    return {
+      canonicalSide: timestampA > timestampB ? 'a' : 'b',
+      latestTimestampA,
+      latestTimestampB,
+      reason: 'latest-jsonl-timestamp',
+    }
+  }
+
+  if (Number.isFinite(timestampA) !== Number.isFinite(timestampB)) {
+    return {
+      canonicalSide: Number.isFinite(timestampA) ? 'a' : 'b',
+      latestTimestampA,
+      latestTimestampB,
+      reason: 'only-valid-jsonl-timestamp',
+    }
+  }
+
+  const mtimeA = Number(statA.mtimeMs)
+  const mtimeB = Number(statB.mtimeMs)
+  if (Math.abs(mtimeA - mtimeB) > 1) {
+    return {
+      canonicalSide: mtimeA > mtimeB ? 'a' : 'b',
+      latestTimestampA,
+      latestTimestampB,
+      reason: 'latest-mtime',
+    }
+  }
+
+  return {
+    canonicalSide: pathA.localeCompare(pathB) <= 0 ? 'a' : 'b',
+    latestTimestampA,
+    latestTimestampB,
+    reason: 'stable-path-tiebreaker',
+  }
+}
+
+async function writeConflictArtifacts(
+  pathA: string,
+  pathB: string,
+  contentA: Buffer,
+  contentB: Buffer,
+  statA: FileStat,
+  statB: FileStat,
+  resolution: ReturnType<typeof chooseConflictCanonical>
+): Promise<void> {
+  const hashA = sha256(contentA)
+  const hashB = sha256(contentB)
+  const artifactNames = conflictArtifactNames(pathA, hashA, hashB)
+  const createdAt = new Date().toISOString()
+  const manifest = Buffer.from(
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        createdAt,
+        originalName: basename(pathA),
+        resolution: {
+          canonicalSide: resolution.canonicalSide,
+          reason: resolution.reason,
+        },
+        sideA: conflictManifestSide(pathA, contentA, statA, hashA, resolution.latestTimestampA),
+        sideB: conflictManifestSide(pathB, contentB, statB, hashB, resolution.latestTimestampB),
+      },
+      null,
+      2
+    ) + '\n',
+    'utf8'
+  )
+
+  for (const conflictDir of uniqueConflictDirectories(pathA, pathB)) {
+    await mkdir(conflictDir, { recursive: true })
+    await writeFileAtomically(join(conflictDir, artifactNames.sideA), contentA)
+    await writeFileAtomically(join(conflictDir, artifactNames.sideB), contentB)
+    await writeFileAtomically(join(conflictDir, artifactNames.manifest), manifest)
+  }
+}
+
+function conflictManifestSide(
+  path: string,
+  content: Buffer,
+  stat: FileStat,
+  sha256Hash: string,
+  latestJsonlTimestamp: string | null
+): Record<string, unknown> {
+  return {
+    bytes: content.length,
+    latestJsonlTimestamp,
+    mtime: stat.mtime.toISOString(),
+    path,
+    sha256: sha256Hash,
+  }
+}
+
+function conflictArtifactNames(
+  originalPath: string,
+  hashA: string,
+  hashB: string
+): { manifest: string; sideA: string; sideB: string } {
+  const originalName = basename(originalPath)
+  const extension = extname(originalName)
+  const stem = extension ? originalName.slice(0, -extension.length) : originalName
+  const conflictId = `${hashA.slice(0, 16)}-vs-${hashB.slice(0, 16)}`
+  const suffix = extension || '.bin'
+
+  return {
+    manifest: `${stem}.conflict.${conflictId}.json`,
+    sideA: `${stem}.side-a.${hashA}${suffix}`,
+    sideB: `${stem}.side-b.${hashB}${suffix}`,
+  }
+}
+
+function uniqueConflictDirectories(pathA: string, pathB: string): string[] {
+  const directories = [
+    join(dirname(pathA), CONFLICT_DIRECTORY_NAME),
+    join(dirname(pathB), CONFLICT_DIRECTORY_NAME),
+  ]
+  return [...new Set(directories)]
+}
+
+function latestJsonlTimestamp(content: Buffer): string | null {
+  let latest: string | null = null
+  let latestTime = Number.NEGATIVE_INFINITY
+
+  for (const line of content.toString('utf8').split(/\r?\n/)) {
+    if (!line.trim()) continue
+    try {
+      const event = JSON.parse(line) as Record<string, unknown>
+      if (typeof event['timestamp'] !== 'string') continue
+      const time = Date.parse(event['timestamp'])
+      if (!Number.isFinite(time) || time <= latestTime) continue
+      latest = event['timestamp']
+      latestTime = time
+    } catch {
+      continue
+    }
+  }
+
+  return latest
+}
+
+function sha256(content: Buffer): string {
+  return createHash('sha256').update(content).digest('hex')
 }
 
 // ---------------------------------------------------------------------------
@@ -594,6 +805,16 @@ async function copyFileAtomically(sourcePath: string, destinationPath: string): 
   const temporaryPath = temporarySiblingPath(destinationPath, 'copy')
   try {
     await copyFile(sourcePath, temporaryPath)
+    await rename(temporaryPath, destinationPath)
+  } finally {
+    await rm(temporaryPath, { force: true })
+  }
+}
+
+async function writeFileAtomically(destinationPath: string, content: Buffer): Promise<void> {
+  const temporaryPath = temporarySiblingPath(destinationPath, 'write')
+  try {
+    await writeFile(temporaryPath, content)
     await rename(temporaryPath, destinationPath)
   } finally {
     await rm(temporaryPath, { force: true })

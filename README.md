@@ -258,10 +258,12 @@ Open with `swoop web`. The browser interface mirrors the TUI feature set with a 
 
 ### Shared session storage
 
-By default, Claude Code stores session transcripts in `~/.claude/projects/`, which is local to each machine.
-`swoop sync link` moves a project's sessions into `.claude-memory/` inside the project directory itself, then redirects
-Claude Code's storage there via a filesystem junction (Windows) or symlink (macOS/Linux). Any cloud folder that
-syncs the project — OneDrive, pCloud, Dropbox, Google Drive — will carry the sessions along with it.
+- Project Memory stores Claude sessions in `<project>/.claude-memory`.
+- `swoop sync link` redirects Claude's local project storage with a junction or symlink.
+- Your existing cloud provider transports the files; Swoop has no cloud account or remote service.
+- Linking is explicit for each project and device, while Config can discover remote memories separately.
+- Green, orange, and grey clouds mean linked, unresolved unlinked use, and temporarily offline.
+- See [Cross-Device Project Memory](Documents/CROSS_DEVICE_PROJECT_MEMORY.md) for the full architecture and recovery model.
 
 ```bash
 # Link the current project (interactive picker filtered to cloud folders)

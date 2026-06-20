@@ -39,12 +39,12 @@ function buildProjectRowHtml(project) {
     '<span class="p-name">' +
     escapeHtml(compactPath(project.path)) +
     '</span>' +
-    (project.isShared
-      ? project.cloudOffline
+    (project.syncStatus && project.syncStatus !== 'none'
+      ? project.syncStatus === 'grey'
         ? '<span class="p-cloud p-cloud--stale" title="' +
           escapeHtml(STRINGS.projectCloudOffline) +
           '">☁</span>'
-        : project.unlinkedDevices && project.unlinkedDevices.length > 0
+        : project.syncStatus === 'orange'
           ? '<span class="p-cloud p-cloud--unlinked" title="' +
             escapeHtml(
               fmt(STRINGS.projectCloudUnlinked, { devices: project.unlinkedDevices.join(', ') })

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -13,7 +13,9 @@ import {
   replaceLinkWithDirectory,
   stopSyncLoop,
   syncBidirectional,
+  unregisterProjectSync,
 } from '../../src/core/sync/cloud-sync.js'
+import { syncRegistry } from '../../src/core/sync/sync-registry.js'
 
 describe('stopSyncLoop', () => {
   it('does not throw when called before initCloudSync', () => {
@@ -23,6 +25,21 @@ describe('stopSyncLoop', () => {
   it('is idempotent when called repeatedly', () => {
     stopSyncLoop()
     expect(() => stopSyncLoop()).not.toThrow()
+  })
+})
+
+describe('unregisterProjectSync', () => {
+  it('removes stale runtime state that would override the unlinked filesystem', () => {
+    const projectPath = join(tmpdir(), 'swoop-unregistered-project')
+    syncRegistry.set(projectPath, {
+      cloudDir: join(projectPath, '.claude-memory'),
+      hasPendingMerge: false,
+      isOnline: true,
+    })
+
+    unregisterProjectSync(projectPath)
+
+    expect(syncRegistry.has(projectPath)).toBe(false)
   })
 })
 
@@ -131,24 +148,53 @@ describe('syncBidirectional', () => {
     expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('data')
   })
 
-  it('resolves same-size independent edits by keeping the A-side copy', async () => {
-    await writeFile(join(dirA, 'session.jsonl'), 'AAAA', 'utf8')
-    await writeFile(join(dirB, 'session.jsonl'), 'BBBB', 'utf8')
+  it('preserves divergent JSONL copies before converging to the latest transcript', async () => {
+    const sessionFile = '00000000-0000-0000-0000-000000000001.jsonl'
+    const olderTranscript =
+      '{"type":"user","timestamp":"2026-01-01T10:00:00.000Z","message":{"content":"older"}}\n'
+    const newerTranscript =
+      '{"type":"user","timestamp":"2026-01-02T10:00:00.000Z","message":{"content":"newer"}}\n'
+    await writeFile(join(dirA, sessionFile), olderTranscript, 'utf8')
+    await writeFile(join(dirB, sessionFile), newerTranscript, 'utf8')
 
     await syncBidirectional(dirA, dirB)
 
-    expect(await readFile(join(dirA, 'session.jsonl'), 'utf8')).toBe('AAAA')
-    expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('AAAA')
+    expect(await readFile(join(dirA, sessionFile), 'utf8')).toBe(newerTranscript)
+    expect(await readFile(join(dirB, sessionFile), 'utf8')).toBe(newerTranscript)
+
+    const conflictFiles = await readdir(join(dirB, '.swoop-conflicts'))
+    const sideA = conflictFiles.find((name) => name.includes('.side-a.'))
+    const sideB = conflictFiles.find((name) => name.includes('.side-b.'))
+    const manifest = conflictFiles.find((name) => name.includes('.conflict.'))
+
+    expect(sideA).toBeDefined()
+    expect(sideB).toBeDefined()
+    expect(manifest).toBeDefined()
+    expect(await readFile(join(dirB, '.swoop-conflicts', sideA!), 'utf8')).toBe(olderTranscript)
+    expect(await readFile(join(dirB, '.swoop-conflicts', sideB!), 'utf8')).toBe(newerTranscript)
+    expect(await readFile(join(dirB, '.swoop-conflicts', manifest!), 'utf8')).toContain(
+      '"reason": "latest-jsonl-timestamp"'
+    )
   })
 
-  it('resolves divergent edits of different sizes by keeping the longer copy', async () => {
-    await writeFile(join(dirA, 'session.jsonl'), 'local edit\n', 'utf8')
-    await writeFile(join(dirB, 'session.jsonl'), 'independent cloud edit\n', 'utf8')
+  it('does not create duplicate conflict artifacts on a later sync pass', async () => {
+    const sessionFile = '00000000-0000-0000-0000-000000000002.jsonl'
+    await writeFile(
+      join(dirA, sessionFile),
+      '{"type":"user","timestamp":"2026-01-01T10:00:00.000Z"}\n',
+      'utf8'
+    )
+    await writeFile(
+      join(dirB, sessionFile),
+      '{"type":"user","timestamp":"2026-01-02T10:00:00.000Z"}\n',
+      'utf8'
+    )
 
     await syncBidirectional(dirA, dirB)
+    const firstPassFiles = (await readdir(join(dirB, '.swoop-conflicts'))).sort()
+    await syncBidirectional(dirA, dirB)
 
-    expect(await readFile(join(dirA, 'session.jsonl'), 'utf8')).toBe('independent cloud edit\n')
-    expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('independent cloud edit\n')
+    expect((await readdir(join(dirB, '.swoop-conflicts'))).sort()).toEqual(firstPassFiles)
   })
 
   it('auto-merges independently-edited .md files into a union of their lines', async () => {
@@ -183,9 +229,27 @@ describe('syncBidirectional', () => {
     expect(await readFile(join(dirB, 'memory', 'MEMORY.md'), 'utf8')).toBe(expected)
   })
 
-  it('reports a conflict for invalid UTF-8 content in .md files', async () => {
-    await writeFile(join(dirA, 'corrupt.md'), Buffer.from([0x80, 0x81, 0x82]))
-    await writeFile(join(dirB, 'corrupt.md'), Buffer.from([0x90, 0x91, 0x92]))
+  it('preserves invalid UTF-8 Markdown copies instead of blocking sync', async () => {
+    const contentA = Buffer.from([0x80, 0x81, 0x82])
+    const contentB = Buffer.from([0x90, 0x91, 0x92])
+    await writeFile(join(dirA, 'corrupt.md'), contentA)
+    await writeFile(join(dirB, 'corrupt.md'), contentB)
+
+    await syncBidirectional(dirA, dirB)
+
+    const conflictFiles = await readdir(join(dirB, '.swoop-conflicts'))
+    const sideA = conflictFiles.find((name) => name.includes('.side-a.'))
+    const sideB = conflictFiles.find((name) => name.includes('.side-b.'))
+
+    expect(sideA).toBeDefined()
+    expect(sideB).toBeDefined()
+    expect(await readFile(join(dirB, '.swoop-conflicts', sideA!))).toEqual(contentA)
+    expect(await readFile(join(dirB, '.swoop-conflicts', sideB!))).toEqual(contentB)
+  })
+
+  it('still reports a conflict for file-directory type mismatches', async () => {
+    await writeFile(join(dirA, 'mixed'), 'file', 'utf8')
+    await mkdir(join(dirB, 'mixed'))
 
     await expect(syncBidirectional(dirA, dirB)).rejects.toBeInstanceOf(CloudSyncConflictError)
   })
