@@ -18,6 +18,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const dataSource = new SwoopDataSource(logger)
   const detailProvider = new SwoopSessionDetailProvider(logger)
   const treeProvider = new SwoopSessionTreeProvider(dataSource, logger)
+  const treeView = vscode.window.createTreeView('swoop.sessions', {
+    showCollapseAll: true,
+    treeDataProvider: treeProvider,
+  })
+  treeProvider.attachTreeView(treeView)
   const refreshController = new SwoopRefreshController(logger, treeProvider)
 
   logger.info('Swoop extension activated')
@@ -27,10 +32,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     detailProvider,
     refreshController,
     treeProvider,
-    vscode.window.createTreeView('swoop.sessions', {
-      showCollapseAll: true,
-      treeDataProvider: treeProvider,
-    }),
+    treeView,
+    treeView.onDidChangeVisibility((event) => refreshController.setVisible(event.visible)),
     vscode.workspace.registerTextDocumentContentProvider('swoop', detailProvider),
     vscode.commands.registerCommand('swoop.diagnostics', async () => {
       await runDiagnostics(dataSource, logger)
@@ -94,12 +97,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!projectNode) return
       await vscode.commands.executeCommand(
         'revealFileInOS',
-        vscode.Uri.file(projectNode.project.path)
+        vscode.Uri.file(projectNode.group.project.path)
       )
     })
   )
 
-  await treeProvider.refresh()
+  refreshController.setVisible(treeView.visible)
 }
 
 export function deactivate(): void {

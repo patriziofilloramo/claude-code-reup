@@ -1,10 +1,16 @@
+import { join } from 'node:path'
+
 import * as vscode from 'vscode'
 
-import { getClaudeProjectsDirectory } from '../../src/core/project/claude-paths.js'
+import {
+  getClaudeDirectory,
+  getClaudeProjectsDirectory,
+} from '../../src/core/project/claude-paths.js'
 import type { SwoopLogger } from './logger.js'
+import { resolveGitDirectory } from './git-workspace.js'
 
-const INTERVAL_REFRESH_MS = 20_000
-const WATCH_DEBOUNCE_MS = 750
+const SAFETY_REFRESH_MS = 20_000
+const WATCH_DEBOUNCE_MS = 500
 
 type RefreshMode = 'interval' | 'manual' | 'watch'
 
@@ -13,11 +19,8 @@ export interface RefreshTarget {
 }
 
 /**
- * Owns automatic refresh wiring for the VS Code tree.
- *
- * Manual refresh remains the default. Watch/interval modes are opt-in and
- * disposable so an Extension Host restart cannot leave timers or filesystem
- * watchers behind.
+ * Owns refresh lifecycle for the cockpit. No watcher or interval remains active
+ * while the Swoop view is hidden.
  */
 export class SwoopRefreshController implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = []
@@ -26,8 +29,9 @@ export class SwoopRefreshController implements vscode.Disposable {
   private intervalTimer: NodeJS.Timeout | null = null
   private pendingRefreshReason: string | null = null
   private refreshInFlight: Promise<void> | null = null
-  private watcher: vscode.FileSystemWatcher | null = null
+  private visible = false
   private readonly watcherDisposables: vscode.Disposable[] = []
+  private readonly watchers: vscode.FileSystemWatcher[] = []
 
   constructor(
     private readonly logger: SwoopLogger,
@@ -35,55 +39,58 @@ export class SwoopRefreshController implements vscode.Disposable {
   ) {
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration('swoop.refreshMode')) this.reconfigure()
+        if (
+          event.affectsConfiguration('swoop.refreshMode') ||
+          event.affectsConfiguration('swoop.includeArchived')
+        ) {
+          this.reconfigure()
+          this.requestRefresh('configuration')
+        }
+      }),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        this.reconfigure()
+        this.requestRefresh('workspace folders')
+      }),
+      vscode.window.onDidChangeActiveTextEditor(() => {
+        this.requestRefresh('active editor')
       })
     )
+  }
+
+  setVisible(visible: boolean): void {
+    if (this.visible === visible) return
+    this.visible = visible
+    if (!visible) {
+      this.clearRuntime()
+      return
+    }
     this.reconfigure()
+    void this.refresh('view opened')
   }
 
   dispose(): void {
     this.disposed = true
-    this.clearDebounce()
-    this.clearInterval()
-    this.clearWatcher()
+    this.clearRuntime()
     for (const disposable of this.disposables.splice(0)) disposable.dispose()
   }
 
   reconfigure(): void {
-    this.clearDebounce()
-    this.clearInterval()
-    this.clearWatcher()
+    this.clearRuntime()
+    if (!this.visible || this.disposed) return
 
     const mode = readRefreshMode()
     this.logger.info('VS Code refresh mode configured', mode)
-
     if (mode === 'watch') {
-      this.startWatcher()
+      this.startFilesystemWatchers()
+      this.startGitWatchers()
+      this.startSafetyInterval()
     } else if (mode === 'interval') {
-      this.startInterval()
+      this.startSafetyInterval()
     }
   }
 
-  private clearDebounce(): void {
-    if (!this.debounceTimer) return
-    clearTimeout(this.debounceTimer)
-    this.debounceTimer = null
-  }
-
-  private clearInterval(): void {
-    if (!this.intervalTimer) return
-    clearInterval(this.intervalTimer)
-    this.intervalTimer = null
-  }
-
-  private clearWatcher(): void {
-    for (const disposable of this.watcherDisposables.splice(0)) disposable.dispose()
-    this.watcher?.dispose()
-    this.watcher = null
-  }
-
-  private requestRefresh(reason: string): void {
-    if (this.disposed) return
+  requestRefresh(reason: string): void {
+    if (this.disposed || !this.visible) return
     this.clearDebounce()
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null
@@ -92,13 +99,13 @@ export class SwoopRefreshController implements vscode.Disposable {
   }
 
   private async refresh(reason: string): Promise<void> {
-    if (this.disposed) return
+    if (this.disposed || !this.visible) return
     if (this.refreshInFlight) {
       this.pendingRefreshReason = reason
       return
     }
 
-    this.logger.debug('automatic VS Code refresh requested', reason)
+    this.logger.debug('VS Code cockpit refresh requested', reason)
     this.refreshInFlight = this.target.refresh()
     try {
       await this.refreshInFlight
@@ -106,40 +113,69 @@ export class SwoopRefreshController implements vscode.Disposable {
       this.refreshInFlight = null
       const pendingReason = this.pendingRefreshReason
       this.pendingRefreshReason = null
-      if (pendingReason && !this.disposed) this.requestRefresh(`queued after ${pendingReason}`)
+      if (pendingReason && !this.disposed && this.visible) {
+        this.requestRefresh(`queued after ${pendingReason}`)
+      }
     }
   }
 
-  private startInterval(): void {
-    this.intervalTimer = setInterval(() => {
-      void this.refresh('interval')
-    }, INTERVAL_REFRESH_MS)
+  private clearRuntime(): void {
+    this.clearDebounce()
+    if (this.intervalTimer) clearInterval(this.intervalTimer)
+    this.intervalTimer = null
+    for (const disposable of this.watcherDisposables.splice(0)) disposable.dispose()
+    for (const watcher of this.watchers.splice(0)) watcher.dispose()
   }
 
-  private startWatcher(): void {
-    const projectsDirectory = getClaudeProjectsDirectory()
-    const pattern = new vscode.RelativePattern(projectsDirectory, '**/*')
-    this.watcher = vscode.workspace.createFileSystemWatcher(pattern)
-    this.watcher.onDidChange(
-      () => this.requestRefresh('watch change'),
+  private clearDebounce(): void {
+    if (!this.debounceTimer) return
+    clearTimeout(this.debounceTimer)
+    this.debounceTimer = null
+  }
+
+  private startSafetyInterval(): void {
+    this.intervalTimer = setInterval(() => {
+      void this.refresh('safety interval')
+    }, SAFETY_REFRESH_MS)
+  }
+
+  private startFilesystemWatchers(): void {
+    this.addWatcher(getClaudeProjectsDirectory(), '**/*', 'Claude project')
+    this.addWatcher(join(getClaudeDirectory(), 'sessions'), '**/*', 'Claude session lock')
+  }
+
+  private startGitWatchers(): void {
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      void resolveGitDirectory(folder.uri.fsPath).then((gitDirectory) => {
+        if (!gitDirectory || !this.visible || this.disposed || readRefreshMode() !== 'watch') return
+        this.addWatcher(gitDirectory, 'HEAD', 'Git HEAD')
+        this.addWatcher(gitDirectory, 'refs/heads/**', 'Git branch')
+      })
+    }
+  }
+
+  private addWatcher(root: string, pattern: string, label: string): void {
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, pattern))
+    this.watchers.push(watcher)
+    watcher.onDidChange(
+      () => this.requestRefresh(`${label} change`),
       undefined,
       this.watcherDisposables
     )
-    this.watcher.onDidCreate(
-      () => this.requestRefresh('watch create'),
+    watcher.onDidCreate(
+      () => this.requestRefresh(`${label} create`),
       undefined,
       this.watcherDisposables
     )
-    this.watcher.onDidDelete(
-      () => this.requestRefresh('watch delete'),
+    watcher.onDidDelete(
+      () => this.requestRefresh(`${label} delete`),
       undefined,
       this.watcherDisposables
     )
-    this.logger.info('watching Claude projects directory', projectsDirectory)
   }
 }
 
 function readRefreshMode(): RefreshMode {
-  const configured = vscode.workspace.getConfiguration('swoop').get<string>('refreshMode', 'manual')
-  return configured === 'watch' || configured === 'interval' ? configured : 'manual'
+  const configured = vscode.workspace.getConfiguration('swoop').get<string>('refreshMode', 'watch')
+  return configured === 'manual' || configured === 'interval' ? configured : 'watch'
 }

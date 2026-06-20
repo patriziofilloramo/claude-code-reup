@@ -86,22 +86,32 @@
             "watch",
             "interval"
           ],
-          "default": "manual",
-          "description": "Controls how Swoop refreshes session data inside VS Code. Manual refresh is safest; watch follows Claude's projects directory; interval refreshes every 20 seconds."
+          "default": "watch",
+          "description": "Controls refresh while the Swoop view is visible. Watch follows Claude and Git state; interval refreshes every 20 seconds; manual refreshes only on request."
         },
         "swoop.showStatusBar": {
           "type": "boolean",
-          "default": false,
-          "description": "Reserved for a future status bar usage indicator. Disabled until usage freshness is proven in VS Code."
+          "default": true,
+          "description": "Show the compact Swoop active/attention indicator while the cockpit is visible."
         }
       }
     },
     "menus": {
       "view/title": [
         {
+          "command": "swoop.resumeHere",
+          "when": "view == swoop.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "swoop.resumeSession",
+          "when": "view == swoop.sessions",
+          "group": "navigation@2"
+        },
+        {
           "command": "swoop.refreshSessions",
           "when": "view == swoop.sessions",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -140,6 +150,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "swoop.sessions",
+        "contents": "No Claude Code sessions were found.\\n[Refresh Swoop](command:swoop.refreshSessions)",
+        "when": "!swoop.hasSessions && !swoop.hasLoadError"
+      },
+      {
+        "view": "swoop.sessions",
+        "contents": "Swoop could not read local session data.\\n[Show diagnostics](command:swoop.diagnostics)",
+        "when": "swoop.hasLoadError"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
