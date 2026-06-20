@@ -47,7 +47,9 @@ function buildProjectRowHtml(project) {
         : project.syncStatus === 'orange'
           ? '<span class="p-cloud p-cloud--unlinked" title="' +
             escapeHtml(
-              fmt(STRINGS.projectCloudUnlinked, { devices: project.unlinkedDevices.join(', ') })
+              fmt(STRINGS.projectCloudUnlinked, {
+                devices: (project.unlinkedDevices ?? []).join(', '),
+              })
             ) +
             '">☁</span>'
           : '<span class="p-cloud p-cloud--ok" title="' +
