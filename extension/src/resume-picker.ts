@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 
 import { formatContextTokens, formatRelativeTime, statusCodicon } from './formatting.js'
 import { copySessionHandoff } from './handoff.js'
+import { compareCockpitSessions } from './cockpit-model.js'
 import type { SwoopLogger } from './logger.js'
 import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
 import { sessionMatchesWorkspace } from './swoop-data.js'
@@ -39,17 +40,23 @@ export async function showWorkspaceResumePicker(
   logger: SwoopLogger,
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
 ): Promise<void> {
-  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  const workspacePaths = (vscode.workspace.workspaceFolders ?? []).map(
+    (folder) => folder.uri.fsPath
+  )
+  const activeEditorPath = vscode.window.activeTextEditor?.document.uri.fsPath ?? null
   await showResumePicker({
     dataSource,
-    emptyMessage: workspacePath
-      ? 'No Swoop sessions match the current workspace.'
-      : 'Open a workspace folder to use Resume Here.',
-    filter: (session) => sessionMatchesWorkspace(session, workspacePath),
+    emptyMessage:
+      workspacePaths.length > 0
+        ? 'No Swoop sessions match the current workspace.'
+        : 'Open a workspace folder to use Resume Here.',
+    filter: (session) =>
+      workspacePaths.some((workspacePath) => sessionMatchesWorkspace(session, workspacePath)),
     logger,
     placeHolder: 'Resume a Claude Code session for the current workspace',
+    sort: (left, right) => compareCockpitSessions(left, right, activeEditorPath),
     title: 'Swoop: Resume Here',
-    workspacePath,
+    workspacePath: workspacePaths[0],
     onOpenInspector,
   })
 }
@@ -63,6 +70,7 @@ async function showResumePicker(options: {
   title: string
   workspacePath?: string
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
+  sort?: (left: ExtensionSession, right: ExtensionSession) => number
 }): Promise<void> {
   try {
     const model = await options.dataSource.loadModel({
@@ -70,7 +78,8 @@ async function showResumePicker(options: {
       includePreviewHints: true,
       workspacePath: options.workspacePath,
     })
-    const sessions = options.filter ? model.sessions.filter(options.filter) : model.sessions
+    const filteredSessions = options.filter ? model.sessions.filter(options.filter) : model.sessions
+    const sessions = options.sort ? [...filteredSessions].sort(options.sort) : filteredSessions
     if (sessions.length === 0) {
       void vscode.window.showInformationMessage(options.emptyMessage ?? 'No Swoop sessions found.')
       return

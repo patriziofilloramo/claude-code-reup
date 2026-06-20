@@ -12,6 +12,9 @@ const treeSource = await import('node:fs/promises').then(({ readFile }) =>
 const extensionSource = await import('node:fs/promises').then(({ readFile }) =>
   readFile('extension/src/extension.ts', 'utf8')
 )
+const resumePickerSource = await import('node:fs/promises').then(({ readFile }) =>
+  readFile('extension/src/resume-picker.ts', 'utf8')
+)
 
 describe('workspace cockpit guardrails', () => {
   let temporaryDirectory: string | null = null
@@ -45,5 +48,11 @@ describe('workspace cockpit guardrails', () => {
     await writeFile(join(worktree, '.git'), `gitdir: ${gitDirectory}\n`, 'utf8')
 
     expect(await resolveGitDirectory(worktree)).toBe(resolve(gitDirectory))
+  })
+
+  it('matches and ranks Resume Here across every workspace root', () => {
+    expect(resumePickerSource).toContain('const workspacePaths =')
+    expect(resumePickerSource).toContain('workspacePaths.some')
+    expect(resumePickerSource).toContain('compareCockpitSessions(left, right, activeEditorPath)')
   })
 })
