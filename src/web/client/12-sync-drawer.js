@@ -24,26 +24,6 @@ async function renderSyncPanel() {
     ? STRINGS.syncEnabled
     : STRINGS.syncDisabled
 
-  const selectedStatus = selectedProject
-    ? syncOverview.projects.find(function (project) {
-        return project.id === selectedProject.id
-      })
-    : null
-  const selectedAction =
-    selectedStatus && selectedStatus.isShared ? 'sync-unlink-selected' : 'sync-link-selected'
-  const selectedLabel =
-    selectedStatus && selectedStatus.isShared
-      ? STRINGS.syncUnlinkSelected
-      : STRINGS.syncLinkSelected
-  const selectedDisabled = !syncOverview.enabled || !selectedStatus || selectedStatus.isActive
-  const selectedForgettable =
-    syncOverview.enabled &&
-    selectedStatus &&
-    !selectedStatus.isShared &&
-    !selectedStatus.isRemoteProject &&
-    selectedStatus.cloudPath &&
-    !selectedStatus.isActive
-
   elements.syncBody.innerHTML =
     '<div class="sync-warning">' +
     escapeHtml(STRINGS.syncWarning) +
@@ -54,8 +34,6 @@ async function renderSyncPanel() {
       syncOverview.enabled ? STRINGS.syncDisable : STRINGS.syncEnable,
       false
     ) +
-    syncButtonHtml(selectedAction, selectedLabel, selectedDisabled) +
-    syncButtonHtml('sync-forget-selected', STRINGS.syncForgetSelected, !selectedForgettable) +
     syncButtonHtml('sync-link-all-cloud', STRINGS.syncLinkAllCloud, !syncOverview.enabled) +
     syncButtonHtml('sync-unlink-all', STRINGS.syncUnlinkAll, !syncOverview.enabled) +
     '</div>' +
@@ -68,7 +46,7 @@ async function renderSyncPanel() {
     syncOverview.skippedActiveProjects.length +
     ' active disabled</span></div>' +
     renderAdvancedDiscoveryPanel(syncOverview) +
-    renderSyncProjectList(syncOverview.projects)
+    renderSyncProjectList(syncOverview.projects, syncOverview.enabled)
 }
 
 function renderAdvancedDiscoveryPanel(overview) {
@@ -118,33 +96,77 @@ function syncButtonHtml(action, label, disabled) {
   )
 }
 
-function renderSyncProjectList(items) {
+function renderSyncProjectList(items, syncEnabled) {
   if (!items || items.length === 0) {
-    return '<div class="lf-empty">' + STRINGS.syncNoSelectedProject + '</div>'
+    return '<div class="lf-empty">' + STRINGS.syncNoProjects + '</div>'
   }
-  return (
-    '<div class="sync-project-list">' +
-    items
-      .map(function (project) {
-        const state = project.isShared ? 'linked' : project.isCloudProject ? 'cloud' : 'local'
-        const classes =
-          'sync-project sync-project--' + state + (project.isActive ? ' sync-project--active' : '')
-        return (
-          '<div class="' +
-          classes +
-          '">' +
-          '<span class="sync-project-state">' +
-          escapeHtml(project.isActive ? 'active' : state) +
-          '</span>' +
-          '<span class="sync-project-path">' +
-          escapeHtml(project.path) +
-          '</span>' +
-          '</div>'
-        )
-      })
-      .join('') +
-    '</div>'
-  )
+
+  const sections = [
+    { key: 'linked', label: 'Linked', projects: items.filter(function (p) { return p.isShared }) },
+    { key: 'local', label: 'Local (unlinked)', projects: items.filter(function (p) { return !p.isShared && !p.isRemoteProject }) },
+    { key: 'remote', label: 'Remote (other device)', projects: items.filter(function (p) { return p.isRemoteProject }) },
+  ]
+
+  return sections
+    .filter(function (s) { return s.projects.length > 0 })
+    .map(function (section) {
+      return (
+        '<div class="sync-section">' +
+        '<div class="sync-section-title">' +
+        escapeHtml(section.label) +
+        ' (' +
+        section.projects.length +
+        ')</div>' +
+        section.projects
+          .map(function (project) {
+            const isForgettable =
+              syncEnabled &&
+              !project.isShared &&
+              !project.isRemoteProject &&
+              project.cloudPath &&
+              !project.isActive
+            const canLink = syncEnabled && !project.isShared && !project.isActive
+            const canUnlink = syncEnabled && project.isShared && !project.isActive
+
+            return (
+              '<div class="sync-project' + (project.isActive ? ' sync-project--active' : '') + '">' +
+              '<span class="sync-project-path" title="' + escapeHtml(project.path) + '">' +
+              escapeHtml(project.path) +
+              '</span>' +
+              (project.isActive
+                ? '<span class="sync-project-badge sync-project-badge--active">active</span>'
+                : '') +
+              '<span class="sync-project-actions">' +
+              (canLink
+                ? '<button class="btn btn-secondary sync-row-action" data-sync-row-action="link" data-sync-row-path="' +
+                  escapeHtml(project.path) +
+                  '">' +
+                  escapeHtml(STRINGS.syncLink) +
+                  '</button>'
+                : '') +
+              (canUnlink
+                ? '<button class="btn btn-secondary sync-row-action" data-sync-row-action="unlink" data-sync-row-path="' +
+                  escapeHtml(project.path) +
+                  '">' +
+                  escapeHtml(STRINGS.syncUnlink) +
+                  '</button>'
+                : '') +
+              (isForgettable
+                ? '<button class="btn btn-secondary sync-row-action sync-row-action--danger" data-sync-row-action="forget" data-sync-row-path="' +
+                  escapeHtml(project.path) +
+                  '">' +
+                  escapeHtml(STRINGS.syncForget) +
+                  '</button>'
+                : '') +
+              '</span>' +
+              '</div>'
+            )
+          })
+          .join('') +
+        '</div>'
+      )
+    })
+    .join('')
 }
 
 async function runSyncDrawerAction(action) {
@@ -154,38 +176,6 @@ async function runSyncDrawerAction(action) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !syncOverview.enabled }),
-      })
-    } else if (action === 'sync-link-selected') {
-      if (!selectedProject) {
-        showToast(STRINGS.syncNoSelectedProject, 'err')
-        return
-      }
-      if (!window.confirm(STRINGS.syncConfirmManaged)) return
-      await requestJson('/api/sync/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedProject.path }),
-      })
-    } else if (action === 'sync-unlink-selected') {
-      if (!selectedProject) {
-        showToast(STRINGS.syncNoSelectedProject, 'err')
-        return
-      }
-      await requestJson('/api/sync/unlink', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedProject.path }),
-      })
-    } else if (action === 'sync-forget-selected') {
-      if (!selectedProject) {
-        showToast(STRINGS.syncNoSelectedProject, 'err')
-        return
-      }
-      if (!window.confirm(STRINGS.syncForgetConfirm)) return
-      await requestJson('/api/sync/forget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedProject.path }),
       })
     } else if (action === 'sync-link-all-cloud') {
       if (!window.confirm(STRINGS.syncConfirmBulk)) return
@@ -213,6 +203,37 @@ async function runSyncDrawerAction(action) {
   }
 }
 
+async function runSyncRowAction(action, path) {
+  try {
+    if (action === 'link') {
+      if (!window.confirm(STRINGS.syncConfirmManaged)) return
+      await requestJson('/api/sync/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    } else if (action === 'unlink') {
+      await requestJson('/api/sync/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    } else if (action === 'forget') {
+      if (!window.confirm(STRINGS.syncForgetConfirm)) return
+      await requestJson('/api/sync/forget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    }
+    await renderSyncPanel()
+    await refreshProjectData()
+    showToast(STRINGS.syncOperationDone)
+  } catch (error) {
+    showToast(fmt(STRINGS.syncOperationFailed, { error: error.message }), 'err')
+  }
+}
+
 elements.syncButton.addEventListener('click', openSyncDrawer)
 elements.syncCloseButton.addEventListener('click', closeSyncDrawer)
 elements.syncDrawer.addEventListener('click', function (event) {
@@ -222,6 +243,14 @@ elements.syncBody.addEventListener('click', function (event) {
   const button = event.target.closest('[data-sync-action]')
   if (button && !button.disabled) {
     void runSyncDrawerAction(button.dataset.syncAction)
+    return
+  }
+
+  const rowButton = event.target.closest('[data-sync-row-action]')
+  if (rowButton && !rowButton.disabled) {
+    const rowAction = rowButton.dataset.syncRowAction
+    const rowPath = rowButton.dataset.syncRowPath
+    void runSyncRowAction(rowAction, rowPath)
     return
   }
 
