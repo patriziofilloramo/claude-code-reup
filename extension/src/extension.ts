@@ -11,6 +11,7 @@ import {
 } from './session-detail.js'
 import { asProjectTreeNode, asSessionTreeNode, SwoopSessionTreeProvider } from './session-tree.js'
 import { SwoopDataSource } from './swoop-data.js'
+import { CockpitStatusBar } from './status-bar.js'
 import { resumeSessionInTerminal } from './terminal.js'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -26,6 +27,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })
   treeProvider.attachTreeView(treeView)
   const refreshController = new SwoopRefreshController(logger, treeProvider)
+  const statusBar = new CockpitStatusBar()
 
   logger.info('Swoop extension activated')
 
@@ -33,14 +35,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger,
     inspectorProvider,
     refreshController,
+    statusBar,
     treeProvider,
     treeView,
-    treeView.onDidChangeVisibility((event) => refreshController.setVisible(event.visible)),
+    treeView.onDidChangeVisibility((event) => {
+      refreshController.setVisible(event.visible)
+      statusBar.setVisible(event.visible)
+    }),
     treeView.onDidChangeSelection((event) => {
       const sessionNode = asSessionTreeNode(event.selection[0])
       if (sessionNode) void inspectorProvider.showSession(sessionNode.session, false)
     }),
-    treeProvider.onDidChangeModel(() => {
+    treeProvider.onDidChangeModel((model) => {
+      statusBar.update(model)
       void inspectorProvider.refreshSelected()
     }),
     vscode.window.registerWebviewViewProvider('swoop.inspector', inspectorProvider, {
@@ -51,6 +58,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('swoop.refreshSessions', async () => {
       await treeProvider.refresh()
+    }),
+    vscode.commands.registerCommand('swoop.focusCockpit', async () => {
+      await vscode.commands.executeCommand('swoop.sessions.focus')
     }),
     vscode.commands.registerCommand('swoop.resumeHere', async () => {
       await showWorkspaceResumePicker(dataSource, logger, (session) =>
@@ -130,6 +140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   )
 
   refreshController.setVisible(treeView.visible)
+  statusBar.setVisible(treeView.visible)
 }
 
 export function deactivate(): void {

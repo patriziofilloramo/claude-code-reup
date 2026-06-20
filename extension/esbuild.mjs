@@ -4,11 +4,16 @@ const watch = process.argv.includes('--watch')
 
 const buildOptions = {
   bundle: true,
-  entryPoints: ['src/extension.ts'],
+  entryNames: '[name]',
+  entryPoints: {
+    extension: 'src/extension.ts',
+    'smoke-test': 'src/smoke-test.ts',
+  },
   external: ['vscode'],
   format: 'cjs',
   logLevel: 'info',
-  outfile: 'dist/extension.cjs',
+  outdir: 'dist',
+  outExtension: { '.js': '.cjs' },
   platform: 'node',
   sourcemap: true,
   target: 'node20',

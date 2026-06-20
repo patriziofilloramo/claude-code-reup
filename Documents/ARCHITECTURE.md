@@ -272,6 +272,25 @@ State-changing routes validate localhost Origin/Host values. Project and session
 identifiers are resolved against known server-side data before filesystem or
 launch operations.
 
+## VS Code Workspace Cockpit
+
+The optional extension bundles selected `src/core` modules directly; it does
+not require the Swoop CLI binary or web server. Its adapter builds one
+workspace-first cockpit model from shared project discovery, active-session
+state, health signals, Resume Advice, previews, metadata, and Project Memory
+status.
+
+The Activity Bar tree separates current-workspace sessions, attention elsewhere,
+and recent global history. Refresh watchers exist only while the view is
+visible and observe Claude project data, live-session locks, workspace changes,
+active editors, and normal/worktree Git metadata.
+
+The Session Inspector is a CSP-restricted Webview. Transcript previews are
+loaded lazily and cached by transcript modification time. Every action is
+revalidated in the extension host; only reversible metadata mutations are
+available. The status bar uses transcript-backed context and active/attention
+counts, never stale account-limit data.
+
 Web server responsibilities are split between route registration, grouped route
 modules under `web/routes/`, API serialization, local-request security, and
 CLAUDE.md filesystem handling. `routes.ts` remains the single readable map of

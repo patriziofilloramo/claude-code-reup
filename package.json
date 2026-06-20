@@ -17,8 +17,10 @@
   "scripts": {
     "build": "tsc",
     "build:client": "node scripts/build-client.mjs",
+    "build:extension": "npm run compile --prefix extension",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "npm run clean && npm run build",
+    "package:extension": "npm run package:vsix --prefix extension",
     "postbuild": "npm run build:client && node scripts/copy-assets.mjs && node -e \"try{require('fs').chmodSync('dist/index.js',0o755)}catch(e){}\"",
     "dev": "tsc --watch",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,css,html}\" \"tests/**/*.ts\" \"scripts/**/*.mjs\" \"extension/**/*.{ts,mjs,json,md}\" \"Documents/**/*.md\" \"*.md\" \"*.config.js\" \".github/**/*.yml\"",
@@ -28,6 +30,7 @@
     "start": "node dist/index.js",
     "pretest": "npm run build:client",
     "test": "vitest run",
+    "test:extension-host": "npm run smoke:host --prefix extension",
     "test:watch": "vitest"
   },
   "dependencies": {

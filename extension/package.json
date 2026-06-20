@@ -2,9 +2,14 @@
   "name": "swoop-vscode",
   "displayName": "Swoop",
   "description": "Editor-native Claude Code session intelligence from Swoop.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "swoop-local",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/patriziofilloramo/claude-code-swoop.git"
+  },
   "type": "module",
   "engines": {
     "vscode": "^1.90.0",
@@ -16,6 +21,7 @@
   "main": "./dist/extension.cjs",
   "activationEvents": [
     "onCommand:swoop.diagnostics",
+    "onCommand:swoop.focusCockpit",
     "onCommand:swoop.openSessionDetail",
     "onCommand:swoop.refreshSessions",
     "onCommand:swoop.resumeHere",
@@ -35,6 +41,10 @@
       {
         "command": "swoop.diagnostics",
         "title": "Swoop: Diagnostics"
+      },
+      {
+        "command": "swoop.focusCockpit",
+        "title": "Swoop: Focus Workspace Cockpit"
       },
       {
         "command": "swoop.refreshSessions",
@@ -214,11 +224,15 @@
   "scripts": {
     "compile": "tsc --noEmit && node esbuild.mjs",
     "package": "npm run compile",
+    "package:vsix": "npm run compile && vsce package --out dist/swoop-vscode-0.1.0.vsix",
+    "smoke:host": "npm run compile && node scripts/run-smoke.mjs",
     "watch": "node esbuild.mjs --watch"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.1",
     "typescript": "^5.0.0"
   }

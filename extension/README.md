@@ -1,50 +1,75 @@
-# Swoop VS Code Extension
+# Swoop Workspace Cockpit
 
-Local preview extension for Swoop's editor-native workflow.
+Swoop brings local Claude Code session intelligence into VS Code. It helps you
+decide which session to continue, explains resume risks, and launches Claude in
+the correct integrated-terminal directory.
 
-## What Works
+## Workspace Cockpit
 
-- `Swoop: Diagnostics` logs project/session counts to the Swoop Output Channel.
-- `Swoop: Resume Session` opens a global Quick Pick backed by Swoop core data.
-- `Swoop: Resume Here` ranks sessions for the current workspace first.
-- `Swoop: Open Resume Card` opens a read-only Markdown summary for a session.
-- The Swoop Activity Bar view shows a read-only project/session tree.
-- Clicking a session in the tree opens its Resume Card; context actions still
-  provide Resume / Copy ID.
-- `swoop.refreshMode` can keep the tree manual, filesystem-watched, or refreshed
-  every 20 seconds.
-- Session context actions can copy the session ID or a compact Markdown handoff
-  packet without modifying Claude-owned transcript files.
-- Session resume launches `claude --resume <uuid>` in a VS Code integrated
-  terminal after validating the UUID and project path.
+The Activity Bar view is organized around the editor you are using:
 
-## Build
+- **Current Workspace** prioritizes active work, warnings, branch matches, and
+  the project containing the active editor.
+- **Needs Attention Elsewhere** keeps interrupted, expiring, and unavailable
+  sessions visible without mixing them into the workspace.
+- **Recent Elsewhere** keeps global history available in a collapsed section.
+
+The Session Inspector shows resume advice, goal, latest response, plan, TODO
+state, context size, branches, touched files, tags, and passive Project Memory
+status.
+
+Safe local actions include Resume, Copy Handoff, Alias, Archive/Undo, Tags,
+Reveal Project, and opening transcript-referenced files. Swoop never modifies
+Claude-owned transcripts.
+
+## Install a local VSIX
 
 ```bash
-npm install
+cd extension
+npm ci
+npm run package:vsix
+code --install-extension dist/swoop-vscode-0.1.0.vsix
+```
+
+Restart or reload VS Code, then open the Swoop icon in the Activity Bar.
+
+## Development
+
+```bash
+cd extension
+npm ci
 npm run compile
 ```
 
-The bundle is written to `dist/extension.cjs`. The VS Code API is externalized;
-Swoop core is bundled from the repository source.
+From the repository root, run the `Run Swoop VS Code Extension` launch
+configuration. The Extension Host uses the local bundle in
+`extension/dist/extension.cjs`.
 
-## Manual Smoke Test
+## Refresh and status settings
 
-1. Open this repository in VS Code.
-2. Open `extension/` as an extension-development folder, or configure an
-   Extension Host launch that uses `extension/package.json`.
-3. Run `npm install && npm run compile` inside `extension/`.
-4. Start an Extension Host.
-5. Run `Swoop: Diagnostics`.
-6. Run `Swoop: Resume Here` and confirm matching sessions are ranked first.
-7. Run `Swoop: Open Resume Card` and confirm it opens a `swoop:` Markdown
-   document.
-8. Open the Swoop Activity Bar view and use Refresh / Copy Session ID / Resume.
+- `swoop.refreshMode`: `watch` (default), `interval`, or `manual`.
+- `swoop.includeArchived`: include locally archived sessions.
+- `swoop.showStatusBar`: show active and attention counts while Swoop is
+  visible.
 
-## Guardrails
+Watchers, Git checks, and the safety interval are active only while the Swoop
+view is visible.
 
-- No telemetry.
-- No network requests.
+## Privacy and safety
+
+- No telemetry or network requests.
 - No transcript writes.
-- No shell interpolation with untrusted values.
-- Mutation commands are intentionally deferred.
+- No automatic branch changes.
+- No destructive session deletion.
+- Resume accepts only a discovered full UUID and an existing project path.
+- Webview content uses a restrictive CSP and validates every message in the
+  extension host.
+
+## Troubleshooting
+
+- Run `Swoop: Diagnostics` and inspect **Output: Swoop**.
+- Use `Swoop: Refresh Sessions` after moving Claude data manually.
+- If automatic refresh is noisy on a virtual filesystem, set
+  `swoop.refreshMode` to `interval` or `manual`.
+- If a session reports branch drift, verify the current branch before resuming;
+  Swoop explains the mismatch but never switches branches automatically.

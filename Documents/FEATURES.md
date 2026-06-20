@@ -132,25 +132,24 @@ the reviewed landscape that ships both a web UI and session intelligence.
 
 ---
 
-### VS Code surface _(discovery roadmap)_
+### VS Code Workspace Cockpit
 
-VS Code is the next surface to investigate, not yet a shipped feature. The goal
-is not to build a dashboard clone. The extension should bring Swoop's attention
-signals, usage state, and safe resume actions into the editor workflow.
+The installable VS Code extension is workspace-first rather than a dashboard
+clone:
 
-Potential high-value shapes:
+- Current-workspace, external-attention, and recent-global sections.
+- Deterministic Resume Advice for missing paths, active sessions, branch drift,
+  interrupted work, expiry, compaction, and safe resume.
+- Live refresh only while the Swoop view is visible, including Claude locks,
+  multi-root workspaces, active editor affinity, and Git worktrees.
+- A CSP-restricted Session Inspector with goal, progress, plan, TODOs, context,
+  branches, file links, tags, and passive Project Memory state.
+- Safe local actions: resume, handoff, alias, archive/undo, tags, and reveal.
+- Compact active/attention status bar and global/workspace Quick Picks.
 
-- Quick Pick for `Swoop: Resume Session` with health, project, branch, and last
-  activity inline
-- Activity Bar tree view with projects, sessions, attention badges, active
-  state, and aliases
-- Status Bar item for live account limits and active-session state
-- Session detail view with resume card, branch drift, path, usage, and safe
-  actions
-- Integrated-terminal resume in the recorded project directory
-
-Promote this only if it clearly beats a simple native picker workflow for at
-least one common VS Code use case.
+The extension reuses Swoop core discovery, health, preview, metadata, and
+handoff logic. It has no telemetry, network service, transcript writes,
+automatic branch changes, or destructive delete action.
 
 ---
 

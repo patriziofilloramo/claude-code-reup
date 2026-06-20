@@ -402,6 +402,10 @@ npm run lint    # ESLint
 npm run format  # Prettier
 ```
 
+The optional [VS Code Workspace Cockpit](extension/README.md) provides
+workspace-first Resume Advice, live attention state, a focused Session
+Inspector, and integrated-terminal resume from an installable local VSIX.
+
 See [Architecture](Documents/ARCHITECTURE.md) for the implemented system,
 [Product direction](Documents/PRODUCT_DIRECTION.md) for the long-term product
 principles, [Usage visibility](Documents/USAGE_VISIBILITY.md) for usage-data
@@ -413,8 +417,8 @@ the native-installer design, and [ROADMAP.md](ROADMAP.md) for planned work.
 ## Roadmap
 
 `swoop` is evolving from a session browser into a local control plane for
-Claude Code work. Planned areas include deeper pre-resume intelligence and a
-focused investigation into a native VS Code extension.
+Claude Code work. Planned areas include deeper pre-resume intelligence and
+continued refinement of the native VS Code Workspace Cockpit.
 
 See [ROADMAP.md](ROADMAP.md) for current milestones.
 

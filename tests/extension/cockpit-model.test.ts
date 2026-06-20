@@ -59,6 +59,27 @@ describe('buildCockpitModel', () => {
       'recent',
     ])
   })
+
+  it('maps one thousand sessions within the interactive performance budget', () => {
+    const sessions = Array.from({ length: 1_000 }, (_, index) =>
+      session(`session-${index}`, `/work/project-${index % 50}`, {
+        isActive: index % 97 === 0,
+        needsAttention: index % 31 === 0,
+      })
+    )
+    const projects = [
+      ...new Map(sessions.map((item) => [item.projectId, projectFor(item)])).values(),
+    ]
+    const startedAt = performance.now()
+
+    const model = buildCockpitModel(projects, sessions, {
+      activeEditorPath: '/work/project-2/src/index.ts',
+      workspaceRoots: ['/work/project-2', '/work/project-3'],
+    })
+
+    expect(performance.now() - startedAt).toBeLessThan(100)
+    expect(model.sessions).toHaveLength(1_000)
+  })
 })
 
 const baseAdvice: ExtensionSession['advice'] = {

@@ -4,3 +4,4 @@ src/web/client.js
 # Extension build artifacts and dependencies.
 extension/dist/
 extension/node_modules/
+extension/.vscode-test/

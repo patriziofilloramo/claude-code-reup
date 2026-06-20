@@ -1,0 +1,12 @@
+.gitignore
+src/**
+scripts/**
+node_modules/**
+dist/*.vsix
+dist/smoke-test.cjs
+dist/smoke-test.cjs.map
+esbuild.mjs
+tsconfig.json
+package-lock.json
+.vscode/**
+**/*.test.*
