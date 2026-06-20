@@ -43,7 +43,7 @@ export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: 
     values: ['off', 'on', 'auto'],
   },
   crossDeviceSessionStorage: {
-    description: 'Alpha cross-device Claude session storage sync',
+    description: 'Alpha cross-device Claude project memory sync',
     values: ['off', 'on'],
   },
   projectSearchPaths: {

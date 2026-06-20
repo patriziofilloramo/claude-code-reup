@@ -116,9 +116,9 @@ export const LABELS = {
   configSyncLinked: 'linked',
   configSyncActionsTitle: 'Actions',
   configSyncFeatureDescription:
-    'Per-project session storage shared through folders already synced by your cloud provider.',
+    'Per-project memory shared through folders already synced by your cloud provider.',
   configSyncFeatureDescriptionExpanded:
-    'Moves Claude session storage into each project .claude-memory folder and links this device to it. Your existing cloud provider transports the files; Swoop has no account or remote service. Linking is explicit per device and per project.',
+    'Moves Claude project memory into each project .claude-memory folder and links this device to it. Your existing cloud provider transports the files; Swoop has no account or remote service. Linking is explicit per device and per project.',
   configSyncLinkedProjectsTitle: 'Synced Project Memory',
   configSyncUnlinkedProjectsTitle: 'Local-Only Projects',
   configSyncRemoteProjectsTitle: 'Remote Project Memory',

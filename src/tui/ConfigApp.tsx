@@ -374,8 +374,8 @@ export function ConfigApp({
         ok: true,
         text:
           next === 'on'
-            ? 'Cross-device Session Storage enabled; link actions still require explicit selection'
-            : 'Cross-device Session Storage disabled',
+            ? 'Project Memory Sync enabled; link actions still require explicit selection'
+            : 'Project Memory Sync disabled',
       })
       if (next === 'on') void refreshProjectsAndSync(true)
       return
@@ -731,7 +731,7 @@ function FeaturesTab({
               : LABELS.configSyncFeatureDescription
           }
           focused={cursor === 1}
-          label="Cross-device Session Storage"
+          label="Project Memory Sync"
           noBottomMargin={syncEnabled}
           status={syncEnabled ? 'on' : 'off'}
         />
