@@ -1,6 +1,6 @@
 import type { Context, Hono } from 'hono'
 
-import { setUserPref } from '../../core/user-prefs.js'
+import { readUserPrefsSync, setUserPref, writeUserPrefsSync } from '../../core/user-prefs.js'
 import {
   buildSyncOverview,
   forgetProjectForSync,
@@ -37,6 +37,27 @@ export function registerSyncRoute(app: Hono): void {
         return context.json({ error: 'enabled must be boolean' }, 400)
       }
       await setUserPref('crossDeviceSessionStorage', body.enabled ? 'on' : 'off')
+      return context.json(await buildSyncOverview())
+    })
+  )
+
+  app.post(
+    '/api/sync/advanced-discovery',
+    guardedRoute(async (context) => {
+      const body = await context.req.json<{ enabled?: unknown; paths?: unknown }>()
+      const prefs = readUserPrefsSync()
+
+      if (typeof body.enabled === 'boolean') {
+        prefs.advancedDiscovery = body.enabled ? 'on' : 'off'
+      }
+      if (Array.isArray(body.paths)) {
+        const paths = body.paths.filter(
+          (p): p is string => typeof p === 'string' && p.trim() !== ''
+        )
+        prefs.projectSearchPaths = paths
+      }
+
+      writeUserPrefsSync(prefs)
       return context.json(await buildSyncOverview())
     })
   )

@@ -67,7 +67,43 @@ async function renderSyncPanel() {
     ' cloud candidates</span><span>' +
     syncOverview.skippedActiveProjects.length +
     ' active disabled</span></div>' +
+    renderAdvancedDiscoveryPanel(syncOverview) +
     renderSyncProjectList(syncOverview.projects)
+}
+
+function renderAdvancedDiscoveryPanel(overview) {
+  const isOn = overview.advancedDiscovery
+  const pathsValue = (overview.projectSearchPaths ?? []).join('\n')
+  return (
+    '<div class="sync-advanced-discovery">' +
+    '<div class="sync-advanced-discovery-header">' +
+    '<span class="sync-advanced-discovery-label">' +
+    escapeHtml(STRINGS.syncAdvancedDiscoveryLabel) +
+    '</span>' +
+    '<button class="btn btn-secondary sync-action" data-sync-action="sync-advanced-discovery-toggle">' +
+    escapeHtml(isOn ? STRINGS.syncAdvancedDiscoveryOn : STRINGS.syncAdvancedDiscoveryOff) +
+    '</button>' +
+    '</div>' +
+    '<p class="sync-advanced-discovery-desc">' +
+    escapeHtml(STRINGS.syncAdvancedDiscoveryDesc) +
+    '</p>' +
+    (isOn
+      ? '<div class="sync-search-paths">' +
+        '<label class="sync-search-paths-label">' +
+        escapeHtml(STRINGS.syncSearchPathsLabel) +
+        '</label>' +
+        '<textarea id="sync-search-paths-input" class="sync-search-paths-input" rows="4" placeholder="' +
+        escapeHtml(STRINGS.syncSearchPathsPlaceholder) +
+        '">' +
+        escapeHtml(pathsValue) +
+        '</textarea>' +
+        '<button class="btn btn-secondary" id="sync-search-paths-save">' +
+        escapeHtml(STRINGS.syncSearchPathsSave) +
+        '</button>' +
+        '</div>'
+      : '') +
+    '</div>'
+  )
 }
 
 function syncButtonHtml(action, label, disabled) {
@@ -159,6 +195,14 @@ async function runSyncDrawerAction(action) {
       if (!window.confirm(STRINGS.syncConfirmBulk)) return
       const result = await requestJson('/api/sync/unlink-all', { method: 'POST' })
       showToast(result.message || STRINGS.syncOperationDone)
+    } else if (action === 'sync-advanced-discovery-toggle') {
+      await requestJson('/api/sync/advanced-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !syncOverview.advancedDiscovery }),
+      })
+      await renderSyncPanel()
+      return
     }
 
     await renderSyncPanel()
@@ -176,6 +220,25 @@ elements.syncDrawer.addEventListener('click', function (event) {
 })
 elements.syncBody.addEventListener('click', function (event) {
   const button = event.target.closest('[data-sync-action]')
-  if (!button || button.disabled) return
-  void runSyncDrawerAction(button.dataset.syncAction)
+  if (button && !button.disabled) {
+    void runSyncDrawerAction(button.dataset.syncAction)
+    return
+  }
+
+  if (event.target.id === 'sync-search-paths-save') {
+    const textarea = document.getElementById('sync-search-paths-input')
+    if (!textarea) return
+    const paths = textarea.value
+      .split('\n')
+      .map((p) => p.trim())
+      .filter(Boolean)
+    void requestJson('/api/sync/advanced-discovery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+    })
+      .then(() => renderSyncPanel())
+      .then(() => showToast(STRINGS.syncSearchPathsSaved))
+      .catch((err) => showToast(fmt(STRINGS.syncOperationFailed, { error: err.message }), 'err'))
+  }
 })

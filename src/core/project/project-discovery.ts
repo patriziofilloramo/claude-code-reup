@@ -47,8 +47,8 @@ const LOCK_FILE_GRACE_PERIOD_MS = 2 * 60 * 1000
 /** Loads every project containing sessions, newest project activity first. */
 export async function loadProjects(): Promise<Project[]> {
   const projectsDirectory = getClaudeProjectsDirectory()
-  const syncEnabled =
-    APP.enableProjectMemorySync && readUserPrefsSync().crossDeviceSessionStorage === 'on'
+  const prefs = readUserPrefsSync()
+  const syncEnabled = APP.enableProjectMemorySync && prefs.crossDeviceSessionStorage === 'on'
   const cacheKey = `${projectsDirectory}\0sync:${syncEnabled ? 'on' : 'off'}`
   const cached = getCachedProjects(cacheKey)
   if (cached) return cached

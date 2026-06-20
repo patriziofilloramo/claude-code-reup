@@ -29,8 +29,10 @@ describe('user preferences', () => {
     )
 
     expect(readUserPrefsSync()).toEqual({
+      advancedDiscovery: 'off',
       autoCleanupOnStart: 'off',
       crossDeviceSessionStorage: 'off',
+      projectSearchPaths: [],
       theme: 'dark',
     })
   })

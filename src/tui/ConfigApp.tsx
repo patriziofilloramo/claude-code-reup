@@ -20,7 +20,7 @@ import {
   unlinkAllSyncedProjectsForSync,
   unlinkProjectForSync,
 } from '../core/sync/sync-actions.js'
-import type { AutoCleanup, CrossDeviceSessionStorage } from '../core/user-prefs.js'
+import type { AdvancedDiscovery, AutoCleanup, CrossDeviceSessionStorage } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,
@@ -35,6 +35,7 @@ type SyncSection = 'linked' | 'local' | 'remote'
 type FeatureCursorItem =
   | { kind: 'cleanup' }
   | { kind: 'sync-toggle' }
+  | { kind: 'advanced-discovery-toggle' }
   | { action: 'current-project' | 'link-all-cloud' | 'unlink-all'; kind: 'action' }
   | { kind: 'legend' }
   | { kind: 'section'; section: SyncSection }
@@ -102,6 +103,7 @@ export function ConfigApp({
   const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
   const [crossDeviceSessionStorage, setCrossDeviceSessionStorage] =
     useState<CrossDeviceSessionStorage>('off')
+  const [advancedDiscovery, setAdvancedDiscovery] = useState<AdvancedDiscovery>('off')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null)
@@ -123,6 +125,7 @@ export function ConfigApp({
       setTheme(prefs.theme)
       setAutoCleanupOnStart(prefs.autoCleanupOnStart)
       setCrossDeviceSessionStorage(prefs.crossDeviceSessionStorage)
+      setAdvancedDiscovery(prefs.advancedDiscovery)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
     void loadProjects().then(setProjects)
@@ -150,6 +153,7 @@ export function ConfigApp({
     if (crossDeviceSessionStorage !== 'on') return items
 
     items.push(
+      { kind: 'advanced-discovery-toggle' },
       { kind: 'action', action: 'current-project' },
       { kind: 'action', action: 'link-all-cloud' },
       { kind: 'action', action: 'unlink-all' }
@@ -166,7 +170,7 @@ export function ConfigApp({
     }
     items.push({ kind: 'legend' })
     return items
-  }, [crossDeviceSessionStorage, expandedSyncSections, syncSections])
+  }, [advancedDiscovery, crossDeviceSessionStorage, expandedSyncSections, syncSections])
   const featuresCursorMax = featureCursorItems.length - 1
   const maxCursor = currentTab === 'Features' ? featuresCursorMax : TAB_CURSOR_MAX[currentTab]
 
@@ -377,6 +381,15 @@ export function ConfigApp({
       return
     }
 
+    if (item.kind === 'advanced-discovery-toggle') {
+      const next: AdvancedDiscovery = advancedDiscovery === 'on' ? 'off' : 'on'
+      await setUserPref('advancedDiscovery', next)
+      setAdvancedDiscovery(next)
+      setStatusMsg({ ok: true, text: `Advanced Discovery: ${next}` })
+      void refreshProjectsAndSync(true)
+      return
+    }
+
     if (crossDeviceSessionStorage !== 'on') return
     if (item.kind === 'section') {
       setExpandedSyncSections((current) => {
@@ -468,6 +481,7 @@ export function ConfigApp({
         )}
         {currentTab === 'Features' && (
           <FeaturesTab
+            advancedDiscovery={advancedDiscovery}
             autoCleanupOnStart={autoCleanupOnStart}
             busy={busy}
             cursor={cursor}
@@ -623,6 +637,7 @@ function IntegrationsTab({
 }
 
 function FeaturesTab({
+  advancedDiscovery,
   autoCleanupOnStart,
   busy,
   cursor,
@@ -636,6 +651,7 @@ function FeaturesTab({
   syncOverview,
   syncSections,
 }: {
+  advancedDiscovery: AdvancedDiscovery
   autoCleanupOnStart: AutoCleanup
   busy: boolean
   cursor: number
@@ -650,11 +666,13 @@ function FeaturesTab({
   syncSections: Record<SyncSection, SyncProjectReport[]>
 }) {
   const syncEnabled = crossDeviceSessionStorage === 'on'
+  const advancedDiscoveryEnabled = advancedDiscovery === 'on'
   const syncCardFocused = cursor >= 1
   const cleanupLabel =
     autoCleanupOnStart === 'on' ? 'on' : autoCleanupOnStart === 'auto' ? 'auto' : 'off'
   const cursorFor = (predicate: (item: FeatureCursorItem) => boolean): number =>
     featureCursorItems.findIndex(predicate)
+  const advancedDiscoveryCursor = cursorFor((item) => item.kind === 'advanced-discovery-toggle')
   const actionCursor = (action: 'current-project' | 'link-all-cloud' | 'unlink-all'): number =>
     cursorFor((item) => item.kind === 'action' && item.action === action)
   const currentProjectPresentation =
@@ -722,9 +740,18 @@ function FeaturesTab({
 
         {syncEnabled && syncCardFocused && (
           <Box flexDirection="column" paddingLeft={3} marginTop={1} marginBottom={1}>
-            <Text bold color={COLORS.text}>
-              {LABELS.configSyncActionsTitle}
-            </Text>
+            <SelectableRow
+              active={advancedDiscoveryEnabled}
+              description="Scan specific folders for projects linked on other devices. Configure search paths in the web UI."
+              focused={cursor === advancedDiscoveryCursor}
+              label="Advanced Discovery"
+              status={advancedDiscoveryEnabled ? 'on' : 'off'}
+            />
+            <Box marginTop={1}>
+              <Text bold color={COLORS.text}>
+                {LABELS.configSyncActionsTitle}
+              </Text>
+            </Box>
             <SyncActionRow
               confirm={false}
               disabled={currentProjectPresentation.disabled}

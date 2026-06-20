@@ -13,6 +13,7 @@ import { normalizePathForComparison, pathsReferToSameLocation } from '../project
 import { loadProjects } from '../project/project-discovery.js'
 import { getLiveSessionRecords } from '../session/active-sessions.js'
 import type { Project } from '../session/session-model.js'
+import { readUserPrefsSync } from '../user-prefs.js'
 import { isProjectMemorySyncEnabled } from './project-sync-status.js'
 import {
   detectCloudRoots,
@@ -70,12 +71,14 @@ export interface SyncProjectReport {
 }
 
 export interface SyncOverview {
+  advancedDiscovery: boolean
   cloudProjectCandidates: SyncProjectReport[]
   cloudRoots: string[]
   enabled: boolean
   linkedProjects: SyncProjectReport[]
   localProjectCandidates: SyncProjectReport[]
   projects: SyncProjectReport[]
+  projectSearchPaths: string[]
   skippedActiveProjects: SyncProjectReport[]
 }
 
@@ -139,6 +142,9 @@ export class SyncSetupPatchError extends Error {
 export async function buildSyncOverview(projects?: Project[]): Promise<SyncOverview> {
   const discoveredProjects = projects ?? (await loadProjects())
   const syncEnabled = isProjectMemorySyncEnabled()
+  const prefs = readUserPrefsSync()
+  const advancedDiscovery = prefs.advancedDiscovery === 'on'
+  const projectSearchPaths = prefs.projectSearchPaths
   const [cloudRoots, liveSessions] = await Promise.all([
     detectCloudRoots(),
     getLiveSessionRecords(),
@@ -160,24 +166,32 @@ export async function buildSyncOverview(projects?: Project[]): Promise<SyncOverv
       return project.sessions.some((session) => session.signals.pathExists !== false)
     })
 
-  // Scan cloud roots for projects linked from other devices but not yet known locally
-  // (i.e. projects the user has never opened from this device with Claude Code).
+  // Scan for projects linked from other devices but not yet known locally.
+  // When advanced discovery is on, use the user-defined search paths (falling
+  // back to auto-detected cloud roots if none are configured); otherwise use
+  // the fast scan over detected cloud roots.
   const knownPaths = new Set(discoveredProjects.map((p) => normalizePathForComparison(p.path)))
-  const discoveryRoots = APP.enableAdvancedDiscovery ? APP.projectSearchPaths : cloudRoots
+  const discoveryRoots = advancedDiscovery
+    ? projectSearchPaths.length > 0
+      ? projectSearchPaths
+      : cloudRoots
+    : cloudRoots
   const cloudOnlyProjects = syncEnabled
     ? await discoverCloudLinkedProjects(discoveryRoots, knownPaths, {
-        scanMode: APP.enableAdvancedDiscovery ? 'full' : 'fast',
+        scanMode: advancedDiscovery ? 'full' : 'fast',
       })
     : []
   const allReports = [...reports, ...cloudOnlyProjects]
 
   return {
+    advancedDiscovery,
     cloudProjectCandidates: allReports.filter((project) => project.kind === 'cloud-candidate'),
     cloudRoots,
     enabled: syncEnabled,
     linkedProjects: allReports.filter((project) => project.kind === 'linked'),
     localProjectCandidates: allReports.filter((project) => project.kind === 'local-candidate'),
     projects: allReports,
+    projectSearchPaths,
     skippedActiveProjects: allReports.filter((project) => project.kind === 'active-disabled'),
   }
 }
