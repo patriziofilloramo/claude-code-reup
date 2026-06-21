@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { access, lstat, readdir, readFile, readlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join, normalize, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { APP } from '../../config/app.js'
@@ -133,6 +133,8 @@ async function loadProjectDirectory(
     const projectDirectory = join(projectsDirectory, directoryName)
     const decodedProjectPath = await resolveProjectPath(directoryName)
     const linkState = await readLinkState(projectDirectory)
+    const fallbackProjectPath =
+      resolveLinkedProjectPath(projectDirectory, linkState.cloudPath) ?? decodedProjectPath
 
     // Detect offline cloud storage before attempting to read sessions.
     // An inaccessible junction target means the drive is unmounted; surfacing
@@ -143,24 +145,24 @@ async function loadProjectDirectory(
         id: directoryName,
         isShared: true,
         cloudOffline: true,
-        path: decodedProjectPath,
+        path: fallbackProjectPath,
         sessions: [],
       }
     }
 
     const sessions =
       (await loadIndexedSessions(projectDirectory)) ??
-      (await loadTranscriptSessions(projectDirectory, decodedProjectPath))
+      (await loadTranscriptSessions(projectDirectory, fallbackProjectPath))
 
     const sessionsWithGhosts = await addGhostSessions(
       sessions,
       projectDirectory,
-      decodedProjectPath,
+      fallbackProjectPath,
       liveSessions
     )
     const sessionsWithPathStatus = await annotatePathExistence(sessionsWithGhosts)
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
-    const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? decodedProjectPath
+    const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? fallbackProjectPath
     const sharedMemoryState = syncEnabled
       ? await readProjectMemoryState(canonicalProjectPath, linkState.cloudPath)
       : null
@@ -179,6 +181,22 @@ async function loadProjectDirectory(
     // One unreadable or malformed project must not hide the remaining projects.
     return null
   }
+}
+
+/**
+ * Linked project directories point at `<project-root>/.claude-memory`.
+ * Recover the project root from that authoritative target instead of decoding
+ * Claude's directory name, whose hyphen encoding is inherently ambiguous.
+ */
+function resolveLinkedProjectPath(
+  projectDirectory: string,
+  linkedCloudPath?: string
+): string | undefined {
+  if (!linkedCloudPath) return undefined
+  const absoluteCloudPath = isAbsolute(linkedCloudPath)
+    ? normalize(linkedCloudPath)
+    : resolve(dirname(projectDirectory), linkedCloudPath)
+  return dirname(absoluteCloudPath)
 }
 
 /**

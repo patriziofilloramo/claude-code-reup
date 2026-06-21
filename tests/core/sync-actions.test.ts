@@ -15,6 +15,7 @@ import {
   patchClaudeMdSection,
   patchGitignoreForSync,
 } from '../../src/core/sync/sync-actions.js'
+import { normalizePathForComparison } from '../../src/core/project/path-comparison.js'
 import type { Project } from '../../src/core/session/session-model.js'
 
 describe('sync actions', () => {
@@ -302,7 +303,7 @@ describe('discoverCloudLinkedProjects', () => {
     await mkdir(join(projectPath, '.claude-memory', 'linked'), { recursive: true })
     await writeFile(join(projectPath, '.claude-memory', 'linked', 'device-a'), '', 'utf8')
 
-    const knownPaths = new Set([projectPath.toLowerCase()])
+    const knownPaths = new Set([normalizePathForComparison(projectPath)])
     const results = await discoverCloudLinkedProjects([root], knownPaths)
 
     expect(results).toHaveLength(0)
