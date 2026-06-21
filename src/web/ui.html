@@ -10,24 +10,39 @@
     <div class="app">
       <header class="hdr">
         <span class="logo">swoop</span>
-        <div class="usage-summary" id="usage-summary">usage loading…</div>
+        <div class="usage-summary" id="usage-summary" data-str="usageLoading">usage loading…</div>
         <div class="hdr-hints" id="hdr-hints">
-          <span class="hint"><b>/</b> search</span>
-          <span class="hint"><b>enter</b> resume</span>
+          <span class="hint"><b>/</b> <span data-str="footerHintSearch">search</span></span>
+          <span class="hint"><b>enter</b> <span data-str="footerHintResume">resume</span></span>
         </div>
         <div class="search-wrap" id="search-wrap" style="display: none">
           <span class="search-lbl">/</span>
           <input
             id="search-input"
+            data-str-placeholder="searchPlaceholder"
+            data-str-title="searchInputTitle"
             placeholder="project / session / is:attention — tab: search all context"
-            title="Search projects and sessions. Try is:attention, is:drift, is:high-context. Tab searches full transcripts."
+            title="Search projects and sessions."
             autocomplete="off"
             spellcheck="false"
           />
-          <button class="search-deep-btn" id="search-deep-btn" title="Deep search (Tab)">⌕</button>
+          <button
+            class="search-deep-btn"
+            id="search-deep-btn"
+            data-str-title="searchDeepTitle"
+            title="Deep search (Tab)"
+          >
+            ⌕
+          </button>
           <span class="search-clear" id="search-clear">✕</span>
         </div>
-        <span class="search-mode-label" id="search-mode-label" style="display: none">⌕ deep</span>
+        <span
+          class="search-mode-label"
+          id="search-mode-label"
+          data-str="searchModeActive"
+          style="display: none"
+          >⌕ deep</span
+        >
       </header>
 
       <div class="body">
@@ -36,7 +51,14 @@
           <div class="focus-bar" id="focus-bar" style="display: none">
             <span class="focus-bar-label" id="focus-bar-label"></span>
             <span class="focus-bar-count" id="focus-bar-count"></span>
-            <button class="focus-clear" id="focus-clear" title="Clear focus">×</button>
+            <button
+              class="focus-clear"
+              id="focus-clear"
+              data-str-title="focusClearTitle"
+              title="Clear focus"
+            >
+              ×
+            </button>
           </div>
           <div class="pnl-label">
             <span id="proj-label">PROJECTS</span>
@@ -45,19 +67,27 @@
               id="project-sort-select"
               title="Project sort order"
             >
-              <option value="recent">Recent</option>
-              <option value="name">Name</option>
+              <option value="recent" data-str="sortRecent">Recent</option>
+              <option value="name" data-str="sortName">Name</option>
             </select>
           </div>
           <div class="proj-list" id="proj-list"></div>
         </div>
         <div class="pnl-right">
           <div class="right-hdr">
-            <button class="back-btn" id="back-btn" aria-label="Back to projects">←</button>
+            <button
+              class="back-btn"
+              id="back-btn"
+              data-str-aria="backBtnAriaLabel"
+              aria-label="Back to projects"
+            >
+              ←
+            </button>
             <span class="right-hdr-title" id="right-title">Select a project</span>
             <div
               class="review-signals"
               id="review-signals"
+              data-str-aria="reviewSignalsAriaLabel"
               aria-label="Review signals"
               style="display: none"
             ></div>
@@ -67,6 +97,7 @@
               id="md-tag"
               style="display: none"
               href="#"
+              data-str-title="mdTagTitle"
               title="Edit project instructions (CLAUDE.md)"
             >
               <span class="md-pip"></span>CLAUDE.md
@@ -78,12 +109,12 @@
             <button class="filter-pill" data-filter="attention">Needs Attention</button>
             <button class="filter-pill" data-filter="active">Active</button>
             <button class="filter-pill" data-filter="archived">Archived</button>
-            <!-- titles set dynamically by renderFilterBar() from STRINGS -->
+            <!-- titles and labels set dynamically by renderFilterBar() from STRINGS -->
             <span class="filter-sep"></span>
             <select class="sort-select" id="sort-select" title="Sort order">
-              <option value="recent">Recent</option>
-              <option value="risk">Risk</option>
-              <option value="context">Context</option>
+              <option value="recent" data-str="sortRecent">Recent</option>
+              <option value="risk" data-str="sortRisk">Risk</option>
+              <option value="context" data-str="sortContext">Context</option>
             </select>
           </div>
           <div class="sess-list" id="sess-list"></div>
@@ -92,48 +123,64 @@
       </div>
 
       <footer class="ftr">
-        <span class="ftr-item" title="Click to select a session"
-          ><b class="ftr-k">click</b> select</span
+        <span class="ftr-item" data-str-title="footerTitleClick"
+          ><b class="ftr-k">click</b> <span data-str="footerHintSelect">select</span></span
         >
-        <span
-          class="ftr-item ftr-item-context"
-          title="Right-click a session or project row for actions"
-          ><b class="ftr-k">right-click</b> actions</span
+        <span class="ftr-item ftr-item-context" data-str-title="footerTitleRightClick"
+          ><b class="ftr-k">right-click</b> <span data-str="footerHintActions">actions</span></span
         >
-        <span class="ftr-item" title="Resume the selected session in a terminal"
-          ><b class="ftr-k">enter</b> resume</span
+        <span class="ftr-item" data-str-title="footerTitleEnter"
+          ><b class="ftr-k">enter</b> <span data-str="footerHintResume">resume</span></span
         >
-        <span class="ftr-item" title="Open the search bar"><b class="ftr-k">/</b> search</span>
-        <span class="ftr-item" title="Assign selected project to a group (g)"
-          ><b class="ftr-k">g</b> group</span
+        <span class="ftr-item" data-str-title="footerTitleSlash"
+          ><b class="ftr-k">/</b> <span data-str="footerHintSearch">search</span></span
         >
-        <span class="ftr-item" title="Add/remove tags on the selected session (t)"
-          ><b class="ftr-k">t</b> tag</span
+        <span class="ftr-item" data-str-title="footerTitleG"
+          ><b class="ftr-k">g</b> <span data-str="footerHintGroup">group</span></span
         >
-        <span class="ftr-item" title="Rename the selected session (r)"
-          ><b class="ftr-k">r</b> rename</span
+        <span class="ftr-item" data-str-title="footerTitleT"
+          ><b class="ftr-k">t</b> <span data-str="footerHintTag">tag</span></span
         >
-        <span class="ftr-item" title="Copy a handoff packet for the selected session (H)"
-          ><b class="ftr-k">H</b> handoff</span
+        <span class="ftr-item" data-str-title="footerTitleR"
+          ><b class="ftr-k">r</b> <span data-str="footerHintRename">rename</span></span
         >
-        <span class="ftr-item" title="Delete the selected session permanently (D)"
-          ><b class="ftr-k">D</b> delete</span
+        <span class="ftr-item" data-str-title="footerTitleH"
+          ><b class="ftr-k">H</b> <span data-str="footerHintHandoff">handoff</span></span
+        >
+        <span class="ftr-item" data-str-title="footerTitleD"
+          ><b class="ftr-k">D</b> <span data-str="footerHintDelete">delete</span></span
         >
         <span class="ftr-sp"></span>
         <button class="ftr-diagnostics" id="ftr-diagnostics" style="display: none"></button>
-        <button class="ftr-sync-btn" id="ftr-sync" title="Project Memory Sync (Alpha)">sync</button>
-        <button class="ftr-theme-btn" id="ftr-theme-btn" title="Switch theme">theme</button>
-        <span class="ftr-status" id="ftr-status">loading…</span>
+        <button
+          class="ftr-sync-btn"
+          id="ftr-sync"
+          data-str-title="footerSyncTitle"
+          data-str="footerSyncBtn"
+        >
+          sync
+        </button>
+        <button
+          class="ftr-theme-btn"
+          id="ftr-theme-btn"
+          data-str-title="footerThemeTitle"
+          data-str="footerThemeBtn"
+        >
+          theme
+        </button>
+        <span class="ftr-status" id="ftr-status" data-str="footerStatusLoading">loading…</span>
       </footer>
     </div>
 
     <!-- Stack / group item manager -->
     <div class="overlay org-manager-overlay" id="org-manager-overlay">
       <div class="dlg org-manager-dlg">
-        <div class="dlg-label" id="org-manager-title">Manage items</div>
+        <div class="dlg-label" id="org-manager-title"></div>
         <div class="org-manager-list" id="org-manager-list"></div>
         <div class="dlg-actions">
-          <button class="btn btn-secondary" id="org-manager-close">Done</button>
+          <button class="btn btn-secondary" id="org-manager-close" data-str="orgManagerDone">
+            Done
+          </button>
         </div>
       </div>
     </div>
@@ -144,7 +191,9 @@
         <div class="dlg-label" id="org-picker-title">Assign to…</div>
         <div class="org-picker-list" id="org-picker-list"></div>
         <div class="dlg-actions">
-          <button class="btn btn-secondary" id="org-picker-close">Cancel</button>
+          <button class="btn btn-secondary" id="org-picker-close" data-str="orgPickerCancelBtn">
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -163,25 +212,31 @@
         />
         <div class="tag-picker-suggestions" id="tag-picker-suggestions"></div>
         <div class="dlg-actions">
-          <button class="btn btn-secondary" id="tag-picker-close">Done</button>
+          <button class="btn btn-secondary" id="tag-picker-close" data-str="tagPickerDone">
+            Done
+          </button>
         </div>
       </div>
     </div>
 
     <div class="overlay" id="resume-overlay">
       <div class="dlg">
-        <div class="dlg-label">Resume Session</div>
+        <div class="dlg-label" data-str="resumeDialogTitle">Resume Session</div>
         <div class="dlg-cmd" id="dlg-cmd"></div>
         <div class="dlg-name" id="dlg-name"></div>
         <div class="dlg-branch" id="dlg-branch"></div>
         <div class="dlg-actions">
-          <button class="btn btn-primary" id="dlg-confirm">Resume</button>
-          <button class="btn btn-secondary" id="dlg-cancel">Cancel</button>
+          <button class="btn btn-primary" id="dlg-confirm" data-str="resumeConfirmBtn">
+            Resume
+          </button>
+          <button class="btn btn-secondary" id="dlg-cancel" data-str="resumeDialogCancel">
+            Cancel
+          </button>
           <span class="dlg-msg" id="dlg-msg"></span>
         </div>
         <label class="dlg-pref">
           <input type="checkbox" id="dlg-always-confirm" checked />
-          Always confirm before resuming
+          <span data-str="resumeAlwaysConfirm">Always confirm before resuming</span>
         </label>
       </div>
     </div>
@@ -190,17 +245,23 @@
       <div class="drawer-pane">
         <div class="drawer-hdr">
           <div>
-            <div class="drawer-title">CLAUDE.md</div>
+            <div class="drawer-title" data-str="claudeMdTitle">CLAUDE.md</div>
             <div class="drawer-path" id="md-path"></div>
           </div>
-          <button class="drawer-close" id="md-close">✕</button>
+          <button class="drawer-close" id="md-close" data-str="drawerCloseIcon">✕</button>
         </div>
         <div class="drawer-body">
-          <textarea id="md-editor" placeholder="No CLAUDE.md found for this project."></textarea>
+          <textarea
+            id="md-editor"
+            data-str-placeholder="claudeMdEditorPlaceholder"
+            placeholder="No CLAUDE.md found for this project."
+          ></textarea>
         </div>
         <div class="drawer-footer">
-          <button class="btn btn-primary" id="md-save">Save</button>
-          <button class="btn btn-secondary" id="md-close2">Close</button>
+          <button class="btn btn-primary" id="md-save" data-str="claudeMdSaveBtn">Save</button>
+          <button class="btn btn-secondary" id="md-close2" data-str="claudeMdCloseBtn">
+            Close
+          </button>
           <span class="save-status" id="md-save-status"></span>
         </div>
       </div>
@@ -210,13 +271,13 @@
       <div class="drawer-pane">
         <div class="drawer-hdr">
           <div>
-            <div class="drawer-title">Lost &amp; Found</div>
+            <div class="drawer-title" data-str="lfTitle">Lost &amp; Found</div>
             <div class="drawer-path" id="lf-subtitle"></div>
           </div>
-          <button class="drawer-close" id="lf-close">✕</button>
+          <button class="drawer-close" id="lf-close" data-str="drawerCloseIcon">✕</button>
         </div>
         <div class="drawer-body lf-body" id="lf-body">
-          <div class="lf-loading">Scanning…</div>
+          <div class="lf-loading" data-str="diagnosticsScanning">Scanning…</div>
         </div>
       </div>
     </div>
@@ -226,14 +287,15 @@
         <div class="drawer-hdr">
           <div>
             <div class="drawer-title">
-              Project Memory Sync <span class="alpha-badge">Alpha</span>
+              <span data-str="syncTitle">Project Memory Sync</span>
+              <span class="alpha-badge" data-str="syncAlphaLabel">Alpha</span>
             </div>
             <div class="drawer-path" id="sync-subtitle"></div>
           </div>
-          <button class="drawer-close" id="sync-close">x</button>
+          <button class="drawer-close" id="sync-close" data-str="drawerCloseIcon">✕</button>
         </div>
         <div class="drawer-body sync-body" id="sync-body">
-          <div class="lf-loading">Loading...</div>
+          <div class="lf-loading" data-str="syncLoading">Loading sync status...</div>
         </div>
       </div>
     </div>

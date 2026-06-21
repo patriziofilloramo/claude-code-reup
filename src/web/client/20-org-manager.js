@@ -9,7 +9,10 @@ function openOrgManager(kind, id, name) {
   if (!elements.orgManagerOverlay) return
   orgManagerKind = kind
   orgManagerId = id
-  elements.orgManagerTitle.textContent = (kind === 'stack' ? 'Stack: ' : 'Group: ') + name
+  elements.orgManagerTitle.textContent = fmt(
+    kind === 'stack' ? STRINGS.orgManagerStackTitle : STRINGS.orgManagerGroupTitle,
+    { name: name }
+  )
   renderOrgManagerList()
   elements.orgManagerOverlay.classList.add('open')
 }
