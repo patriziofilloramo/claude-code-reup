@@ -7,7 +7,7 @@ const manifest = JSON.parse(readFileSync('extension/package.json', 'utf8')) as {
   activationEvents: string[]
   contributes: {
     commands: Array<{ command: string }>
-    views: Record<string, Array<{ id: string; type?: string }>>
+    views: Record<string, Array<{ icon?: string; id: string; type?: string }>>
   }
 }
 
@@ -25,8 +25,18 @@ describe('VS Code command manifest', () => {
 
   it('declares the focused Session Inspector as a webview', () => {
     expect(manifest.contributes.views['swoop']).toContainEqual(
-      expect.objectContaining({ id: 'swoop.inspector', type: 'webview' })
+      expect.objectContaining({
+        icon: 'media/swoop.svg',
+        id: 'swoop.inspector',
+        type: 'webview',
+      })
     )
     expect(manifest.activationEvents).toContain('onView:swoop.inspector')
+  })
+
+  it('keeps every Swoop view identifiable when users move it', () => {
+    for (const view of manifest.contributes.views['swoop']) {
+      expect(view.icon).toBe('media/swoop.svg')
+    }
   })
 })

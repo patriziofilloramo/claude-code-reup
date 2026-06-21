@@ -5,10 +5,15 @@ import { describe, expect, it } from 'vitest'
 const extensionSource = readFileSync('extension/src/extension.ts', 'utf8')
 const statusBarSource = readFileSync('extension/src/status-bar.ts', 'utf8')
 const manifest = JSON.parse(readFileSync('extension/package.json', 'utf8')) as {
+  displayName: string
+  icon: string
   scripts: Record<string, string>
   version: string
 }
 const vscodeIgnore = readFileSync('extension/.vscodeignore', 'utf8')
+const activityBarIcon = readFileSync('extension/media/swoop.svg', 'utf8')
+const brandIcon = readFileSync('extension/media/swoop-brand.svg', 'utf8')
+const brandIconPng = readFileSync('extension/media/swoop-brand.png')
 
 describe('VS Code product quality guardrails', () => {
   it('keeps the status bar contextual and transcript-backed', () => {
@@ -26,5 +31,15 @@ describe('VS Code product quality guardrails', () => {
     expect(manifest.scripts['smoke:host']).toContain('run-smoke.mjs')
     expect(vscodeIgnore).toContain('node_modules/**')
     expect(vscodeIgnore).toContain('dist/smoke-test.cjs')
+  })
+
+  it('ships distinct Activity Bar and installable brand icons', () => {
+    expect(manifest.displayName).toBe('Swoop for Claude Code')
+    expect(manifest.icon).toBe('media/swoop-brand.png')
+    expect(activityBarIcon).toContain('viewBox="0 0 256 256"')
+    expect(activityBarIcon).not.toContain('<rect')
+    expect(brandIcon).toContain('fill="#E68465"')
+    expect(brandIcon).toContain('fill="#8AD9E8"')
+    expect(brandIconPng.subarray(1, 4).toString('ascii')).toBe('PNG')
   })
 })

@@ -1,10 +1,11 @@
 {
   "name": "swoop-vscode",
-  "displayName": "Swoop",
+  "displayName": "Swoop for Claude Code",
   "description": "Editor-native Claude Code session intelligence from Swoop.",
   "version": "0.1.0",
   "publisher": "swoop-local",
   "private": true,
+  "icon": "media/swoop-brand.png",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -190,12 +191,14 @@
       "swoop": [
         {
           "id": "swoop.sessions",
-          "name": "Sessions"
+          "name": "Sessions",
+          "icon": "media/swoop.svg"
         },
         {
           "id": "swoop.inspector",
           "name": "Session Inspector",
-          "type": "webview"
+          "type": "webview",
+          "icon": "media/swoop.svg"
         }
       ]
     },

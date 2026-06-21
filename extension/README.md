@@ -1,8 +1,12 @@
 # Swoop Workspace Cockpit
 
+![Swoop logo](media/swoop-brand.png)
+
 Swoop brings local Claude Code session intelligence into VS Code. It helps you
 decide which session to continue, explains resume risks, and launches Claude in
 the correct integrated-terminal directory.
+
+Swoop is an independent local tool and is not affiliated with Anthropic.
 
 ## Workspace Cockpit
 
@@ -22,7 +26,7 @@ Safe local actions include Resume, Copy Handoff, Alias, Archive/Undo, Tags,
 Reveal Project, and opening transcript-referenced files. Swoop never modifies
 Claude-owned transcripts.
 
-## Install a local VSIX
+## Install locally
 
 ```bash
 cd extension
@@ -31,7 +35,15 @@ npm run package:vsix
 code --install-extension dist/swoop-vscode-0.1.0.vsix
 ```
 
-Restart or reload VS Code, then open the Swoop icon in the Activity Bar.
+Or, after building the VSIX:
+
+1. Open the VS Code Command Palette.
+2. Run **Extensions: Install from VSIX...**
+3. Select `extension/dist/swoop-vscode-0.1.0.vsix`.
+4. Reload VS Code and open the Swoop icon in the Activity Bar.
+
+To replace an older local build from the terminal, add `--force` to the
+`code --install-extension` command.
 
 ## Development
 

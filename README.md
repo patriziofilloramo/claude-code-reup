@@ -406,6 +406,19 @@ The optional [VS Code Workspace Cockpit](extension/README.md) provides
 workspace-first Resume Advice, live attention state, a focused Session
 Inspector, and integrated-terminal resume from an installable local VSIX.
 
+### Install the VS Code extension locally
+
+```bash
+npm ci --prefix extension
+npm run package:extension
+code --install-extension extension/dist/swoop-vscode-0.1.0.vsix
+```
+
+Alternatively, run **Extensions: Install from VSIX...** from the VS Code
+Command Palette and select the generated file. See the
+[extension README](extension/README.md) for development, privacy, and
+troubleshooting details.
+
 See [Architecture](Documents/ARCHITECTURE.md) for the implemented system,
 [Product direction](Documents/PRODUCT_DIRECTION.md) for the long-term product
 principles, [Usage visibility](Documents/USAGE_VISIBILITY.md) for usage-data

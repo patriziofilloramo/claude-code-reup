@@ -1,16 +1,18 @@
 <svg
-  width="32"
-  height="32"
+  width="256"
+  height="256"
   viewBox="0 0 256 256"
   fill="none"
   xmlns="http://www.w3.org/2000/svg"
 >
+  <rect width="256" height="256" rx="52" fill="#15191B" />
   <path
-    fill="#C5C5C5"
+    fill="#E68465"
     d="M52 80C84 42 153 39 207 64L180 91C137 72 104 76 82 98C104 111 135 112 163 117C198 123 216 143 209 169C198 209 127 226 60 190L86 163C132 186 171 179 181 159C162 146 135 145 105 139C65 131 41 111 52 80Z"
   />
   <path
-    fill="#C5C5C5"
+    fill="#8AD9E8"
     d="M213 28L219 46L237 52L219 58L213 76L207 58L189 52L207 46L213 28Z"
   />
+  <circle cx="44" cy="202" r="7" fill="#F5E9DF" />
 </svg>
