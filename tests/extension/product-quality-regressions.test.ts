@@ -26,8 +26,9 @@ describe('VS Code product quality guardrails', () => {
   })
 
   it('produces a pre-1.0 installable VSIX with smoke-test support', () => {
-    expect(manifest.version).toBe('0.1.0')
-    expect(manifest.scripts['package:vsix']).toContain('vsce package')
+    expect(manifest.version).toMatch(/^0\.\d+\.\d+$/)
+    expect(manifest.scripts['install:local']).toContain('install-local.mjs')
+    expect(manifest.scripts['package:vsix']).toContain('package-vsix.mjs')
     expect(manifest.scripts['smoke:host']).toContain('run-smoke.mjs')
     expect(vscodeIgnore).toContain('node_modules/**')
     expect(vscodeIgnore).toContain('dist/smoke-test.cjs')

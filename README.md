@@ -409,15 +409,17 @@ Inspector, and integrated-terminal resume from an installable local VSIX.
 ### Install the VS Code extension locally
 
 ```bash
-npm ci --prefix extension
-npm run package:extension
-code --install-extension extension/dist/swoop-vscode-0.1.0.vsix
+npm run install:extension
 ```
 
-Alternatively, run **Extensions: Install from VSIX...** from the VS Code
-Command Palette and select the generated file. See the
-[extension README](extension/README.md) for development, privacy, and
-troubleshooting details.
+The command installs missing build dependencies, packages the current version,
+and replaces the locally installed extension. You can also run **Tasks: Run
+Task** → **Install Swoop VS Code Extension Locally** inside VS Code.
+
+Alternatively, run `npm run package:extension`, then choose **Extensions:
+Install from VSIX...** from the Command Palette and select the generated file.
+See the [extension README](extension/README.md) for versioning, development,
+privacy, and troubleshooting details.
 
 See [Architecture](Documents/ARCHITECTURE.md) for the implemented system,
 [Product direction](Documents/PRODUCT_DIRECTION.md) for the long-term product

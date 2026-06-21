@@ -28,22 +28,45 @@ Claude-owned transcripts.
 
 ## Install locally
 
+From the repository root, the quickest route is:
+
 ```bash
-cd extension
-npm ci
-npm run package:vsix
-code --install-extension dist/swoop-vscode-0.1.0.vsix
+npm run install:extension
 ```
 
-Or, after building the VSIX:
+This installs missing extension dependencies when necessary, creates a
+versioned VSIX, and installs it with `code --install-extension --force`.
+
+Inside VS Code, the same workflow is available through **Tasks: Run Task** →
+**Install Swoop VS Code Extension Locally**.
+
+For manual installation, build the package with `npm run package:extension`,
+then:
 
 1. Open the VS Code Command Palette.
 2. Run **Extensions: Install from VSIX...**
-3. Select `extension/dist/swoop-vscode-0.1.0.vsix`.
+3. Select the newest `extension/dist/swoop-vscode-<version>.vsix`.
 4. Reload VS Code and open the Swoop icon in the Activity Bar.
 
-To replace an older local build from the terminal, add `--force` to the
-`code --install-extension` command.
+If the `code` shell command is unavailable, install it from VS Code or set
+`SWOOP_VSCODE_CLI` to the executable path.
+
+## Versioning rule
+
+Every change that affects the installable extension must increment
+`extension/package.json`. This includes bundled extension/shared-core code, the
+manifest, packaged documentation, and media assets. Tests and developer-only
+scripts do not require a release bump by themselves.
+
+For the normal pre-1.0 patch release:
+
+```bash
+npm version patch --prefix extension --no-git-tag-version
+```
+
+CI builds the extension, derives its actual bundled source inputs from the
+sourcemap, and rejects release-affecting changes when the extension version did
+not increase.
 
 ## Development
 

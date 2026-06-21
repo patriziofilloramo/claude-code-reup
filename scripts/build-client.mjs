@@ -13,8 +13,10 @@
  * Usage:
  *   node scripts/build-client.mjs
  */
+import console from 'node:console'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import process from 'node:process'
 
 const SEGMENTS = [
   '00-strings.js', // user-facing strings and lightweight formatter helpers

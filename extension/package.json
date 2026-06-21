@@ -2,7 +2,7 @@
   "name": "swoop-vscode",
   "displayName": "Swoop for Claude Code",
   "description": "Editor-native Claude Code session intelligence from Swoop.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "swoop-local",
   "private": true,
   "icon": "media/swoop-brand.png",
@@ -227,7 +227,8 @@
   "scripts": {
     "compile": "tsc --noEmit && node esbuild.mjs",
     "package": "npm run compile",
-    "package:vsix": "npm run compile && vsce package --out dist/swoop-vscode-0.1.0.vsix",
+    "install:local": "node scripts/install-local.mjs",
+    "package:vsix": "npm run compile && node scripts/package-vsix.mjs",
     "smoke:host": "npm run compile && node scripts/run-smoke.mjs",
     "watch": "node esbuild.mjs --watch"
   },

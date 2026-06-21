@@ -15,6 +15,20 @@
         "panel": "dedicated",
         "reveal": "silent"
       }
+    },
+    {
+      "label": "Install Swoop VS Code Extension Locally",
+      "type": "shell",
+      "command": "npm run install:extension",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always"
+      }
     }
   ]
 }
