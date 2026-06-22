@@ -2,7 +2,7 @@
   "name": "swoop-vscode",
   "displayName": "Swoop for Claude Code",
   "description": "Editor-native Claude Code session intelligence from Swoop.",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "publisher": "swoop-local",
   "private": true,
   "icon": "media/swoop-brand.png",

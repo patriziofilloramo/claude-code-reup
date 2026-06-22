@@ -43,9 +43,18 @@ describe('workspace cockpit guardrails', () => {
     expect(treeSource).toContain('treeView.badge')
     expect(treeSource).toContain('const visibleSessionCount = group.sessions.length')
     expect(extensionSource).toContain('treeProvider.attachTreeView(treeView)')
+    expect(extensionSource).toContain('refreshController?.setVisible(dashboardVisible)')
     expect(extensionSource).toContain(
+      'if (event.visible && !treeProvider.renderCurrentModel()) void refreshAll()'
+    )
+    expect(extensionSource).toContain(
+      'if (treeVisible && !treeProvider.renderCurrentModel()) void refreshAll()'
+    )
+    expect(extensionSource).not.toContain(
       'refreshController?.setVisible(treeVisible || dashboardVisible)'
     )
+    expect(treeSource).toContain('renderCurrentModel(): boolean')
+    expect(treeSource).toContain('if (!this.model || !this.modelFingerprint) return false')
     expect(extensionSource).toContain('new SwoopRefreshController(logger, { refresh: refreshAll })')
     expect(extensionSource).toContain('treeProvider.refresh({ notifyView: treeVisible })')
     expect(extensionSource).toContain('if (changed) await dashboard?.refresh')

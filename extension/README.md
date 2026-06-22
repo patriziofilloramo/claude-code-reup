@@ -107,10 +107,11 @@ configuration. The Extension Host uses the local bundle in
 - `swoop.showStatusBar`: show active and attention counts while Swoop is
   visible.
 
-Watchers and Git checks are active only while the dashboard or Swoop tree is
-visible. Watch events are coalesced and rate-limited, and unchanged models do
-not invalidate hidden or visible Tree Views. The 20-second timer is used only
-in explicit `interval` mode.
+Watchers and Git checks are active only while the dashboard is visible. The
+sidebar tree refreshes once when opened, after Swoop mutations, or through the
+manual Refresh command. This prevents transcript activity from keeping shared
+VS Code sidebars busy. Watch events are coalesced and rate-limited, and the
+20-second timer is used only in explicit `interval` mode.
 
 ## Privacy and safety
 

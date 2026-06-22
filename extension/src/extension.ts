@@ -26,7 +26,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let treeVisible = false
   let refreshController: SwoopRefreshController | null = null
   const updateRefreshVisibility = (): void => {
-    refreshController?.setVisible(treeVisible || dashboardVisible)
+    // Continuous filesystem watching is reserved for the dashboard. Keeping
+    // it attached to a contributed TreeView can make the shared VS Code
+    // sidebar appear perpetually busy while Claude is writing transcripts.
+    // The tree receives one-shot refreshes when opened and after Swoop actions.
+    refreshController?.setVisible(dashboardVisible)
   }
   const refreshAll = async (): Promise<void> => {
     const changed = await treeProvider.refresh({ notifyView: treeVisible })
@@ -70,11 +74,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeProvider,
     treeView,
     treeView.onDidChangeVisibility((event) => {
-      const refreshWasAlreadyActive = treeVisible || dashboardVisible
       treeVisible = event.visible
-      updateRefreshVisibility()
       statusBar.setVisible(event.visible)
-      if (event.visible && refreshWasAlreadyActive) void refreshAll()
+      if (event.visible && !treeProvider.renderCurrentModel()) void refreshAll()
     }),
     treeView.onDidChangeSelection((event) => {
       const sessionNode = asSessionTreeNode(event.selection[0])
@@ -185,6 +187,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   updateRefreshVisibility()
   statusBar.setVisible(treeView.visible)
   await openDashboardOnFirstUse(context, dashboard)
+  if (treeVisible && !treeProvider.renderCurrentModel()) void refreshAll()
 }
 
 async function openDashboardOnFirstUse(

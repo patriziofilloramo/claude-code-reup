@@ -136,6 +136,20 @@ export class SwoopSessionTreeProvider
     return this.model
   }
 
+  /**
+   * Publishes the latest in-memory model when the TreeView becomes visible.
+   * Returns false only when no model has been loaded yet and disk I/O is needed.
+   */
+  renderCurrentModel(): boolean {
+    if (!this.model || !this.modelFingerprint) return false
+    if (this.renderedFingerprint === this.modelFingerprint) return true
+    this.renderedFingerprint = this.modelFingerprint
+    this.changedEmitter.fire(undefined)
+    this.modelChangedEmitter.fire(this.model)
+    this.updateViewBadge(this.model)
+    return true
+  }
+
   getTreeItem(node: TreeNode): vscode.TreeItem {
     if (node.kind === 'section') return sectionTreeItem(node, this.model)
     if (node.kind === 'project') return projectTreeItem(node)
