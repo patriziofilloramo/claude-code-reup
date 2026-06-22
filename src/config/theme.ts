@@ -32,5 +32,7 @@ export const COLORS = colorsFromTheme(
 
 export const SIZES = {
   projectPanelWidth: 30,
+  projectGroupMinTerminalWidth: 180,
   sessionDetailsMinWidth: 72,
+  wideProjectPanelWidth: 44,
 } as const

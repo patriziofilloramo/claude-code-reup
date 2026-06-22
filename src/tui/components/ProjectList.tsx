@@ -1,11 +1,12 @@
-import { Box, Text } from 'ink'
+import { Box, Text, useStdout } from 'ink'
 
-import { COLORS, SIZES } from '../../config/theme.js'
+import { COLORS } from '../../config/theme.js'
 import type { Project } from '../../core/session/session-model.js'
 import {
   getProjectSyncStatus,
   isProjectMemorySyncEnabled,
 } from '../../core/sync/project-sync-status.js'
+import { projectPanelWidthForTerminal, shouldShowProjectGroups } from '../layout.js'
 
 interface ProjectListProps {
   isFocused: boolean
@@ -20,8 +21,11 @@ export default function ProjectList({
   selectedIndex,
   totalCount,
 }: ProjectListProps) {
+  const { stdout } = useStdout()
+  const terminalWidth = stdout?.columns ?? 80
   const labelColor = isFocused ? COLORS.accent : COLORS.dim
   const projectMemorySyncEnabled = isProjectMemorySyncEnabled()
+  const showProjectGroups = shouldShowProjectGroups(terminalWidth)
 
   return (
     <Box
@@ -33,7 +37,7 @@ export default function ProjectList({
       borderTop={false}
       flexDirection="column"
       flexShrink={0}
-      width={SIZES.projectPanelWidth}
+      width={projectPanelWidthForTerminal(terminalWidth)}
     >
       <Box gap={1} paddingX={1}>
         <Text bold color={labelColor}>
@@ -60,8 +64,8 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
-            {project.groupName ? (
-              <Box flexShrink={1} paddingLeft={1}>
+            {showProjectGroups && project.groupName ? (
+              <Box flexShrink={0} paddingLeft={1} width={14}>
                 <Text color={COLORS.accent} wrap="truncate">
                   [{project.groupName}]
                 </Text>

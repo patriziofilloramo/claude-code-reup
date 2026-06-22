@@ -21,6 +21,7 @@ describe('TUI organization parity guardrails', () => {
 
   it('surfaces organization and provenance without duplicating metadata logic', () => {
     expect(projectListSource).toContain('project.groupName')
+    expect(projectListSource).toContain('shouldShowProjectGroups')
     expect(resumeCardSource).toContain('automaticFactLabel(')
     expect(resumeCardSource).toContain('automaticContext.plan.source')
     expect(resumeCardSource).toContain('todos.updatedAt')

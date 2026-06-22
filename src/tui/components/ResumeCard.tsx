@@ -13,6 +13,7 @@ import { primaryStatus } from '../../core/session/session-signals.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import type { SessionPreview } from '../../core/session/session-preview.js'
 import { relativeTime } from '../../utils/time.js'
+import { projectPanelWidthForTerminal } from '../layout.js'
 
 // ---------------------------------------------------------------------------
 // Component
@@ -80,7 +81,8 @@ export default function ResumeCard({
     session.signals.lastToolFailed === true ||
     preview?.pendingToolName != null
 
-  const dividerWidth = Math.max(8, (stdout?.columns ?? 80) - 34 /* project panel */ - 6)
+  const terminalWidth = stdout?.columns ?? 80
+  const dividerWidth = Math.max(8, terminalWidth - projectPanelWidthForTerminal(terminalWidth) - 6)
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
