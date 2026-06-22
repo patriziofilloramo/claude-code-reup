@@ -1,8 +1,8 @@
 {
   "name": "swoop-vscode",
   "displayName": "Swoop for Claude Code",
-  "description": "Editor-native Claude Code session intelligence from Swoop.",
-  "version": "0.1.22",
+  "description": "Find, understand, and safely resume Claude Code sessions across every project.",
+  "version": "0.1.23",
   "publisher": "swoop-local",
   "private": true,
   "icon": "media/swoop-brand.png",
@@ -17,8 +17,20 @@
     "node": ">=20"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "sessions",
+    "resume",
+    "dashboard"
+  ],
+  "galleryBanner": {
+    "color": "#101315",
+    "theme": "dark"
+  },
   "main": "./dist/extension.cjs",
   "activationEvents": [
     "onCommand:swoop.diagnostics",
@@ -250,7 +262,8 @@
   },
   "scripts": {
     "generate:brand": "node scripts/generate-brand-assets.mjs",
-    "compile": "npm run generate:brand && tsc --noEmit && node esbuild.mjs",
+    "generate:marketplace": "node scripts/generate-marketplace-assets.mjs",
+    "compile": "npm run generate:brand && npm run generate:marketplace && tsc --noEmit && node esbuild.mjs",
     "package": "npm run compile",
     "install:local": "node scripts/install-local.mjs",
     "package:vsix": "npm run compile && node scripts/package-vsix.mjs",
