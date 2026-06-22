@@ -1,5 +1,6 @@
 import { Box, Text, useStdout } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 
 interface AppFooterProps {
@@ -114,6 +115,7 @@ export default function AppFooter({
         <Text color={COLORS.muted}>
           <Text color={COLORS.text}>space</Text> actions
         </Text>
+        {!compact ? <Text color={COLORS.muted}>{LABELS.hintFocus}</Text> : null}
         {focusedPanel === 'sessions' && !compact ? (
           <Text color={COLORS.muted}>
             <Text color={COLORS.text}>s</Text> select

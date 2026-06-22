@@ -66,6 +66,17 @@ describe('CLI help', () => {
     expect(String(log.mock.calls[0][0])).toContain('swoop --theme <dark|light|terminal>')
   })
 
+  it('documents organization filters for list', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runCli(['list', '--help'])
+
+    const help = String(log.mock.calls[0][0])
+    expect(help).toContain('--tag <name>')
+    expect(help).toContain('--group <name>')
+    expect(help).toContain('--stack <name>')
+  })
+
   it('rejects unknown help topics cleanly', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 

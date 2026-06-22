@@ -13,6 +13,8 @@ const COMPLETION_SCRIPTS: Record<SupportedShell, string> = {
     '  if [[ "$COMP_CWORD" -eq 2 && ("${COMP_WORDS[1]}" == "resume" || "${COMP_WORDS[1]}" == "handoff") ]]; then',
     '    compopt -o nosort 2>/dev/null || true',
     '    COMPREPLY=( $(swoop __complete-session-ids "$current") )',
+    '  elif [[ "${COMP_WORDS[1]}" == "list" && "$current" == -* ]]; then',
+    '    COMPREPLY=( $(compgen -W "--active --archived --attention --json --limit --project --status --tag --group --stack" -- "$current") )',
     '  fi',
     '}',
     'complete -F _swoop_complete swoop',
@@ -28,11 +30,17 @@ const COMPLETION_SCRIPTS: Record<SupportedShell, string> = {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
       }
     }
+  } elseif ($elements.Count -ge 2 -and $elements[1] -eq 'list' -and $wordToComplete.StartsWith('-')) {
+    @('--active', '--archived', '--attention', '--json', '--limit', '--project', '--status', '--tag', '--group', '--stack') |
+      Where-Object { $_ -like "$wordToComplete*" } |
+      ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_) }
   }
 }`,
   zsh: String.raw`_swoop_complete() {
   if (( CURRENT == 3 )) && [[ "$words[2]" == "resume" || "$words[2]" == "handoff" ]]; then
     compadd -V swoop-sessions -- $(swoop __complete-session-ids "$words[CURRENT]")
+  elif [[ "$words[2]" == "list" && "$words[CURRENT]" == -* ]]; then
+    compadd -- --active --archived --attention --json --limit --project --status --tag --group --stack
   fi
 }
 compdef _swoop_complete swoop`,

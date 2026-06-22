@@ -12,6 +12,12 @@ import { readLiveUsageSummary } from '../core/usage/live-usage.js'
 import type { LiveUsageSummary } from '../core/usage/live-usage.js'
 import { loadProjects } from '../core/project/project-discovery.js'
 import type { Project, Session } from '../core/session/session-model.js'
+import {
+  filterProjectsBySmartView,
+  nextSessionSmartView,
+  smartViewLabel,
+  type SessionSmartViewId,
+} from '../core/session/session-smart-view.js'
 import { deleteSession, setSessionArchived } from '../core/session/session-metadata.js'
 import { forgetProjectForSync } from '../core/sync/sync-actions.js'
 import { copyToClipboard, openDirectory } from '../utils/system.js'
@@ -79,6 +85,7 @@ function App({ onResume }: AppProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showArchivedSessions, setShowArchivedSessions] = useState(false)
+  const [smartViewId, setSmartViewId] = useState<SessionSmartViewId | null>(null)
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [isProjectActionMenuOpen, setIsProjectActionMenuOpen] = useState(false)
   const [isSessionActionMenuOpen, setIsSessionActionMenuOpen] = useState(false)
@@ -232,8 +239,9 @@ function App({ onResume }: AppProps) {
     return ids
   }, [projects, activeSessionIds])
 
+  const focusedProjects = filterProjectsBySmartView(projects, activeSessionIds, smartViewId)
   const matchingProjects = deriveSearchResults(
-    projects,
+    focusedProjects,
     searchQuery,
     showArchivedSessions,
     activeSessionIds
@@ -443,6 +451,9 @@ function App({ onResume }: AppProps) {
         : 'Delete session permanently',
     'toggle-archived': showArchivedSessions ? 'Hide archived sessions' : 'Show archived sessions',
     'new-session': 'Start new session in this project',
+    'cycle-focus': smartViewId
+      ? `Next Inbox focus (current: ${smartViewLabel(smartViewId)})`
+      : 'Focus: Active now',
   }
 
   const paletteCommands: PaletteCommand[] = COMMANDS.map((cmd) => ({
@@ -501,6 +512,16 @@ function App({ onResume }: AppProps) {
       case 'toggle-archived':
         setShowArchivedSessions((v) => !v)
         break
+      case 'cycle-focus':
+        setSmartViewId((current) => nextSessionSmartView(current))
+        setSelectedProjectIndex(0)
+        setSelectedSessionIndex(0)
+        break
+      case 'clear-focus':
+        setSmartViewId(null)
+        setSelectedProjectIndex(0)
+        setSelectedSessionIndex(0)
+        break
       case 'focus-sessions':
         setFocusedPanel('sessions')
         break
@@ -515,6 +536,14 @@ function App({ onResume }: AppProps) {
         break
       case 'quit':
         exit()
+        break
+      default:
+        if (commandKey.startsWith('focus-')) {
+          const focusId = commandKey.slice('focus-'.length) as SessionSmartViewId
+          setSmartViewId(focusId)
+          setSelectedProjectIndex(0)
+          setSelectedSessionIndex(0)
+        }
         break
     }
   }
@@ -574,6 +603,12 @@ function App({ onResume }: AppProps) {
         setBulkSelectedIds(new Set())
         return
       }
+      if (smartViewId) {
+        setSmartViewId(null)
+        setSelectedProjectIndex(0)
+        setSelectedSessionIndex(0)
+        return
+      }
       if (focusedPanel === 'sessions') setFocusedPanel('projects')
       else exit()
       return
@@ -604,6 +639,12 @@ function App({ onResume }: AppProps) {
     }
     if (!isLoading && input === 'a') {
       setShowArchivedSessions((visible) => !visible)
+      return
+    }
+    if (!isLoading && input === 'f') {
+      setSmartViewId((current) => nextSessionSmartView(current))
+      setSelectedProjectIndex(0)
+      setSelectedSessionIndex(0)
       return
     }
     // Capital A: archive focused or all bulk-selected
@@ -839,6 +880,7 @@ function App({ onResume }: AppProps) {
     <Box flexDirection="column">
       <AppHeader usage={liveUsage} version={APP.version} />
       <AppToolbar
+        focusLabel={smartViewLabel(smartViewId)}
         isLoading={isLoading}
         isSearchOpen={isSearchOpen}
         projectCount={matchingProjects.length}

@@ -169,7 +169,15 @@ export default function ResumeCard({
         text={preview?.lastResponse ?? null}
       />
       {!isLoading && automaticContext?.plan ? (
-        <PreviewSection isLoading={false} label="native plan" text={automaticContext.plan.text} />
+        <PreviewSection
+          isLoading={false}
+          label={automaticFactLabel(
+            'native plan',
+            automaticContext.plan.source,
+            automaticContext.plan.updatedAt
+          )}
+          text={automaticContext.plan.text}
+        />
       ) : null}
       {!isLoading && automaticContext && automaticContext.todos.items.length > 0 ? (
         <TodoPreviewSection todos={automaticContext.todos} />
@@ -285,9 +293,22 @@ const MAX_VISIBLE_TODOS = 5
 function formatTodoHeading(todos: NativeTodoState): string {
   const openCount = todos.counts.pending + todos.counts.in_progress + todos.counts.unknown
   const completedCount = todos.counts.completed
-  const parts = ['native todos', `${openCount} open`]
+  const parts = [
+    automaticFactLabel('native todos', todos.source, todos.updatedAt),
+    `${openCount} open`,
+  ]
   if (completedCount > 0) parts.push(`${completedCount} done`)
   return parts.join(' · ')
+}
+
+function automaticFactLabel(
+  label: string,
+  source: string | null,
+  updatedAt: string | null
+): string {
+  const sourceLabel = source ? source.replaceAll('-', ' ') : 'source unavailable'
+  const freshness = updatedAt ? relativeTime(updatedAt) : 'time unavailable'
+  return `${label} · ${sourceLabel} · ${freshness}`
 }
 
 function selectVisibleTodos(items: NativeTodoItem[]): NativeTodoItem[] {

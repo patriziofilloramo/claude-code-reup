@@ -7,15 +7,15 @@ Triage in seconds, not minutes. Group by intent, not by filesystem path.
 
 ## What's already built
 
-| Component                                                                                                                           | Status         |
-| ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `session-automatic-context.ts` — extracts plans, TODOs, touched files, research trail, tool health, agent activity, execution facts | ✅ done        |
-| `SessionPreview.automaticContext` included in every preview API response                                                            | ✅ done        |
-| TUI Resume Card shows native plan + TODO state (read-only)                                                                          | ✅ done        |
-| Web inspector: `buildNativePlanHtml` + `buildNativeTodosHtml` exist in `07-filter-inspector.js`                                     | ✅ done        |
-| Web inspector: research trail, tool health, source/freshness labels                                                                 | ✅ done        |
-| Session tags, project tags, project groups, work stacks                                                                             | ✅ done        |
-| Left rail (Inbox / Smart / Stacks / Groups)                                                                                         | ❌ not started |
+| Component                                                                                                                           | Status  |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `session-automatic-context.ts` — extracts plans, TODOs, touched files, research trail, tool health, agent activity, execution facts | ✅ done |
+| `SessionPreview.automaticContext` included in every preview API response                                                            | ✅ done |
+| TUI Resume Card shows native plan + TODO state (read-only)                                                                          | ✅ done |
+| Web inspector: `buildNativePlanHtml` + `buildNativeTodosHtml` exist in `07-filter-inspector.js`                                     | ✅ done |
+| Web inspector: research trail, tool health, source/freshness labels                                                                 | ✅ done |
+| Session tags, project tags, project groups, work stacks                                                                             | ✅ done |
+| Left rail (Inbox / Smart / Stacks / Groups)                                                                                         | ✅ done |
 
 ---
 
@@ -119,8 +119,8 @@ Smart Views are virtual filters computed client-side from signals already presen
 | Has open TODOs   | requires preview — loaded on demand; shown in Inspector, not filterable server-side in MVP                                                              |
 | Planned          | same — preview-dependent; surfaced in Inspector                                                                                                         |
 | High context     | `context.latestContextTokens !== null && context.latestContextTokens > CONTEXT_HIGH_THRESHOLD` (`CONTEXT_HIGH_THRESHOLD = 150_000` tokens, MVP default) |
-| Expiring soon    | `signals.expiresInDays !== null && signals.expiresInDays <= 3`                                                                                          |
-| Recently touched | `Date.now() - Date.parse(session.updated) < 24 * 3_600_000`                                                                                             |
+| Expiring soon    | `signals.expiresInDays !== null && signals.expiresInDays <= 7`                                                                                          |
+| Recently touched | `Date.now() - Date.parse(session.updated) < 7 * 24 * 3_600_000`                                                                                         |
 
 Note: **Has open TODOs** and **Planned** require per-session preview data (transcript scan). They
 are surfaced in the Inspector and Triage Inbox session details, but NOT as server-side filter
@@ -196,8 +196,8 @@ INBOX
   🟡 Branch drift            (3)   gitBranch ≠ currentBranch
   ⬛ Path missing            (1)   project folder deleted/moved
   🔵 High context            (4)   latestContextTokens > 150,000
-  ⏱  Expiring soon           (1)   ≤ 3 days on transcript
-  🟣 Recently touched        (7)   last 24h, not in above buckets
+  ⏱  Expiring soon           (1)   ≤ 7 days on transcript
+  🟣 Recently touched        (7)   last 7 days, not in above buckets
 ```
 
 Rules:
@@ -523,29 +523,31 @@ grouping, stack assignment) stays in the web UI for now.
 
 #### 3a — TUI
 
-- [ ] Session rows show tag chips (abbreviated, max 2, elided) when space allows
-- [ ] Project rows show group name (abbreviated) when assigned
-- [ ] Footer hints: `f focus  esc clear` (no `t`/`g` edit pickers in MVP)
-- [ ] `f` cycles Inbox Smart View buckets (filter-only, no org mutation)
-- [ ] TUI Resume Card: plan and TODO already shown; add source/freshness label (matches Phase 1f)
-- [ ] Command palette: `Focus: [Inbox bucket]`, `Clear focus`
+- [x] Session rows show tag chips (abbreviated, max 2, elided) when space allows
+- [x] Project rows show group name (abbreviated) when assigned
+- [x] Footer hints: `f focus  esc clear` (no `t`/`g` edit pickers in MVP)
+- [x] `f` cycles Inbox Smart View buckets (filter-only, no org mutation)
+- [x] TUI Resume Card shows source/freshness labels for native plan and TODO state
+- [x] Command palette: `Focus: [Inbox bucket]`, `Clear focus`
 - [ ] **Not in MVP**: tag picker (`t`), group/stack picker (`g`) — editing stays in web
 
 #### 3b — CLI
 
-- [ ] `swoop list --group <name>` — projects in group, via `readOrgData()` + `filterProjectsByOrg()`
-- [ ] `swoop list --stack <name>` — items in stack, same core path
-- [ ] `swoop list --tag <name>` — sessions with matching tag, reads `swoop.json` sidecars directly
-- [ ] `swoop list --json` — `tags`, `group`, `projectTags` included in output
-- [ ] Help text and completion scripts updated
+- [x] `swoop list --group <name>` — projects in group, via `readOrgData()` + `filterProjectsByOrg()`
+- [x] `swoop list --stack <name>` — items in stack, same core path
+- [x] `swoop list --tag <name>` — sessions with matching tag, reads `swoop.json` sidecars directly
+- [x] `swoop list --json` — `tags`, `group`, `projectTags` included in output
+- [x] Help text and completion scripts updated
 - [ ] `--todo` and `--planned` deferred (require transcript scan; out of MVP scope)
-- [ ] No HTTP calls to web server; all data from core (`readOrgData`, `readProjectSidecar`)
+- [x] No HTTP calls to web server; all data from core (`readOrgData`, `readProjectSidecar`)
 
 #### 3c — Tests
 
-- [ ] Integration: `swoop list --tag bug` returns only tagged sessions
-- [ ] Integration: `swoop list --group work` returns only assigned projects
-- [ ] Integration: `swoop list --stack launch` returns stack members
+- [x] Integration: `swoop list --tag bug` returns only tagged sessions
+- [x] Integration: `swoop list --group work` returns only assigned projects
+- [x] Integration: `swoop list --stack launch` returns stack members
+- [x] Unit: shared Smart View priority, archived exclusion, filtering, and cycling
+- [x] Regression: TUI group/focus/provenance surfaces and CLI help/completion flags
 
 ---
 

@@ -44,6 +44,7 @@ _"What is happening, what needs attention, and should I resume it now?"_
 - **One-action resume** — launch the selected session in its recorded working directory.
 - **Deep transcript search** — scan every session transcript for keywords (`swoop search --deep`, TUI `tab`, or the web UI ⌕ button).
 - **Composable CLI** — inspect the inbox, diagnose local data, export JSON, and create handoffs.
+- **Organization layer** — triage with Smart Views, tags, groups, and reusable work stacks.
 - **CLAUDE.md editor** — view and edit each project's instruction file from the web UI.
 - **Shared session storage** — link any project so sessions travel with the repo via cloud storage.
 - **Local-first** — no account, cloud service, or telemetry.
@@ -132,6 +133,9 @@ ambiguous prefixes.
 | `--archived`        | Show only archived sessions             |
 | `--project <query>` | Match project name, ID, or path         |
 | `--status <status>` | Match one exact session status          |
+| `--tag <name>`      | Match a session or project tag          |
+| `--group <name>`    | Show projects assigned to a group       |
+| `--stack <name>`    | Show sessions included in a work stack  |
 | `--limit <count>`   | Limit the number of results             |
 
 Examples:
@@ -140,6 +144,8 @@ Examples:
 swoop list
 swoop list release --active
 swoop list --attention --project claude-code-swoop
+swoop list --group work --tag release
+swoop list --stack launch
 swoop list --archived --limit 20
 swoop list --json --status interrupted | jq '.sessions[]'
 ```
@@ -233,6 +239,7 @@ session titles or transcript content.
 | `/`           | Search sessions                  |
 | `tab`         | Deep search (while searching)    |
 | `a`           | Toggle archived sessions         |
+| `f`           | Cycle Inbox Smart View focus     |
 | `space`       | Project action menu              |
 | `enter`       | Expand project / preview session |
 | `esc`         | Back / quit                      |

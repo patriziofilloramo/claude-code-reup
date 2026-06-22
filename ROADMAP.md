@@ -33,17 +33,16 @@
 
 Swoop's near-term product bets are:
 
-1. **Milestone 12 — Organization layer**: Phase 1 and the core Phase 2 web experience are
-   complete: Triage Inbox, stack/group rail, chips, focus bar, keyboard tag/group/stack flows,
-   context menus, Inspector editing, and Save as stack. Phase 3 brings read/filter parity to TUI
-   and CLI.
+1. **Milestone 12 — Organization layer**: Phase 1, the Phase 2 web experience, and Phase 3
+   TUI/CLI read-filter parity are complete. Remaining organization work is optional advanced
+   editing, automation, and portability after real-world use.
 2. **Milestone 13 — Live web control panel**: make `swoop web` worth keeping open while working.
    It should show what is active, changing, risky, or close to a limit without becoming a chat UI.
 3. **Milestone 11 — VS Code Workspace Cockpit**: shipped. Remaining work is smoke-testing on
    clean platforms and fixing the Windows terminal launcher before any public release.
 
-**Recommended order:** complete Milestone 12 Phase 3 (TUI/CLI read and filter parity), then close
-the Milestone 9 Windows launcher and clean-environment release blockers. After that, build
+**Recommended order:** close the Milestone 9 Windows launcher and clean-environment release
+blockers. After that, build
 Milestone 13 on the existing SSE/live-usage foundation and carry the proven organization
 vocabulary into the VS Code dashboard.
 

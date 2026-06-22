@@ -166,6 +166,7 @@ export const LABELS = {
   hintSearch: '/ search',
   hintDeepSearch: 'tab deep search',
   hintFiles: 'f files',
+  hintFocus: 'f focus',
   hintSpace: 'space actions',
   hintSelect: 's select',
   hintQuit: 'q quit',
@@ -216,6 +217,7 @@ export const LABELS = {
   newSessionVerb: 'starting new session in',
   resumePickerTitle: 'Swoop RESUME',
   sessionsCountLabel: 'sessions',
+  focusLabel: 'Focus:',
 } as const
 
 export type LabelKey = keyof typeof LABELS

@@ -84,7 +84,10 @@ Options:
   --json               Emit machine-readable JSON
   --limit <count>      Limit the number of results
   --project <query>    Filter by project
-  --status <status>    Filter by derived status`,
+  --status <status>    Filter by derived status
+  --tag <name>         Filter by session or project tag
+  --group <name>       Filter by project group
+  --stack <name>       Filter by work stack`,
 
   resume: `swoop resume - resume a Claude Code session
 

@@ -1,9 +1,11 @@
 import { Box, Text } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import SearchBar from './SearchBar.js'
 
 interface AppToolbarProps {
+  focusLabel: string | null
   isLoading: boolean
   isSearchOpen: boolean
   projectCount: number
@@ -11,6 +13,7 @@ interface AppToolbarProps {
 }
 
 export default function AppToolbar({
+  focusLabel,
   isLoading,
   isSearchOpen,
   projectCount,
@@ -32,6 +35,11 @@ export default function AppToolbar({
       ) : (
         <Box gap={2}>
           <Text color={COLORS.dim}>{isLoading ? '…' : projectCount} projects</Text>
+          {focusLabel ? (
+            <Text color={COLORS.accent}>
+              {LABELS.focusLabel} {focusLabel}
+            </Text>
+          ) : null}
           <Text color={COLORS.muted}>
             {'  '}
             <Text color={COLORS.text}>/</Text>

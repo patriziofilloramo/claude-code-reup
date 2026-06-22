@@ -16,6 +16,9 @@ describe('completion command', () => {
     expect(String(log.mock.calls[0][0])).toContain('__complete-session-ids')
     expect(String(log.mock.calls[0][0])).toContain('resume')
     expect(String(log.mock.calls[0][0])).toContain('handoff')
+    expect(String(log.mock.calls[0][0])).toContain('--tag')
+    expect(String(log.mock.calls[0][0])).toContain('--group')
+    expect(String(log.mock.calls[0][0])).toContain('--stack')
     expect(process.exitCode).toBeUndefined()
   })
 

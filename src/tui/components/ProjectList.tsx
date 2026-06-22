@@ -60,6 +60,13 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
+            {project.groupName ? (
+              <Box flexShrink={1} paddingLeft={1}>
+                <Text color={COLORS.accent} wrap="truncate">
+                  [{project.groupName}]
+                </Text>
+              </Box>
+            ) : null}
             {syncStatus && syncStatus !== 'none' ? (
               <Box flexShrink={0} paddingLeft={1}>
                 <Text color={cloudColor}>{'☁'}</Text>
