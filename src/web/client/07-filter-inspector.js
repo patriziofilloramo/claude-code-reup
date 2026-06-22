@@ -553,6 +553,7 @@ function buildOrgInspectorHtml(session, project) {
       (groupName
         ? '<span class="insp-org-pill">' + escapeHtml(groupName) + '</span>'
         : '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>') +
+      '<button class="insp-org-add" data-inspector-action="project-group">change</button>' +
       '</span>'
     html += '</div>'
   }
@@ -569,6 +570,7 @@ function buildOrgInspectorHtml(session, project) {
     } else {
       html += '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>'
     }
+    html += '<button class="insp-org-add" data-inspector-action="session-stack">change</button>'
     html += '</span></div>'
   }
 
@@ -739,12 +741,21 @@ elements.sessionInspector.addEventListener('click', function (event) {
 
   const actionButton = event.target.closest('[data-inspector-action]')
   if (actionButton && selectedSession) {
-    if (actionButton.dataset.inspectorAction === 'inspector-toggle-expanded') {
+    var inspectorAction = actionButton.dataset.inspectorAction
+    if (inspectorAction === 'inspector-toggle-expanded') {
       sessionInspectorExpanded = !sessionInspectorExpanded
       renderSessions()
       return
     }
-    executeSessionAction(actionButton.dataset.inspectorAction, selectedSession)
+    if (inspectorAction === 'project-group' && selectedProject) {
+      openGroupPicker(selectedProject)
+      return
+    }
+    if (inspectorAction === 'session-stack' && selectedProject) {
+      openStackPicker(selectedProject, selectedSession)
+      return
+    }
+    executeSessionAction(inspectorAction, selectedSession)
     return
   }
 

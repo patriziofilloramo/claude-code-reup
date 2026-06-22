@@ -54,6 +54,7 @@ const elements = {
   focusBar: elementById('focus-bar'),
   focusBarLabel: elementById('focus-bar-label'),
   focusBarCount: elementById('focus-bar-count'),
+  focusSaveBtn: elementById('focus-save'),
   focusClearBtn: elementById('focus-clear'),
   orgPickerOverlay: elementById('org-picker-overlay'),
   orgPickerTitle: elementById('org-picker-title'),

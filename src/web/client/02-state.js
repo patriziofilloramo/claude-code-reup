@@ -28,6 +28,7 @@ let orgData = null
 // Shape: null | { kind: 'stack', id: string, name: string }
 //             | { kind: 'group', id: string, name: string }
 //             | { kind: 'tag', tag: string }
+//             | { kind: 'review', id: string, name: string }
 let focusFilter = null
 // Which rail item is subject to a pending context menu action: null | { kind, id, name }
 let ctxRailItem = null

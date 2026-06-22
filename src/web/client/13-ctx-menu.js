@@ -64,6 +64,7 @@ function openProjectContextMenu(event, project) {
     { action: 'project-new-session', label: '+ new session' },
     { action: 'project-copy-path', label: 'copy path' },
     { type: 'separator' },
+    { action: 'project-tag', label: STRINGS.sessionActionTag },
     { action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup },
     { action: 'project-add-stack', label: STRINGS.projectCtxAddToStack },
   ]
@@ -84,6 +85,8 @@ elements.contextMenu.addEventListener('click', function (event) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
     copyTextToClipboard(project.path, STRINGS.projectPathCopied)
+  } else if (action === 'project-tag' && project) {
+    openProjectTagPicker(project)
   } else if (action === 'project-move-group' && project) {
     openGroupPicker(project)
   } else if (action === 'project-add-stack' && project) {

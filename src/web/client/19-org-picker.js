@@ -12,6 +12,7 @@ function openGroupPicker(project) {
   elements.orgPickerTitle.textContent = STRINGS.orgPickerGroupTitle
   renderOrgPickerList()
   elements.orgPickerOverlay.classList.add('open')
+  focusFirstOrgPickerItem()
 }
 
 function openStackPicker(project, session) {
@@ -20,6 +21,7 @@ function openStackPicker(project, session) {
   elements.orgPickerTitle.textContent = STRINGS.orgPickerStackTitle
   renderOrgPickerList()
   elements.orgPickerOverlay.classList.add('open')
+  focusFirstOrgPickerItem()
 }
 
 function closeOrgPicker() {
@@ -51,17 +53,20 @@ function renderOrgPickerList() {
 
   if (orgPickerMode === 'group' && currentGroupId) {
     html +=
-      '<div class="org-picker-item org-picker-remove" data-item-id="">' +
+      '<div class="org-picker-item org-picker-remove" tabindex="0" data-item-id="">' +
       escapeHtml(STRINGS.orgPickerRemoveGroup) +
       '</div>'
   }
   for (var i = 0; i < items.length; i++) {
     var item = items[i]
-    var isCurrent = orgPickerMode === 'group' && item.id === currentGroupId
+    var isCurrent =
+      orgPickerMode === 'group'
+        ? item.id === currentGroupId
+        : stackContainsOrgPickerTarget(item, orgPickerTarget)
     html +=
       '<div class="org-picker-item' +
       (isCurrent ? ' active' : '') +
-      '" data-item-id="' +
+      '" tabindex="0" data-item-id="' +
       escapeHtml(item.id) +
       '">' +
       escapeHtml(item.name) +
@@ -87,7 +92,7 @@ function renderOrgPickerList() {
     var createLabel =
       orgPickerMode === 'group' ? STRINGS.orgPickerNewGroup : STRINGS.orgPickerNewStack
     html +=
-      '<div class="org-picker-item org-picker-create-trigger" data-picker-action="create">' +
+      '<div class="org-picker-item org-picker-create-trigger" tabindex="0" data-picker-action="create">' +
       escapeHtml(createLabel) +
       '</div>'
   }
@@ -97,6 +102,27 @@ function renderOrgPickerList() {
     var input = elements.orgPickerList.querySelector('.org-picker-create-input')
     if (input) input.focus()
   }
+}
+
+function focusFirstOrgPickerItem() {
+  requestAnimationFrame(function () {
+    var first = elements.orgPickerList.querySelector('.org-picker-item')
+    if (first) first.focus()
+  })
+}
+
+function stackContainsOrgPickerTarget(stack, target) {
+  if (!stack || !target || !target.project) return false
+  return stack.items.some(function (item) {
+    if (target.session) {
+      return (
+        item.kind === 'session' &&
+        item.projectId === target.project.id &&
+        item.sessionId === target.session.id
+      )
+    }
+    return item.kind === 'project' && item.projectId === target.project.id
+  })
 }
 
 async function applyOrgPickerSelection(itemId) {
@@ -116,11 +142,24 @@ async function applyOrgPickerSelection(itemId) {
       var body = target.session
         ? { kind: 'session', projectId: target.project.id, sessionId: target.session.id }
         : { kind: 'project', projectId: target.project.id }
-      await requestJson('/api/org/stacks/' + encodeURIComponent(itemId) + '/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      var stack = orgData.stacks.find(function (candidate) {
+        return candidate.id === itemId
       })
+      if (stackContainsOrgPickerTarget(stack, target)) {
+        var itemRef = target.session
+          ? target.project.id + ':' + target.session.id
+          : target.project.id
+        await requestJson(
+          '/api/org/stacks/' + encodeURIComponent(itemId) + '/items/' + encodeURIComponent(itemRef),
+          { method: 'DELETE' }
+        )
+      } else {
+        await requestJson('/api/org/stacks/' + encodeURIComponent(itemId) + '/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      }
     }
     void refreshProjectData()
   } catch (error) {
@@ -188,7 +227,24 @@ elements.orgPickerList.addEventListener('click', function (event) {
 
 elements.orgPickerList.addEventListener('keydown', function (event) {
   var input = event.target.closest('.org-picker-create-input')
-  if (!input) return
+  if (!input) {
+    var item = event.target.closest('.org-picker-item')
+    if (!item) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      item.click()
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      var items = Array.from(elements.orgPickerList.querySelectorAll('.org-picker-item'))
+      var index = items.indexOf(item)
+      var direction = event.key === 'ArrowDown' ? 1 : -1
+      var next = items[(index + direction + items.length) % items.length]
+      if (next) next.focus()
+    }
+    return
+  }
 
   if (event.key === 'Enter') {
     event.preventDefault()

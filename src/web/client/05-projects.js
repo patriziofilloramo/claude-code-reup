@@ -39,6 +39,7 @@ function buildProjectRowHtml(project) {
     '<span class="p-name">' +
     escapeHtml(compactPath(project.path)) +
     '</span>' +
+    buildProjectOrgChipsHtml(project) +
     (project.syncStatus && project.syncStatus !== 'none'
       ? project.syncStatus === 'grey'
         ? '<span class="p-cloud p-cloud--stale" title="' +
@@ -164,6 +165,24 @@ function selectProject(project) {
 }
 
 elements.projectList.addEventListener('click', function (event) {
+  const tagChip = event.target.closest('.p-tag')
+  if (tagChip) {
+    event.stopPropagation()
+    var tag = tagChip.dataset.tag
+    if (tag) {
+      focusFilter =
+        focusFilter && focusFilter.kind === 'tag' && focusFilter.tag === tag
+          ? null
+          : { kind: 'tag', tag: tag }
+      synchronizeSelectedProjectWithView()
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+    }
+    return
+  }
+
   const menuBtn = event.target.closest('.p-menu-btn')
   if (menuBtn) {
     event.stopPropagation()
@@ -174,6 +193,10 @@ elements.projectList.addEventListener('click', function (event) {
     openContextMenu(menuBtn, [
       { action: 'project-new-session', label: STRINGS.projectCtxNewSession },
       { action: 'project-copy-path', label: STRINGS.projectCtxCopyPath },
+      { type: 'separator' },
+      { action: 'project-tag', label: STRINGS.sessionActionTag },
+      { action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup },
+      { action: 'project-add-stack', label: STRINGS.projectCtxAddToStack },
     ])
     return
   }

@@ -33,21 +33,19 @@
 
 Swoop's near-term product bets are:
 
-1. **Milestone 12 — Organization layer**: make the web UI genuinely useful for managing many
-   Claude Code projects and sessions. Phase 1 (data model, APIs, org.json infrastructure) is
-   already complete. Phase 2 is the web UI: Triage Inbox left rail, chips, focus bar, and
-   tag/group/stack pickers. This is the strongest differentiator — no other tool in the space
-   does intent-based organization.
+1. **Milestone 12 — Organization layer**: Phase 1 and the core Phase 2 web experience are
+   complete: Triage Inbox, stack/group rail, chips, focus bar, keyboard tag/group/stack flows,
+   context menus, Inspector editing, and Save as stack. Phase 3 brings read/filter parity to TUI
+   and CLI.
 2. **Milestone 13 — Live web control panel**: make `swoop web` worth keeping open while working.
    It should show what is active, changing, risky, or close to a limit without becoming a chat UI.
 3. **Milestone 11 — VS Code Workspace Cockpit**: shipped. Remaining work is smoke-testing on
    clean platforms and fixing the Windows terminal launcher before any public release.
 
-**Recommended order:** complete Milestone 12 Phase 2 (web organization UI) next. The data layer
-(Phase 1) is already done, so this is purely a frontend build. Phase 2 is the Triage Inbox left
-rail — the feature most likely to be the standout differentiator at launch. After that, design
-Milestone 13 live panel and carry M11 organization into the VS Code extension once the tag/stack
-vocabulary is stable.
+**Recommended order:** complete Milestone 12 Phase 3 (TUI/CLI read and filter parity), then close
+the Milestone 9 Windows launcher and clean-environment release blockers. After that, build
+Milestone 13 on the existing SSE/live-usage foundation and carry the proven organization
+vocabulary into the VS Code dashboard.
 
 ---
 
@@ -452,24 +450,24 @@ Current implementation status:
 
 ### Feature ideas worth building
 
-- [ ] **Triage Inbox** — an unfiled/attention-first view for sessions that are active,
+- [x] **Triage Inbox** — an unfiled/attention-first view for sessions that are active,
       interrupted, expiring, branch-drifted, high-context, recently modified, or untagged. The
       user can archive, tag, stack, or dismiss from one place.
-- [ ] **Smart Buckets** — virtual sections generated from signals: `Now`, `Needs review`,
+- [x] **Smart Buckets** — virtual sections generated from signals: `Now`, `Needs review`,
       `Waiting on tools`, `High context`, `Stale`, `Expiring`, `Archived`. These should exist even
       before the user creates manual groups.
-- [ ] **Work Stack rail** — a persistent web sidebar above projects. A stack can contain both
+- [x] **Work Stack rail** — a persistent web sidebar above projects. A stack can contain both
       projects and individual sessions. Selecting it filters the whole app to that intent.
 - [ ] **"Send to stack" gesture** — web: drag a row onto a stack; keyboard: `g`; CLI:
       `swoop tag/move` later if useful. Keep the first implementation native and simple.
-- [ ] **Session chips** — compact visible chips in rows for tags/stacks, capped at 2 plus `+N`.
+- [x] **Session chips** — compact visible chips in rows for tags/stacks, capped at 2 plus `+N`.
       Chips are clickable filters in web and searchable tokens in TUI/CLI.
 - [ ] **Suggested tags** — local heuristics only: branch prefix (`feat`, `fix`, `release`),
       project folder name, status signals (`interrupted`, `high-context`, `expiring`), and recent
       tag usage. Suggestions are opt-in in config and never call an API.
-- [ ] **Focus bar** — when filtering by group/tag/stack, show a clear top bar:
+- [x] **Focus bar** — when filtering by group/tag/stack, show a clear top bar:
       `Focus: Launch week x`. Escape or one click clears it.
-- [ ] **Saved view from search** — after a global search, allow "save as stack" so a messy set of
+- [x] **Saved view from search** — after a global search, allow "save as stack" so a messy set of
       related sessions becomes a reusable work context.
 - [ ] **TODO-aware triage** — sessions with unfinished Claude TODOs appear in Inbox/Smart Buckets;
       completed TODO lists can make a session a cleanup/archive candidate.
@@ -485,9 +483,9 @@ Current implementation status:
 
 ### Fast interaction model
 
-- [ ] **One-key tagging** — `t` opens a tiny tag picker for the focused session/project;
+- [x] **One-key tagging** — `t` opens a tiny tag picker for the focused session/project;
       typing creates or filters tags, Enter toggles, Esc cancels
-- [ ] **Quick move/group** — `g` opens a group/stack picker; Enter assigns the focused project
+- [x] **Quick move/group** — `g` opens the relevant group or stack picker; Enter assigns the focused project
       or selected sessions without leaving the keyboard flow
 - [ ] **Web drag-and-drop** — drag a session or project onto a group/stack in the sidebar;
       no dependency-heavy DnD framework unless native pointer events become too fragile
@@ -500,14 +498,14 @@ Current implementation status:
 
 ### Web UI shape
 
-- [ ] Left rail: `Smart`, `Stacks`, `Groups`, then `Projects`; each section collapsible
-- [ ] Main list: projects/sessions filtered by current focus, with chips and health badges visible
-- [ ] Right inspector: Resume Card, native TODO summary, and organization editor for selected
+- [x] Left rail: `Smart`, `Stacks`, `Groups`, then `Projects`; each section collapsible
+- [x] Main list: projects/sessions filtered by current focus, with chips and health badges visible
+- [x] Right inspector: Resume Card, native TODO summary, and organization editor for selected
       session/project
 - [ ] Plan section: latest native plan shown above TODOs when present, with source/freshness label
 - [ ] Drag targets: stacks/groups highlight only while dragging a project/session row
 - [ ] Empty state: "No stacks yet — press g or drag a session here" instead of a settings-heavy flow
-- [ ] Context menu: row-only actions for tag, move to stack/group, archive, delete, handoff
+- [x] Context menu: row-only actions for tag, move to stack/group, archive, delete, handoff
 
 ### TUI / CLI shape
 
@@ -542,7 +540,8 @@ Current implementation status:
        web inspector and smart-bucket integration remain.
 4. [ ] Native Plan extraction: latest plan summary/status and `planned` smart bucket. Core
        extraction + TUI preview are done; planned bucket remains.
-5. [ ] Web first: rail, chips, focus bar, tag picker, group/stack picker, drag to stack/group
+5. [x] Web first: rail, chips, focus bar, tag picker, group/stack picker, and Save as stack.
+       Native drag-and-drop remains an optional interaction enhancement.
 6. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips/TODO/plan count in compact rows
 7. [ ] Search/list integration: tags/groups/stacks/TODO/plan state participate in search and
        `swoop list --json`

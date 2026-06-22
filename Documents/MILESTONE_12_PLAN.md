@@ -410,13 +410,13 @@ Add a collapsible rail above the existing project list:
 └─────────────────────────────────────┘
 ```
 
-- [ ] Rail sections rendered above `.proj-list` in `05-projects.js`
-- [ ] Section collapse state persisted in `localStorage` (one key per section)
-- [ ] Inbox items computed client-side from `projects` + `activeSessionIds` (no new API)
-- [ ] Stacks/Groups populated from `GET /api/org` (fetched alongside `/api/projects`)
-- [ ] Counts: stack = active session count; group = project count
-- [ ] Selecting any rail item sets `focusFilter` and re-renders both panels
-- [ ] Inline "create" for stacks and groups (click `+ new stack` → inline input → Enter → `POST /api/org/stacks`)
+- [x] Rail sections rendered above `.proj-list`
+- [x] Section collapse state persisted in `localStorage` (one key per section)
+- [x] Inbox items computed client-side from `projects` + `activeSessionIds` (no new API)
+- [x] Stacks/Groups populated from `GET /api/org` (fetched alongside `/api/projects`)
+- [x] Counts: Inbox is exclusive by priority; stack = visible sessions; group = project count
+- [x] Selecting any rail item sets `focusFilter` and re-renders both panels
+- [x] Inline creation is available from the keyboard/context picker and immediately applies the item
 
 #### 2b — Focus bar
 
@@ -426,10 +426,10 @@ Add a collapsible rail above the existing project list:
 └─────────────────────────────────────────────────────┘
 ```
 
-- [ ] Shown below search bar, above filter pills, when `focusFilter` is set
-- [ ] Search within focus scope only (no silent global fallback)
-- [ ] `×` clears focus; Escape from search input clears focus too
-- [ ] `fmt(STRINGS.focusBar, { name, n, total })` pattern
+- [x] Shown below search bar, above filter pills, when focus or search is active
+- [x] Search within focus scope only (no silent global fallback)
+- [x] `×` clears focus; Escape from search input clears focus too
+- [x] `fmt(STRINGS.focusBar, { name, n, total })` pattern
 
 #### 2c — Session + project chips
 
@@ -437,11 +437,11 @@ Add a collapsible rail above the existing project list:
 ● session name  [bug] [+1]  ⎇ feat/login  5m
 ```
 
-- [ ] Session tags rendered as chips in session rows: max 2 visible + `+N` overflow
-- [ ] Project tags shown beside project name in project rows
-- [ ] Chips are clickable → sets tag focus filter
-- [ ] `.tag-chip` CSS: small rounded pill, muted color; focused chip has accent border
-- [ ] Stack/group indicator on project rows when a group is assigned
+- [x] Session tags rendered as chips in session rows: max 2 visible + `+N` overflow
+- [x] Project tags shown beside project name in project rows
+- [x] Chips are clickable → sets tag focus filter
+- [x] Chips use compact accent styling
+- [x] Group indicator shown on assigned project rows
 
 #### 2d — Tag picker (`t` key)
 
@@ -455,12 +455,12 @@ Tag session   [bug filter or new tag   ]
   + Create "deploy"
 ```
 
-- [ ] Opens on `t` when session is selected; also from inspector "+ add tag" button
-- [ ] Shows palette sorted by recency (most recently used first)
-- [ ] Typing filters list; Enter on new text creates tag, adds to palette, applies to session
-- [ ] Toggle existing tags on/off; single `PUT /api/…/tags` call on close
-- [ ] Keyboard: arrows navigate, Enter toggle/create, Escape cancel
-- [ ] Added to `STRINGS` + footer hint
+- [x] Opens on `t` for the selected session/project and from Inspector/context menus
+- [x] Shows palette sorted by recency (most recently used first)
+- [x] Typing filters; Enter selects or creates
+- [x] Existing tags can be removed; one `PUT` is issued on commit
+- [x] Keyboard: arrows navigate, Enter select/create, Escape cancels
+- [x] Added to `STRINGS` + footer hint
 
 #### 2e — Group/Stack picker (`g` key)
 
@@ -475,16 +475,16 @@ Move to group / stack   [filter...     ]
   + New stack
 ```
 
-- [ ] Opens on `g` when project or session is focused
-- [ ] Checkmarks show current membership; toggle to add/remove
-- [ ] Fires `PUT /api/projects/:id/group` or `POST/DELETE /api/org/stacks/:id/items`
-- [ ] New stack inline creation at bottom
-- [ ] Footer hint added
+- [x] Opens the relevant group/stack picker on `g`
+- [x] Checkmarks show current membership; stack membership toggles add/remove
+- [x] Fires `PUT /api/projects/:id/group` or `POST/DELETE /api/org/stacks/:id/items`
+- [x] New group/stack inline creation at bottom
+- [x] Footer hint added
 
 #### 2f — Context menu additions
 
-- [ ] Session row right-click: `Tag…`, `Move to stack…`, `Archive`, `Delete`, `Copy ID`
-- [ ] Project row right-click: `Tag project…`, `Move to group…`, `New session`, `Copy path`
+- [x] Session row right-click: `Tag…`, `Move to stack…`, `Archive`, `Delete`, `Copy ID`
+- [x] Project row right-click: `Tag project…`, `Move to group…`, `Move to stack…`, `New session`, `Copy path`
 
 #### 2g — Inspector org editor
 
@@ -497,13 +497,13 @@ Stack      Launch week ▾
 Group      Work
 ```
 
-- [ ] Tags: chips + inline input for adding (calls tag picker or inline add)
-- [ ] Stack/Group: dropdown selects → immediate PUT
+- [x] Tags: chips + tag picker
+- [x] Stack/Group: picker actions apply immediately
 
 #### 2h — "Save as stack" from search/focus
 
-- [ ] When a search or Smart View focus is active, show `Save as stack` button in focus bar
-- [ ] Creates a new stack containing the visible sessions
+- [x] When a search or Smart View focus is active, show `Save as stack` in the focus bar
+- [x] Creates a new stack containing the visible sessions
 
 #### 2i — Tests
 

@@ -59,6 +59,14 @@ function getReviewBucket(bucketId) {
   return null
 }
 
+function primaryReviewBucket(session) {
+  if (session.signals.archived) return null
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    if (REVIEW_BUCKETS[i].test(session)) return REVIEW_BUCKETS[i]
+  }
+  return null
+}
+
 function parseSearchQuery(query) {
   var reviewBucketIds = []
   var textParts = []

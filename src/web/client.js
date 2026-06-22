@@ -308,6 +308,8 @@ const STRINGS = {
   railGroups: 'GROUPS',
   railGroupsTooltip:
     'Project organization. A project can belong to one group, such as work, personal, or client.',
+  railInbox: 'INBOX',
+  railInboxTooltip: 'Live, attention-first views computed from current session signals.',
 
   // ── Rail: delete / manage ─────────────────────────────────────────────────
   railDeleteStack: 'delete stack',
@@ -333,6 +335,11 @@ const STRINGS = {
   // Focus bar
   focusBar: 'Focus: {name}',
   focusBarCount: '{n} of {total}',
+  focusSaveAsStack: 'Save as stack',
+  focusSavePrompt: 'Name this stack',
+  focusSaveEmpty: 'There are no visible sessions to save.',
+  focusSaveSuccess: 'Saved {n} sessions to "{name}".',
+  focusSaveFailed: 'Could not save stack: {error}',
 
   // Tag chips
   tagChipOverflow: '+{n}',
@@ -364,6 +371,7 @@ const STRINGS = {
 
   // Tag picker dialog
   tagPickerSessionTitle: 'Tag session',
+  tagPickerProjectTitle: 'Tag project',
   tagPickerPlaceholder: 'Add tag… (Enter to add)',
   tagPickerSaveFailed: 'Failed to save tags: {error}',
 
@@ -543,6 +551,7 @@ let orgData = null
 // Shape: null | { kind: 'stack', id: string, name: string }
 //             | { kind: 'group', id: string, name: string }
 //             | { kind: 'tag', tag: string }
+//             | { kind: 'review', id: string, name: string }
 let focusFilter = null
 // Which rail item is subject to a pending context menu action: null | { kind, id, name }
 let ctxRailItem = null
@@ -602,6 +611,7 @@ const elements = {
   focusBar: elementById('focus-bar'),
   focusBarLabel: elementById('focus-bar-label'),
   focusBarCount: elementById('focus-bar-count'),
+  focusSaveBtn: elementById('focus-save'),
   focusClearBtn: elementById('focus-clear'),
   orgPickerOverlay: elementById('org-picker-overlay'),
   orgPickerTitle: elementById('org-picker-title'),
@@ -1026,6 +1036,7 @@ function buildProjectRowHtml(project) {
     '<span class="p-name">' +
     escapeHtml(compactPath(project.path)) +
     '</span>' +
+    buildProjectOrgChipsHtml(project) +
     (project.syncStatus && project.syncStatus !== 'none'
       ? project.syncStatus === 'grey'
         ? '<span class="p-cloud p-cloud--stale" title="' +
@@ -1151,6 +1162,24 @@ function selectProject(project) {
 }
 
 elements.projectList.addEventListener('click', function (event) {
+  const tagChip = event.target.closest('.p-tag')
+  if (tagChip) {
+    event.stopPropagation()
+    var tag = tagChip.dataset.tag
+    if (tag) {
+      focusFilter =
+        focusFilter && focusFilter.kind === 'tag' && focusFilter.tag === tag
+          ? null
+          : { kind: 'tag', tag: tag }
+      synchronizeSelectedProjectWithView()
+      renderRail()
+      renderFocusBar()
+      renderProjects()
+      renderSessions()
+    }
+    return
+  }
+
   const menuBtn = event.target.closest('.p-menu-btn')
   if (menuBtn) {
     event.stopPropagation()
@@ -1161,6 +1190,10 @@ elements.projectList.addEventListener('click', function (event) {
     openContextMenu(menuBtn, [
       { action: 'project-new-session', label: STRINGS.projectCtxNewSession },
       { action: 'project-copy-path', label: STRINGS.projectCtxCopyPath },
+      { type: 'separator' },
+      { action: 'project-tag', label: STRINGS.sessionActionTag },
+      { action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup },
+      { action: 'project-add-stack', label: STRINGS.projectCtxAddToStack },
     ])
     return
   }
@@ -1230,6 +1263,14 @@ function normalizeReviewSearchToken(value) {
 function getReviewBucket(bucketId) {
   for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
     if (REVIEW_BUCKETS[i].id === bucketId) return REVIEW_BUCKETS[i]
+  }
+  return null
+}
+
+function primaryReviewBucket(session) {
+  if (session.signals.archived) return null
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    if (REVIEW_BUCKETS[i].test(session)) return REVIEW_BUCKETS[i]
   }
   return null
 }
@@ -2000,6 +2041,7 @@ function buildOrgInspectorHtml(session, project) {
       (groupName
         ? '<span class="insp-org-pill">' + escapeHtml(groupName) + '</span>'
         : '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>') +
+      '<button class="insp-org-add" data-inspector-action="project-group">change</button>' +
       '</span>'
     html += '</div>'
   }
@@ -2016,6 +2058,7 @@ function buildOrgInspectorHtml(session, project) {
     } else {
       html += '<span class="insp-org-muted">' + escapeHtml(STRINGS.inspOrgNoGroup) + '</span>'
     }
+    html += '<button class="insp-org-add" data-inspector-action="session-stack">change</button>'
     html += '</span></div>'
   }
 
@@ -2186,12 +2229,21 @@ elements.sessionInspector.addEventListener('click', function (event) {
 
   const actionButton = event.target.closest('[data-inspector-action]')
   if (actionButton && selectedSession) {
-    if (actionButton.dataset.inspectorAction === 'inspector-toggle-expanded') {
+    var inspectorAction = actionButton.dataset.inspectorAction
+    if (inspectorAction === 'inspector-toggle-expanded') {
       sessionInspectorExpanded = !sessionInspectorExpanded
       renderSessions()
       return
     }
-    executeSessionAction(actionButton.dataset.inspectorAction, selectedSession)
+    if (inspectorAction === 'project-group' && selectedProject) {
+      openGroupPicker(selectedProject)
+      return
+    }
+    if (inspectorAction === 'session-stack' && selectedProject) {
+      openStackPicker(selectedProject, selectedSession)
+      return
+    }
+    executeSessionAction(inspectorAction, selectedSession)
     return
   }
 
@@ -3431,6 +3483,7 @@ function openProjectContextMenu(event, project) {
     { action: 'project-new-session', label: '+ new session' },
     { action: 'project-copy-path', label: 'copy path' },
     { type: 'separator' },
+    { action: 'project-tag', label: STRINGS.sessionActionTag },
     { action: 'project-move-group', label: STRINGS.projectCtxMoveToGroup },
     { action: 'project-add-stack', label: STRINGS.projectCtxAddToStack },
   ]
@@ -3451,6 +3504,8 @@ elements.contextMenu.addEventListener('click', function (event) {
     void startNewSession(project)
   } else if (action === 'project-copy-path' && project) {
     copyTextToClipboard(project.path, STRINGS.projectPathCopied)
+  } else if (action === 'project-tag' && project) {
+    openProjectTagPicker(project)
   } else if (action === 'project-move-group' && project) {
     openGroupPicker(project)
   } else if (action === 'project-add-stack' && project) {
@@ -3538,6 +3593,7 @@ function openSearch() {
   elements.searchWrapper.style.display = 'flex'
   elements.searchInput.value = ''
   searchQuery = ''
+  renderFocusBar()
   elements.searchInput.focus()
 }
 
@@ -3557,6 +3613,7 @@ async function runInlineDeepSearch(query) {
   elements.searchModeLabel.style.display = 'flex'
   synchronizeSelectedProjectWithView()
   renderProjects()
+  renderFocusBar()
   renderSessions()
   try {
     const data = await requestJson('/api/search/deep?q=' + encodeURIComponent(query))
@@ -3568,6 +3625,7 @@ async function runInlineDeepSearch(query) {
     deepSearchLoading = false
     synchronizeSelectedProjectWithView()
     renderProjects()
+    renderFocusBar()
     renderSessions()
   }
 }
@@ -3592,6 +3650,7 @@ function closeSearch() {
   elements.headerHints.style.display = 'flex'
   searchQuery = ''
   exitInlineDeepSearch()
+  renderFocusBar()
 }
 
 elements.searchInput.addEventListener('input', function () {
@@ -3600,6 +3659,7 @@ elements.searchInput.addEventListener('input', function () {
   else {
     synchronizeSelectedProjectWithView()
     renderProjects()
+    renderFocusBar()
     renderSessions()
   }
 })
@@ -3612,7 +3672,10 @@ elements.searchInput.addEventListener('keydown', function (event) {
   }
   if (event.key === 'Escape') {
     if (deepSearchActive) exitInlineDeepSearch()
-    else closeSearch()
+    else {
+      if (focusFilter) clearFocusFilter()
+      closeSearch()
+    }
   }
 })
 
@@ -3666,7 +3729,13 @@ document.addEventListener('keydown', function (event) {
   if (selectedProject) {
     if (event.key === 'g') {
       event.preventDefault()
-      openGroupPicker(selectedProject)
+      if (selectedSession) openStackPicker(selectedProject, selectedSession)
+      else openGroupPicker(selectedProject)
+      return
+    }
+    if (event.key === 't' && !selectedSession) {
+      event.preventDefault()
+      openProjectTagPicker(selectedProject)
       return
     }
   }
@@ -4051,6 +4120,16 @@ applyTheme(getActiveTheme())
 function getSessionsMatchingFocus(project) {
   if (!focusFilter) return null
 
+  if (focusFilter.kind === 'review') {
+    var reviewBucket = getReviewBucket(focusFilter.id)
+    if (!reviewBucket) return undefined
+    var reviewSessions = project.sessions.filter(function (session) {
+      var primaryBucket = primaryReviewBucket(session)
+      return primaryBucket && primaryBucket.id === reviewBucket.id
+    })
+    return reviewSessions.length > 0 ? reviewSessions : undefined
+  }
+
   if (focusFilter.kind === 'stack') {
     if (!orgData) return undefined
     var stack = null
@@ -4155,6 +4234,45 @@ function countGroupProjectsForRail(groupId) {
     if (assignments[keys[i]] === groupId) count++
   }
   return count
+}
+
+function countReviewBucketSessions(bucket) {
+  var count = 0
+  for (var pi = 0; pi < projects.length; pi++) {
+    for (var si = 0; si < projects[pi].sessions.length; si++) {
+      var session = projects[pi].sessions[si]
+      var primaryBucket = primaryReviewBucket(session)
+      if (primaryBucket && primaryBucket.id === bucket.id) count++
+    }
+  }
+  return count
+}
+
+function buildProjectOrgChipsHtml(project) {
+  var html = ''
+  var tags = project.projectTags || []
+  for (var ti = 0; ti < Math.min(tags.length, 2); ti++) {
+    html +=
+      '<button class="p-tag" type="button" data-tag="' +
+      escapeHtml(tags[ti]) +
+      '">#' +
+      escapeHtml(tags[ti]) +
+      '</button>'
+  }
+  if (tags.length > 2) {
+    html += '<span class="p-tag-overflow">+' + (tags.length - 2) + '</span>'
+  }
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var groupId = assignments[project.id]
+  if (groupId && orgData) {
+    var group = orgData.groups.find(function (candidate) {
+      return candidate.id === groupId
+    })
+    if (group) {
+      html += '<span class="p-group" title="Group">' + escapeHtml(group.name) + '</span>'
+    }
+  }
+  return html ? '<span class="p-org">' + html + '</span>' : ''
 }
 
 function reconcileFocusFilterAfterOrgChange() {
@@ -4267,6 +4385,46 @@ function buildStacksSectionHtml() {
   )
 }
 
+function buildInboxSectionHtml() {
+  var rows = ''
+  var visibleBuckets = 0
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    var bucket = REVIEW_BUCKETS[i]
+    var count = countReviewBucketSessions(bucket)
+    if (count === 0) continue
+    visibleBuckets++
+    var label = STRINGS[bucket.labelKey] || bucket.id
+    var isActive = focusFilter && focusFilter.kind === 'review' && focusFilter.id === bucket.id
+    rows +=
+      '<div class="rail-item ' +
+      bucket.cssClass +
+      (isActive ? ' active' : '') +
+      '" data-rail-action="review" data-review-id="' +
+      escapeHtml(bucket.id) +
+      '" data-review-name="' +
+      escapeHtml(label) +
+      '">' +
+      '<span class="rail-item-icon">' +
+      bucket.icon +
+      '</span>' +
+      '<span class="rail-item-label">' +
+      escapeHtml(label) +
+      '</span>' +
+      '<span class="rail-item-cnt">' +
+      count +
+      '</span></div>'
+  }
+  if (!rows) return ''
+  return buildRailSectionHtml(
+    'inbox',
+    STRINGS.railInbox,
+    '◇',
+    rows,
+    visibleBuckets,
+    STRINGS.railInboxTooltip
+  )
+}
+
 function buildGroupsSectionHtml() {
   var groups = (orgData && orgData.groups) || []
   var visibleGroups = []
@@ -4310,7 +4468,7 @@ function buildGroupsSectionHtml() {
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  var html = buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html = buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
   elements.rail.innerHTML = html
   elements.rail.style.display = html ? '' : 'none'
 }
@@ -4321,12 +4479,19 @@ function renderRail() {
 
 /** Re-renders the focus bar above the project list. Hides it when no focus is active. */
 function renderFocusBar() {
-  if (!focusFilter) {
+  var hasSearch = !!searchQuery.trim()
+  if (!focusFilter && !hasSearch) {
     elements.focusBar.style.display = 'none'
     return
   }
   var name = ''
-  if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
+  if (!focusFilter) {
+    name = '"' + searchQuery.trim() + '"'
+  } else if (
+    focusFilter.kind === 'stack' ||
+    focusFilter.kind === 'group' ||
+    focusFilter.kind === 'review'
+  ) {
     name = focusFilter.name
   } else if (focusFilter.kind === 'tag') {
     name = '#' + focusFilter.tag
@@ -4338,6 +4503,8 @@ function renderFocusBar() {
     n: visibleCount,
     total: totalCount,
   })
+  elements.focusSaveBtn.textContent = STRINGS.focusSaveAsStack
+  elements.focusClearBtn.style.display = focusFilter ? '' : 'none'
   elements.focusBar.style.display = 'flex'
 }
 
@@ -4351,6 +4518,66 @@ function clearFocusFilter() {
 
 if (elements.focusClearBtn) {
   elements.focusClearBtn.addEventListener('click', clearFocusFilter)
+}
+
+async function saveVisibleSessionsAsStack() {
+  var visible = []
+  var visibleProjects = deriveVisibleProjects()
+  for (var pi = 0; pi < visibleProjects.length; pi++) {
+    var project = visibleProjects[pi]
+    var sessions = deriveVisibleSessionsForProject(project)
+    for (var si = 0; si < sessions.length; si++) {
+      visible.push({ projectId: project.id, sessionId: sessions[si].id })
+    }
+  }
+  if (visible.length === 0) {
+    showToast(STRINGS.focusSaveEmpty, 'err')
+    return
+  }
+  var suggestedName = focusFilter
+    ? focusFilter.kind === 'tag'
+      ? focusFilter.tag
+      : focusFilter.name
+    : searchQuery.trim()
+  var name = window.prompt(STRINGS.focusSavePrompt, suggestedName || '')
+  if (!name || !name.trim()) return
+  try {
+    var created = await requestJson('/api/org/stacks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    })
+    var stack = created.stack
+    await Promise.all(
+      visible.map(function (item) {
+        return requestJson('/api/org/stacks/' + encodeURIComponent(stack.id) + '/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'session',
+            projectId: item.projectId,
+            sessionId: item.sessionId,
+          }),
+        })
+      })
+    )
+    await refreshProjectData()
+    focusFilter = { kind: 'stack', id: stack.id, name: stack.name }
+    synchronizeSelectedProjectWithView()
+    renderRail()
+    renderFocusBar()
+    renderProjects()
+    renderSessions()
+    showToast(fmt(STRINGS.focusSaveSuccess, { n: visible.length, name: stack.name }))
+  } catch (error) {
+    showToast(fmt(STRINGS.focusSaveFailed, { error: error.message || String(error) }), 'err')
+  }
+}
+
+if (elements.focusSaveBtn) {
+  elements.focusSaveBtn.addEventListener('click', function () {
+    void saveVisibleSessionsAsStack()
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -4371,7 +4598,13 @@ if (elements.rail) {
     if (!item) return
 
     var action = item.dataset.railAction
-    if (action === 'stack') {
+    if (action === 'review') {
+      var reviewId = item.dataset.reviewId
+      var reviewName = item.dataset.reviewName
+      var wasActiveReview =
+        focusFilter && focusFilter.kind === 'review' && focusFilter.id === reviewId
+      focusFilter = wasActiveReview ? null : { kind: 'review', id: reviewId, name: reviewName }
+    } else if (action === 'stack') {
       var stackId = item.dataset.stackId
       var stackName = item.dataset.stackName
       var wasActiveStack = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId
@@ -4421,34 +4654,57 @@ if (elements.rail) {
   })
 }
 // ---------------------------------------------------------------------------
-// Tag picker — floating dialog for adding/removing session tags (key: t)
+// Tag picker — keyboard-first editor for session or project tags (key: t)
 // ---------------------------------------------------------------------------
 
-var tagPickerSession = null // Session currently being tagged
-var tagPickerProject = null // Project owning the session
-var tagPickerTags = [] // Working copy of tags for the open session
+var tagPickerSession = null
+var tagPickerProject = null
+var tagPickerTags = []
+var tagPickerOriginalTags = []
+var tagPickerSuggestionIndex = -1
 
 function openTagPicker(session, project) {
+  openTagPickerTarget(project, session)
+}
+
+function openProjectTagPicker(project) {
+  openTagPickerTarget(project, null)
+}
+
+function openTagPickerTarget(project, session) {
   tagPickerSession = session
   tagPickerProject = project
-  tagPickerTags = (session.tags || []).slice()
-  elements.tagPickerTitle.textContent = STRINGS.tagPickerSessionTitle
+  tagPickerTags = (session ? session.tags : project.projectTags || []).slice()
+  tagPickerOriginalTags = tagPickerTags.slice()
+  tagPickerSuggestionIndex = -1
+  elements.tagPickerTitle.textContent = session
+    ? STRINGS.tagPickerSessionTitle
+    : STRINGS.tagPickerProjectTitle
   elements.tagPickerInput.placeholder = STRINGS.tagPickerPlaceholder
+  elements.tagPickerInput.value = ''
   renderTagPickerChips()
   renderTagPickerSuggestions('')
   elements.tagPickerOverlay.classList.add('open')
-  elements.tagPickerInput.value = ''
   elements.tagPickerInput.focus()
 }
 
-function closeTagPicker() {
+function closeTagPicker(commitChanges) {
   if (!elements.tagPickerOverlay.classList.contains('open')) return
+  var project = tagPickerProject
+  var session = tagPickerSession
+  var tags = tagPickerTags.slice()
+  var changed = tags.join('\n') !== tagPickerOriginalTags.join('\n')
   elements.tagPickerOverlay.classList.remove('open')
   tagPickerSession = null
   tagPickerProject = null
   tagPickerTags = []
+  tagPickerOriginalTags = []
+  tagPickerSuggestionIndex = -1
   elements.tagPickerSuggestions.innerHTML = ''
   elements.tagPickerChips.innerHTML = ''
+  if (commitChanges && changed && project) {
+    void persistTagPickerTags(project, session, tags)
+  }
 }
 
 function renderTagPickerChips() {
@@ -4459,44 +4715,55 @@ function renderTagPickerChips() {
       escapeHtml(tagPickerTags[i]) +
       '<button class="tp-chip-remove" data-tag="' +
       escapeHtml(tagPickerTags[i]) +
+      '" aria-label="Remove #' +
+      escapeHtml(tagPickerTags[i]) +
       '">×</button></span>'
   }
   elements.tagPickerChips.innerHTML = html
 }
 
-function renderTagPickerSuggestions(query) {
+function tagPickerSuggestions(query) {
   var palette = (orgData && orgData.tagPalette) || []
-  var lq = query.toLowerCase()
-  var filtered = palette.filter(function (tag) {
-    return tag.indexOf(lq) !== -1 && tagPickerTags.indexOf(tag) === -1
-  })
-  if (!filtered.length || !query) {
-    elements.tagPickerSuggestions.innerHTML = ''
-    return
+  var normalizedQuery = query.trim().toLowerCase()
+  return palette
+    .filter(function (tag) {
+      return (
+        tagPickerTags.indexOf(tag) === -1 &&
+        (!normalizedQuery || tag.toLowerCase().includes(normalizedQuery))
+      )
+    })
+    .slice(0, 8)
+}
+
+function renderTagPickerSuggestions(query) {
+  var suggestions = tagPickerSuggestions(query)
+  if (tagPickerSuggestionIndex >= suggestions.length) {
+    tagPickerSuggestionIndex = suggestions.length - 1
   }
   var html = ''
-  for (var i = 0; i < Math.min(filtered.length, 8); i++) {
+  for (var i = 0; i < suggestions.length; i++) {
     html +=
-      '<span class="tp-suggestion" data-tag="' +
-      escapeHtml(filtered[i]) +
+      '<button type="button" class="tp-suggestion' +
+      (i === tagPickerSuggestionIndex ? ' active' : '') +
+      '" data-tag="' +
+      escapeHtml(suggestions[i]) +
       '">#' +
-      escapeHtml(filtered[i]) +
-      '</span>'
+      escapeHtml(suggestions[i]) +
+      '</button>'
   }
   elements.tagPickerSuggestions.innerHTML = html
 }
 
-async function saveTagPickerTags() {
-  if (!tagPickerSession || !tagPickerProject) return
+async function persistTagPickerTags(project, session, tags) {
+  var endpoint = session
+    ? '/api/projects/' + project.id + '/sessions/' + session.id + '/tags'
+    : '/api/projects/' + project.id + '/tags'
   try {
-    await requestJson(
-      '/api/projects/' + tagPickerProject.id + '/sessions/' + tagPickerSession.id + '/tags',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: tagPickerTags }),
-      }
-    )
+    await requestJson(endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: tags }),
+    })
     await refreshProjectData()
   } catch (error) {
     showToast(fmt(STRINGS.tagPickerSaveFailed, { error: error.message || String(error) }), 'err')
@@ -4509,60 +4776,69 @@ function addTagInPicker(rawTag) {
   if (tagPickerTags.indexOf(tag) === -1) {
     tagPickerTags.push(tag)
     renderTagPickerChips()
-    void saveTagPickerTags()
   }
   elements.tagPickerInput.value = ''
+  tagPickerSuggestionIndex = -1
   renderTagPickerSuggestions('')
   elements.tagPickerInput.focus()
 }
 
 function removeTagInPicker(tag) {
-  var idx = tagPickerTags.indexOf(tag)
-  if (idx !== -1) {
-    tagPickerTags.splice(idx, 1)
-    renderTagPickerChips()
-    void saveTagPickerTags()
-  }
+  var index = tagPickerTags.indexOf(tag)
+  if (index === -1) return
+  tagPickerTags.splice(index, 1)
+  renderTagPickerChips()
+  renderTagPickerSuggestions(elements.tagPickerInput.value)
 }
 
-// ---- Event wiring ----
-
 elements.tagPickerInput.addEventListener('input', function () {
+  tagPickerSuggestionIndex = -1
   renderTagPickerSuggestions(elements.tagPickerInput.value)
 })
 
 elements.tagPickerInput.addEventListener('keydown', function (event) {
+  var suggestions = tagPickerSuggestions(elements.tagPickerInput.value)
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    if (!suggestions.length) return
+    var direction = event.key === 'ArrowDown' ? 1 : -1
+    tagPickerSuggestionIndex =
+      (tagPickerSuggestionIndex + direction + suggestions.length) % suggestions.length
+    renderTagPickerSuggestions(elements.tagPickerInput.value)
+    return
+  }
   if (event.key === 'Enter') {
     event.preventDefault()
-    addTagInPicker(elements.tagPickerInput.value)
+    if (tagPickerSuggestionIndex >= 0 && suggestions[tagPickerSuggestionIndex]) {
+      addTagInPicker(suggestions[tagPickerSuggestionIndex])
+    } else {
+      addTagInPicker(elements.tagPickerInput.value)
+    }
+    return
   }
   if (event.key === 'Escape') {
     event.preventDefault()
-    closeTagPicker()
+    closeTagPicker(false)
   }
 })
 
 elements.tagPickerChips.addEventListener('click', function (event) {
   var removeBtn = event.target.closest('.tp-chip-remove')
-  if (removeBtn) {
-    removeTagInPicker(removeBtn.dataset.tag)
-  }
+  if (removeBtn) removeTagInPicker(removeBtn.dataset.tag)
 })
 
 elements.tagPickerSuggestions.addEventListener('click', function (event) {
   var suggestion = event.target.closest('.tp-suggestion')
-  if (suggestion) {
-    addTagInPicker(suggestion.dataset.tag)
-  }
+  if (suggestion) addTagInPicker(suggestion.dataset.tag)
 })
 
 elements.tagPickerOverlay.addEventListener('click', function (event) {
-  if (event.target === elements.tagPickerOverlay) closeTagPicker()
+  if (event.target === elements.tagPickerOverlay) closeTagPicker(true)
 })
 
-elements.tagPickerClose.addEventListener('click', closeTagPicker)
-
-// t key — opens tag picker for selected session
+elements.tagPickerClose.addEventListener('click', function () {
+  closeTagPicker(true)
+})
 // ---------------------------------------------------------------------------
 // Org picker — assign a project to a group, or add a session/project to a stack
 // ---------------------------------------------------------------------------
@@ -4577,6 +4853,7 @@ function openGroupPicker(project) {
   elements.orgPickerTitle.textContent = STRINGS.orgPickerGroupTitle
   renderOrgPickerList()
   elements.orgPickerOverlay.classList.add('open')
+  focusFirstOrgPickerItem()
 }
 
 function openStackPicker(project, session) {
@@ -4585,6 +4862,7 @@ function openStackPicker(project, session) {
   elements.orgPickerTitle.textContent = STRINGS.orgPickerStackTitle
   renderOrgPickerList()
   elements.orgPickerOverlay.classList.add('open')
+  focusFirstOrgPickerItem()
 }
 
 function closeOrgPicker() {
@@ -4616,17 +4894,20 @@ function renderOrgPickerList() {
 
   if (orgPickerMode === 'group' && currentGroupId) {
     html +=
-      '<div class="org-picker-item org-picker-remove" data-item-id="">' +
+      '<div class="org-picker-item org-picker-remove" tabindex="0" data-item-id="">' +
       escapeHtml(STRINGS.orgPickerRemoveGroup) +
       '</div>'
   }
   for (var i = 0; i < items.length; i++) {
     var item = items[i]
-    var isCurrent = orgPickerMode === 'group' && item.id === currentGroupId
+    var isCurrent =
+      orgPickerMode === 'group'
+        ? item.id === currentGroupId
+        : stackContainsOrgPickerTarget(item, orgPickerTarget)
     html +=
       '<div class="org-picker-item' +
       (isCurrent ? ' active' : '') +
-      '" data-item-id="' +
+      '" tabindex="0" data-item-id="' +
       escapeHtml(item.id) +
       '">' +
       escapeHtml(item.name) +
@@ -4652,7 +4933,7 @@ function renderOrgPickerList() {
     var createLabel =
       orgPickerMode === 'group' ? STRINGS.orgPickerNewGroup : STRINGS.orgPickerNewStack
     html +=
-      '<div class="org-picker-item org-picker-create-trigger" data-picker-action="create">' +
+      '<div class="org-picker-item org-picker-create-trigger" tabindex="0" data-picker-action="create">' +
       escapeHtml(createLabel) +
       '</div>'
   }
@@ -4662,6 +4943,27 @@ function renderOrgPickerList() {
     var input = elements.orgPickerList.querySelector('.org-picker-create-input')
     if (input) input.focus()
   }
+}
+
+function focusFirstOrgPickerItem() {
+  requestAnimationFrame(function () {
+    var first = elements.orgPickerList.querySelector('.org-picker-item')
+    if (first) first.focus()
+  })
+}
+
+function stackContainsOrgPickerTarget(stack, target) {
+  if (!stack || !target || !target.project) return false
+  return stack.items.some(function (item) {
+    if (target.session) {
+      return (
+        item.kind === 'session' &&
+        item.projectId === target.project.id &&
+        item.sessionId === target.session.id
+      )
+    }
+    return item.kind === 'project' && item.projectId === target.project.id
+  })
 }
 
 async function applyOrgPickerSelection(itemId) {
@@ -4681,11 +4983,24 @@ async function applyOrgPickerSelection(itemId) {
       var body = target.session
         ? { kind: 'session', projectId: target.project.id, sessionId: target.session.id }
         : { kind: 'project', projectId: target.project.id }
-      await requestJson('/api/org/stacks/' + encodeURIComponent(itemId) + '/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      var stack = orgData.stacks.find(function (candidate) {
+        return candidate.id === itemId
       })
+      if (stackContainsOrgPickerTarget(stack, target)) {
+        var itemRef = target.session
+          ? target.project.id + ':' + target.session.id
+          : target.project.id
+        await requestJson(
+          '/api/org/stacks/' + encodeURIComponent(itemId) + '/items/' + encodeURIComponent(itemRef),
+          { method: 'DELETE' }
+        )
+      } else {
+        await requestJson('/api/org/stacks/' + encodeURIComponent(itemId) + '/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      }
     }
     void refreshProjectData()
   } catch (error) {
@@ -4753,7 +5068,24 @@ elements.orgPickerList.addEventListener('click', function (event) {
 
 elements.orgPickerList.addEventListener('keydown', function (event) {
   var input = event.target.closest('.org-picker-create-input')
-  if (!input) return
+  if (!input) {
+    var item = event.target.closest('.org-picker-item')
+    if (!item) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      item.click()
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      var items = Array.from(elements.orgPickerList.querySelectorAll('.org-picker-item'))
+      var index = items.indexOf(item)
+      var direction = event.key === 'ArrowDown' ? 1 : -1
+      var next = items[(index + direction + items.length) % items.length]
+      if (next) next.focus()
+    }
+    return
+  }
 
   if (event.key === 'Enter') {
     event.preventDefault()

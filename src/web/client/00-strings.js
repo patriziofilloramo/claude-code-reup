@@ -299,6 +299,8 @@ const STRINGS = {
   railGroups: 'GROUPS',
   railGroupsTooltip:
     'Project organization. A project can belong to one group, such as work, personal, or client.',
+  railInbox: 'INBOX',
+  railInboxTooltip: 'Live, attention-first views computed from current session signals.',
 
   // ── Rail: delete / manage ─────────────────────────────────────────────────
   railDeleteStack: 'delete stack',
@@ -324,6 +326,11 @@ const STRINGS = {
   // Focus bar
   focusBar: 'Focus: {name}',
   focusBarCount: '{n} of {total}',
+  focusSaveAsStack: 'Save as stack',
+  focusSavePrompt: 'Name this stack',
+  focusSaveEmpty: 'There are no visible sessions to save.',
+  focusSaveSuccess: 'Saved {n} sessions to "{name}".',
+  focusSaveFailed: 'Could not save stack: {error}',
 
   // Tag chips
   tagChipOverflow: '+{n}',
@@ -355,6 +362,7 @@ const STRINGS = {
 
   // Tag picker dialog
   tagPickerSessionTitle: 'Tag session',
+  tagPickerProjectTitle: 'Tag project',
   tagPickerPlaceholder: 'Add tag… (Enter to add)',
   tagPickerSaveFailed: 'Failed to save tags: {error}',
 

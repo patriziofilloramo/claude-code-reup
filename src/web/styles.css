@@ -517,6 +517,20 @@ body {
 .focus-clear:hover {
   color: var(--fg);
 }
+.focus-save {
+  background: rgb(var(--accent-rgb) / 0.1);
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
+  border-radius: 3px;
+  color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 3px 7px;
+}
+.focus-save:hover {
+  background: rgb(var(--accent-rgb) / 0.18);
+}
 
 .proj-row {
   border-left: 2px solid transparent;
@@ -548,6 +562,42 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.p-org {
+  align-items: center;
+  display: flex;
+  flex-shrink: 1;
+  gap: 3px;
+  min-width: 0;
+}
+.p-tag,
+.p-group,
+.p-tag-overflow {
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 9px;
+  line-height: 1.2;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.p-tag {
+  background: rgb(var(--accent-rgb) / 0.1);
+  border: 1px solid rgb(var(--accent-rgb) / 0.22);
+  color: var(--accent);
+  cursor: pointer;
+}
+.p-tag:hover {
+  background: rgb(var(--accent-rgb) / 0.2);
+}
+.p-group {
+  background: var(--surface-chip);
+  color: var(--muted2);
+  max-width: 82px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p-tag-overflow {
+  color: var(--muted);
 }
 .p-cnt {
   color: var(--muted);
@@ -1674,14 +1724,17 @@ body {
 }
 .tp-suggestion {
   background: var(--surface-chip);
+  border: 1px solid transparent;
   border-radius: 3px;
   color: var(--muted2);
   cursor: pointer;
   font-size: 11px;
   padding: 2px 6px;
 }
-.tp-suggestion:hover {
+.tp-suggestion:hover,
+.tp-suggestion.active {
   background: rgb(var(--accent-rgb) / 0.1);
+  border-color: rgb(var(--accent-rgb) / 0.25);
   color: var(--accent);
 }
 

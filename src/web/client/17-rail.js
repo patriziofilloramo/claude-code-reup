@@ -15,6 +15,16 @@
 function getSessionsMatchingFocus(project) {
   if (!focusFilter) return null
 
+  if (focusFilter.kind === 'review') {
+    var reviewBucket = getReviewBucket(focusFilter.id)
+    if (!reviewBucket) return undefined
+    var reviewSessions = project.sessions.filter(function (session) {
+      var primaryBucket = primaryReviewBucket(session)
+      return primaryBucket && primaryBucket.id === reviewBucket.id
+    })
+    return reviewSessions.length > 0 ? reviewSessions : undefined
+  }
+
   if (focusFilter.kind === 'stack') {
     if (!orgData) return undefined
     var stack = null
@@ -119,6 +129,45 @@ function countGroupProjectsForRail(groupId) {
     if (assignments[keys[i]] === groupId) count++
   }
   return count
+}
+
+function countReviewBucketSessions(bucket) {
+  var count = 0
+  for (var pi = 0; pi < projects.length; pi++) {
+    for (var si = 0; si < projects[pi].sessions.length; si++) {
+      var session = projects[pi].sessions[si]
+      var primaryBucket = primaryReviewBucket(session)
+      if (primaryBucket && primaryBucket.id === bucket.id) count++
+    }
+  }
+  return count
+}
+
+function buildProjectOrgChipsHtml(project) {
+  var html = ''
+  var tags = project.projectTags || []
+  for (var ti = 0; ti < Math.min(tags.length, 2); ti++) {
+    html +=
+      '<button class="p-tag" type="button" data-tag="' +
+      escapeHtml(tags[ti]) +
+      '">#' +
+      escapeHtml(tags[ti]) +
+      '</button>'
+  }
+  if (tags.length > 2) {
+    html += '<span class="p-tag-overflow">+' + (tags.length - 2) + '</span>'
+  }
+  var assignments = (orgData && orgData.projectGroupAssignments) || {}
+  var groupId = assignments[project.id]
+  if (groupId && orgData) {
+    var group = orgData.groups.find(function (candidate) {
+      return candidate.id === groupId
+    })
+    if (group) {
+      html += '<span class="p-group" title="Group">' + escapeHtml(group.name) + '</span>'
+    }
+  }
+  return html ? '<span class="p-org">' + html + '</span>' : ''
 }
 
 function reconcileFocusFilterAfterOrgChange() {
@@ -231,6 +280,46 @@ function buildStacksSectionHtml() {
   )
 }
 
+function buildInboxSectionHtml() {
+  var rows = ''
+  var visibleBuckets = 0
+  for (var i = 0; i < REVIEW_BUCKETS.length; i++) {
+    var bucket = REVIEW_BUCKETS[i]
+    var count = countReviewBucketSessions(bucket)
+    if (count === 0) continue
+    visibleBuckets++
+    var label = STRINGS[bucket.labelKey] || bucket.id
+    var isActive = focusFilter && focusFilter.kind === 'review' && focusFilter.id === bucket.id
+    rows +=
+      '<div class="rail-item ' +
+      bucket.cssClass +
+      (isActive ? ' active' : '') +
+      '" data-rail-action="review" data-review-id="' +
+      escapeHtml(bucket.id) +
+      '" data-review-name="' +
+      escapeHtml(label) +
+      '">' +
+      '<span class="rail-item-icon">' +
+      bucket.icon +
+      '</span>' +
+      '<span class="rail-item-label">' +
+      escapeHtml(label) +
+      '</span>' +
+      '<span class="rail-item-cnt">' +
+      count +
+      '</span></div>'
+  }
+  if (!rows) return ''
+  return buildRailSectionHtml(
+    'inbox',
+    STRINGS.railInbox,
+    '◇',
+    rows,
+    visibleBuckets,
+    STRINGS.railInboxTooltip
+  )
+}
+
 function buildGroupsSectionHtml() {
   var groups = (orgData && orgData.groups) || []
   var visibleGroups = []
@@ -274,7 +363,7 @@ function buildGroupsSectionHtml() {
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  var html = buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html = buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
   elements.rail.innerHTML = html
   elements.rail.style.display = html ? '' : 'none'
 }
@@ -285,12 +374,19 @@ function renderRail() {
 
 /** Re-renders the focus bar above the project list. Hides it when no focus is active. */
 function renderFocusBar() {
-  if (!focusFilter) {
+  var hasSearch = !!searchQuery.trim()
+  if (!focusFilter && !hasSearch) {
     elements.focusBar.style.display = 'none'
     return
   }
   var name = ''
-  if (focusFilter.kind === 'stack' || focusFilter.kind === 'group') {
+  if (!focusFilter) {
+    name = '"' + searchQuery.trim() + '"'
+  } else if (
+    focusFilter.kind === 'stack' ||
+    focusFilter.kind === 'group' ||
+    focusFilter.kind === 'review'
+  ) {
     name = focusFilter.name
   } else if (focusFilter.kind === 'tag') {
     name = '#' + focusFilter.tag
@@ -302,6 +398,8 @@ function renderFocusBar() {
     n: visibleCount,
     total: totalCount,
   })
+  elements.focusSaveBtn.textContent = STRINGS.focusSaveAsStack
+  elements.focusClearBtn.style.display = focusFilter ? '' : 'none'
   elements.focusBar.style.display = 'flex'
 }
 
@@ -315,6 +413,66 @@ function clearFocusFilter() {
 
 if (elements.focusClearBtn) {
   elements.focusClearBtn.addEventListener('click', clearFocusFilter)
+}
+
+async function saveVisibleSessionsAsStack() {
+  var visible = []
+  var visibleProjects = deriveVisibleProjects()
+  for (var pi = 0; pi < visibleProjects.length; pi++) {
+    var project = visibleProjects[pi]
+    var sessions = deriveVisibleSessionsForProject(project)
+    for (var si = 0; si < sessions.length; si++) {
+      visible.push({ projectId: project.id, sessionId: sessions[si].id })
+    }
+  }
+  if (visible.length === 0) {
+    showToast(STRINGS.focusSaveEmpty, 'err')
+    return
+  }
+  var suggestedName = focusFilter
+    ? focusFilter.kind === 'tag'
+      ? focusFilter.tag
+      : focusFilter.name
+    : searchQuery.trim()
+  var name = window.prompt(STRINGS.focusSavePrompt, suggestedName || '')
+  if (!name || !name.trim()) return
+  try {
+    var created = await requestJson('/api/org/stacks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    })
+    var stack = created.stack
+    await Promise.all(
+      visible.map(function (item) {
+        return requestJson('/api/org/stacks/' + encodeURIComponent(stack.id) + '/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'session',
+            projectId: item.projectId,
+            sessionId: item.sessionId,
+          }),
+        })
+      })
+    )
+    await refreshProjectData()
+    focusFilter = { kind: 'stack', id: stack.id, name: stack.name }
+    synchronizeSelectedProjectWithView()
+    renderRail()
+    renderFocusBar()
+    renderProjects()
+    renderSessions()
+    showToast(fmt(STRINGS.focusSaveSuccess, { n: visible.length, name: stack.name }))
+  } catch (error) {
+    showToast(fmt(STRINGS.focusSaveFailed, { error: error.message || String(error) }), 'err')
+  }
+}
+
+if (elements.focusSaveBtn) {
+  elements.focusSaveBtn.addEventListener('click', function () {
+    void saveVisibleSessionsAsStack()
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -335,7 +493,13 @@ if (elements.rail) {
     if (!item) return
 
     var action = item.dataset.railAction
-    if (action === 'stack') {
+    if (action === 'review') {
+      var reviewId = item.dataset.reviewId
+      var reviewName = item.dataset.reviewName
+      var wasActiveReview =
+        focusFilter && focusFilter.kind === 'review' && focusFilter.id === reviewId
+      focusFilter = wasActiveReview ? null : { kind: 'review', id: reviewId, name: reviewName }
+    } else if (action === 'stack') {
       var stackId = item.dataset.stackId
       var stackName = item.dataset.stackName
       var wasActiveStack = focusFilter && focusFilter.kind === 'stack' && focusFilter.id === stackId

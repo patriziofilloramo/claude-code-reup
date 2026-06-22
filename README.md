@@ -242,15 +242,18 @@ session titles or transcript content.
 
 Open with `swoop web`. The browser interface mirrors the TUI feature set with a few additions:
 
-| Feature                | How to access                                                          |
-| ---------------------- | ---------------------------------------------------------------------- |
-| Browse sessions        | Click any project in the left panel                                    |
-| Resume session         | Double-click a session row, or select and press `enter`                |
-| Deep transcript search | Click **⌕ deep search** in the header                                  |
-| Start new session      | Select a project, then click **+ new**                                 |
-| Edit CLAUDE.md         | Select a project — click the **CLAUDE.md** tag when it appears         |
-| Live usage limits      | Shown in the header; auto-refreshes every 5 seconds                    |
-| Keyboard nav           | `/` search · `j`/`k` or `↑`/`↓` sessions · `[`/`]` or `h`/`l` projects |
+| Feature                | How to access                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| Browse sessions        | Click any project in the left panel                                            |
+| Resume session         | Double-click a session row, or select and press `enter`                        |
+| Deep transcript search | Click **⌕ deep search** in the header                                          |
+| Start new session      | Select a project, then click **+ new**                                         |
+| Edit CLAUDE.md         | Select a project — click the **CLAUDE.md** tag when it appears                 |
+| Triage Inbox           | Use the **INBOX** rail for active, attention, drift, context, and expiry views |
+| Organize work          | Press `t` to tag and `g` to assign the selected project/session                |
+| Save a working set     | Search or focus a view, then click **Save as stack**                           |
+| Live usage limits      | Shown in the header; auto-refreshes every 5 seconds                            |
+| Keyboard nav           | `/` search · `j`/`k` or `↑`/`↓` sessions · `[`/`]` or `h`/`l` projects         |
 
 ---
 

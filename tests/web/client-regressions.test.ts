@@ -546,7 +546,7 @@ describe('web client org layer invariants', () => {
       '// j / k - navigate sessions up/down'
     )
     const tagPicker = sourceBetween('function openTagPicker(', 'function closeTagPicker(')
-    const save = sourceBetween('async function saveTagPickerTags()', 'function addTagInPicker(')
+    const save = sourceBetween('async function persistTagPickerTags(', 'function addTagInPicker(')
     expect(shortcuts).toContain("event.key === 't'")
     expect(shortcuts).toContain('openTagPicker(selectedSession, selectedProject)')
     expect(tagPicker).toContain('tagPickerTags')
@@ -555,6 +555,49 @@ describe('web client org layer invariants', () => {
     expect(save).toContain("'/sessions/'")
     expect(save).toContain("'/tags'")
     expect(save).toContain("method: 'PUT'")
+    expect(save).toContain("'/api/projects/' + project.id + '/tags'")
+    expect(tagPicker).toContain('openTagPickerTarget(project, session)')
+  })
+
+  it('renders an exclusive triage inbox and focuses a review bucket', () => {
+    const rail = sourceBetween(
+      'function countReviewBucketSessions(',
+      'function buildGroupsSectionHtml('
+    )
+    expect(source).toContain('function primaryReviewBucket(session)')
+    expect(rail).toContain('primaryReviewBucket(session)')
+    expect(rail).toContain('function buildInboxSectionHtml()')
+    expect(rail).toContain('data-rail-action="review"')
+    expect(rail).toContain("focusFilter.kind === 'review'")
+  })
+
+  it('can save the current focus or search result as a session stack', () => {
+    const saveStack = sourceBetween(
+      'async function saveVisibleSessionsAsStack()',
+      'if (elements.focusSaveBtn)'
+    )
+    expect(saveStack).toContain("requestJson('/api/org/stacks'")
+    expect(saveStack).toContain("kind: 'session'")
+    expect(saveStack).toContain('deriveVisibleSessionsForProject(project)')
+    expect(uiSource).toContain('id="focus-save"')
+  })
+
+  it('shows project tags and group membership in project rows', () => {
+    const projectChips = sourceBetween(
+      'function buildProjectOrgChipsHtml(',
+      'function reconcileFocusFilterAfterOrgChange()'
+    )
+    expect(projectChips).toContain('project.projectTags')
+    expect(projectChips).toContain('orgData.projectGroupAssignments')
+    expect(projectChips).toContain('class="p-tag"')
+    expect(source).toContain('buildProjectOrgChipsHtml(project)')
+  })
+
+  it('toggles existing stack membership and supports keyboard picker navigation', () => {
+    expect(source).toContain('function stackContainsOrgPickerTarget(')
+    expect(source).toContain("method: 'DELETE'")
+    expect(source).toContain("event.key === 'ArrowDown' || event.key === 'ArrowUp'")
+    expect(source).toContain('item.click()')
   })
 
   it('org inspector section shows tags, group, and stack memberships', () => {

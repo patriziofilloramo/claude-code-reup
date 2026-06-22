@@ -8,6 +8,7 @@ function openSearch() {
   elements.searchWrapper.style.display = 'flex'
   elements.searchInput.value = ''
   searchQuery = ''
+  renderFocusBar()
   elements.searchInput.focus()
 }
 
@@ -27,6 +28,7 @@ async function runInlineDeepSearch(query) {
   elements.searchModeLabel.style.display = 'flex'
   synchronizeSelectedProjectWithView()
   renderProjects()
+  renderFocusBar()
   renderSessions()
   try {
     const data = await requestJson('/api/search/deep?q=' + encodeURIComponent(query))
@@ -38,6 +40,7 @@ async function runInlineDeepSearch(query) {
     deepSearchLoading = false
     synchronizeSelectedProjectWithView()
     renderProjects()
+    renderFocusBar()
     renderSessions()
   }
 }
@@ -62,6 +65,7 @@ function closeSearch() {
   elements.headerHints.style.display = 'flex'
   searchQuery = ''
   exitInlineDeepSearch()
+  renderFocusBar()
 }
 
 elements.searchInput.addEventListener('input', function () {
@@ -70,6 +74,7 @@ elements.searchInput.addEventListener('input', function () {
   else {
     synchronizeSelectedProjectWithView()
     renderProjects()
+    renderFocusBar()
     renderSessions()
   }
 })
@@ -82,7 +87,10 @@ elements.searchInput.addEventListener('keydown', function (event) {
   }
   if (event.key === 'Escape') {
     if (deepSearchActive) exitInlineDeepSearch()
-    else closeSearch()
+    else {
+      if (focusFilter) clearFocusFilter()
+      closeSearch()
+    }
   }
 })
 
@@ -136,7 +144,13 @@ document.addEventListener('keydown', function (event) {
   if (selectedProject) {
     if (event.key === 'g') {
       event.preventDefault()
-      openGroupPicker(selectedProject)
+      if (selectedSession) openStackPicker(selectedProject, selectedSession)
+      else openGroupPicker(selectedProject)
+      return
+    }
+    if (event.key === 't' && !selectedSession) {
+      event.preventDefault()
+      openProjectTagPicker(selectedProject)
       return
     }
   }
