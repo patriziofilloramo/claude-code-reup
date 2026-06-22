@@ -64,6 +64,7 @@ describe('full-screen dashboard guardrails', () => {
   it('uses one shared brand lockup for loading and the dashboard header', () => {
     expect(source).toContain("from '../../src/brand.js'")
     expect(source).not.toContain("from './brand.js'")
+    expect(source).toContain('renderSwoopMarkSvg')
     expect(source).toContain('function renderBrandMarkup()')
     expect(source).toContain('${brandMarkup}<p>Mapping your Claude work')
     expect(source).toContain("'+BRAND_MARKUP+'")

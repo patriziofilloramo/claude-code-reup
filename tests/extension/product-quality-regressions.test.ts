@@ -14,6 +14,8 @@ const vscodeIgnore = readFileSync('extension/.vscodeignore', 'utf8')
 const activityBarIcon = readFileSync('extension/media/swoop.svg', 'utf8')
 const brandIcon = readFileSync('extension/media/swoop-brand.svg', 'utf8')
 const brandIconPng = readFileSync('extension/media/swoop-brand.png')
+const brandSource = readFileSync('src/brand.ts', 'utf8')
+const brandGenerator = readFileSync('extension/scripts/generate-brand-assets.mjs', 'utf8')
 
 describe('VS Code product quality guardrails', () => {
   it('keeps the status bar contextual and transcript-backed', () => {
@@ -34,17 +36,27 @@ describe('VS Code product quality guardrails', () => {
     expect(vscodeIgnore).toContain('dist/smoke-test.cjs')
   })
 
-  it('ships distinct Activity Bar and installable brand icons', () => {
+  it('generates every extension icon from the canonical Swoop mark', () => {
     expect(manifest.displayName).toBe('Swoop for Claude Code')
     expect(manifest.icon).toBe('media/swoop-brand.png')
+    expect(manifest.scripts['generate:brand']).toContain('generate-brand-assets.mjs')
+    expect(manifest.scripts.compile).toContain('generate:brand')
+    expect(brandGenerator).toContain("join(repositoryRoot, 'src', 'brand.ts')")
+    expect(brandGenerator).toContain("'swoop-brand.svg'")
+    expect(brandGenerator).toContain("'swoop-brand.png'")
+    expect(brandGenerator).toContain("'swoop.svg'")
+
+    const canonicalPath = brandSource.match(/export const SWOOP_PATH\s*=\s*['"]([^'"]+)['"]/)?.[1]
+    expect(canonicalPath).toBeTruthy()
     expect(activityBarIcon).toContain('viewBox="0 0 256 256"')
-    expect(activityBarIcon).not.toContain('<rect')
-    expect(brandIcon).toContain('id="swoopGrad"')
-    expect(brandIcon).toContain('stop-color="#FF6030"')
-    expect(brandIcon).toContain('stroke="#FFFFFF"')
-    expect(brandIcon).not.toContain(
-      'M213 28L219 46L237 52L219 58L213 76L207 58L189 52L207 46L213 28Z'
-    )
+    expect(activityBarIcon).toContain(`d="${canonicalPath}"`)
+    expect(activityBarIcon).toContain('<rect')
+    expect(activityBarIcon).toContain('rx="44"')
+    expect(brandIcon).toContain('id="swoopMarkGradient"')
+    expect(brandIcon).toContain('stop-color="#2EA8D3"')
+    expect(brandIcon).toContain('stop-color="#187FA8"')
+    expect(brandIcon).toContain(`fill="#FFFFFF" d="${canonicalPath}"`)
+    expect(brandIcon.match(/<path/g)).toHaveLength(1)
     expect(brandIconPng.subarray(1, 4).toString('ascii')).toBe('PNG')
   })
 })

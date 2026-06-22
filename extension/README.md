@@ -6,6 +6,10 @@ Swoop brings local Claude Code session intelligence into VS Code. It helps you
 decide which session to continue, explains resume risks, and resumes it either
 in the Claude Code extension or in the correct integrated-terminal directory.
 
+The install icon, dashboard mark, local web header, and monochrome Activity Bar
+adaptation are generated from the canonical mark in `src/brand.ts`; product
+surfaces must not carry independent logo artwork.
+
 ## Full-screen Resume Dashboard
 
 Run **Swoop: Open Dashboard** or use the dashboard button in the Sessions view.

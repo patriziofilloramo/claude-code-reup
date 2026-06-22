@@ -108,8 +108,9 @@ body {
   letter-spacing: 0.04em;
 }
 .logo-mark {
-  color: #e86030;
   flex-shrink: 0;
+  height: 18px;
+  width: 18px;
 }
 .hdr-sep {
   background: var(--dim);

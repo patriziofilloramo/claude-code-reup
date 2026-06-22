@@ -2,12 +2,15 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { renderSwoopMarkSvg } from '../brand.js'
+
 const assetDirectory = dirname(fileURLToPath(import.meta.url))
 const clientScript = readFileSync(join(assetDirectory, 'client.js'), 'utf8')
 const styles = readFileSync(join(assetDirectory, 'styles.css'), 'utf8')
 const template = readFileSync(join(assetDirectory, 'ui.html'), 'utf8')
 
 const baseHtml = template
+  .replace('<!-- SWOOP:BRAND_MARK -->', renderSwoopMarkSvg({ className: 'logo-mark', size: 18 }))
   .replace('<!-- SWOOP:STYLES -->', `<style>\n${styles}</style>`)
   .replace('<!-- SWOOP:SCRIPT -->', `<script>\n${clientScript}</script>`)
 
