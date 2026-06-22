@@ -12,6 +12,7 @@ import {
 } from '../../src/core/session/session-preview.js'
 import { primaryStatus } from '../../src/core/session/session-signals.js'
 import { getResumeAdvice, type ResumeAdvice } from '../../src/core/session/resume-advice.js'
+import { searchTranscripts } from '../../src/core/session/session-search.js'
 import {
   getProjectSyncStatus,
   type ProjectSyncStatus,
@@ -62,6 +63,12 @@ export interface ExtensionSessionModel {
   generatedAt: string
   projects: ExtensionProject[]
   sessions: ExtensionSession[]
+}
+
+export interface ExtensionContentMatch {
+  matchCount: number
+  session: ExtensionSession
+  snippet: string
 }
 
 export interface LoadExtensionModelOptions {
@@ -122,6 +129,32 @@ export class SwoopDataSource {
     return createExtensionSession(project, session, activeSessionIds, {
       includePreviewHints: false,
     })
+  }
+
+  async loadPreview(projectId: string, sessionId: string) {
+    return loadSessionPreview(sessionTranscriptPath(projectId, sessionId))
+  }
+
+  async searchTranscriptContent(
+    query: string,
+    includeArchived: boolean,
+    onProgress?: (scanned: number, total: number) => void
+  ): Promise<ExtensionContentMatch[]> {
+    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const searchableProjects = projects.map((project) => ({
+      ...project,
+      sessions: project.sessions.filter((session) => includeArchived || !session.signals.archived),
+    }))
+    const matches = await searchTranscripts(query, searchableProjects, onProgress)
+    return Promise.all(
+      matches.map(async (match) => ({
+        matchCount: match.matchCount,
+        session: await createExtensionSession(match.project, match.session, activeSessionIds, {
+          includePreviewHints: false,
+        }),
+        snippet: match.snippet,
+      }))
+    )
   }
 }
 

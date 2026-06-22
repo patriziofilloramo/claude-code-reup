@@ -1,6 +1,12 @@
 import * as vscode from 'vscode'
 
-import { formatContextTokens, formatRelativeTime, statusThemeIconId } from './formatting.js'
+import {
+  formatContextTokens,
+  formatRelativeTime,
+  projectMemoryDescription,
+  statusThemeColorId,
+  statusThemeIconId,
+} from './formatting.js'
 import type { CockpitProjectGroup, ExtensionCockpitModel } from './cockpit-model.js'
 import type { SwoopLogger } from './logger.js'
 import type { ExtensionProject, ExtensionSession, SwoopDataSource } from './swoop-data.js'
@@ -38,7 +44,10 @@ export class SwoopSessionTreeProvider
 {
   private readonly changedEmitter = new vscode.EventEmitter<TreeNode | undefined>()
   private readonly modelChangedEmitter = new vscode.EventEmitter<ExtensionCockpitModel>()
+  private modelFingerprint: string | null = null
+  private renderedFingerprint: string | null = null
   private model: ExtensionCockpitModel | null = null
+  private hadLoadError = false
   private selectedSessionId: string | null = null
   private sessionNodes = new Map<string, SessionTreeNode>()
   private projectNodes = new Map<string, ProjectTreeNode>()
@@ -62,7 +71,7 @@ export class SwoopSessionTreeProvider
     })
   }
 
-  async refresh(): Promise<void> {
+  async refresh(options: { notifyView?: boolean } = {}): Promise<boolean> {
     try {
       const model = await this.dataSource.loadCockpitModel({
         activeEditorPath: vscode.window.activeTextEditor?.document.uri.fsPath,
@@ -73,36 +82,53 @@ export class SwoopSessionTreeProvider
           (folder) => folder.uri.fsPath
         ),
       })
+      const fingerprint = cockpitModelFingerprint(model)
+      const changed = fingerprint !== this.modelFingerprint
+      const recoveredFromError = this.hadLoadError
+      this.hadLoadError = false
       this.model = model
-      this.rebuildNodeCache(model)
-      await Promise.all([
-        vscode.commands.executeCommand(
-          'setContext',
-          'swoop.hasSessions',
-          model.sessions.length > 0
-        ),
-        vscode.commands.executeCommand(
-          'setContext',
-          'swoop.hasWorkspaceSessions',
-          model.summary.workspaceSessionCount > 0
-        ),
-        vscode.commands.executeCommand('setContext', 'swoop.hasLoadError', false),
-      ])
-      this.changedEmitter.fire(undefined)
-      this.modelChangedEmitter.fire(model)
-      this.updateViewBadge(model)
-      await this.restoreSelection()
+      if (changed) {
+        this.modelFingerprint = fingerprint
+        this.rebuildNodeCache(model)
+      }
+      const shouldNotifyView =
+        options.notifyView !== false && this.renderedFingerprint !== fingerprint
+      if (changed || recoveredFromError) {
+        await Promise.all([
+          vscode.commands.executeCommand(
+            'setContext',
+            'swoop.hasSessions',
+            model.sessions.length > 0
+          ),
+          vscode.commands.executeCommand(
+            'setContext',
+            'swoop.hasWorkspaceSessions',
+            model.summary.workspaceSessionCount > 0
+          ),
+          vscode.commands.executeCommand('setContext', 'swoop.hasLoadError', false),
+        ])
+      }
+      if (shouldNotifyView) {
+        this.renderedFingerprint = fingerprint
+        this.changedEmitter.fire(undefined)
+        this.modelChangedEmitter.fire(model)
+        this.updateViewBadge(model)
+      }
       this.logger.info('refreshed VS Code cockpit', {
         active: model.summary.activeCount,
         attention: model.summary.attentionCount,
+        changed,
         projects: model.projects.length,
         sessions: model.sessions.length,
         workspaceSessions: model.summary.workspaceSessionCount,
       })
+      return changed
     } catch (error) {
+      this.hadLoadError = true
       await vscode.commands.executeCommand('setContext', 'swoop.hasLoadError', true)
       this.logger.error('cockpit refresh failed', error)
       void vscode.window.showErrorMessage('Swoop could not refresh sessions. See Output: Swoop.')
+      return false
     }
   }
 
@@ -112,8 +138,8 @@ export class SwoopSessionTreeProvider
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
     if (node.kind === 'section') return sectionTreeItem(node, this.model)
-    if (node.kind === 'project') return projectTreeItem(node.group.project)
-    return sessionTreeItem(node.session)
+    if (node.kind === 'project') return projectTreeItem(node)
+    return sessionTreeItem(node)
   }
 
   getChildren(node?: TreeNode): TreeNode[] {
@@ -154,29 +180,49 @@ export class SwoopSessionTreeProvider
   }
 
   private rebuildNodeCache(model: ExtensionCockpitModel): void {
-    this.projectNodes.clear()
-    this.sessionNodes.clear()
+    const nextProjectNodes = new Map<string, ProjectTreeNode>()
+    const nextSessionNodes = new Map<string, SessionTreeNode>()
+    const existingProjectsById = new Map(
+      [...this.projectNodes.values()].map((node) => [node.group.project.id, node])
+    )
 
     for (const [section, groups] of [
       ['workspace', model.workspaceProjects],
       ['recent', model.recentElsewhere],
     ] as const) {
       for (const group of groups) {
-        const projectNode: ProjectTreeNode = { group, kind: 'project', parentSection: section }
-        this.projectNodes.set(projectNodeKey(section, group.project.id), projectNode)
-        for (const session of group.sessions) {
-          this.sessionNodes.set(session.id, {
-            kind: 'session',
-            parentProjectId: group.project.id,
+        const key = projectNodeKey(section, group.project.id)
+        const projectNode = this.projectNodes.get(key) ??
+          existingProjectsById.get(group.project.id) ?? {
+            group,
+            kind: 'project',
             parentSection: section,
-            session,
-          })
+          }
+        projectNode.group = group
+        projectNode.parentSection = section
+        nextProjectNodes.set(key, projectNode)
+        for (const session of group.sessions) {
+          const node = this.sessionNodes.get(session.id) ?? sessionNode(session, section)
+          node.parentProjectId = group.project.id
+          node.parentSection = section
+          node.session = session
+          nextSessionNodes.set(session.id, node)
         }
       }
     }
 
     for (const session of model.attentionElsewhere) {
-      this.sessionNodes.set(session.id, sessionNode(session, 'attention'))
+      const node = this.sessionNodes.get(session.id) ?? sessionNode(session, 'attention')
+      delete node.parentProjectId
+      node.parentSection = 'attention'
+      node.session = session
+      nextSessionNodes.set(session.id, node)
+    }
+
+    this.projectNodes = nextProjectNodes
+    this.sessionNodes = nextSessionNodes
+    if (this.selectedSessionId && !nextSessionNodes.has(this.selectedSessionId)) {
+      this.selectedSessionId = null
     }
   }
 
@@ -197,18 +243,6 @@ export class SwoopSessionTreeProvider
           parentSection: section,
         }
     )
-  }
-
-  private async restoreSelection(): Promise<void> {
-    if (!this.treeView || !this.selectedSessionId) return
-    const node = this.sessionNodes.get(this.selectedSessionId)
-    if (!node) {
-      this.selectedSessionId = null
-      return
-    }
-    await Promise.resolve(
-      this.treeView.reveal(node, { expand: true, focus: false, select: true })
-    ).catch(() => {})
   }
 
   private updateViewBadge(model: ExtensionCockpitModel): void {
@@ -257,6 +291,7 @@ function sectionTreeItem(
   }
   const definition = definitions[node.id]
   const item = new vscode.TreeItem(definition.label, definition.state)
+  item.id = `swoop.section.${node.id}`
   item.contextValue = `swoopSection.${node.id}`
   item.iconPath = new vscode.ThemeIcon(definition.icon)
   if (model) {
@@ -271,29 +306,31 @@ function sectionTreeItem(
   return item
 }
 
-function projectTreeItem(project: ExtensionProject): vscode.TreeItem {
+function projectTreeItem(node: ProjectTreeNode): vscode.TreeItem {
+  const { group } = node
+  const project = group.project
   const item = new vscode.TreeItem(project.name, vscode.TreeItemCollapsibleState.Expanded)
+  item.id = `swoop.project.${project.id}`
   item.contextValue = 'swoopProject'
-  item.description = `${project.sessionCount} session${project.sessionCount === 1 ? '' : 's'}`
+  const visibleSessionCount = group.sessions.length
+  item.description = `${visibleSessionCount} session${visibleSessionCount === 1 ? '' : 's'}`
   item.tooltip = [
     project.path,
     `Updated: ${formatRelativeTime(project.updated)}`,
-    project.memoryStatus && project.memoryStatus !== 'none'
-      ? `Project Memory: ${project.memoryStatus}`
-      : null,
+    projectMemoryDescription(project.memoryStatus),
   ]
     .filter(Boolean)
     .join('\n')
-  item.iconPath = new vscode.ThemeIcon(
-    project.memoryStatus === 'orange' ? 'cloud-upload' : 'folder'
-  )
+  item.iconPath = projectMemoryIcon(project.memoryStatus)
   return item
 }
 
-function sessionTreeItem(session: ExtensionSession): vscode.TreeItem {
+function sessionTreeItem(node: SessionTreeNode): vscode.TreeItem {
+  const { session } = node
   const item = new vscode.TreeItem(session.title, vscode.TreeItemCollapsibleState.None)
+  item.id = `swoop.session.${session.projectId}.${session.id}`
   item.command = {
-    arguments: [{ kind: 'session', parentSection: 'workspace', session } satisfies SessionTreeNode],
+    arguments: [node],
     command: 'swoop.openSessionDetail',
     title: 'Open Session Inspector',
   }
@@ -313,13 +350,24 @@ function sessionTreeItem(session: ExtensionSession): vscode.TreeItem {
   item.tooltip = tooltip
   item.iconPath = new vscode.ThemeIcon(
     statusThemeIconId(session.primaryStatus, session.isActive),
-    session.advice.severity === 'blocked'
-      ? new vscode.ThemeColor('problemsErrorIcon.foreground')
-      : session.advice.severity === 'warning'
-        ? new vscode.ThemeColor('problemsWarningIcon.foreground')
-        : undefined
+    themeColor(statusThemeColorId(session.primaryStatus, session.isActive))
   )
   return item
+}
+
+function themeColor(id: string | undefined): vscode.ThemeColor | undefined {
+  return id ? new vscode.ThemeColor(id) : undefined
+}
+
+function projectMemoryIcon(status: ExtensionProject['memoryStatus']): vscode.ThemeIcon {
+  if (!status || status === 'none') return new vscode.ThemeIcon('folder')
+  const color =
+    status === 'green'
+      ? new vscode.ThemeColor('testing.iconPassed')
+      : status === 'orange'
+        ? new vscode.ThemeColor('problemsWarningIcon.foreground')
+        : new vscode.ThemeColor('disabledForeground')
+  return new vscode.ThemeIcon('cloud', color)
 }
 
 function sessionNode(session: ExtensionSession, section: SectionId): SessionTreeNode {
@@ -338,4 +386,8 @@ function isTreeNode(value: unknown): value is TreeNode {
 
 function escapeMarkdownCode(value: string): string {
   return value.replace(/`/g, '\\`')
+}
+
+function cockpitModelFingerprint(model: ExtensionCockpitModel): string {
+  return JSON.stringify({ ...model, generatedAt: undefined })
 }

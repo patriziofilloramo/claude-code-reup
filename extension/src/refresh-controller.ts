@@ -6,11 +6,13 @@ import {
   getClaudeDirectory,
   getClaudeProjectsDirectory,
 } from '../../src/core/project/claude-paths.js'
+import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
 import type { SwoopLogger } from './logger.js'
 import { resolveGitDirectory } from './git-workspace.js'
 
 const SAFETY_REFRESH_MS = 20_000
 const WATCH_DEBOUNCE_MS = 500
+const WATCH_REFRESH_THROTTLE_MS = 5_000
 
 type RefreshMode = 'interval' | 'manual' | 'watch'
 
@@ -27,6 +29,7 @@ export class SwoopRefreshController implements vscode.Disposable {
   private debounceTimer: NodeJS.Timeout | null = null
   private disposed = false
   private intervalTimer: NodeJS.Timeout | null = null
+  private lastRefreshStartedAt = 0
   private pendingRefreshReason: string | null = null
   private refreshInFlight: Promise<void> | null = null
   private visible = false
@@ -83,7 +86,6 @@ export class SwoopRefreshController implements vscode.Disposable {
     if (mode === 'watch') {
       this.startFilesystemWatchers()
       this.startGitWatchers()
-      this.startSafetyInterval()
     } else if (mode === 'interval') {
       this.startSafetyInterval()
     }
@@ -92,10 +94,17 @@ export class SwoopRefreshController implements vscode.Disposable {
   requestRefresh(reason: string): void {
     if (this.disposed || !this.visible) return
     this.clearDebounce()
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null
-      void this.refresh(reason)
-    }, WATCH_DEBOUNCE_MS)
+    const throttleDelay =
+      readRefreshMode() === 'watch'
+        ? Math.max(0, this.lastRefreshStartedAt + WATCH_REFRESH_THROTTLE_MS - Date.now())
+        : 0
+    this.debounceTimer = setTimeout(
+      () => {
+        this.debounceTimer = null
+        void this.refresh(reason)
+      },
+      Math.max(WATCH_DEBOUNCE_MS, throttleDelay)
+    )
   }
 
   private async refresh(reason: string): Promise<void> {
@@ -106,6 +115,8 @@ export class SwoopRefreshController implements vscode.Disposable {
     }
 
     this.logger.debug('VS Code cockpit refresh requested', reason)
+    this.lastRefreshStartedAt = Date.now()
+    invalidateProjectCache()
     this.refreshInFlight = this.target.refresh()
     try {
       await this.refreshInFlight

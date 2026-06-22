@@ -39,8 +39,17 @@ export function buildCockpitModel(
 ): ExtensionCockpitModel {
   const workspaceRoots = context.workspaceRoots.map((root) => resolve(root))
   const activeEditorPath = context.activeEditorPath ? resolve(context.activeEditorPath) : null
+  const workspaceProjectIds = new Set(
+    projects
+      .filter((project) => workspaceRoots.some((root) => pathsOverlap(project.path, root)))
+      .map((project) => project.id)
+  )
   const workspaceSessions = sessions
-    .filter((session) => sessionMatchesAnyWorkspace(session, workspaceRoots))
+    .filter(
+      (session) =>
+        workspaceProjectIds.has(session.projectId) ||
+        sessionMatchesAnyWorkspace(session, workspaceRoots)
+    )
     .sort((left, right) => compareCockpitSessions(left, right, activeEditorPath))
   const workspaceIds = new Set(workspaceSessions.map((session) => session.id))
 

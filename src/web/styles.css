@@ -98,11 +98,18 @@ body {
   padding: 6px 14px;
 }
 .logo {
-  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--strong);
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+.logo-mark {
+  color: #e86030;
+  flex-shrink: 0;
 }
 .hdr-sep {
   background: var(--dim);

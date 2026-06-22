@@ -3,8 +3,22 @@
 ![Swoop logo](media/swoop-brand.png)
 
 Swoop brings local Claude Code session intelligence into VS Code. It helps you
-decide which session to continue, explains resume risks, and launches Claude in
-the correct integrated-terminal directory.
+decide which session to continue, explains resume risks, and resumes it either
+in the Claude Code extension or in the correct integrated-terminal directory.
+
+## Full-screen Resume Dashboard
+
+Run **Swoop: Open Dashboard** or use the dashboard button in the Sessions view.
+The editor-native dashboard is the fastest way to search projects and sessions,
+review resume context, and continue work. Metadata search supports
+`project:`, `branch:`, `tag:`/`#`, `status:`, and `is:active`; transcript search
+is available explicitly through **Deep search**. Project and session
+right-click menus expose the relevant actions without crowding the primary UI.
+
+The dashboard opens once for its onboarding generation, then remains
+user-invoked. Normal patch updates do not reopen it automatically.
+Background and manual refreshes preserve the active editor/sidebar focus,
+dashboard caret, selection, and scroll position.
 
 Swoop is an independent local tool and is not affiliated with Anthropic.
 
@@ -25,6 +39,12 @@ status.
 Safe local actions include Resume, Copy Handoff, Alias, Archive/Undo, Tags,
 Reveal Project, and opening transcript-referenced files. Swoop never modifies
 Claude-owned transcripts.
+
+When Anthropic's Claude Code extension is installed, the first Resume asks
+whether to use it or the VS Code terminal. The checkmarked **Remember my
+choice** control makes that selection persistent; the dashboard split button
+can change it later. If the Claude Code command is unavailable, Swoop reports
+the problem and safely falls back to the terminal.
 
 ## Install locally
 
@@ -87,12 +107,16 @@ configuration. The Extension Host uses the local bundle in
 - `swoop.showStatusBar`: show active and attention counts while Swoop is
   visible.
 
-Watchers, Git checks, and the safety interval are active only while the Swoop
-view is visible.
+Watchers and Git checks are active only while the dashboard or Swoop tree is
+visible. Watch events are coalesced and rate-limited, and unchanged models do
+not invalidate hidden or visible Tree Views. The 20-second timer is used only
+in explicit `interval` mode.
 
 ## Privacy and safety
 
-- No telemetry or network requests.
+- No telemetry and no Swoop backend. When live usage capture is configured,
+  the shared core may refresh aggregate limits from Anthropic's authenticated
+  read-only usage endpoint; credentials remain in memory and are never logged.
 - No transcript writes.
 - No automatic branch changes.
 - No destructive session deletion.

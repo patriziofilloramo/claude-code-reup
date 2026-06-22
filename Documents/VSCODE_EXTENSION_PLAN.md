@@ -1,7 +1,17 @@
 # VS Code Extension Plan
 
-Status: working plan for Milestone 11 discovery. Phase 0 and the first read-only
-editor proof are now implemented on `feat/vscode-extension-plan`.
+Status: historical Milestone 11 discovery plan. The proof succeeded and the
+current implementation has moved beyond this document: see
+[`extension/README.md`](../extension/README.md),
+[`FEATURES.md`](FEATURES.md), and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
+shipped dashboard, Inspector, search, live usage, actions, and resume-target
+behavior.
+
+The earlier “not a dashboard clone” constraint remains useful as design
+history, but it is no longer a literal product restriction. The implemented
+full-screen dashboard is an editor-native, resume-focused surface backed by the
+same core functions as TUI and Web, not a copy of the browser administration
+UI.
 
 This document defines the first VS Code extension slice for Swoop. It is written
 for an implementation agent: decisions are explicit, risky ideas are deferred,

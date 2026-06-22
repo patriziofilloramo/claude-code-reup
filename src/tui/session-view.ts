@@ -1,4 +1,9 @@
 import type { Project, Session } from '../core/session/session-model.js'
+import {
+  parseSessionQuery,
+  sessionMatchesParsedQuery,
+  sessionQueryHasQualifiers,
+} from '../core/session/session-query.js'
 import { primaryStatus } from '../core/session/session-signals.js'
 
 /** Reserves one body row for the selected session's optional detail line. */
@@ -33,52 +38,6 @@ export function createVisibleWindow<T>(
   ]
 }
 
-interface ParsedQuery {
-  branchTerms: string[]
-  filterActive: boolean
-  filterArchived: boolean
-  projectTerms: string[]
-  statusTerms: string[]
-  tagTerms: string[]
-  text: string
-}
-
-function parseSearchQuery(searchQuery: string): ParsedQuery {
-  const parts = searchQuery.trim().split(/\s+/).filter(Boolean)
-  const result: ParsedQuery = {
-    branchTerms: [],
-    filterActive: false,
-    filterArchived: false,
-    projectTerms: [],
-    statusTerms: [],
-    tagTerms: [],
-    text: '',
-  }
-  const textParts: string[] = []
-
-  for (const part of parts) {
-    const lower = part.toLowerCase()
-    if (lower === 'is:active') {
-      result.filterActive = true
-    } else if (lower === 'is:archived') {
-      result.filterArchived = true
-    } else if (lower.startsWith('project:')) {
-      result.projectTerms.push(lower.slice(8))
-    } else if (lower.startsWith('branch:')) {
-      result.branchTerms.push(lower.slice(7))
-    } else if (lower.startsWith('status:')) {
-      result.statusTerms.push(lower.slice(7))
-    } else if (lower.startsWith('tag:') || lower.startsWith('#')) {
-      const tag = lower.startsWith('tag:') ? lower.slice(4) : lower.slice(1)
-      if (tag) result.tagTerms.push(tag)
-    } else {
-      textParts.push(lower)
-    }
-  }
-  result.text = textParts.join(' ')
-  return result
-}
-
 /**
  * Applies archive visibility and global text search to the TUI project tree.
  *
@@ -99,15 +58,9 @@ export function deriveSearchResults(
   showArchivedSessions: boolean,
   activeSessionIds: Set<string> = new Set()
 ): Project[] {
-  const parsed = parseSearchQuery(searchQuery)
+  const parsed = parseSessionQuery(searchQuery)
   const showArchived = showArchivedSessions || parsed.filterArchived
-  const hasQualifiers =
-    parsed.filterActive ||
-    parsed.filterArchived ||
-    parsed.projectTerms.length > 0 ||
-    parsed.branchTerms.length > 0 ||
-    parsed.statusTerms.length > 0 ||
-    parsed.tagTerms.length > 0
+  const hasQualifiers = sessionQueryHasQualifiers(parsed)
 
   return projects.flatMap((project) => {
     const visibleSessions = project.sessions.filter(
@@ -133,33 +86,24 @@ export function deriveSearchResults(
 
     // With session-level qualifiers: filter per-session
     const matchingSessions = visibleSessions.filter((session) => {
-      // Text must match project or session
-      if (parsed.text) {
-        if (
-          !projectMatchesQuery(project, parsed.text) &&
-          !sessionMatchesQuery(session, parsed.text)
-        )
-          return false
-      }
-      if (parsed.filterActive && !activeSessionIds.has(session.id)) return false
-      if (parsed.filterArchived && !session.signals.archived) return false
-      if (parsed.branchTerms.length > 0) {
-        const branch = (
-          (session.gitBranch ?? '') +
-          ' ' +
-          (session.currentBranch ?? '')
-        ).toLowerCase()
-        if (!parsed.branchTerms.some((t) => branch.includes(t))) return false
-      }
-      if (parsed.statusTerms.length > 0) {
-        const status = primaryStatus(session.signals)
-        if (!parsed.statusTerms.some((t) => status.includes(t))) return false
-      }
-      if (parsed.tagTerms.length > 0) {
-        const sessionTags = (session.tags ?? []).map((t) => t.toLowerCase())
-        if (!parsed.tagTerms.some((t) => sessionTags.some((st) => st.includes(t)))) return false
-      }
-      return true
+      return sessionMatchesParsedQuery(
+        {
+          active: activeSessionIds.has(session.id),
+          archived: session.signals.archived,
+          branches: [session.gitBranch ?? '', session.currentBranch ?? ''],
+          project: [project.id, project.path, session.projectPath],
+          status: primaryStatus(session.signals),
+          tags: session.tags ?? [],
+          text: [
+            session.id,
+            session.name,
+            session.alias ?? '',
+            ...(session.context.models ?? []),
+            ...(session.tags ?? []),
+          ],
+        },
+        parsed
+      )
     })
 
     return matchingSessions.length > 0 ? [{ ...project, sessions: matchingSessions }] : []

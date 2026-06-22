@@ -1,5 +1,7 @@
 import { Box, Text, useStdout } from 'ink'
 
+import { BRAND_COLOR } from '../../brand.js'
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { LiveUsageSummary, UsageLimitWindow } from '../../core/usage/live-usage.js'
 import { relativeTime } from '../../utils/time.js'
@@ -41,12 +43,19 @@ export default function AppHeader({ usage, version }: AppHeaderProps) {
       flexDirection="column"
       paddingX={1}
     >
-      <Box gap={2}>
+      <Box gap={0}>
+        <Text color={BRAND_COLOR}>∫ </Text>
         <Text bold color={COLORS.accent}>
-          swoop
+          {LABELS.appName}
         </Text>
-        {compact ? null : <Text color={COLORS.muted}>claude code session manager</Text>}
-        <Text color={COLORS.border}>v{version}</Text>
+        {compact ? (
+          <Text color={COLORS.muted}> v{version}</Text>
+        ) : (
+          <Text color={COLORS.muted}>
+            {' — '}
+            {LABELS.brandProduct} v{version}
+          </Text>
+        )}
       </Box>
       {usageDisplay ? <UsageSummary compact={compact} display={usageDisplay} /> : null}
     </Box>
@@ -56,7 +65,7 @@ export default function AppHeader({ usage, version }: AppHeaderProps) {
 function UsageSummary({ compact, display }: { compact: boolean; display: UsageDisplay }) {
   return (
     <Box gap={2}>
-      <Text color={COLORS.dim}>limits</Text>
+      <Text color={COLORS.dim}>{LABELS.limitsLabel}</Text>
       {display.limits.map((limit) => (
         <Box key={limit.label} gap={1}>
           <Text bold color={limit.color}>
@@ -75,7 +84,7 @@ function UsageSummary({ compact, display }: { compact: boolean; display: UsageDi
       {compact ? null : display.statusText ? (
         <Text color={COLORS.muted}>{display.statusText}</Text>
       ) : null}
-      {display.creditsEnabled ? <Text color={COLORS.ok}>credits on</Text> : null}
+      {display.creditsEnabled ? <Text color={COLORS.ok}>{LABELS.creditsEnabled}</Text> : null}
     </Box>
   )
 }

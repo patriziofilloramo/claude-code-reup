@@ -403,8 +403,10 @@ npm run format  # Prettier
 ```
 
 The optional [VS Code Workspace Cockpit](extension/README.md) provides
-workspace-first Resume Advice, live attention state, a focused Session
-Inspector, and integrated-terminal resume from an installable local VSIX.
+an editor-native full-screen dashboard, workspace-first Resume Advice, live
+attention and usage state, structured metadata/deep search, a focused Session
+Inspector, and resume through either the Claude Code extension or the VS Code
+terminal.
 
 ### Install the VS Code extension locally
 

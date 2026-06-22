@@ -134,9 +134,12 @@ the reviewed landscape that ships both a web UI and session intelligence.
 
 ### VS Code Workspace Cockpit
 
-The installable VS Code extension is workspace-first rather than a dashboard
-clone:
+The installable VS Code extension combines a focused full-screen resume
+dashboard with workspace-native companion views:
 
+- Full-screen project/session discovery with progressive detail loading,
+  structured metadata search, explicit transcript search, live usage, and
+  context menus.
 - Current-workspace, external-attention, and recent-global sections.
 - Deterministic Resume Advice for missing paths, active sessions, branch drift,
   interrupted work, expiry, compaction, and safe resume.
@@ -146,6 +149,9 @@ clone:
   branches, file links, tags, and passive Project Memory state.
 - Safe local actions: resume, handoff, alias, archive/undo, tags, and reveal.
 - Compact active/attention status bar and global/workspace Quick Picks.
+- One centralized resume policy across all surfaces, choosing the Claude Code
+  extension when available or the VS Code terminal, with an optional persistent
+  preference and safe fallback.
 
 The extension reuses Swoop core discovery, health, preview, metadata, and
 handoff logic. It has no telemetry, network service, transcript writes,
@@ -256,7 +262,7 @@ Assessed against the four tools reviewed in the mid-2026 article
 | CLAUDE.md editor                                    |       ✓        |   —    |    —    |       —        |    —     |
 | TUI interface                                       |       ✓        |   —    |    —    |       ✓        |    ✓     |
 | Web interface                                       |       ✓        |   —    |    ✓    |       —        |    —     |
-| VS Code extension                                   |  _(research)_  |   —    |    —    |       —        |    —     |
+| VS Code extension                                   |       ✓        |   —    |    —    |       —        |    —     |
 | Credential / secret warning before share            |  _(roadmap)_   |   ✓    |    —    |       —        |    —     |
 | Files-touched list in session preview               |  _(roadmap)_   |   ✓    |    —    |       —        |    —     |
 | Timeline replay / step-by-step code diff            | ✗ out of scope |   ✓    |    —    |       —        |    —     |

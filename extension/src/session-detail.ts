@@ -26,7 +26,7 @@ import {
   type InspectorMessage,
 } from './inspector-html.js'
 import type { SwoopLogger } from './logger.js'
-import { resumeSessionInTerminal } from './terminal.js'
+import type { SessionResumeService } from './resume-target.js'
 import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
 
 const INSPECTOR_VIEW_ID = 'swoop.inspector'
@@ -46,23 +46,27 @@ interface SessionReference {
 }
 
 export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscode.Disposable {
-  private readonly disposables: vscode.Disposable[] = []
+  private readonly viewDisposables: vscode.Disposable[] = []
   private readonly previewCache = new Map<string, PreviewCacheEntry>()
   private selectedReference: SessionReference | null = null
   private selectedSession: ExtensionSession | null = null
   private selectedPreview: SessionPreview | null = null
+  private lastRenderKey: string | null = null
+  private renderRequestId = 0
   private view: vscode.WebviewView | null = null
 
   constructor(
     private readonly dataSource: SwoopDataSource,
     private readonly logger: SwoopLogger,
-    private readonly onDidMutate: () => Promise<void>
+    private readonly onDidMutate: () => Promise<void>,
+    private readonly resumeService: SessionResumeService
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
+    this.lastRenderKey = null
     view.webview.options = { enableScripts: true, localResourceRoots: [] }
-    this.disposables.push(
+    this.viewDisposables.push(
       view.webview.onDidReceiveMessage((message: unknown) => {
         if (!isInspectorMessage(message)) {
           this.logger.error('rejected invalid inspector message', message)
@@ -71,7 +75,10 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
         void this.handleMessage(message)
       }),
       view.onDidDispose(() => {
-        if (this.view === view) this.view = null
+        if (this.view === view) {
+          this.view = null
+          for (const disposable of this.viewDisposables.splice(0)) disposable.dispose()
+        }
       })
     )
     void this.render()
@@ -85,12 +92,18 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
     await this.render()
   }
 
-  async refreshSelected(): Promise<void> {
+  async refreshSelected(sessions?: readonly ExtensionSession[]): Promise<void> {
     if (!this.selectedReference) return
-    const session = await this.dataSource.resolveSession(
-      this.selectedReference.projectId,
-      this.selectedReference.sessionId
-    )
+    const session = sessions
+      ? (sessions.find(
+          (candidate) =>
+            candidate.projectId === this.selectedReference?.projectId &&
+            candidate.id === this.selectedReference.sessionId
+        ) ?? null)
+      : await this.dataSource.resolveSession(
+          this.selectedReference.projectId,
+          this.selectedReference.sessionId
+        )
     this.selectedSession = session
     if (!session) this.selectedReference = null
     await this.render()
@@ -152,8 +165,10 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
   }
 
   dispose(): void {
-    for (const disposable of this.disposables.splice(0)) disposable.dispose()
+    for (const disposable of this.viewDisposables.splice(0)) disposable.dispose()
     this.previewCache.clear()
+    this.lastRenderKey = null
+    this.renderRequestId += 1
     this.view = null
   }
 
@@ -164,7 +179,7 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
     try {
       switch (message.type) {
         case 'resume':
-          await resumeSessionInTerminal(current)
+          await this.resumeService.resume(current)
           break
         case 'copyHandoff':
           await copySessionHandoff(current, this.logger)
@@ -221,12 +236,21 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
 
   private async render(): Promise<void> {
     if (!this.view) return
+    const requestId = ++this.renderRequestId
     if (!this.selectedSession) {
+      if (this.lastRenderKey === 'empty') return
+      this.lastRenderKey = 'empty'
       this.view.webview.html = emptyInspectorHtml()
       return
     }
-    this.selectedPreview = await this.loadPreview(this.selectedSession)
-    this.view.webview.html = renderInspectorHtml(this.selectedSession, this.selectedPreview)
+    const session = this.selectedSession
+    const preview = await this.loadPreview(session)
+    if (requestId !== this.renderRequestId || this.selectedSession !== session || !this.view) return
+    this.selectedPreview = preview
+    const renderKey = JSON.stringify([session, preview])
+    if (this.lastRenderKey === renderKey) return
+    this.lastRenderKey = renderKey
+    this.view.webview.html = renderInspectorHtml(session, preview)
   }
 
   private async loadPreview(session: ExtensionSession): Promise<SessionPreview> {

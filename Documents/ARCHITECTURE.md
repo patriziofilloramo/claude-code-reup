@@ -280,16 +280,35 @@ workspace-first cockpit model from shared project discovery, active-session
 state, health signals, Resume Advice, previews, metadata, and Project Memory
 status.
 
-The Activity Bar tree separates current-workspace sessions, attention elsewhere,
-and recent global history. Refresh watchers exist only while the view is
-visible and observe Claude project data, live-session locks, workspace changes,
-active editors, and normal/worktree Git metadata.
+The full-screen dashboard is the primary discovery and resume surface. It loads
+metadata first, requests previews only for the selected session, uses the shared
+core query parser for structured search, and performs transcript search only on
+explicit request. The Activity Bar tree remains a compact companion that
+separates current-workspace sessions, attention elsewhere, and recent global
+history. Refresh watchers exist only while either the dashboard or tree is
+visible and observe
+Claude project data, live-session locks, workspace changes, active editors, and
+normal/worktree Git metadata.
+
+Refresh is focus-neutral: tree nodes retain stable object identity and VS Code
+IDs instead of being programmatically reselected, while the dashboard captures
+and restores its focused control, input caret, and panel scroll positions
+around DOM updates. The Inspector skips semantically identical renders and
+rejects stale asynchronous preview results.
+
+Watch mode is event-driven rather than polling: filesystem bursts are
+coalesced and rate-limited, hidden Tree Views are not invalidated, and
+structurally unchanged cockpit models produce no UI refresh. Periodic
+20-second scanning is reserved for explicit interval mode.
 
 The Session Inspector is a CSP-restricted Webview. Transcript previews are
 loaded lazily and cached by transcript modification time. Every action is
 revalidated in the extension host; only reversible metadata mutations are
-available. The status bar uses transcript-backed context and active/attention
-counts, never stale account-limit data.
+available. Resume destination is centralized across dashboard, Inspector, tree,
+and Quick Picks, with an optional remembered choice between Anthropic's Claude
+Code extension and the integrated terminal. The status bar uses
+transcript-backed context and active/attention counts; the dashboard separately
+shows the shared live-usage cache with freshness handling.
 
 Web server responsibilities are split between route registration, grouped route
 modules under `web/routes/`, API serialization, local-request security, and

@@ -1,7 +1,12 @@
 import { randomBytes } from 'node:crypto'
 
 import type { SessionPreview } from '../../src/core/session/session-preview.js'
-import { formatContextTokens, formatRelativeTime } from './formatting.js'
+import {
+  formatContextTokens,
+  formatRelativeTime,
+  projectMemoryDescription,
+  statusLabel,
+} from './formatting.js'
 import type { ExtensionSession } from './swoop-data.js'
 
 export type InspectorMessage =
@@ -17,10 +22,8 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
   const nonce = randomBytes(18).toString('base64')
   const resumeDisabled =
     session.advice.code === 'path-missing' || session.advice.code === 'already-active'
-  const memoryStatus =
-    session.memoryStatus && session.memoryStatus !== 'none'
-      ? `<span class="pill memory-${session.memoryStatus}">Project Memory: ${escapeHtml(session.memoryStatus)}</span>`
-      : ''
+  const memoryStatus = renderMemoryStatus(session.memoryStatus)
+  const healthStatus = statusLabel(session.primaryStatus)
 
   return `<!doctype html>
 <html lang="en">
@@ -46,10 +49,25 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
     .label { color: var(--vscode-descriptionForeground); }
     .pills { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
     .pill { border: 1px solid var(--vscode-widget-border); border-radius: 10px; padding: 1px 7px; font-size: .85em; }
+    .pill-active { color: var(--vscode-testing-iconPassed); border-color: var(--vscode-testing-iconPassed); }
+    .pill-warning { color: var(--vscode-editorWarning-foreground); border-color: var(--vscode-editorWarning-foreground); }
+    .pill-error { color: var(--vscode-editorError-foreground); border-color: var(--vscode-editorError-foreground); }
+    .pill-muted { color: var(--vscode-descriptionForeground); }
+    .tag { color: var(--vscode-textLink-foreground); border-color: var(--vscode-textLink-foreground); background: var(--vscode-textBlockQuote-background); font-weight: 600; }
+    .memory { font-size: 1em; padding: 0 5px; }
     .memory-green { color: var(--vscode-testing-iconPassed); }
     .memory-orange { color: var(--vscode-editorWarning-foreground); }
     .memory-grey { color: var(--vscode-disabledForeground); }
     .muted { color: var(--vscode-descriptionForeground); }
+    .markdown { overflow-wrap: anywhere; }
+    .markdown h3, .markdown h4 { margin: 12px 0 5px; }
+    .markdown p { margin: 5px 0 9px; }
+    .markdown pre { overflow-x: auto; padding: 8px; background: var(--vscode-textCodeBlock-background); border-radius: 4px; }
+    .markdown code { font-family: var(--vscode-editor-font-family); background: var(--vscode-textCodeBlock-background); padding: 1px 3px; border-radius: 3px; }
+    .markdown pre code { padding: 0; background: transparent; }
+    .markdown table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: .9em; }
+    .markdown th, .markdown td { border: 1px solid var(--vscode-widget-border); padding: 4px 6px; text-align: left; vertical-align: top; }
+    .markdown th { background: var(--vscode-textBlockQuote-background); }
     ul { padding-left: 18px; }
     a { color: var(--vscode-textLink-foreground); cursor: pointer; }
   </style>
@@ -69,10 +87,10 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
     <button class="secondary" data-action="revealProject">Reveal Project</button>
   </div>
   <div class="pills">
-    <span class="pill">${escapeHtml(session.primaryStatus)}</span>
-    ${session.isActive ? '<span class="pill">active</span>' : ''}
+    ${healthStatus ? `<span class="pill ${statusPillClass(session.primaryStatus)}">${escapeHtml(healthStatus)}</span>` : ''}
+    ${session.isActive ? '<span class="pill pill-active">● active</span>' : ''}
     ${memoryStatus}
-    ${session.tags.map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join('')}
+    ${session.tags.map((tag) => `<span class="pill tag">#${escapeHtml(tag)}</span>`).join('')}
   </div>
   <div class="facts">
     <span class="label">Project</span><span>${escapeHtml(session.projectName)}</span>
@@ -84,8 +102,8 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
     <span class="label">Session ID</span><span>${escapeHtml(session.id)}</span>
   </div>
   ${textSection('What You Asked For', preview.goal)}
-  ${textSection('Where Claude Left Off', preview.lastResponse)}
-  ${textSection('Plan', preview.automaticContext.plan?.text ?? null)}
+  ${markdownSection('Where Claude Left Off', preview.lastResponse)}
+  ${markdownSection('Plan', preview.automaticContext.plan?.text ?? null)}
   ${todoSection(preview)}
   ${fileSection('Files Touched', preview.touchedFiles)}
   ${fileSection('Files Read', preview.automaticContext.readFiles)}
@@ -102,6 +120,18 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
   </script>
 </body>
 </html>`
+}
+
+function renderMemoryStatus(status: ExtensionSession['memoryStatus']): string {
+  const description = projectMemoryDescription(status)
+  if (!description || !status || status === 'none') return ''
+  return `<span class="pill memory memory-${status}" title="${escapeAttribute(description)}" aria-label="${escapeAttribute(description)}">☁</span>`
+}
+
+function statusPillClass(status: ExtensionSession['primaryStatus']): string {
+  if (status === 'interrupted') return 'pill-warning'
+  if (status === 'expiring' || status === 'path-missing') return 'pill-error'
+  return 'pill-muted'
 }
 
 export function emptyInspectorHtml(): string {
@@ -127,6 +157,143 @@ export function isInspectorMessage(value: unknown): value is InspectorMessage {
 
 function textSection(title: string, value: string | null): string {
   return `<h2>${escapeHtml(title)}</h2><p>${value ? escapeHtml(value) : '<span class="muted">No structured value found.</span>'}</p>`
+}
+
+function markdownSection(title: string, value: string | null): string {
+  return `<h2>${escapeHtml(title)}</h2>${value ? `<div class="markdown">${renderMarkdown(value)}</div>` : '<p><span class="muted">No structured value found.</span></p>'}`
+}
+
+function renderMarkdown(markdown: string): string {
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const html: string[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index] ?? ''
+    if (!line.trim()) {
+      index++
+      continue
+    }
+
+    const fence = line.match(/^```/)
+    if (fence) {
+      const code: string[] = []
+      index++
+      while (index < lines.length && !/^```/.test(lines[index] ?? '')) {
+        code.push(lines[index] ?? '')
+        index++
+      }
+      if (index < lines.length) index++
+      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+      continue
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/)
+    if (heading) {
+      const level = Math.min(4, heading[1]?.length ?? 3)
+      html.push(`<h${level}>${renderMarkdownInline(heading[2] ?? '')}</h${level}>`)
+      index++
+      continue
+    }
+
+    if (isTableHeader(lines, index)) {
+      const headers = splitTableRow(line)
+      index += 2
+      const rows: string[][] = []
+      while (index < lines.length && isTableRow(lines[index] ?? '')) {
+        rows.push(splitTableRow(lines[index] ?? ''))
+        index++
+      }
+      html.push(
+        `<table><thead><tr>${headers.map((cell) => `<th>${renderMarkdownInline(cell)}</th>`).join('')}</tr></thead><tbody>${rows
+          .map(
+            (row) =>
+              `<tr>${headers.map((_, cellIndex) => `<td>${renderMarkdownInline(row[cellIndex] ?? '')}</td>`).join('')}</tr>`
+          )
+          .join('')}</tbody></table>`
+      )
+      continue
+    }
+
+    const bullet = line.match(/^\s*[-*+]\s+(.+)$/)
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/)
+    if (bullet || ordered) {
+      const tag = ordered ? 'ol' : 'ul'
+      const items: string[] = []
+      while (index < lines.length) {
+        const match =
+          tag === 'ol'
+            ? (lines[index] ?? '').match(/^\s*\d+[.)]\s+(.+)$/)
+            : (lines[index] ?? '').match(/^\s*[-*+]\s+(.+)$/)
+        if (!match) break
+        items.push(`<li>${renderMarkdownInline(match[1] ?? '')}</li>`)
+        index++
+      }
+      html.push(`<${tag}>${items.join('')}</${tag}>`)
+      continue
+    }
+
+    const paragraph: string[] = [line.trim()]
+    index++
+    while (
+      index < lines.length &&
+      (lines[index] ?? '').trim() &&
+      !isMarkdownBlockStart(lines, index)
+    ) {
+      paragraph.push((lines[index] ?? '').trim())
+      index++
+    }
+    html.push(`<p>${renderMarkdownInline(paragraph.join(' '))}</p>`)
+  }
+
+  return html.join('')
+}
+
+function renderMarkdownInline(value: string): string {
+  const code: string[] = []
+  let escaped = escapeHtml(value).replace(/`([^`]+)`/g, (_match, content: string) => {
+    const placeholder = `SWOOPCODEPLACEHOLDER${code.length}END`
+    code.push(`<code>${content}</code>`)
+    return placeholder
+  })
+  escaped = escaped
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  return escaped.replace(
+    /SWOOPCODEPLACEHOLDER(\d+)END/g,
+    (_match, index: string) => code[Number(index)] ?? ''
+  )
+}
+
+function isMarkdownBlockStart(lines: string[], index: number): boolean {
+  const line = lines[index] ?? ''
+  return (
+    /^```/.test(line) ||
+    /^#{1,4}\s+/.test(line) ||
+    /^\s*[-*+]\s+/.test(line) ||
+    /^\s*\d+[.)]\s+/.test(line) ||
+    isTableHeader(lines, index)
+  )
+}
+
+function isTableHeader(lines: string[], index: number): boolean {
+  const header = lines[index] ?? ''
+  const separator = lines[index + 1] ?? ''
+  return isTableRow(header) && /^\s*\|?\s*:?-{3,}/.test(separator) && isTableRow(separator)
+}
+
+function isTableRow(line: string): boolean {
+  return line.includes('|')
+}
+
+function splitTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim())
 }
 
 function todoSection(preview: SessionPreview): string {

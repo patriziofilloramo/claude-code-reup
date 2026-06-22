@@ -24,15 +24,31 @@ describe('workspace cockpit guardrails', () => {
     temporaryDirectory = null
   })
 
-  it('renders workspace, attention, and recent sections with stable selection support', () => {
+  it('refreshes workspace, attention, and recent sections without stealing tree focus', () => {
     expect(treeSource).toContain("type SectionId = 'workspace' | 'attention' | 'recent'")
     expect(treeSource).toContain("label: 'Current Workspace'")
     expect(treeSource).toContain("label: 'Needs Attention Elsewhere'")
     expect(treeSource).toContain("label: 'Recent Elsewhere'")
-    expect(treeSource).toContain('restoreSelection')
+    expect(treeSource).toContain('const nextSessionNodes = new Map')
+    expect(treeSource).toContain('this.sessionNodes.get(session.id) ?? sessionNode')
+    expect(treeSource).toContain('cockpitModelFingerprint(model)')
+    expect(treeSource).toContain('this.renderedFingerprint !== fingerprint')
+    expect(treeSource).toContain('options.notifyView !== false')
+    expect(treeSource).not.toContain('restoreSelection')
+    expect(treeSource).not.toContain('treeView.reveal(')
+    expect(treeSource).not.toContain('select: true')
+    expect(treeSource).toContain('item.id = `swoop.section.${node.id}`')
+    expect(treeSource).toContain('item.id = `swoop.project.${project.id}`')
+    expect(treeSource).toContain('item.id = `swoop.session.${session.projectId}.${session.id}`')
     expect(treeSource).toContain('treeView.badge')
+    expect(treeSource).toContain('const visibleSessionCount = group.sessions.length')
     expect(extensionSource).toContain('treeProvider.attachTreeView(treeView)')
-    expect(extensionSource).toContain('refreshController.setVisible(event.visible)')
+    expect(extensionSource).toContain(
+      'refreshController?.setVisible(treeVisible || dashboardVisible)'
+    )
+    expect(extensionSource).toContain('new SwoopRefreshController(logger, { refresh: refreshAll })')
+    expect(extensionSource).toContain('treeProvider.refresh({ notifyView: treeVisible })')
+    expect(extensionSource).toContain('if (changed) await dashboard?.refresh')
   })
 
   it('resolves normal repositories and worktree gitdir files', async () => {

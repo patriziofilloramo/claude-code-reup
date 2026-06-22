@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 
 import type { SessionStatus } from '../../src/core/session/session-model.js'
+import type { ProjectSyncStatus } from '../../src/core/sync/project-sync-status.js'
 import { relativeTime } from '../../src/utils/time.js'
 
 export function compactProjectName(projectPath: string): string {
@@ -27,7 +28,7 @@ export function statusCodicon(status: SessionStatus, isActive: boolean): string 
 }
 
 export function statusThemeIconId(status: SessionStatus, isActive: boolean): string {
-  if (isActive) return 'debug-start'
+  if (isActive) return 'circle-filled'
   switch (status) {
     case 'expiring':
       return 'warning'
@@ -40,4 +41,34 @@ export function statusThemeIconId(status: SessionStatus, isActive: boolean): str
     case 'ok':
       return 'circle-outline'
   }
+}
+
+export function statusLabel(status: SessionStatus): string | null {
+  switch (status) {
+    case 'interrupted':
+      return 'interrupted'
+    case 'expiring':
+      return 'expiring soon'
+    case 'path-missing':
+      return 'path missing'
+    case 'heavily-compacted':
+      return 'heavy context'
+    case 'ok':
+      return null
+  }
+}
+
+export function statusThemeColorId(status: SessionStatus, isActive: boolean): string | undefined {
+  if (isActive) return 'testing.iconPassed'
+  if (status === 'interrupted') return 'problemsWarningIcon.foreground'
+  if (status === 'expiring' || status === 'path-missing') return 'problemsErrorIcon.foreground'
+  if (status === 'heavily-compacted') return 'descriptionForeground'
+  return undefined
+}
+
+export function projectMemoryDescription(status: ProjectSyncStatus | null): string | null {
+  if (!status || status === 'none') return null
+  if (status === 'green') return 'Project Memory is synced through shared storage'
+  if (status === 'orange') return 'Project Memory needs linking on one or more devices'
+  return 'Project Memory shared storage is currently unavailable'
 }

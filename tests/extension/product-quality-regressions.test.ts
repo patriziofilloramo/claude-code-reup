@@ -39,8 +39,12 @@ describe('VS Code product quality guardrails', () => {
     expect(manifest.icon).toBe('media/swoop-brand.png')
     expect(activityBarIcon).toContain('viewBox="0 0 256 256"')
     expect(activityBarIcon).not.toContain('<rect')
-    expect(brandIcon).toContain('fill="#E68465"')
-    expect(brandIcon).toContain('fill="#8AD9E8"')
+    expect(brandIcon).toContain('id="swoopGrad"')
+    expect(brandIcon).toContain('stop-color="#FF6030"')
+    expect(brandIcon).toContain('stroke="#FFFFFF"')
+    expect(brandIcon).not.toContain(
+      'M213 28L219 46L237 52L219 58L213 76L207 58L189 52L207 46L213 28Z'
+    )
     expect(brandIconPng.subarray(1, 4).toString('ascii')).toBe('PNG')
   })
 })

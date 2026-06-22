@@ -14,6 +14,7 @@ export const LABELS = {
   appName: 'swoop',
   appTitle: 'Swoop — session manager for Claude Code',
   appTagline: 'claude code session manager',
+  brandProduct: 'claude code',
 
   // ── CLI help ─────────────────────────────────────────────────────────────
   usagePrefix: 'Usage:',

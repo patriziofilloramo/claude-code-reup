@@ -30,6 +30,12 @@ describe('VS Code refresh controller guardrails', () => {
     expect(source).toContain("configured === 'manual' || configured === 'interval'")
     expect(source).toContain('vscode.workspace.createFileSystemWatcher')
     expect(source).toContain('setInterval')
+    expect(source).toContain('WATCH_REFRESH_THROTTLE_MS')
+    expect(source).toContain('Math.max(WATCH_DEBOUNCE_MS, throttleDelay)')
+    expect(source).toContain('invalidateProjectCache()')
+    expect(source).not.toContain(
+      "if (mode === 'watch') {\n      this.startFilesystemWatchers()\n      this.startGitWatchers()\n      this.startSafetyInterval()"
+    )
     expect(source).toContain("join(getClaudeDirectory(), 'sessions')")
     expect(source).toContain('resolveGitDirectory')
   })

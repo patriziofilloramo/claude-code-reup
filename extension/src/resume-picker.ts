@@ -4,9 +4,9 @@ import { formatContextTokens, formatRelativeTime, statusCodicon } from './format
 import { copySessionHandoff } from './handoff.js'
 import { compareCockpitSessions } from './cockpit-model.js'
 import type { SwoopLogger } from './logger.js'
+import type { SessionResumeService } from './resume-target.js'
 import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
 import { sessionMatchesWorkspace } from './swoop-data.js'
-import { resumeSessionInTerminal } from './terminal.js'
 
 interface SessionQuickPickItem extends vscode.QuickPickItem {
   session: ExtensionSession
@@ -24,12 +24,14 @@ const COPY_HANDOFF_BUTTON: vscode.QuickInputButton = {
 export async function showGlobalResumePicker(
   dataSource: SwoopDataSource,
   logger: SwoopLogger,
+  resumeService: SessionResumeService,
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
 ): Promise<void> {
   await showResumePicker({
     dataSource,
     logger,
     placeHolder: 'Resume any Claude Code session known to Swoop',
+    resumeService,
     title: 'Swoop: Resume Session',
     onOpenInspector,
   })
@@ -38,6 +40,7 @@ export async function showGlobalResumePicker(
 export async function showWorkspaceResumePicker(
   dataSource: SwoopDataSource,
   logger: SwoopLogger,
+  resumeService: SessionResumeService,
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
 ): Promise<void> {
   const workspacePaths = (vscode.workspace.workspaceFolders ?? []).map(
@@ -54,6 +57,7 @@ export async function showWorkspaceResumePicker(
       workspacePaths.some((workspacePath) => sessionMatchesWorkspace(session, workspacePath)),
     logger,
     placeHolder: 'Resume a Claude Code session for the current workspace',
+    resumeService,
     sort: (left, right) => compareCockpitSessions(left, right, activeEditorPath),
     title: 'Swoop: Resume Here',
     workspacePath: workspacePaths[0],
@@ -67,6 +71,7 @@ async function showResumePicker(options: {
   filter?: (session: ExtensionSession) => boolean
   logger: SwoopLogger
   placeHolder: string
+  resumeService: SessionResumeService
   title: string
   workspacePath?: string
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
@@ -123,6 +128,7 @@ async function runQuickPick(
     logger: SwoopLogger
     onOpenInspector?: (session: ExtensionSession) => Promise<void>
     placeHolder: string
+    resumeService: SessionResumeService
     title: string
   }
 ): Promise<void> {
@@ -144,12 +150,15 @@ async function runQuickPick(
     quickPick.onDidAccept(() => {
       const selected = quickPick.selectedItems[0]
       if (!selected) return
-      void resumeSessionInTerminal(selected.session)
-        .then(() => options.logger.info('resumed session from picker', selected.session.id))
+      finish()
+      void options.resumeService
+        .resume(selected.session)
+        .then((target) => {
+          if (target) options.logger.info('resumed session from picker', selected.session.id)
+        })
         .catch((error) =>
           vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
         )
-        .finally(finish)
     })
     quickPick.onDidTriggerItemButton((event) => {
       if (event.button === OPEN_INSPECTOR_BUTTON && options.onOpenInspector) {

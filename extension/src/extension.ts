@@ -1,9 +1,12 @@
 import * as vscode from 'vscode'
 
 import { copySessionHandoff } from './handoff.js'
+import { SwoopDashboard } from './dashboard.js'
 import { createLogger } from './logger.js'
 import { SwoopRefreshController } from './refresh-controller.js'
 import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-picker.js'
+import { SessionResumeService } from './resume-target.js'
+import { showSessionSearch } from './session-search.js'
 import {
   openSessionDetail,
   showSessionDetailPicker,
@@ -12,35 +15,66 @@ import {
 import { asProjectTreeNode, asSessionTreeNode, SwoopSessionTreeProvider } from './session-tree.js'
 import { SwoopDataSource } from './swoop-data.js'
 import { CockpitStatusBar } from './status-bar.js'
-import { resumeSessionInTerminal } from './terminal.js'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = createLogger()
   const dataSource = new SwoopDataSource(logger)
+  const resumeService = new SessionResumeService(context, logger)
   const treeProvider = new SwoopSessionTreeProvider(dataSource, logger)
-  const inspectorProvider = new SwoopInspectorProvider(dataSource, logger, () =>
-    treeProvider.refresh()
+  let dashboard: SwoopDashboard | null = null
+  let dashboardVisible = false
+  let treeVisible = false
+  let refreshController: SwoopRefreshController | null = null
+  const updateRefreshVisibility = (): void => {
+    refreshController?.setVisible(treeVisible || dashboardVisible)
+  }
+  const refreshAll = async (): Promise<void> => {
+    const changed = await treeProvider.refresh({ notifyView: treeVisible })
+    if (changed) await dashboard?.refresh(treeProvider.getModel() ?? undefined)
+  }
+  const inspectorProvider = new SwoopInspectorProvider(
+    dataSource,
+    logger,
+    refreshAll,
+    resumeService
+  )
+  dashboard = new SwoopDashboard(
+    context,
+    dataSource,
+    inspectorProvider,
+    logger,
+    refreshAll,
+    resumeService,
+    (visible) => {
+      dashboardVisible = visible
+      updateRefreshVisibility()
+    },
+    () => treeProvider.getModel()
   )
   const treeView = vscode.window.createTreeView('swoop.sessions', {
     showCollapseAll: true,
     treeDataProvider: treeProvider,
   })
   treeProvider.attachTreeView(treeView)
-  const refreshController = new SwoopRefreshController(logger, treeProvider)
+  refreshController = new SwoopRefreshController(logger, { refresh: refreshAll })
   const statusBar = new CockpitStatusBar()
 
   logger.info('Swoop extension activated')
 
   context.subscriptions.push(
     logger,
+    dashboard,
     inspectorProvider,
     refreshController,
     statusBar,
     treeProvider,
     treeView,
     treeView.onDidChangeVisibility((event) => {
-      refreshController.setVisible(event.visible)
+      const refreshWasAlreadyActive = treeVisible || dashboardVisible
+      treeVisible = event.visible
+      updateRefreshVisibility()
       statusBar.setVisible(event.visible)
+      if (event.visible && refreshWasAlreadyActive) void refreshAll()
     }),
     treeView.onDidChangeSelection((event) => {
       const sessionNode = asSessionTreeNode(event.selection[0])
@@ -48,7 +82,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     treeProvider.onDidChangeModel((model) => {
       statusBar.update(model)
-      void inspectorProvider.refreshSelected()
+      void inspectorProvider.refreshSelected(model.sessions)
     }),
     vscode.window.registerWebviewViewProvider('swoop.inspector', inspectorProvider, {
       webviewOptions: { retainContextWhenHidden: false },
@@ -57,18 +91,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await runDiagnostics(dataSource, logger)
     }),
     vscode.commands.registerCommand('swoop.refreshSessions', async () => {
-      await treeProvider.refresh()
+      await refreshAll()
+    }),
+    vscode.commands.registerCommand('swoop.openDashboard', async () => {
+      await dashboard?.open()
     }),
     vscode.commands.registerCommand('swoop.focusCockpit', async () => {
       await vscode.commands.executeCommand('swoop.sessions.focus')
     }),
     vscode.commands.registerCommand('swoop.resumeHere', async () => {
-      await showWorkspaceResumePicker(dataSource, logger, (session) =>
+      await showWorkspaceResumePicker(dataSource, logger, resumeService, (session) =>
         inspectorProvider.showSession(session)
       )
     }),
     vscode.commands.registerCommand('swoop.resumeSession', async () => {
-      await showGlobalResumePicker(dataSource, logger, (session) =>
+      await showGlobalResumePicker(dataSource, logger, resumeService, (session) =>
+        inspectorProvider.showSession(session)
+      )
+    }),
+    vscode.commands.registerCommand('swoop.searchSessions', async () => {
+      await showSessionSearch(dataSource, logger, resumeService, (session) =>
         inspectorProvider.showSession(session)
       )
     }),
@@ -91,8 +133,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const sessionNode = asSessionTreeNode(node)
       if (!sessionNode) return
       try {
-        await resumeSessionInTerminal(sessionNode.session)
-        logger.info('resumed session from tree', sessionNode.session.id)
+        const target = await resumeService.resume(sessionNode.session)
+        if (target) logger.info('resumed session from tree', sessionNode.session.id)
       } catch (error) {
         logger.error('tree resume failed', error)
         void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
@@ -139,8 +181,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   )
 
-  refreshController.setVisible(treeView.visible)
+  treeVisible = treeView.visible
+  updateRefreshVisibility()
   statusBar.setVisible(treeView.visible)
+  await openDashboardOnFirstUse(context, dashboard)
+}
+
+async function openDashboardOnFirstUse(
+  context: vscode.ExtensionContext,
+  dashboard: SwoopDashboard
+): Promise<void> {
+  const onboardingGeneration = 1
+  const key = 'swoop.dashboard.onboardingGeneration'
+  if (context.globalState.get<number>(key) === onboardingGeneration) return
+  await context.globalState.update(key, onboardingGeneration)
+  await dashboard.open()
 }
 
 export function deactivate(): void {

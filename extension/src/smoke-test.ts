@@ -10,10 +10,12 @@ export async function run(): Promise<void> {
   const commands = new Set(await vscode.commands.getCommands(true))
   for (const command of [
     'swoop.focusCockpit',
+    'swoop.openDashboard',
     'swoop.openSessionDetail',
     'swoop.refreshSessions',
     'swoop.resumeHere',
     'swoop.resumeSession',
+    'swoop.searchSessions',
   ]) {
     assert(commands.has(command), `command must be registered: ${command}`)
   }

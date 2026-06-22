@@ -60,6 +60,32 @@ describe('buildCockpitModel', () => {
     ])
   })
 
+  it('keeps cross-device sessions with their canonical local workspace project', () => {
+    const local = session('local', 'P:\\Projects\\demo', {
+      projectId: 'demo-project',
+    })
+    const remote = session('remote', '/Users/other/Projects/demo', {
+      projectId: 'demo-project',
+    })
+    const project: ExtensionProject = {
+      id: 'demo-project',
+      memoryStatus: 'green',
+      name: 'demo',
+      path: 'P:\\Projects\\demo',
+      sessionCount: 2,
+      updated: remote.updated,
+    }
+
+    const model = buildCockpitModel([project], [local, remote], {
+      workspaceRoots: ['P:\\Projects\\demo'],
+    })
+
+    expect(model.workspaceProjects).toHaveLength(1)
+    expect(model.workspaceProjects[0]?.sessions.map((item) => item.id)).toEqual(['local', 'remote'])
+    expect(model.recentElsewhere).toEqual([])
+    expect(model.summary.workspaceSessionCount).toBe(2)
+  })
+
   it('maps one thousand sessions within the interactive performance budget', () => {
     const sessions = Array.from({ length: 1_000 }, (_, index) =>
       session(`session-${index}`, `/work/project-${index % 50}`, {

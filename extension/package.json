@@ -2,7 +2,7 @@
   "name": "swoop-vscode",
   "displayName": "Swoop for Claude Code",
   "description": "Editor-native Claude Code session intelligence from Swoop.",
-  "version": "0.1.2",
+  "version": "0.1.20",
   "publisher": "swoop-local",
   "private": true,
   "icon": "media/swoop-brand.png",
@@ -24,9 +24,11 @@
     "onCommand:swoop.diagnostics",
     "onCommand:swoop.focusCockpit",
     "onCommand:swoop.openSessionDetail",
+    "onCommand:swoop.openDashboard",
     "onCommand:swoop.refreshSessions",
     "onCommand:swoop.resumeHere",
     "onCommand:swoop.resumeSession",
+    "onCommand:swoop.searchSessions",
     "onCommand:swoop.tree.copyHandoff",
     "onCommand:swoop.tree.copySessionId",
     "onCommand:swoop.tree.editAlias",
@@ -39,6 +41,11 @@
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "swoop.openDashboard",
+        "title": "Swoop: Open Dashboard",
+        "icon": "$(dashboard)"
+      },
       {
         "command": "swoop.diagnostics",
         "title": "Swoop: Diagnostics"
@@ -54,11 +61,18 @@
       },
       {
         "command": "swoop.resumeHere",
-        "title": "Swoop: Resume Here"
+        "title": "Swoop: Resume Here",
+        "icon": "$(play)"
       },
       {
         "command": "swoop.resumeSession",
-        "title": "Swoop: Resume Session"
+        "title": "Swoop: Resume Session",
+        "icon": "$(history)"
+      },
+      {
+        "command": "swoop.searchSessions",
+        "title": "Swoop: Search Sessions",
+        "icon": "$(search)"
       },
       {
         "command": "swoop.openSessionDetail",
@@ -129,6 +143,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "swoop.openDashboard",
+          "when": "view == swoop.sessions",
+          "group": "navigation@0"
+        },
+        {
           "command": "swoop.resumeHere",
           "when": "view == swoop.sessions",
           "group": "navigation@1"
@@ -139,9 +158,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "swoop.refreshSessions",
+          "command": "swoop.searchSessions",
           "when": "view == swoop.sessions",
           "group": "navigation@3"
+        },
+        {
+          "command": "swoop.refreshSessions",
+          "when": "view == swoop.sessions",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -205,7 +229,7 @@
     "viewsWelcome": [
       {
         "view": "swoop.sessions",
-        "contents": "No Claude Code sessions were found.\\n[Refresh Swoop](command:swoop.refreshSessions)",
+        "contents": "[Open Swoop Dashboard](command:swoop.openDashboard)\\n\\nNo Claude Code sessions were found.\\n[Refresh Swoop](command:swoop.refreshSessions)",
         "when": "!swoop.hasSessions && !swoop.hasLoadError"
       },
       {

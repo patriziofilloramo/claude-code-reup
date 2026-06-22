@@ -77,13 +77,16 @@ Swoop's next differentiators should be built around three reinforcing bets:
    `swoop web` open while Claude Code runs elsewhere and immediately see active
    sessions, changing state, latest tool activity, usage freshness, and attention
    events. It should be calm and glanceable, not a transcript stream.
-3. **A VS Code extension only if it surfaces Swoop intelligence natively.** The
-   extension should not be a dashboard clone. It should bring groups, stacks,
-   active state, usage, resume cards, and safe actions into the editor workflow.
+3. **A VS Code extension that surfaces Swoop intelligence natively.** The
+   shipped extension uses a resume-focused full-screen dashboard plus compact
+   editor companion views. It brings active state, usage, resume cards, search,
+   and safe actions into the editor without copying the browser administration
+   UI.
 
-The preferred sequence is: organization first, live web panel second, VS Code
-extension discovery in parallel until its MVP is clearly stronger than simply
-calling Claude Code's native picker.
+The original discovery sequence is complete: organization, the live web panel,
+and the VS Code extension now coexist as distinct surfaces over shared core
+logic. Future work should preserve that shared model and avoid surface-specific
+parsers or state.
 
 ## Product Principles
 

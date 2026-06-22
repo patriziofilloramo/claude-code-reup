@@ -170,31 +170,123 @@ const STRINGS = {
   diagnosticsExpiresSoon: 'Expires soon · {path}',
   diagnosticsPathMissing: 'Path missing · {path}',
 
-  // ── CLAUDE.md drawer ───────────────────────────────────────────────────────
+  // ── App chrome ────────────────────────────────────────────────────────────
+  usageLoading: 'usage loading…',
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  searchPlaceholder: 'project / session / is:attention — tab: search all context',
+  searchInputTitle:
+    'Search projects and sessions. Try is:attention, is:drift, is:high-context. Tab searches full transcripts.',
+  searchDeepTitle: 'Deep search (Tab)',
+  searchModeActive: '⌕ deep',
+
+  // ── Navigation chrome ─────────────────────────────────────────────────────
+  backBtnAriaLabel: 'Back to projects',
+  mdTagTitle: 'Edit project instructions (CLAUDE.md)',
+  reviewSignalsAriaLabel: 'Review signals',
+
+  // ── Sort options ──────────────────────────────────────────────────────────
+  sortRecent: 'Recent',
+  sortName: 'Name',
+  sortRisk: 'Risk',
+  sortContext: 'Context',
+
+  // ── Focus bar ─────────────────────────────────────────────────────────────
+  focusClearTitle: 'Clear focus',
+
+  // ── Footer hints ──────────────────────────────────────────────────────────
+  footerHintSelect: 'select',
+  footerHintActions: 'actions',
+  footerHintResume: 'resume',
+  footerHintSearch: 'search',
+  footerHintGroup: 'group',
+  footerHintTag: 'tag',
+  footerHintRename: 'rename',
+  footerHintHandoff: 'handoff',
+  footerHintDelete: 'delete',
+  footerTitleClick: 'Click to select a session',
+  footerTitleRightClick: 'Right-click a session or project row for actions',
+  footerTitleEnter: 'Resume the selected session in a terminal',
+  footerTitleSlash: 'Open the search bar',
+  footerTitleG: 'Assign selected project to a group (g)',
+  footerTitleT: 'Add/remove tags on the selected session (t)',
+  footerTitleR: 'Rename the selected session (r)',
+  footerTitleH: 'Copy a handoff packet for the selected session (H)',
+  footerTitleD: 'Delete the selected session permanently (D)',
+  footerSyncBtn: 'sync',
+  footerSyncTitle: 'Project Memory Sync (Alpha)',
+  footerThemeBtn: 'theme',
+  footerThemeTitle: 'Switch theme',
+  footerStatusLoading: 'loading…',
+
+  // ── Right panel ───────────────────────────────────────────────────────────
+  sessionPanelPlaceholder: 'Select a project',
+  sessionSearching: 'searching transcripts…',
+  sessionDeepFound: '{n} sessions found',
+  sessionCountLabel: '{n} sessions',
+
+  // ── Resume dialog ─────────────────────────────────────────────────────────
+  resumeDialogTitle: 'Resume Session',
+  resumeDialogCancel: 'Cancel',
+  resumeAlwaysConfirm: 'Always confirm before resuming',
+
+  // ── Drawers (shared) ──────────────────────────────────────────────────────
+  drawerCloseIcon: '✕',
+
+  // ── Drawer titles and chrome ───────────────────────────────────────────────
+  claudeMdTitle: 'CLAUDE.md',
+  claudeMdEditorPlaceholder: 'No CLAUDE.md found for this project.',
+  claudeMdSaveBtn: 'Save',
+  claudeMdCloseBtn: 'Close',
+  lfTitle: 'Lost & Found',
+  syncTitle: 'Project Memory Sync',
+  syncAlphaLabel: 'Alpha',
+
+  // ── Org manager dialog ────────────────────────────────────────────────────
+  orgManagerStackTitle: 'Stack: {name}',
+  orgManagerGroupTitle: 'Group: {name}',
+  orgManagerDone: 'Done',
+
+  // ── Org picker dialog ─────────────────────────────────────────────────────
+  orgPickerCancelBtn: 'Cancel',
+
+  // ── Tag picker dialog ─────────────────────────────────────────────────────
+  tagPickerDone: 'Done',
+
+  // ── CLAUDE.md drawer (save status) ────────────────────────────────────────
   claudeMdSaved: 'saved',
   claudeMdUnsaved: 'unsaved',
   claudeMdSaveError: 'error: {message}',
   syncLoading: 'Loading sync status...',
   syncLoadFailed: 'Failed to load sync status.',
   syncWarning:
-    'Alpha. Syncs Claude session storage between your own devices through a cloud-synced project folder. It does not share sessions with other users. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/.',
-  syncEnabled: 'Cross-device Session Storage is on',
-  syncDisabled: 'Cross-device Session Storage is off',
-  syncEnable: 'Enable Cross-device Storage',
-  syncDisable: 'Disable Cross-device Storage',
-  syncLinkSelected: 'Link selected project',
-  syncUnlinkSelected: 'Unlink selected project',
-  syncForgetSelected: 'Forget local copy',
+    'Alpha. Syncs Claude project memory between your own devices through a cloud-synced project folder. It does not share data with other users. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/.',
+  syncEnabled: 'Project Memory Sync is on',
+  syncDisabled: 'Project Memory Sync is off',
+  syncEnable: 'Enable Project Memory Sync',
+  syncDisable: 'Disable Project Memory Sync',
+  syncLink: 'Link',
+  syncUnlink: 'Unlink',
+  syncForget: 'Forget',
   syncForgetConfirm:
     'Forget this local project copy? Project Memory remains available and local data is archived for recovery.',
   syncLinkAllCloud: 'Link all cloud projects',
   syncUnlinkAll: 'Unlink all synced projects',
-  syncNoSelectedProject: 'Select a project to link or unlink it.',
+  syncNoProjects: 'No projects found.',
   syncNoCloudProjects: 'No cloud projects found under detected cloud folders.',
   syncConfirmManaged: 'Swoop will patch managed sync files for this project. Continue?',
   syncConfirmBulk: 'Run this bulk sync operation sequentially?',
   syncOperationDone: 'Sync operation complete',
   syncOperationFailed: 'Sync failed: {error}',
+  syncAdvancedDiscoveryLabel: 'Advanced Discovery',
+  syncAdvancedDiscoveryOn: 'on',
+  syncAdvancedDiscoveryOff: 'off',
+  syncAdvancedDiscoveryDesc:
+    'Scan specific folders for projects linked on other devices. Slower than auto-detection; useful when projects live outside detected cloud roots.',
+  syncSearchPathsLabel: 'Search paths',
+  syncSearchPathsPlaceholder: 'One path per line, e.g. ~/Documents/Projects',
+  syncSearchPathsSave: 'Save paths',
+  syncSearchPathsSaved: 'Paths saved',
 
   // ── New session ────────────────────────────────────────────────────────────
   newSessionStarted: 'New session started in terminal',
@@ -942,7 +1034,9 @@ function buildProjectRowHtml(project) {
         : project.syncStatus === 'orange'
           ? '<span class="p-cloud p-cloud--unlinked" title="' +
             escapeHtml(
-              fmt(STRINGS.projectCloudUnlinked, { devices: project.unlinkedDevices.join(', ') })
+              fmt(STRINGS.projectCloudUnlinked, {
+                devices: (project.unlinkedDevices ?? []).join(', '),
+              })
             ) +
             '">☁</span>'
           : '<span class="p-cloud p-cloud--ok" title="' +
@@ -2325,16 +2419,18 @@ function renderSessions() {
 
   if (deepSearchActive) {
     elements.sessionPanelTitle.textContent = deepSearchLoading
-      ? 'searching transcripts…'
+      ? STRINGS.sessionSearching
       : '⌕ ' + deepSearchQueryTerm
     elements.sessionCount.textContent = deepSearchLoading
       ? ''
-      : deepSearchMatches.length + ' sessions found'
+      : fmt(STRINGS.sessionDeepFound, { n: deepSearchMatches.length })
   } else {
     elements.sessionPanelTitle.textContent = selectedProject
       ? compactPath(selectedProject.path)
-      : 'Select a project'
-    elements.sessionCount.textContent = selectedProject ? visibleSessions.length + ' sessions' : ''
+      : STRINGS.sessionPanelPlaceholder
+    elements.sessionCount.textContent = selectedProject
+      ? fmt(STRINGS.sessionCountLabel, { n: visibleSessions.length })
+      : ''
   }
   renderReviewSignals()
   renderFilterBar()
@@ -2970,26 +3066,6 @@ async function renderSyncPanel() {
     ? STRINGS.syncEnabled
     : STRINGS.syncDisabled
 
-  const selectedStatus = selectedProject
-    ? syncOverview.projects.find(function (project) {
-        return project.id === selectedProject.id
-      })
-    : null
-  const selectedAction =
-    selectedStatus && selectedStatus.isShared ? 'sync-unlink-selected' : 'sync-link-selected'
-  const selectedLabel =
-    selectedStatus && selectedStatus.isShared
-      ? STRINGS.syncUnlinkSelected
-      : STRINGS.syncLinkSelected
-  const selectedDisabled = !syncOverview.enabled || !selectedStatus || selectedStatus.isActive
-  const selectedForgettable =
-    syncOverview.enabled &&
-    selectedStatus &&
-    !selectedStatus.isShared &&
-    !selectedStatus.isRemoteProject &&
-    selectedStatus.cloudPath &&
-    !selectedStatus.isActive
-
   elements.syncBody.innerHTML =
     '<div class="sync-warning">' +
     escapeHtml(STRINGS.syncWarning) +
@@ -3000,8 +3076,6 @@ async function renderSyncPanel() {
       syncOverview.enabled ? STRINGS.syncDisable : STRINGS.syncEnable,
       false
     ) +
-    syncButtonHtml(selectedAction, selectedLabel, selectedDisabled) +
-    syncButtonHtml('sync-forget-selected', STRINGS.syncForgetSelected, !selectedForgettable) +
     syncButtonHtml('sync-link-all-cloud', STRINGS.syncLinkAllCloud, !syncOverview.enabled) +
     syncButtonHtml('sync-unlink-all', STRINGS.syncUnlinkAll, !syncOverview.enabled) +
     '</div>' +
@@ -3013,7 +3087,43 @@ async function renderSyncPanel() {
     ' cloud candidates</span><span>' +
     syncOverview.skippedActiveProjects.length +
     ' active disabled</span></div>' +
-    renderSyncProjectList(syncOverview.projects)
+    renderAdvancedDiscoveryPanel(syncOverview) +
+    renderSyncProjectList(syncOverview.projects, syncOverview.enabled)
+}
+
+function renderAdvancedDiscoveryPanel(overview) {
+  const isOn = overview.advancedDiscovery
+  const pathsValue = (overview.projectSearchPaths ?? []).join('\n')
+  return (
+    '<div class="sync-advanced-discovery">' +
+    '<div class="sync-advanced-discovery-header">' +
+    '<span class="sync-advanced-discovery-label">' +
+    escapeHtml(STRINGS.syncAdvancedDiscoveryLabel) +
+    '</span>' +
+    '<button class="btn btn-secondary sync-action" data-sync-action="sync-advanced-discovery-toggle">' +
+    escapeHtml(isOn ? STRINGS.syncAdvancedDiscoveryOn : STRINGS.syncAdvancedDiscoveryOff) +
+    '</button>' +
+    '</div>' +
+    '<p class="sync-advanced-discovery-desc">' +
+    escapeHtml(STRINGS.syncAdvancedDiscoveryDesc) +
+    '</p>' +
+    (isOn
+      ? '<div class="sync-search-paths">' +
+        '<label class="sync-search-paths-label">' +
+        escapeHtml(STRINGS.syncSearchPathsLabel) +
+        '</label>' +
+        '<textarea id="sync-search-paths-input" class="sync-search-paths-input" rows="4" placeholder="' +
+        escapeHtml(STRINGS.syncSearchPathsPlaceholder) +
+        '">' +
+        escapeHtml(pathsValue) +
+        '</textarea>' +
+        '<button class="btn btn-secondary" id="sync-search-paths-save">' +
+        escapeHtml(STRINGS.syncSearchPathsSave) +
+        '</button>' +
+        '</div>'
+      : '') +
+    '</div>'
+  )
 }
 
 function syncButtonHtml(action, label, disabled) {
@@ -3028,33 +3138,101 @@ function syncButtonHtml(action, label, disabled) {
   )
 }
 
-function renderSyncProjectList(items) {
+function renderSyncProjectList(items, syncEnabled) {
   if (!items || items.length === 0) {
-    return '<div class="lf-empty">' + STRINGS.syncNoSelectedProject + '</div>'
+    return '<div class="lf-empty">' + STRINGS.syncNoProjects + '</div>'
   }
-  return (
-    '<div class="sync-project-list">' +
-    items
-      .map(function (project) {
-        const state = project.isShared ? 'linked' : project.isCloudProject ? 'cloud' : 'local'
-        const classes =
-          'sync-project sync-project--' + state + (project.isActive ? ' sync-project--active' : '')
-        return (
-          '<div class="' +
-          classes +
-          '">' +
-          '<span class="sync-project-state">' +
-          escapeHtml(project.isActive ? 'active' : state) +
-          '</span>' +
-          '<span class="sync-project-path">' +
-          escapeHtml(project.path) +
-          '</span>' +
-          '</div>'
-        )
-      })
-      .join('') +
-    '</div>'
-  )
+
+  const sections = [
+    {
+      key: 'linked',
+      label: 'Linked',
+      projects: items.filter(function (p) {
+        return p.isShared
+      }),
+    },
+    {
+      key: 'local',
+      label: 'Local (unlinked)',
+      projects: items.filter(function (p) {
+        return !p.isShared && !p.isRemoteProject
+      }),
+    },
+    {
+      key: 'remote',
+      label: 'Remote (other device)',
+      projects: items.filter(function (p) {
+        return p.isRemoteProject
+      }),
+    },
+  ]
+
+  return sections
+    .filter(function (s) {
+      return s.projects.length > 0
+    })
+    .map(function (section) {
+      return (
+        '<div class="sync-section">' +
+        '<div class="sync-section-title">' +
+        escapeHtml(section.label) +
+        ' (' +
+        section.projects.length +
+        ')</div>' +
+        section.projects
+          .map(function (project) {
+            const isForgettable =
+              syncEnabled &&
+              !project.isShared &&
+              !project.isRemoteProject &&
+              project.cloudPath &&
+              !project.isActive
+            const canLink = syncEnabled && !project.isShared && !project.isActive
+            const canUnlink = syncEnabled && project.isShared && !project.isActive
+
+            return (
+              '<div class="sync-project' +
+              (project.isActive ? ' sync-project--active' : '') +
+              '">' +
+              '<span class="sync-project-path" title="' +
+              escapeHtml(project.path) +
+              '">' +
+              escapeHtml(project.path) +
+              '</span>' +
+              (project.isActive
+                ? '<span class="sync-project-badge sync-project-badge--active">active</span>'
+                : '') +
+              '<span class="sync-project-actions">' +
+              (canLink
+                ? '<button class="btn btn-secondary sync-row-action" data-sync-row-action="link" data-sync-row-path="' +
+                  escapeHtml(project.path) +
+                  '">' +
+                  escapeHtml(STRINGS.syncLink) +
+                  '</button>'
+                : '') +
+              (canUnlink
+                ? '<button class="btn btn-secondary sync-row-action" data-sync-row-action="unlink" data-sync-row-path="' +
+                  escapeHtml(project.path) +
+                  '">' +
+                  escapeHtml(STRINGS.syncUnlink) +
+                  '</button>'
+                : '') +
+              (isForgettable
+                ? '<button class="btn btn-secondary sync-row-action sync-row-action--danger" data-sync-row-action="forget" data-sync-row-path="' +
+                  escapeHtml(project.path) +
+                  '">' +
+                  escapeHtml(STRINGS.syncForget) +
+                  '</button>'
+                : '') +
+              '</span>' +
+              '</div>'
+            )
+          })
+          .join('') +
+        '</div>'
+      )
+    })
+    .join('')
 }
 
 async function runSyncDrawerAction(action) {
@@ -3065,38 +3243,6 @@ async function runSyncDrawerAction(action) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !syncOverview.enabled }),
       })
-    } else if (action === 'sync-link-selected') {
-      if (!selectedProject) {
-        showToast(STRINGS.syncNoSelectedProject, 'err')
-        return
-      }
-      if (!window.confirm(STRINGS.syncConfirmManaged)) return
-      await requestJson('/api/sync/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedProject.path }),
-      })
-    } else if (action === 'sync-unlink-selected') {
-      if (!selectedProject) {
-        showToast(STRINGS.syncNoSelectedProject, 'err')
-        return
-      }
-      await requestJson('/api/sync/unlink', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedProject.path }),
-      })
-    } else if (action === 'sync-forget-selected') {
-      if (!selectedProject) {
-        showToast(STRINGS.syncNoSelectedProject, 'err')
-        return
-      }
-      if (!window.confirm(STRINGS.syncForgetConfirm)) return
-      await requestJson('/api/sync/forget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedProject.path }),
-      })
     } else if (action === 'sync-link-all-cloud') {
       if (!window.confirm(STRINGS.syncConfirmBulk)) return
       const result = await requestJson('/api/sync/link-all-cloud', { method: 'POST' })
@@ -3105,8 +3251,47 @@ async function runSyncDrawerAction(action) {
       if (!window.confirm(STRINGS.syncConfirmBulk)) return
       const result = await requestJson('/api/sync/unlink-all', { method: 'POST' })
       showToast(result.message || STRINGS.syncOperationDone)
+    } else if (action === 'sync-advanced-discovery-toggle') {
+      await requestJson('/api/sync/advanced-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !syncOverview.advancedDiscovery }),
+      })
+      await renderSyncPanel()
+      return
     }
 
+    await renderSyncPanel()
+    await refreshProjectData()
+    showToast(STRINGS.syncOperationDone)
+  } catch (error) {
+    showToast(fmt(STRINGS.syncOperationFailed, { error: error.message }), 'err')
+  }
+}
+
+async function runSyncRowAction(action, path) {
+  try {
+    if (action === 'link') {
+      if (!window.confirm(STRINGS.syncConfirmManaged)) return
+      await requestJson('/api/sync/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    } else if (action === 'unlink') {
+      await requestJson('/api/sync/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    } else if (action === 'forget') {
+      if (!window.confirm(STRINGS.syncForgetConfirm)) return
+      await requestJson('/api/sync/forget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    }
     await renderSyncPanel()
     await refreshProjectData()
     showToast(STRINGS.syncOperationDone)
@@ -3122,8 +3307,35 @@ elements.syncDrawer.addEventListener('click', function (event) {
 })
 elements.syncBody.addEventListener('click', function (event) {
   const button = event.target.closest('[data-sync-action]')
-  if (!button || button.disabled) return
-  void runSyncDrawerAction(button.dataset.syncAction)
+  if (button && !button.disabled) {
+    void runSyncDrawerAction(button.dataset.syncAction)
+    return
+  }
+
+  const rowButton = event.target.closest('[data-sync-row-action]')
+  if (rowButton && !rowButton.disabled) {
+    const rowAction = rowButton.dataset.syncRowAction
+    const rowPath = rowButton.dataset.syncRowPath
+    void runSyncRowAction(rowAction, rowPath)
+    return
+  }
+
+  if (event.target.id === 'sync-search-paths-save') {
+    const textarea = document.getElementById('sync-search-paths-input')
+    if (!textarea) return
+    const paths = textarea.value
+      .split('\n')
+      .map((p) => p.trim())
+      .filter(Boolean)
+    void requestJson('/api/sync/advanced-discovery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+    })
+      .then(() => renderSyncPanel())
+      .then(() => showToast(STRINGS.syncSearchPathsSaved))
+      .catch((err) => showToast(fmt(STRINGS.syncOperationFailed, { error: err.message }), 'err'))
+  }
 })
 // ---------------------------------------------------------------------------
 // New session
@@ -4577,7 +4789,10 @@ function openOrgManager(kind, id, name) {
   if (!elements.orgManagerOverlay) return
   orgManagerKind = kind
   orgManagerId = id
-  elements.orgManagerTitle.textContent = (kind === 'stack' ? 'Stack: ' : 'Group: ') + name
+  elements.orgManagerTitle.textContent = fmt(
+    kind === 'stack' ? STRINGS.orgManagerStackTitle : STRINGS.orgManagerGroupTitle,
+    { name: name }
+  )
   renderOrgManagerList()
   elements.orgManagerOverlay.classList.add('open')
 }

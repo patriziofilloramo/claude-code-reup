@@ -24,7 +24,15 @@ describe('VS Code extension lifecycle guardrails', () => {
   it('drops preview state and webview resources on disposal', () => {
     expect(detailSource).toContain('this.previewCache.clear()')
     expect(detailSource).toContain('this.view = null')
-    expect(detailSource).toContain('for (const disposable of this.disposables.splice(0))')
+    expect(detailSource).toContain('for (const disposable of this.viewDisposables.splice(0))')
+  })
+
+  it('does not rebuild the Inspector DOM or apply stale previews on every refresh', () => {
+    expect(detailSource).toContain('private lastRenderKey: string | null = null')
+    expect(detailSource).toContain('if (this.lastRenderKey === renderKey) return')
+    expect(detailSource).toContain('const requestId = ++this.renderRequestId')
+    expect(detailSource).toContain('if (requestId !== this.renderRequestId')
+    expect(extensionSource).toContain('inspectorProvider.refreshSelected(model.sessions)')
   })
 
   it('opens a focused Inspector with strict message validation', () => {
