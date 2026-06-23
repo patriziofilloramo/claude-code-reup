@@ -20,6 +20,8 @@ const marketplaceGenerator = readFileSync(
   'extension/scripts/generate-marketplace-assets.mjs',
   'utf8'
 )
+const marketplaceReadmeSource = readFileSync('extension/scripts/marketplace-readme.mjs', 'utf8')
+const packageVsixSource = readFileSync('extension/scripts/package-vsix.mjs', 'utf8')
 const extensionReadme = readFileSync('extension/README.md', 'utf8')
 const dashboardWorkflow = readFileSync('extension/media/marketplace/dashboard-workflow.gif')
 const workspaceCockpit = readFileSync('extension/media/marketplace/workspace-cockpit.png')
@@ -41,6 +43,8 @@ describe('VS Code product quality guardrails', () => {
     expect(manifest.scripts['smoke:host']).toContain('run-smoke.mjs')
     expect(vscodeIgnore).toContain('node_modules/**')
     expect(vscodeIgnore).toContain('dist/smoke-test.cjs')
+    expect(vscodeIgnore).toContain('README.md')
+    expect(vscodeIgnore).toContain('media/marketplace/**')
   })
 
   it('generates every extension icon from the canonical Swoop mark', () => {
@@ -67,21 +71,22 @@ describe('VS Code product quality guardrails', () => {
     expect(brandIconPng.subarray(1, 4).toString('ascii')).toBe('PNG')
   })
 
-  it('ships an image-led marketplace page without fragile relative image links', () => {
+  it('ships an image-led marketplace page that packages offline-safe images', () => {
     expect(manifest.scripts['generate:marketplace']).toContain('generate-marketplace-assets.mjs')
     expect(manifest.scripts.compile).toContain('generate:marketplace')
     expect(marketplaceGenerator).toContain('readBrandDefinition')
     expect(marketplaceGenerator).toContain('dashboard-workflow.gif')
     expect(marketplaceGenerator).toContain('workspace-cockpit.png')
     expect(extensionReadme).toContain('Stop hunting for the right Claude session')
-    expect(extensionReadme).toContain(
-      'https://raw.githubusercontent.com/patriziofilloramo/claude-code-swoop/master/extension/media/marketplace/dashboard-workflow.gif'
-    )
-    expect(extensionReadme).toContain(
-      'https://raw.githubusercontent.com/patriziofilloramo/claude-code-swoop/master/extension/media/marketplace/workspace-cockpit.png'
-    )
-    expect(extensionReadme).not.toMatch(/!\[[^\]]*]\((?!https:\/\/)/)
+    expect(extensionReadme).toContain('media/marketplace/dashboard-workflow.gif')
+    expect(extensionReadme).toContain('media/marketplace/workspace-cockpit.png')
+    expect(extensionReadme).not.toContain('raw.githubusercontent.com')
     expect(extensionReadme).not.toContain('canonical mark')
+    expect(marketplaceReadmeSource).toContain('data:${asset.mediaType};base64,')
+    expect(marketplaceReadmeSource).toContain('Expected one README image reference')
+    expect(packageVsixSource).toContain('buildPackagedReadme')
+    expect(packageVsixSource).toContain("'--readme-path'")
+    expect(packageVsixSource).toContain('rm(packagedReadmePath, { force: true })')
     expect(dashboardWorkflow.subarray(0, 6).toString('ascii')).toMatch(/^GIF8[79]a$/)
     expect(workspaceCockpit.subarray(1, 4).toString('ascii')).toBe('PNG')
   })

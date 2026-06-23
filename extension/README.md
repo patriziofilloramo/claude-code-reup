@@ -5,7 +5,7 @@
 Find work across every project, understand exactly where Claude stopped, and
 resume the right session without guessing from a title or timestamp.
 
-![Swoop dashboard workflow](https://raw.githubusercontent.com/patriziofilloramo/claude-code-swoop/master/extension/media/marketplace/dashboard-workflow.gif)
+![Swoop dashboard workflow](media/marketplace/dashboard-workflow.gif)
 
 ## Your Claude work, understood at a glance
 
@@ -38,7 +38,7 @@ Use **Deep search** when the clue is buried inside a conversation.
 
 ## A cockpit beside your editor
 
-![Swoop Workspace Cockpit](https://raw.githubusercontent.com/patriziofilloramo/claude-code-swoop/master/extension/media/marketplace/workspace-cockpit.png)
+![Swoop Workspace Cockpit](media/marketplace/workspace-cockpit.png)
 
 The compact Activity Bar view follows the workspace you are editing:
 

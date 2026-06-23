@@ -1,4 +1,6 @@
 .gitignore
+README.md
+media/marketplace/**
 src/**
 scripts/**
 node_modules/**
