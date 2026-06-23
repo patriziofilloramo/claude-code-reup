@@ -20,7 +20,14 @@ await writeFile(packagedReadmePath, await buildPackagedReadme(), 'utf8')
 try {
   const result = spawnSync(
     command,
-    ['package', '--out', outputPath, '--readme-path', packagedReadmeName],
+    [
+      'package',
+      '--out',
+      outputPath,
+      '--readme-path',
+      packagedReadmeName,
+      '--no-rewrite-relative-links',
+    ],
     {
       cwd: extensionRoot,
       encoding: 'utf8',

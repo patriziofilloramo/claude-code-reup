@@ -86,6 +86,7 @@ describe('VS Code product quality guardrails', () => {
     expect(marketplaceReadmeSource).toContain('Expected one README image reference')
     expect(packageVsixSource).toContain('buildPackagedReadme')
     expect(packageVsixSource).toContain("'--readme-path'")
+    expect(packageVsixSource).toContain("'--no-rewrite-relative-links'")
     expect(packageVsixSource).toContain('rm(packagedReadmePath, { force: true })')
     expect(dashboardWorkflow.subarray(0, 6).toString('ascii')).toMatch(/^GIF8[79]a$/)
     expect(workspaceCockpit.subarray(1, 4).toString('ascii')).toBe('PNG')

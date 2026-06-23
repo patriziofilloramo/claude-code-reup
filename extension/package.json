@@ -2,7 +2,7 @@
   "name": "swoop-vscode",
   "displayName": "Swoop for Claude Code",
   "description": "Find, understand, and safely resume Claude Code sessions across every project.",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "publisher": "swoop-local",
   "private": true,
   "icon": "media/swoop-brand.png",
