@@ -5,7 +5,9 @@
 Find work across every project, understand exactly where Claude stopped, and
 resume the right session without guessing from a title or timestamp.
 
-![Swoop dashboard workflow](media/marketplace/dashboard-workflow.gif)
+Swoop is built around one fast loop:
+
+`Discover` -> `Understand` -> `Resume safely`
 
 ## Your Claude work, understood at a glance
 
@@ -37,8 +39,6 @@ Search supports `project:`, `branch:`, `tag:`/`#`, `status:` and `is:active`.
 Use **Deep search** when the clue is buried inside a conversation.
 
 ## A cockpit beside your editor
-
-![Swoop Workspace Cockpit](media/marketplace/workspace-cockpit.png)
 
 The compact Activity Bar view follows the workspace you are editing:
 
@@ -90,6 +90,14 @@ Useful commands:
 - `Swoop: Diagnostics`
 
 Swoop is an independent local tool and is not affiliated with Anthropic.
+
+## TODO
+
+- Reintroduce marketplace images only after publishing the dashboard GIF and
+  cockpit screenshot through stable public HTTPS URLs. VS Code's local extension
+  Details page strips packaged relative images and embedded `data:` images, so
+  local README media should stay out of the install page until the assets are
+  externally hosted.
 
 ## Local development
 
