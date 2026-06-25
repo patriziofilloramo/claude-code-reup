@@ -36,7 +36,11 @@
     "hooks:install": "node scripts/install-hooks.mjs"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,mjs,css,html}": "prettier --write",
+    "*.{ts,tsx,js,mjs}": [
+      "prettier --write",
+      "eslint"
+    ],
+    "*.{css,html}": "prettier --write",
     "*.{md,json,yml}": "prettier --write"
   },
   "dependencies": {

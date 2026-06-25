@@ -2,7 +2,7 @@
  * Installs a pre-commit hook that runs lint-staged on staged files.
  * Run once after cloning: npm run hooks:install
  */
-import { writeFileSync, chmodSync, mkdirSync, existsSync } from 'node:fs'
+import { writeFileSync, chmodSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const hooksDir = join(process.cwd(), '.git', 'hooks')
