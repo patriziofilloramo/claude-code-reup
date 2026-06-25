@@ -508,12 +508,18 @@ Group      Work
 
 #### 2i — Tests
 
-- [ ] Unit: Inbox bucket assignment (priority ordering, archived excluded)
-- [ ] Unit: Smart View counts correct from fixture projects
-- [ ] Unit: focus filter applied to project/session list
-- [ ] Unit: chip overflow cap (`buildTagChipsHtml(tags, max)`)
-- [ ] Unit: tag picker recent-first sort
-- [ ] Manual smoke: `t` → tag → chip appears → click chip → focus filters
+- [x] Source invariant: Inbox bucket priority ordering and archived exclusion
+- [x] Source invariant: Smart View count iteration and skip-zero logic
+- [x] Source invariant: focus filter projection via `deriveVisibleProjects` / `getSessionsMatchingFocus`
+- [x] Source invariant: chip overflow cap at `TAG_CHIPS_MAX = 2`
+- [x] Source invariant: tag picker palette-order preserved (no re-sort)
+- [ ] **Manual smoke** (not automatable without a DOM runtime): `t` → tag applied →
+      chip visible in session row → click chip → focus bar appears, sessions filtered →
+      `×` clears focus → all sessions restored
+
+Note: the written tests are structural (source-analysis), not DOM execution. They guard intent and
+prevent accidental regressions in logic structure. The manual smoke above is the only remaining
+gate before M12 is declared closed.
 
 ---
 
