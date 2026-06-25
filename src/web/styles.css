@@ -509,6 +509,11 @@ body {
     transform: scale(0.8);
   }
 }
+.insp-activity {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
 .activity-tool {
   color: var(--muted2);
   flex-shrink: 0;
