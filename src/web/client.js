@@ -4557,7 +4557,9 @@ function buildActivitySectionHtml() {
       ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
       : ''
     var time = entry.lastEventAt
-      ? '<span class="activity-time">' + escapeHtml(shortRelativeTime(entry.lastEventAt)) + '</span>'
+      ? '<span class="activity-time">' +
+        escapeHtml(shortRelativeTime(entry.lastEventAt)) +
+        '</span>'
       : ''
     rows +=
       '<div class="rail-item" data-rail-action="select-session" data-project-id="' +
