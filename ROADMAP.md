@@ -33,18 +33,18 @@
 
 Swoop's near-term product bets are:
 
-1. **Milestone 12 — Organization layer**: Phase 1, the Phase 2 web experience, and Phase 3
-   TUI/CLI read-filter parity are complete. Remaining organization work is optional advanced
-   editing, automation, and portability after real-world use.
+1. **Milestone 12 — Organization layer**: Phase 1, 2 (code), and 3 are shipped. One gap remains:
+   5 unit tests (2i) and a manual smoke of the `t → tag → chip → focus` flow. Once those pass,
+   M12 is closed. Phase 4 (advanced) is deferred until real-world use.
 2. **Milestone 13 — Live web control panel**: make `swoop web` worth keeping open while working.
    It should show what is active, changing, risky, or close to a limit without becoming a chat UI.
-3. **Milestone 11 — VS Code Workspace Cockpit**: shipped. Remaining work is smoke-testing on
-   clean platforms and fixing the Windows terminal launcher before any public release.
+3. **Milestone 11 — VS Code Workspace Cockpit**: shipped. Remaining: smoke test on clean Windows
+   and macOS, and fix the Windows terminal launcher before public release.
 
-**Recommended order:** close the Milestone 9 Windows launcher and clean-environment release
-blockers. After that, build
-Milestone 13 on the existing SSE/live-usage foundation and carry the proven organization
-vocabulary into the VS Code dashboard.
+**Recommended order:** write the 5 missing Phase 2i tests and run the manual smoke (one short
+session). Then move to Milestone 13 — the live web panel is the next product differentiator and
+builds cleanly on the existing SSE and live-usage infrastructure. The VS Code extension can absorb
+org vocabulary (tags, groups, stacks) as a follow-on after M13 proves the data contracts stable.
 
 ---
 
@@ -368,198 +368,65 @@ Make Swoop useful when Claude Code work stops being "a list of folders" and beco
 parallel investigations, branches, fixes, reviews, and half-finished threads. The goal is a
 lightweight organisation layer that feels faster than filing things manually.
 
+See [`Documents/MILESTONE_12_PLAN.md`](Documents/MILESTONE_12_PLAN.md) for the full spec,
+Inbox bucket definitions (as implemented), and Phase 4 advanced ideas.
+
+### Status: Phase 1, 2, 3 shipped — test hardening remaining
+
+**Phase 1 — Foundation** ✅ complete  
+**Phase 2 — Web Organization UI** ✅ complete (code), 🔲 tests pending  
+**Phase 3 — TUI + CLI parity** ✅ complete  
+**Phase 4 — Advanced** deferred until MVP is proven in real use
+
+### What shipped
+
+- `org.json` infrastructure: `readOrgData()`, `withOrgLock()`, atomic write, advisory lock,
+  SSE watcher, `filterProjectsByOrg()` shared across web/TUI/CLI
+- Session tags and project tags in `swoop.json`; `Session.tags`, `Project.group`, `Project.projectTags`
+- Full org CRUD: groups, stacks, stack items, project-group assignments
+- API routes: `/api/org/**`, tag mutation endpoints, `?group`/`?stack`/`?tag` project filters
+- Web left rail: Inbox (7 priority buckets), Stacks, Groups — all collapsible, `localStorage`-persisted
+- Web focus bar, session/project chips (max 2 + overflow), clickable tag filters
+- Tag picker (`t`), group/stack picker (`g`), context menu additions, inspector org editor
+- "Save as stack" from search or Smart View focus
+- TUI: chips, group labels, `f` cycle focus, command palette entries, source/freshness labels
+- CLI: `--tag`, `--group`, `--stack` filters; `--json` includes tags/group/projectTags; no HTTP
+
+### Inbox buckets (as implemented — priority order, exclusive assignment)
+
+| Bucket | Condition |
+|---|---|
+| Active now | session.id ∈ activeSessionIds |
+| Needs attention | interrupted ∥ lastToolFailed (narrower than original plan — each problem has its own bucket) |
+| Branch drift | gitBranch ≠ currentBranch |
+| Path missing | !pathExists |
+| High context | latestContextTokens ≥ 150 000 |
+| Expiring soon | expiresInDays ≤ 7 |
+| Recently touched | updated within RECENT_WITHIN_DAYS |
+
+### Remaining before M12 is closed
+
+- [ ] **Unit tests (2i)** — 5 tests not yet written:
+  - Inbox bucket assignment: priority ordering, archived sessions excluded
+  - Smart View counts from fixture projects
+  - Focus filter applied to project/session list
+  - Chip overflow cap (`buildTagChipsHtml(tags, max)`)
+  - Tag picker recent-first sort
+- [ ] **Manual smoke**: `t` → tag applied → chip visible in row → click chip → focus filters sessions → `×` clears focus
+
 ### Why this matters
 
-Claude Code's native resume flow can already find sessions globally. Swoop should win by helping
-users **organize intent**: what belongs together, what is waiting, what is active, what is risky,
-and what should be resumed next. The web UI is the best surface for this because it has room for a
-left-side organization model, a dense session list, and a detail/preview panel at the same time.
+### Phase 4 — Advanced (deferred)
 
-The design target is not "manual filing". It is **triage in seconds**:
+After real-world use proves the MVP:
 
-- see all work grouped by meaning, not just by filesystem path
-- drag or keybind a session into the right bucket while scanning
-- focus one work stream and hide unrelated noise
-- recover a project/session later by memory: tag, goal, branch, status, or work stack
-- keep zero-config useful defaults when the user never creates a tag
-
-### Product direction
-
-- [ ] **Project groups** — user-defined groups such as `Work`, `Personal`, `Clients`,
-      `Research`, or `Archived Labs`; shown as collapsible sections in TUI and web
-- [ ] **Session tags** — small labels on sessions (`bug`, `release`, `waiting`, `review`,
-      `deep-dive`, etc.) stored in Swoop metadata; never written into Claude transcripts
-- [ ] **Project tags** — labels that apply to all sessions in a project and help search/filter
-      across related repos
-- [ ] **Work stacks** — a named saved view that can contain projects and sessions together,
-      e.g. `Auth migration`, `Launch week`, or `Bug bash`; this is the standout concept:
-      group by intent, not by filesystem
-- [ ] **Native TODO state** — detect Claude Code `TodoWrite` lists from transcripts and show open,
-      in-progress, and completed task counts beside the session. This is read-only insight, not a
-      task manager.
-- [ ] **Native Plan state** — detect Claude Code planning artifacts (`ExitPlanMode`,
-      `plan_file_reference`, `plan_mode`, and plan tool results when present) and surface the latest
-      accepted/proposed plan separately from TODOs.
-- [ ] **Focus mode** — activate one group/tag/stack and hide unrelated noise until cleared
-- [ ] **Smart views** — built-in virtual views such as `Active now`, `Needs attention`,
-      `Waiting`, `High context`, `Recently touched`, and `Expiring soon`
-
-### Automatic Claude context layer
-
-Swoop should mine read-only facts that Claude Code already records, so the user gets richer
-organization with nearly zero manual effort. Candidate sources observed in local transcript
-structure and existing Swoop parsers:
-
-- [ ] **Plans** — `ExitPlanMode`, plan-mode attachments, and plan file references; show latest
-      plan title/summary/status when available
-- [ ] **TODOs** — `TodoWrite` and TODO tool results; show active/in-progress/completed counts and
-      latest unfinished items
-- [ ] **Touched files** — Edit/Write/MultiEdit/NotebookEdit tool inputs and edited-file
-      attachments; show recent files without diffing the repo
-- [ ] **Read/research trail** — Read/Grep/Glob/WebSearch/WebFetch tool usage; show "looked at"
-      files and research actions separately from changed files
-- [ ] **Tool health** — pending tool calls, failed tool results, command duration, truncated
-      output, interrupted commands, and backgrounded tasks
-- [ ] **Execution context** — cwd, git branch, entrypoint (`cli`, `claude-vscode`, SDK), Claude Code
-      version, permission mode, and session slug
-- [ ] **Agent/subagent activity** — agent listings, sidechain sessions, Task/Agent tool results,
-      agent IDs, token totals, and tool stats where available
-- [ ] **Compaction / summaries** — compact boundaries, summary events, compact file references,
-      and last prompt events
-- [ ] **IDE and file-history hints** — file-history snapshots, IDE diagnostics, edited text file
-      attachments, and shell snapshots when available
-- [ ] **Usage facts** — model, input/output/cache tokens, context usage reports, service tier, and
-      account-limit snapshots already handled by the usage layer
-
-Guardrail: every field must be labelled by source/freshness and degrade to "unknown" when the
-artifact is missing. Do not infer private intent from raw content when a structured signal exists.
-
-Current implementation status:
-
-- [x] Shared automatic-context extractor in `src/core/session/session-automatic-context.ts` reads
-      native Claude transcript artifacts without modifying them: plans, TODOs, touched files,
-      read/research trail, tool health, execution facts, agent activity, compact summaries, and
-      last-prompt events.
-- [x] Session preview API includes the extracted automatic context so web, TUI, CLI, and future
-      VS Code surfaces can consume the same facts.
-- [x] TUI Resume Card shows native plan and native TODO state when present, keeping it read-only
-      and separate from Swoop-owned organization metadata.
-- [ ] Web inspector/Resume Card should surface the same plan/TODO/read-research facts once the
-      organization rail and inspector layout are finalized.
-
-### Feature ideas worth building
-
-- [x] **Triage Inbox** — an unfiled/attention-first view for sessions that are active,
-      interrupted, expiring, branch-drifted, high-context, recently modified, or untagged. The
-      user can archive, tag, stack, or dismiss from one place.
-- [x] **Smart Buckets** — virtual sections generated from signals: `Now`, `Needs review`,
-      `Waiting on tools`, `High context`, `Stale`, `Expiring`, `Archived`. These should exist even
-      before the user creates manual groups.
-- [x] **Work Stack rail** — a persistent web sidebar above projects. A stack can contain both
-      projects and individual sessions. Selecting it filters the whole app to that intent.
-- [ ] **"Send to stack" gesture** — web: drag a row onto a stack; keyboard: `g`; CLI:
-      `swoop tag/move` later if useful. Keep the first implementation native and simple.
-- [x] **Session chips** — compact visible chips in rows for tags/stacks, capped at 2 plus `+N`.
-      Chips are clickable filters in web and searchable tokens in TUI/CLI.
-- [ ] **Suggested tags** — local heuristics only: branch prefix (`feat`, `fix`, `release`),
-      project folder name, status signals (`interrupted`, `high-context`, `expiring`), and recent
-      tag usage. Suggestions are opt-in in config and never call an API.
-- [x] **Focus bar** — when filtering by group/tag/stack, show a clear top bar:
-      `Focus: Launch week x`. Escape or one click clears it.
-- [x] **Saved view from search** — after a global search, allow "save as stack" so a messy set of
-      related sessions becomes a reusable work context.
-- [ ] **TODO-aware triage** — sessions with unfinished Claude TODOs appear in Inbox/Smart Buckets;
-      completed TODO lists can make a session a cleanup/archive candidate.
-- [ ] **Plan-aware triage** — sessions with a proposed/accepted plan but no completed TODOs appear
-      as `planned`, making them easy to resume before the implementation context goes cold.
-- [ ] **Auto-suggest organization** — suggest tags/stacks from plan title, TODO wording, branch
-      prefix, touched-file directories, agent type, and status signals. Suggestions remain local,
-      visible, and user-controlled.
-- [ ] **Quick clean sweep** — from a group/stack, archive completed or stale sessions in bulk, with
-      active sessions skipped and reported.
-- [ ] **Portable organization export** — export/import only Swoop metadata, not transcripts, so a
-      user can move their organization layer between machines safely.
-
-### Fast interaction model
-
-- [x] **One-key tagging** — `t` opens a tiny tag picker for the focused session/project;
-      typing creates or filters tags, Enter toggles, Esc cancels
-- [x] **Quick move/group** — `g` opens the relevant group or stack picker; Enter assigns the focused project
-      or selected sessions without leaving the keyboard flow
-- [ ] **Web drag-and-drop** — drag a session or project onto a group/stack in the sidebar;
-      no dependency-heavy DnD framework unless native pointer events become too fragile
-- [ ] **Command palette actions** — `Tag selected`, `Move to group`, `Create stack from selection`,
-      `Focus this tag`, `Clear focus`
-- [ ] **Bulk organisation** — multi-select sessions with existing `space`, then tag/group/archive
-      them together
-- [ ] **Recent tags and suggested tags** — show the last-used tags first; optionally suggest tags
-      from branch name, project folder, status signals, and existing aliases without AI/API calls
-
-### Web UI shape
-
-- [x] Left rail: `Smart`, `Stacks`, `Groups`, then `Projects`; each section collapsible
-- [x] Main list: projects/sessions filtered by current focus, with chips and health badges visible
-- [x] Right inspector: Resume Card, native TODO summary, and organization editor for selected
-      session/project
-- [ ] Plan section: latest native plan shown above TODOs when present, with source/freshness label
-- [ ] Drag targets: stacks/groups highlight only while dragging a project/session row
-- [ ] Empty state: "No stacks yet — press g or drag a session here" instead of a settings-heavy flow
-- [x] Context menu: row-only actions for tag, move to stack/group, archive, delete, handoff
-
-### TUI / CLI shape
-
-- [ ] TUI footer hints: `t tag`, `g stack/group`, `f focus`, `esc clear`
-- [ ] TUI command palette entries mirror the web actions
-- [ ] CLI filters: `swoop list --tag bug`, `swoop list --group work`, `swoop list --stack launch`
-- [ ] CLI mutations stay optional until the UI model proves itself; avoid adding too many commands
-      before the vocabulary settles
-
-### Data and safety
-
-- [ ] Store session tags in each project's `swoop.json` sidecar beside alias/archive metadata
-- [ ] Store project groups, project tags, stack definitions, and tag palette in
-      `~/.claude/swoop/prefs.json`
-- [ ] Derive TODO state from transcript `TodoWrite` events and keep it read-only; never write back
-      into Claude's TODO tools or transcript files
-- [ ] Derive plan state from transcript/plan artifacts and keep it read-only; never rewrite plan
-      files or inject plan content into transcripts
-- [ ] Keep organisation metadata local-first and portable; no account, no telemetry, no server
-- [ ] Provide `swoop config` toggles for organisation UI density and suggested-tag behaviour
-- [ ] Add export/import for organisation metadata before adding complex editing flows
-- [ ] Make delete/archive/tag actions undo-friendly where feasible, or clearly reversible by design
-
-### MVP slice
-
-1. [ ] Data model: session tags + project groups + work stack definitions
-2. [x] Automatic context extractor: native plan, TODO, touched files, read/research trail, tool
-       health, agent/subagent activity, and execution context facts. Source/freshness metadata is
-       present for the initial structured artifacts and should be made more visible in the UI.
-3. [ ] Native TODO extraction: latest `TodoWrite` list, open/in-progress/completed counts, and
-       concise TODO preview in Resume Card / inspector. Core extraction + TUI preview are done;
-       web inspector and smart-bucket integration remain.
-4. [ ] Native Plan extraction: latest plan summary/status and `planned` smart bucket. Core
-       extraction + TUI preview are done; planned bucket remains.
-5. [x] Web first: rail, chips, focus bar, tag picker, group/stack picker, and Save as stack.
-       Native drag-and-drop remains an optional interaction enhancement.
-6. [ ] TUI parity for the fast path: `t`, `g`, focus filter, chips/TODO/plan count in compact rows
-7. [ ] Search/list integration: tags/groups/stacks/TODO/plan state participate in search and
-       `swoop list --json`
-8. [ ] CLI filters: `--tag`, `--group`, `--stack`, `--todo`, `--planned`; mutation commands only if
-       users need scripting
-9. [ ] Tests: metadata read/write, automatic context extraction, TODO/plan extraction, filters,
-       keyboard actions, drag handler guards, and regression
-       checks for zero-config defaults
-
-### Product guardrails
-
-- [ ] Do not turn Swoop into a project-management app: no due dates, comments, assignments, or
-      kanban boards in the core product
-- [ ] Keep the default experience clean for users with no tags/groups configured
-- [ ] Every organisation feature must improve resume/triage speed, not just decorate rows
-- [ ] Prefer reversible local metadata over destructive transcript edits
-- [ ] TODO state is displayed as observed session context, not as a Swoop-owned checklist to edit
-- [ ] Plan state is displayed as observed session context, not as a Swoop-owned project plan to edit
-- [ ] Avoid AI auto-organization in the core path; heuristic suggestions are enough for the MVP
+- [ ] `--todo pending` and `--planned` CLI filters (require transcript scan)
+- [ ] Suggested tags from branch prefix, folder name, and status signals (opt-in in config)
+- [ ] Portable org export: `swoop org export` → `org.json` + all `swoop.json` tags
+- [ ] Org import with merge strategy
+- [ ] Quick clean sweep — bulk archive from group/stack, skips active sessions
+- [ ] Drag-to-stack (after `g` picker is proven sufficient)
+- [ ] TODO-aware and plan-aware triage (requires `hasTodos`/`hasPlans` persisted in sidecar)
 
 ---
 

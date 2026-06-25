@@ -113,19 +113,20 @@ Smart Views are virtual filters computed client-side from signals already presen
 | View             | Condition                                                                                                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Active now       | `session.id ∈ activeSessionIds`                                                                                                                         |
-| Needs attention  | `signals.interrupted \|\| signals.lastToolFailed \|\| primaryStatus === 'expiring'`                                                                     |
-| Branch drift     | `session.gitBranch && session.currentBranch && session.gitBranch !== session.currentBranch`                                                             |
-| Path missing     | `!signals.pathExists`                                                                                                                                   |
-| Has open TODOs   | requires preview — loaded on demand; shown in Inspector, not filterable server-side in MVP                                                              |
-| Planned          | same — preview-dependent; surfaced in Inspector                                                                                                         |
-| High context     | `context.latestContextTokens !== null && context.latestContextTokens > CONTEXT_HIGH_THRESHOLD` (`CONTEXT_HIGH_THRESHOLD = 150_000` tokens, MVP default) |
-| Expiring soon    | `signals.expiresInDays !== null && signals.expiresInDays <= 7`                                                                                          |
-| Recently touched | `Date.now() - Date.parse(session.updated) < 7 * 24 * 3_600_000`                                                                                         |
+| Needs attention  | `signals.interrupted \|\| signals.lastToolFailed` — path-missing and expiring have their own buckets |
+| Branch drift     | `session.gitBranch && session.currentBranch && session.gitBranch !== session.currentBranch`          |
+| Path missing     | `!signals.pathExists` — separate bucket; not folded into "Needs attention"                           |
+| High context     | `context.latestContextTokens >= CONTEXT_HIGH_THRESHOLD` (`CONTEXT_HIGH_THRESHOLD = 150_000` tokens) |
+| Expiring soon    | `signals.expiresInDays !== null && signals.expiresInDays <= 7`                                       |
+| Recently touched | `Date.parse(session.updated) >= Date.now() - RECENT_WITHIN_DAYS * 86_400_000`                       |
+| Has open TODOs   | requires preview — shown in Inspector only, not an Inbox bucket in MVP                               |
+| Planned          | same — preview-dependent; surfaced in Inspector                                                      |
 
-Note: **Has open TODOs** and **Planned** require per-session preview data (transcript scan). They
-are surfaced in the Inspector and Triage Inbox session details, but NOT as server-side filter
-parameters on `/api/projects` in the MVP. Client-side filtering for those two views is deferred
-until a lightweight `hasTodos`/`hasPlans` signal is persisted in the sidecar after first analysis.
+"Needs attention" is intentionally narrower than the original plan: it covers only interrupted work
+and failed tools — things requiring the developer's direct response. Path-missing and Expiring soon
+are independently actionable and surface better as their own buckets. The filter pill "Needs
+Attention" retains the broader definition (interrupted || expiring || path-missing) for the main
+session list.
 
 ### Shared core for org reads and filtering
 
