@@ -110,15 +110,15 @@ update failed; callers log the palette write error and proceed.
 Smart Views are virtual filters computed client-side from signals already present in every
 `/api/projects` response. Zero backend changes required.
 
-| View             | Condition                                                                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Active now       | `session.id ∈ activeSessionIds`                                                                                                                         |
+| View             | Condition                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| Active now       | `session.id ∈ activeSessionIds`                                                                      |
 | Needs attention  | `signals.interrupted \|\| signals.lastToolFailed` — path-missing and expiring have their own buckets |
 | Branch drift     | `session.gitBranch && session.currentBranch && session.gitBranch !== session.currentBranch`          |
 | Path missing     | `!signals.pathExists` — separate bucket; not folded into "Needs attention"                           |
-| High context     | `context.latestContextTokens >= CONTEXT_HIGH_THRESHOLD` (`CONTEXT_HIGH_THRESHOLD = 150_000` tokens) |
+| High context     | `context.latestContextTokens >= CONTEXT_HIGH_THRESHOLD` (`CONTEXT_HIGH_THRESHOLD = 150_000` tokens)  |
 | Expiring soon    | `signals.expiresInDays !== null && signals.expiresInDays <= 7`                                       |
-| Recently touched | `Date.parse(session.updated) >= Date.now() - RECENT_WITHIN_DAYS * 86_400_000`                       |
+| Recently touched | `Date.parse(session.updated) >= Date.now() - RECENT_WITHIN_DAYS * 86_400_000`                        |
 | Has open TODOs   | requires preview — shown in Inspector only, not an Inbox bucket in MVP                               |
 | Planned          | same — preview-dependent; surfaced in Inspector                                                      |
 

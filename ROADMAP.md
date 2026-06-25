@@ -394,15 +394,15 @@ Inbox bucket definitions (as implemented), and Phase 4 advanced ideas.
 
 ### Inbox buckets (as implemented — priority order, exclusive assignment)
 
-| Bucket | Condition |
-|---|---|
-| Active now | session.id ∈ activeSessionIds |
-| Needs attention | interrupted ∥ lastToolFailed (narrower than original plan — each problem has its own bucket) |
-| Branch drift | gitBranch ≠ currentBranch |
-| Path missing | !pathExists |
-| High context | latestContextTokens ≥ 150 000 |
-| Expiring soon | expiresInDays ≤ 7 |
-| Recently touched | updated within RECENT_WITHIN_DAYS |
+| Bucket           | Condition                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| Active now       | session.id ∈ activeSessionIds                                                                |
+| Needs attention  | interrupted ∥ lastToolFailed (narrower than original plan — each problem has its own bucket) |
+| Branch drift     | gitBranch ≠ currentBranch                                                                    |
+| Path missing     | !pathExists                                                                                  |
+| High context     | latestContextTokens ≥ 150 000                                                                |
+| Expiring soon    | expiresInDays ≤ 7                                                                            |
+| Recently touched | updated within RECENT_WITHIN_DAYS                                                            |
 
 ### Remaining before M12 is closed
 
