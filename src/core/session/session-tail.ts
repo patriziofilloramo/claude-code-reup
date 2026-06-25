@@ -40,7 +40,10 @@ export async function readSessionTailActivity(
     await fd.read(buffer, 0, readSize, fileSize - readSize)
     const text = buffer.toString('utf8')
 
-    return parseTailActivity(text)
+    // When the file is larger than the tail window we started mid-stream, so
+    // the first line is probably truncated and must be dropped.
+    const isPartialRead = fileSize > readSize
+    return parseTailActivity(text, isPartialRead)
   } catch {
     return null
   } finally {
@@ -48,11 +51,11 @@ export async function readSessionTailActivity(
   }
 }
 
-function parseTailActivity(text: string): SessionTailActivity {
-  // Split on newlines; the first line may be a partial line if we didn't read
-  // from the start — skip it.
+function parseTailActivity(text: string, isPartialRead: boolean): SessionTailActivity {
+  // Only skip the first line when we started mid-file; reading from offset 0
+  // gives a complete first line that must be kept.
   const rawLines = text.split('\n')
-  const lines = rawLines.length > 1 ? rawLines.slice(1) : rawLines
+  const lines = isPartialRead && rawLines.length > 1 ? rawLines.slice(1) : rawLines
 
   let lastToolName: string | null = null
   let lastToolUseId: string | null = null
