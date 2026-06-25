@@ -48,6 +48,42 @@ function buildInspectorRowHtml(label, value, valueClass, valueAttributes) {
   )
 }
 
+/** Looks up a session's live activity entry, or null when it is not active. */
+function findLiveActivity(sessionId) {
+  for (var i = 0; i < liveActivity.length; i++) {
+    if (liveActivity[i].sessionId === sessionId) return liveActivity[i]
+  }
+  return null
+}
+
+/**
+ * Builds the inspector "Activity" heartbeat row for an active session.
+ * Returns an empty string when the session has no live activity entry.
+ */
+function buildInspectorHeartbeatHtml(session) {
+  var entry = findLiveActivity(session.id)
+  if (!entry) return ''
+  var state = entry.activityState || 'idle'
+  var stateLabel =
+    state === 'running'
+      ? STRINGS.activityRunning
+      : state === 'waiting'
+        ? STRINGS.activityWaiting
+        : STRINGS.activityIdle
+  var tool =
+    entry.lastToolName && state === 'running'
+      ? ' <span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
+      : ''
+  var value =
+    '<span class="activity-dot ' + escapeHtml(state) + '"></span> ' + escapeHtml(stateLabel) + tool
+  return buildInspectorRowHtml(
+    STRINGS.inspRowActivity,
+    value,
+    'insp-activity',
+    'title="' + escapeHtml(STRINGS.inspRowActivityTooltip) + '"'
+  )
+}
+
 /** Returns the stable cache key for a session preview. */
 function previewCacheKey(project, session) {
   return project.id + ':' + session.id
@@ -644,6 +680,7 @@ function renderInspector(visibleSessions) {
   html += buildInspectorActionsHtml(session)
   html += buildSessionPreviewHtml(selectedProject, session)
   html += buildInspectorRowHtml(STRINGS.inspRowStatus, statusValue)
+  html += buildInspectorHeartbeatHtml(session)
   html += buildInspectorRowHtml(
     STRINGS.inspRowLastActive,
     '<em>' + escapeHtml(relativeTime(session.updated)) + '</em>'

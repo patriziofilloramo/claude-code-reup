@@ -98,6 +98,11 @@ const STRINGS = {
   inspShortcuts: 'enter resume · H handoff · r rename · a archive · D delete',
 
   inspRowStatus: 'Status',
+  inspRowActivity: 'Activity',
+  activityRunning: 'Running',
+  activityWaiting: 'Waiting',
+  activityIdle: 'Idle',
+  inspRowActivityTooltip: 'Live state from the running Claude Code process',
   inspRowLastActive: 'Last active',
   inspRowMessages: 'Messages',
   inspRowCompactions: 'Compactions',

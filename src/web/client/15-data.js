@@ -125,11 +125,37 @@ function connectLiveUpdates() {
   })
 }
 
+/**
+ * Refreshes the live activity strip from /api/live-activity.
+ * No-op (and clears the strip) when no sessions are currently active.
+ */
+async function refreshLiveActivity() {
+  if (activeSessionIds.size === 0) {
+    if (liveActivity.length > 0) {
+      liveActivity = []
+      renderRail()
+    }
+    return
+  }
+  try {
+    var data = await requestJson('/api/live-activity')
+    if (!Array.isArray(data)) return
+    liveActivity = data
+    renderRail()
+  } catch {
+    // non-fatal: the strip keeps its last known data until the next poll
+  }
+}
+
 void refreshUsageSummary()
 void refreshProjectData()
+void refreshLiveActivity()
 setInterval(function () {
   void refreshUsageSummary()
 }, USAGE_POLL_INTERVAL_MS)
+setInterval(function () {
+  void refreshLiveActivity()
+}, LIVE_ACTIVITY_POLL_MS)
 connectLiveUpdates()
 
 // Narrow-mode back button: return to the project panel without clearing selection.

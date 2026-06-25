@@ -107,6 +107,11 @@ const STRINGS = {
   inspShortcuts: 'enter resume · H handoff · r rename · a archive · D delete',
 
   inspRowStatus: 'Status',
+  inspRowActivity: 'Activity',
+  activityRunning: 'Running',
+  activityWaiting: 'Waiting',
+  activityIdle: 'Idle',
+  inspRowActivityTooltip: 'Live state from the running Claude Code process',
   inspRowLastActive: 'Last active',
   inspRowMessages: 'Messages',
   inspRowCompactions: 'Compactions',
@@ -420,6 +425,8 @@ const SSE_RECONNECT_DELAY_MS = 3000
 const TOAST_DURATION_MS = 2400
 /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */
 const USAGE_POLL_INTERVAL_MS = 5000
+/** How often (ms) to refresh /api/live-activity when active sessions exist. */
+const LIVE_ACTIVITY_POLL_MS = 3000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
 
@@ -524,6 +531,7 @@ const REVIEW_BUCKETS = [
 let projects = []
 let activeSessionIds = new Set()
 let liveUsage = null
+let liveActivity = []
 let selectedProject = null
 let selectedSession = null
 let selectedFilter = 'all'
@@ -1536,6 +1544,42 @@ function buildInspectorRowHtml(label, value, valueClass, valueAttributes) {
   )
 }
 
+/** Looks up a session's live activity entry, or null when it is not active. */
+function findLiveActivity(sessionId) {
+  for (var i = 0; i < liveActivity.length; i++) {
+    if (liveActivity[i].sessionId === sessionId) return liveActivity[i]
+  }
+  return null
+}
+
+/**
+ * Builds the inspector "Activity" heartbeat row for an active session.
+ * Returns an empty string when the session has no live activity entry.
+ */
+function buildInspectorHeartbeatHtml(session) {
+  var entry = findLiveActivity(session.id)
+  if (!entry) return ''
+  var state = entry.activityState || 'idle'
+  var stateLabel =
+    state === 'running'
+      ? STRINGS.activityRunning
+      : state === 'waiting'
+        ? STRINGS.activityWaiting
+        : STRINGS.activityIdle
+  var tool =
+    entry.lastToolName && state === 'running'
+      ? ' <span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
+      : ''
+  var value =
+    '<span class="activity-dot ' + escapeHtml(state) + '"></span> ' + escapeHtml(stateLabel) + tool
+  return buildInspectorRowHtml(
+    STRINGS.inspRowActivity,
+    value,
+    'insp-activity',
+    'title="' + escapeHtml(STRINGS.inspRowActivityTooltip) + '"'
+  )
+}
+
 /** Returns the stable cache key for a session preview. */
 function previewCacheKey(project, session) {
   return project.id + ':' + session.id
@@ -2132,6 +2176,7 @@ function renderInspector(visibleSessions) {
   html += buildInspectorActionsHtml(session)
   html += buildSessionPreviewHtml(selectedProject, session)
   html += buildInspectorRowHtml(STRINGS.inspRowStatus, statusValue)
+  html += buildInspectorHeartbeatHtml(session)
   html += buildInspectorRowHtml(
     STRINGS.inspRowLastActive,
     '<em>' + escapeHtml(relativeTime(session.updated)) + '</em>'
@@ -3952,11 +3997,37 @@ function connectLiveUpdates() {
   })
 }
 
+/**
+ * Refreshes the live activity strip from /api/live-activity.
+ * No-op (and clears the strip) when no sessions are currently active.
+ */
+async function refreshLiveActivity() {
+  if (activeSessionIds.size === 0) {
+    if (liveActivity.length > 0) {
+      liveActivity = []
+      renderRail()
+    }
+    return
+  }
+  try {
+    var data = await requestJson('/api/live-activity')
+    if (!Array.isArray(data)) return
+    liveActivity = data
+    renderRail()
+  } catch {
+    // non-fatal: the strip keeps its last known data until the next poll
+  }
+}
+
 void refreshUsageSummary()
 void refreshProjectData()
+void refreshLiveActivity()
 setInterval(function () {
   void refreshUsageSummary()
 }, USAGE_POLL_INTERVAL_MS)
+setInterval(function () {
+  void refreshLiveActivity()
+}, LIVE_ACTIVITY_POLL_MS)
 connectLiveUpdates()
 
 // Narrow-mode back button: return to the project panel without clearing selection.
@@ -4465,10 +4536,63 @@ function buildGroupsSectionHtml() {
   )
 }
 
+/** Formats a short, compact age for live activity timestamps (e.g. "3s", "2m ago"). */
+function shortRelativeTime(isoTimestamp) {
+  if (!isoTimestamp) return ''
+  var elapsedMs = Date.now() - new Date(isoTimestamp).getTime()
+  if (elapsedMs < 5000) return 'now'
+  if (elapsedMs < 60000) return Math.floor(elapsedMs / 1000) + 's'
+  return relativeTime(isoTimestamp)
+}
+
+/** Builds the LIVE activity strip rows from the current liveActivity snapshot. */
+function buildActivitySectionHtml() {
+  if (liveActivity.length === 0) return ''
+  var rows = ''
+  for (var i = 0; i < liveActivity.length; i++) {
+    var entry = liveActivity[i]
+    var dotClass = 'activity-dot ' + escapeHtml(entry.activityState || 'idle')
+    var label = escapeHtml((entry.projectName || '') + ' / ' + (entry.sessionName || ''))
+    var tool = entry.lastToolName
+      ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
+      : ''
+    var time = entry.lastEventAt
+      ? '<span class="activity-time">' + escapeHtml(shortRelativeTime(entry.lastEventAt)) + '</span>'
+      : ''
+    rows +=
+      '<div class="rail-item" data-rail-action="select-session" data-project-id="' +
+      escapeHtml(entry.projectId || '') +
+      '" data-session-id="' +
+      escapeHtml(entry.sessionId || '') +
+      '">' +
+      '<span class="' +
+      dotClass +
+      '"></span>' +
+      '<span class="rail-item-label">' +
+      label +
+      '</span>' +
+      tool +
+      time +
+      '</div>'
+  }
+  return buildRailSectionHtml(
+    'activity',
+    'LIVE',
+    '●',
+    rows,
+    liveActivity.length,
+    'Active Claude Code sessions and their current tool'
+  )
+}
+
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  var html = buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html =
+    buildActivitySectionHtml() +
+    buildInboxSectionHtml() +
+    buildStacksSectionHtml() +
+    buildGroupsSectionHtml()
   elements.rail.innerHTML = html
   elements.rail.style.display = html ? '' : 'none'
 }
@@ -4598,6 +4722,21 @@ if (elements.rail) {
     if (!item) return
 
     var action = item.dataset.railAction
+    if (action === 'select-session') {
+      var targetProjectId = item.dataset.projectId
+      var targetSessionId = item.dataset.sessionId
+      var targetProject = projects.find(function (project) {
+        return project.id === targetProjectId
+      })
+      if (!targetProject) return
+      var targetSession = targetProject.sessions.find(function (session) {
+        return session.id === targetSessionId
+      })
+      if (!targetSession) return
+      selectProject(targetProject)
+      selectSession(targetSession)
+      return
+    }
     if (action === 'review') {
       var reviewId = item.dataset.reviewId
       var reviewName = item.dataset.reviewName

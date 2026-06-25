@@ -13,6 +13,8 @@ const SSE_RECONNECT_DELAY_MS = 3000
 const TOAST_DURATION_MS = 2400
 /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */
 const USAGE_POLL_INTERVAL_MS = 5000
+/** How often (ms) to refresh /api/live-activity when active sessions exist. */
+const LIVE_ACTIVITY_POLL_MS = 3000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
 

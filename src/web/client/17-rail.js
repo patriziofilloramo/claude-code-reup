@@ -360,10 +360,65 @@ function buildGroupsSectionHtml() {
   )
 }
 
+/** Formats a short, compact age for live activity timestamps (e.g. "3s", "2m ago"). */
+function shortRelativeTime(isoTimestamp) {
+  if (!isoTimestamp) return ''
+  var elapsedMs = Date.now() - new Date(isoTimestamp).getTime()
+  if (elapsedMs < 5000) return 'now'
+  if (elapsedMs < 60000) return Math.floor(elapsedMs / 1000) + 's'
+  return relativeTime(isoTimestamp)
+}
+
+/** Builds the LIVE activity strip rows from the current liveActivity snapshot. */
+function buildActivitySectionHtml() {
+  if (liveActivity.length === 0) return ''
+  var rows = ''
+  for (var i = 0; i < liveActivity.length; i++) {
+    var entry = liveActivity[i]
+    var dotClass = 'activity-dot ' + escapeHtml(entry.activityState || 'idle')
+    var label = escapeHtml((entry.projectName || '') + ' / ' + (entry.sessionName || ''))
+    var tool = entry.lastToolName
+      ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
+      : ''
+    var time = entry.lastEventAt
+      ? '<span class="activity-time">' +
+        escapeHtml(shortRelativeTime(entry.lastEventAt)) +
+        '</span>'
+      : ''
+    rows +=
+      '<div class="rail-item" data-rail-action="select-session" data-project-id="' +
+      escapeHtml(entry.projectId || '') +
+      '" data-session-id="' +
+      escapeHtml(entry.sessionId || '') +
+      '">' +
+      '<span class="' +
+      dotClass +
+      '"></span>' +
+      '<span class="rail-item-label">' +
+      label +
+      '</span>' +
+      tool +
+      time +
+      '</div>'
+  }
+  return buildRailSectionHtml(
+    'activity',
+    'LIVE',
+    '●',
+    rows,
+    liveActivity.length,
+    'Active Claude Code sessions and their current tool'
+  )
+}
+
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  var html = buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html =
+    buildActivitySectionHtml() +
+    buildInboxSectionHtml() +
+    buildStacksSectionHtml() +
+    buildGroupsSectionHtml()
   elements.rail.innerHTML = html
   elements.rail.style.display = html ? '' : 'none'
 }
@@ -493,6 +548,21 @@ if (elements.rail) {
     if (!item) return
 
     var action = item.dataset.railAction
+    if (action === 'select-session') {
+      var targetProjectId = item.dataset.projectId
+      var targetSessionId = item.dataset.sessionId
+      var targetProject = projects.find(function (project) {
+        return project.id === targetProjectId
+      })
+      if (!targetProject) return
+      var targetSession = targetProject.sessions.find(function (session) {
+        return session.id === targetSessionId
+      })
+      if (!targetSession) return
+      selectProject(targetProject)
+      selectSession(targetSession)
+      return
+    }
     if (action === 'review') {
       var reviewId = item.dataset.reviewId
       var reviewName = item.dataset.reviewName

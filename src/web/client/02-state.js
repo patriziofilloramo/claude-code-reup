@@ -1,6 +1,7 @@
 let projects = []
 let activeSessionIds = new Set()
 let liveUsage = null
+let liveActivity = []
 let selectedProject = null
 let selectedSession = null
 let selectedFilter = 'all'
