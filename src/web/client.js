@@ -420,6 +420,7 @@ const SSE_RECONNECT_DELAY_MS = 3000
 const TOAST_DURATION_MS = 2400
 /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */
 const USAGE_POLL_INTERVAL_MS = 5000
+const LIVE_ACTIVITY_POLL_MS = 3000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
 
@@ -524,6 +525,7 @@ const REVIEW_BUCKETS = [
 let projects = []
 let activeSessionIds = new Set()
 let liveUsage = null
+let liveActivity = []
 let selectedProject = null
 let selectedSession = null
 let selectedFilter = 'all'
@@ -3958,6 +3960,7 @@ setInterval(function () {
   void refreshUsageSummary()
 }, USAGE_POLL_INTERVAL_MS)
 connectLiveUpdates()
+setInterval(function () { void refreshLiveActivity() }, LIVE_ACTIVITY_POLL_MS)
 
 // Narrow-mode back button: return to the project panel without clearing selection.
 var backBtn = document.getElementById('back-btn')
@@ -4385,6 +4388,45 @@ function buildStacksSectionHtml() {
   )
 }
 
+async function refreshLiveActivity() {
+  if (activeSessionIds.size === 0) {
+    if (liveActivity.length > 0) { liveActivity = []; renderRail() }
+    return
+  }
+  try {
+    var data = await requestJson('/api/live-activity')
+    if (!Array.isArray(data)) return
+    liveActivity = data
+    renderRail()
+  } catch { /* non-fatal: strip keeps last known data */ }
+}
+
+function shortRelativeTime(isoTimestamp) {
+  if (!isoTimestamp) return ""
+  var elapsedMs = Date.now() - new Date(isoTimestamp).getTime()
+  if (elapsedMs < 5000) return "now"
+  if (elapsedMs < 60000) return Math.floor(elapsedMs / 1000) + "s"
+  return relativeTime(isoTimestamp)
+}
+
+function buildActivitySectionHtml() {
+  if (liveActivity.length === 0) return ""
+  var rows = ""
+  for (var i = 0; i < liveActivity.length; i++) {
+    var entry = liveActivity[i]
+    var dotClass = "activity-dot " + escapeHtml(entry.activityState || "idle")
+    var label = escapeHtml((entry.projectName || "") + " / " + (entry.sessionName || ""))
+    var tool = entry.lastToolName ? "<span class=\"activity-tool\">" + escapeHtml(entry.lastToolName) + "</span>" : ""
+    var time = entry.lastEventAt ? "<span class=\"activity-time\">" + escapeHtml(shortRelativeTime(entry.lastEventAt)) + "</span>" : ""
+    rows += "<div class=\"rail-item\" data-rail-action=\"select-session\" data-project-id=\"" +
+      escapeHtml(entry.projectId || "") + "\" data-session-id=\"" + escapeHtml(entry.sessionId || "") + "\">" +
+      "<span class=\"" + dotClass + "\"></span>" +
+      "<span class=\"rail-item-label\">" + label + "</span>" +
+      tool + time + "</div>"
+  }
+  return buildRailSectionHtml("activity", "LIVE", String.fromCharCode(9679), rows, liveActivity.length, "Active Claude Code sessions and their current tool")
+}
+
 function buildInboxSectionHtml() {
   var rows = ''
   var visibleBuckets = 0
@@ -4468,7 +4510,7 @@ function buildGroupsSectionHtml() {
 /** Re-renders the org rail. Safe to call at any time. */
 function renderRail() {
   if (!elements.rail) return
-  var html = buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
+  var html = buildActivitySectionHtml() + buildInboxSectionHtml() + buildStacksSectionHtml() + buildGroupsSectionHtml()
   elements.rail.innerHTML = html
   elements.rail.style.display = html ? '' : 'none'
 }
