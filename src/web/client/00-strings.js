@@ -306,7 +306,8 @@ const STRINGS = {
     'Project organization. A project can belong to one group, such as work, personal, or client.',
   railInbox: 'INBOX',
   railInboxTooltip: 'Live, attention-first views computed from current session signals.',
-
+  railActivity: 'LIVE ACTIVITY',
+  railActivityTooltip: 'Active Claude Code sessions with recent tool activity.',
   // ── Rail: delete / manage ─────────────────────────────────────────────────
   railDeleteStack: 'delete stack',
   railDeleteGroup: 'delete group',

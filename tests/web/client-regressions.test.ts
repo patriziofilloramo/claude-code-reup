@@ -201,14 +201,52 @@ describe('web client session-row invariants', () => {
     expect(source).toContain('openContextMenuAt(event.clientX, event.clientY')
   })
 
-  it('keeps the right-click footer hint visible in narrow layouts', () => {
+  it('removes desktop-only footer hints and hover affordances in narrow layouts', () => {
     const narrowStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 639px)'))
 
     expect(uiSource).toContain('ftr-item ftr-item-context')
     expect(narrowStyles).toContain('.ftr-item {')
     expect(narrowStyles).toContain('display: none;')
-    expect(narrowStyles).toContain('.ftr-item-context {')
-    expect(narrowStyles).toContain('display: flex;')
+    expect(narrowStyles).toContain('.ftr-sync-btn {')
+    expect(narrowStyles).toContain('.rail-info,')
+    expect(narrowStyles).toContain('.rail-toggle {')
+    expect(narrowStyles).not.toContain('.ftr-item-context {\n    display: flex;')
+  })
+
+  it('progressively trims footer shortcuts before they overflow', () => {
+    const mediumStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 1199px)'))
+    const compactStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 899px)'))
+
+    expect(mediumStyles).toContain('.ftr-item:nth-of-type(n + 5)')
+    expect(mediumStyles).toContain('display: none;')
+    expect(compactStyles).toContain('.ftr-item:nth-of-type(n + 4)')
+    expect(compactStyles).toContain('display: none;')
+  })
+
+  it('keeps the footer as a compact status bar without baseline hacks', () => {
+    const footerStyles = stylesSource.slice(
+      stylesSource.indexOf('.ftr {'),
+      stylesSource.indexOf('.ftr-status.ok')
+    )
+    const footerRootStyles = stylesSource.slice(
+      stylesSource.indexOf('.ftr {'),
+      stylesSource.indexOf('.ftr-item {')
+    )
+
+    expect(footerStyles).toContain('height: var(--footer-height);')
+    expect(footerStyles).toContain('line-height: 1;')
+    expect(footerStyles).toContain('padding: 0 var(--space-md);')
+    expect(footerRootStyles).not.toContain('align-items: center;')
+    expect(footerStyles).toContain('overflow: hidden;')
+    expect(footerStyles).toContain('white-space: nowrap;')
+    expect(footerStyles).toContain('flex-shrink: 0;')
+    expect(footerStyles).toContain('font-size: 10.5px;')
+    expect(footerStyles).toContain('gap: 12px;')
+    expect(footerStyles).toContain('height: var(--footer-control-height);')
+    expect(footerStyles).not.toContain('footer-baseline-shift')
+    expect(footerStyles).not.toContain('translateY(')
+    expect(footerStyles).toContain('height: 16px;')
+    expect(footerStyles).toContain('display: inline-flex;')
   })
 
   it('loads Resume Card preview data lazily and refreshes it without blanking on live updates', () => {
@@ -397,6 +435,67 @@ describe('web client session-row invariants', () => {
     expect(source).toContain('void refreshUsageSummary()')
     expect(source).toContain('USAGE_POLL_INTERVAL_MS')
   })
+
+  it('refreshes both the live rail and selected inspector heartbeat', () => {
+    const liveRefreshStart = source.indexOf('async function refreshLiveActivity()')
+    const liveRefresh = source.slice(
+      liveRefreshStart,
+      source.indexOf('void refreshProjectData()', liveRefreshStart)
+    )
+
+    expect(liveRefresh).toContain('function renderLiveActivityConsumers()')
+    expect(liveRefresh).toContain('renderRail()')
+    expect(liveRefresh).toContain('if (selectedSession) renderInspector(deriveVisibleSessions())')
+    expect(liveRefresh).toContain('liveActivity = []')
+    expect(liveRefresh).toContain('liveActivity = data')
+  })
+
+  it('keeps live activity rail copy explicit and in STRINGS', () => {
+    const strings = sourceBetween('const STRINGS = {', 'function fmt(')
+    const activityRail = sourceBetween(
+      'function buildActivitySectionHtml()',
+      '/** Re-renders the org rail.'
+    )
+
+    expect(strings).toContain("railActivity: 'LIVE ACTIVITY'")
+    expect(strings).toContain('railActivityTooltip')
+    expect(activityRail).toContain('STRINGS.railActivity')
+    expect(activityRail).toContain('STRINGS.railActivityTooltip')
+    expect(activityRail).not.toContain("'LIVE'")
+    expect(activityRail).not.toContain('Current tool state for attached active sessions')
+  })
+
+  it('shows readable live activity rows without ghost placeholders', () => {
+    const activityRail = sourceBetween(
+      'function buildActivitySectionHtml()',
+      '/** Re-renders the org rail.'
+    )
+
+    expect(activityRail).toContain('STRINGS.activityRunning')
+    expect(activityRail).toContain('STRINGS.activityWaiting')
+    expect(activityRail).toContain('STRINGS.activityIdle')
+    expect(activityRail).toContain("if (state === 'idle') continue")
+    expect(activityRail).toContain('activity-state')
+    expect(activityRail).toContain('rail-live-item')
+    expect(activityRail).toContain('activity-title')
+    expect(activityRail).toContain('activity-meta')
+    expect(activityRail).toContain('if (!entry.projectId || !entry.sessionId) continue')
+    expect(activityRail).not.toContain('live-placeholder')
+    expect(activityRail).not.toContain('activityDetail')
+  })
+
+  it('debounces filesystem event bursts before refreshing the whole web model', () => {
+    const config = sourceBetween('const AUTO_SAVE_DELAY_MS', 'const RISK_RANK')
+    const liveUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
+
+    expect(config).toContain('SSE_REFRESH_DEBOUNCE_MS')
+    expect(source).toContain('let liveUpdatesRefreshTimer = null')
+    expect(liveUpdates).toContain('function scheduleLiveDataRefresh()')
+    expect(liveUpdates).toContain('clearTimeout(liveUpdatesRefreshTimer)')
+    expect(liveUpdates).toContain('setTimeout(function ()')
+    expect(liveUpdates).toContain('void refreshProjectData()')
+    expect(liveUpdates).toContain('void refreshLiveActivity()')
+  })
 })
 
 describe('web client org layer invariants', () => {
@@ -582,15 +681,78 @@ describe('web client org layer invariants', () => {
     expect(uiSource).toContain('id="focus-save"')
   })
 
-  it('shows project tags and group membership in project rows', () => {
+  it('keeps decorative project organization out of dense project rows', () => {
     const projectChips = sourceBetween(
       'function buildProjectOrgChipsHtml(',
       'function reconcileFocusFilterAfterOrgChange()'
     )
-    expect(projectChips).toContain('project.projectTags')
-    expect(projectChips).toContain('orgData.projectGroupAssignments')
-    expect(projectChips).toContain('class="p-tag"')
+    expect(projectChips).toContain('decorative chips must not steal path')
+    expect(projectChips).toContain("return ''")
+    expect(projectChips).not.toContain('class="p-tag"')
+    expect(projectChips).not.toContain('class="p-group"')
+    expect(projectChips).not.toContain('orgData.projectGroupAssignments')
     expect(source).toContain('buildProjectOrgChipsHtml(project)')
+  })
+
+  it('keeps repeated project row metadata in fixed visual columns', () => {
+    const projectRow = stylesSource.slice(
+      stylesSource.indexOf('.proj-row {'),
+      stylesSource.indexOf('.proj-row:hover')
+    )
+    const projectCloud = sourceBetween(
+      'function buildProjectCloudHtml(project)',
+      '/** Looks up the deep-search match record'
+    )
+    const cloudStyles = stylesSource.slice(
+      stylesSource.indexOf('.p-cloud {'),
+      stylesSource.indexOf('.p-cloud--ok')
+    )
+    const countStyles = stylesSource.slice(
+      stylesSource.indexOf('.p-cnt {'),
+      stylesSource.indexOf('/* ── Right panel')
+    )
+
+    expect(projectRow).toContain('display: grid;')
+    expect(projectRow).toContain('grid-template-columns:')
+    expect(projectRow).toContain('var(--project-cloud-col)')
+    expect(projectRow).toContain('var(--project-last-col)')
+    expect(projectRow).toContain('var(--project-count-col)')
+    expect(projectRow).toContain('var(--project-action-col)')
+    expect(projectCloud).toContain('p-cloud--empty')
+    expect(projectCloud).toContain('aria-hidden="true"')
+    expect(cloudStyles).toContain('text-align: center;')
+    expect(countStyles).toContain('font-variant-numeric: tabular-nums;')
+    expect(countStyles).toContain('text-align: right;')
+  })
+
+  it('uses compact project metadata columns on mobile so names keep priority', () => {
+    const narrowStyles = stylesSource.slice(stylesSource.indexOf('@media (max-width: 639px)'))
+    const mobileProjectRow = narrowStyles.slice(
+      narrowStyles.indexOf('.proj-row {'),
+      narrowStyles.indexOf('.p-actions {')
+    )
+
+    expect(narrowStyles).toContain('--project-cloud-col: 16px;')
+    expect(narrowStyles).toContain('--project-last-col: 34px;')
+    expect(narrowStyles).toContain('--project-count-col: 24px;')
+    expect(mobileProjectRow).toContain('grid-template-columns:')
+    expect(mobileProjectRow).toContain('minmax(0, 1fr)')
+    expect(mobileProjectRow).not.toContain('var(--project-action-col)')
+    expect(narrowStyles).toContain('.p-actions {')
+    expect(narrowStyles).toContain('display: none;')
+  })
+
+  it('keeps repeated session row header metadata in fixed visual columns', () => {
+    const sessionHeader = stylesSource.slice(
+      stylesSource.indexOf('.s-line1 {'),
+      stylesSource.indexOf('.s-line2 {')
+    )
+
+    expect(sessionHeader).toContain('display: grid;')
+    expect(sessionHeader).toContain('var(--session-time-col)')
+    expect(sessionHeader).toContain('--session-action-col')
+    expect(sessionHeader).toContain('font-variant-numeric: tabular-nums;')
+    expect(sessionHeader).toContain('text-align: right;')
   })
 
   it('toggles existing stack membership and supports keyboard picker navigation', () => {

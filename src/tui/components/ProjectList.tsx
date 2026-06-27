@@ -6,7 +6,7 @@ import {
   getProjectSyncStatus,
   isProjectMemorySyncEnabled,
 } from '../../core/sync/project-sync-status.js'
-import { projectPanelWidthForTerminal, shouldShowProjectGroups } from '../layout.js'
+import { compactProjectLabel, projectPanelLayoutForTerminal } from '../layout.js'
 
 interface ProjectListProps {
   isFocused: boolean
@@ -25,7 +25,7 @@ export default function ProjectList({
   const terminalWidth = stdout?.columns ?? 80
   const labelColor = isFocused ? COLORS.accent : COLORS.dim
   const projectMemorySyncEnabled = isProjectMemorySyncEnabled()
-  const showProjectGroups = shouldShowProjectGroups(terminalWidth)
+  const projectPanelLayout = projectPanelLayoutForTerminal(terminalWidth, projects)
 
   return (
     <Box
@@ -37,7 +37,7 @@ export default function ProjectList({
       borderTop={false}
       flexDirection="column"
       flexShrink={0}
-      width={projectPanelWidthForTerminal(terminalWidth)}
+      width={projectPanelLayout.width}
     >
       <Box gap={1} paddingX={1}>
         <Text bold color={labelColor}>
@@ -49,7 +49,7 @@ export default function ProjectList({
       {projects.map((project, index) => {
         const isSelected = index === selectedIndex
         const isFocusedSelected = isSelected && isFocused
-        const projectLabel = project.path.split(/[/\\]/).filter(Boolean).slice(-2).join('/')
+        const projectLabel = compactProjectLabel(project.path)
         const syncStatus = getProjectSyncStatus(project, projectMemorySyncEnabled)
         const cloudColor =
           syncStatus === 'grey' ? COLORS.muted : syncStatus === 'orange' ? COLORS.orange : COLORS.ok
@@ -64,19 +64,21 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
-            {showProjectGroups && project.groupName ? (
+            {projectPanelLayout.showProjectGroups && project.groupName ? (
               <Box flexShrink={0} paddingLeft={1} width={14}>
                 <Text color={COLORS.accent} wrap="truncate">
                   [{project.groupName}]
                 </Text>
               </Box>
             ) : null}
-            {syncStatus && syncStatus !== 'none' ? (
-              <Box flexShrink={0} paddingLeft={1}>
+            <Box flexShrink={0} paddingLeft={1} width={4}>
+              {syncStatus && syncStatus !== 'none' ? (
                 <Text color={cloudColor}>{'☁'}</Text>
-              </Box>
-            ) : null}
-            <Box flexShrink={0}>
+              ) : (
+                <Text> </Text>
+              )}
+            </Box>
+            <Box flexShrink={0} width={7}>
               <Text color={isFocusedSelected ? COLORS.accent : COLORS.dim}>
                 {' (' + project.sessions.length + ')'}
               </Text>

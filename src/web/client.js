@@ -315,7 +315,8 @@ const STRINGS = {
     'Project organization. A project can belong to one group, such as work, personal, or client.',
   railInbox: 'INBOX',
   railInboxTooltip: 'Live, attention-first views computed from current session signals.',
-
+  railActivity: 'LIVE ACTIVITY',
+  railActivityTooltip: 'Active Claude Code sessions with recent tool activity.',
   // ── Rail: delete / manage ─────────────────────────────────────────────────
   railDeleteStack: 'delete stack',
   railDeleteGroup: 'delete group',
@@ -421,6 +422,8 @@ function filterTooltip(filter) {
 const AUTO_SAVE_DELAY_MS = 1500
 /** How long to wait (ms) before attempting to reconnect a dropped SSE stream. */
 const SSE_RECONNECT_DELAY_MS = 3000
+/** Coalesces bursts of filesystem SSE events into a single full data refresh. */
+const SSE_REFRESH_DEBOUNCE_MS = 300
 /** How long (ms) a toast notification stays visible before fading out. */
 const TOAST_DURATION_MS = 2400
 /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */
@@ -542,6 +545,7 @@ let renamingSessionId = null
 let claudeInstructionsProjectId = null
 let claudeInstructionsSaveTimer = null
 let liveUpdatesSource = null
+let liveUpdatesRefreshTimer = null
 let usageRefreshInProgress = false
 let deepLinkProcessed = false
 let ctxProject = null
@@ -1045,23 +1049,7 @@ function buildProjectRowHtml(project) {
     escapeHtml(compactPath(project.path)) +
     '</span>' +
     buildProjectOrgChipsHtml(project) +
-    (project.syncStatus && project.syncStatus !== 'none'
-      ? project.syncStatus === 'grey'
-        ? '<span class="p-cloud p-cloud--stale" title="' +
-          escapeHtml(STRINGS.projectCloudOffline) +
-          '">☁</span>'
-        : project.syncStatus === 'orange'
-          ? '<span class="p-cloud p-cloud--unlinked" title="' +
-            escapeHtml(
-              fmt(STRINGS.projectCloudUnlinked, {
-                devices: (project.unlinkedDevices ?? []).join(', '),
-              })
-            ) +
-            '">☁</span>'
-          : '<span class="p-cloud p-cloud--ok" title="' +
-            escapeHtml(STRINGS.projectCloudOk) +
-            '">☁</span>'
-      : '') +
+    buildProjectCloudHtml(project) +
     '<span class="p-last">' +
     lastLabel +
     '</span>' +
@@ -1074,6 +1062,37 @@ function buildProjectRowHtml(project) {
     '">⋯</button>' +
     '</div>' +
     '</div>'
+  )
+}
+
+/** Returns the fixed-width Project Memory cell, including an empty placeholder. */
+function buildProjectCloudHtml(project) {
+  if (!project.syncStatus || project.syncStatus === 'none') {
+    return '<span class="p-cloud p-cloud--empty" aria-hidden="true"></span>'
+  }
+
+  if (project.syncStatus === 'grey') {
+    return (
+      '<span class="p-cloud p-cloud--stale" title="' +
+      escapeHtml(STRINGS.projectCloudOffline) +
+      '">☁</span>'
+    )
+  }
+
+  if (project.syncStatus === 'orange') {
+    return (
+      '<span class="p-cloud p-cloud--unlinked" title="' +
+      escapeHtml(
+        fmt(STRINGS.projectCloudUnlinked, {
+          devices: (project.unlinkedDevices ?? []).join(', '),
+        })
+      ) +
+      '">☁</span>'
+    )
+  }
+
+  return (
+    '<span class="p-cloud p-cloud--ok" title="' + escapeHtml(STRINGS.projectCloudOk) + '">☁</span>'
   )
 }
 
@@ -3984,11 +4003,20 @@ async function refreshProjectData() {
 function connectLiveUpdates() {
   if (liveUpdatesSource) liveUpdatesSource.close()
 
+  function scheduleLiveDataRefresh() {
+    markSessionPreviewsStale()
+    if (liveUpdatesRefreshTimer) clearTimeout(liveUpdatesRefreshTimer)
+    liveUpdatesRefreshTimer = setTimeout(function () {
+      liveUpdatesRefreshTimer = null
+      void refreshProjectData()
+      void refreshUsageSummary()
+      void refreshLiveActivity()
+    }, SSE_REFRESH_DEBOUNCE_MS)
+  }
+
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
-    markSessionPreviewsStale()
-    void refreshProjectData()
-    void refreshUsageSummary()
+    scheduleLiveDataRefresh()
   })
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
@@ -4002,10 +4030,15 @@ function connectLiveUpdates() {
  * No-op (and clears the strip) when no sessions are currently active.
  */
 async function refreshLiveActivity() {
+  function renderLiveActivityConsumers() {
+    renderRail()
+    if (selectedSession) renderInspector(deriveVisibleSessions())
+  }
+
   if (activeSessionIds.size === 0) {
     if (liveActivity.length > 0) {
       liveActivity = []
-      renderRail()
+      renderLiveActivityConsumers()
     }
     return
   }
@@ -4013,7 +4046,7 @@ async function refreshLiveActivity() {
     var data = await requestJson('/api/live-activity')
     if (!Array.isArray(data)) return
     liveActivity = data
-    renderRail()
+    renderLiveActivityConsumers()
   } catch {
     // non-fatal: the strip keeps its last known data until the next poll
   }
@@ -4320,30 +4353,12 @@ function countReviewBucketSessions(bucket) {
 }
 
 function buildProjectOrgChipsHtml(project) {
-  var html = ''
-  var tags = project.projectTags || []
-  for (var ti = 0; ti < Math.min(tags.length, 2); ti++) {
-    html +=
-      '<button class="p-tag" type="button" data-tag="' +
-      escapeHtml(tags[ti]) +
-      '">#' +
-      escapeHtml(tags[ti]) +
-      '</button>'
-  }
-  if (tags.length > 2) {
-    html += '<span class="p-tag-overflow">+' + (tags.length - 2) + '</span>'
-  }
-  var assignments = (orgData && orgData.projectGroupAssignments) || {}
-  var groupId = assignments[project.id]
-  if (groupId && orgData) {
-    var group = orgData.groups.find(function (candidate) {
-      return candidate.id === groupId
-    })
-    if (group) {
-      html += '<span class="p-group" title="Group">' + escapeHtml(group.name) + '</span>'
-    }
-  }
-  return html ? '<span class="p-org">' + html + '</span>' : ''
+  // Project-level organization is available in the rail/Inspector. In this
+  // dense project list, repeated operational metadata (cloud, last access,
+  // session count) gets the fixed columns; decorative chips must not steal path
+  // width or shift those columns.
+  void project
+  return ''
 }
 
 function reconcileFocusFilterAfterOrgChange() {
@@ -4545,14 +4560,22 @@ function shortRelativeTime(isoTimestamp) {
   return relativeTime(isoTimestamp)
 }
 
-/** Builds the LIVE activity strip rows from the current liveActivity snapshot. */
+/** Builds the live activity strip rows from the current liveActivity snapshot. */
 function buildActivitySectionHtml() {
   if (liveActivity.length === 0) return ''
   var rows = ''
+  var count = 0
   for (var i = 0; i < liveActivity.length; i++) {
     var entry = liveActivity[i]
-    var dotClass = 'activity-dot ' + escapeHtml(entry.activityState || 'idle')
-    var label = escapeHtml((entry.projectName || '') + ' / ' + (entry.sessionName || ''))
+    if (!entry.projectId || !entry.sessionId) continue
+    var state = entry.activityState || 'idle'
+    if (state === 'idle') continue
+    var stateLabel =
+      state === 'running'
+        ? STRINGS.activityRunning
+        : state === 'waiting'
+          ? STRINGS.activityWaiting
+          : STRINGS.activityIdle
     var tool = entry.lastToolName
       ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
       : ''
@@ -4562,28 +4585,42 @@ function buildActivitySectionHtml() {
         '</span>'
       : ''
     rows +=
-      '<div class="rail-item" data-rail-action="select-session" data-project-id="' +
-      escapeHtml(entry.projectId || '') +
+      '<div class="rail-item rail-live-item" data-rail-action="select-session" data-project-id="' +
+      escapeHtml(entry.projectId) +
       '" data-session-id="' +
-      escapeHtml(entry.sessionId || '') +
+      escapeHtml(entry.sessionId) +
       '">' +
-      '<span class="' +
-      dotClass +
+      '<span class="activity-dot ' +
+      escapeHtml(state) +
       '"></span>' +
-      '<span class="rail-item-label">' +
-      label +
+      '<span class="activity-copy">' +
+      '<span class="activity-title">' +
+      escapeHtml(entry.sessionName || entry.sessionId) +
+      '</span>' +
+      '<span class="activity-meta">' +
+      '<span class="activity-state ' +
+      escapeHtml(state) +
+      '">' +
+      escapeHtml(stateLabel) +
+      '</span>' +
+      '<span class="activity-project">' +
+      escapeHtml(entry.projectName || entry.projectId) +
       '</span>' +
       tool +
       time +
+      '</span>' +
+      '</span>' +
       '</div>'
+    count++
   }
+  if (count === 0) return ''
   return buildRailSectionHtml(
     'activity',
-    'LIVE',
+    STRINGS.railActivity,
     '●',
     rows,
-    liveActivity.length,
-    'Active Claude Code sessions and their current tool'
+    count,
+    STRINGS.railActivityTooltip
   )
 }
 

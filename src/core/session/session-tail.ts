@@ -58,7 +58,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
   const lines = isPartialRead && rawLines.length > 1 ? rawLines.slice(1) : rawLines
 
   let lastToolName: string | null = null
-  let lastToolUseId: string | null = null
+  const toolUses: Array<{ id: string; name: string | null }> = []
   const resolvedToolIds = new Set<string>()
   let lastEventAt: string | null = null
 
@@ -84,7 +84,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
         const name = typeof block['name'] === 'string' ? block['name'] : null
         const id = typeof block['id'] === 'string' ? block['id'] : null
         if (name) lastToolName = name
-        if (id) lastToolUseId = id
+        if (id) toolUses.push({ id, name })
       }
       continue
     }
@@ -100,7 +100,12 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     }
   }
 
-  const toolPending = lastToolUseId !== null && !resolvedToolIds.has(lastToolUseId)
+  const pendingTool = toolUses
+    .slice()
+    .reverse()
+    .find((toolUse) => !resolvedToolIds.has(toolUse.id))
+  const toolPending = pendingTool !== undefined
+  if (pendingTool?.name) lastToolName = pendingTool.name
 
   let state: ActivityState
   if (toolPending) {

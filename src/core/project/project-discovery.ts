@@ -34,9 +34,9 @@ const SESSION_TRANSCRIPT_FILE_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/i
 
 /**
- * Sessions whose .jsonl hasn't appeared yet are only injected within this
- * window. Beyond it, a missing transcript means the lock file is stale
- * (crashed process or recycled PID — Windows reuses PIDs freely).
+ * Lock-only sessions are valid during Claude Code's startup/first-flush window.
+ * After that, a missing transcript is not a resumable Swoop session; the live
+ * panel may still surface the process, but project/session discovery should not.
  */
 const LOCK_FILE_GRACE_PERIOD_MS = 2 * 60 * 1000
 
@@ -75,9 +75,8 @@ export async function loadProjects(): Promise<Project[]> {
     )
     .sort(compareProjectsByRecentActivity)
 
-  // Handle lock records whose cwd doesn't match any scanned project. These
-  // belong to brand-new projects whose directory may not exist yet.
-  // Only recent records qualify — stale lock files from recycled PIDs are rejected.
+  // Handle very fresh lock records whose cwd doesn't match any scanned project.
+  // Older lock-only records are live processes, not necessarily resumable sessions.
   const now = Date.now()
   const knownPaths = new Set(projects.map((project) => normalizePathForComparison(project.path)))
   const orphanedRecords = liveSessions.filter(
@@ -431,12 +430,10 @@ async function loadTranscriptSessions(
  * Prepends ghost sessions for every live lock-file session that is not already
  * represented by a transcript in this project's directory.
  *
- * Two legitimate cases trigger an injection:
- *  1. The .jsonl exists but has 0 assistant messages (user sent the first
- *     prompt; parseSessionTranscript returns null for these).
- *  2. The .jsonl doesn't exist yet — Claude Code creates it lazily. We only
- *     inject within LOCK_FILE_GRACE_PERIOD_MS to reject stale lock files
- *     whose PIDs were recycled by the OS.
+ * Missing transcripts are deliberately limited to Claude Code's short
+ * startup/first-flush window. If the transcript file already exists, the live
+ * lock is enough evidence to keep the active session visible while the
+ * transcript is still too sparse to parse.
  *
  * Ghost sessions pass through annotatePathExistence and annotateCurrentGitBranches
  * alongside regular sessions, so they get correct pathExists and currentBranch values.
@@ -505,7 +502,7 @@ function buildGhostSession(record: SessionLockRecord & { cwd: string }): Session
 
 /**
  * Creates one ghost project per unique cwd for lock records that don't match
- * any already-scanned project directory. Only called with recent records.
+ * any already-scanned project directory.
  */
 function buildOrphanProjects(records: Array<SessionLockRecord & { cwd: string }>): Project[] {
   const byPath = new Map<string, Array<SessionLockRecord & { cwd: string }>>()

@@ -9,6 +9,8 @@
 const AUTO_SAVE_DELAY_MS = 1500
 /** How long to wait (ms) before attempting to reconnect a dropped SSE stream. */
 const SSE_RECONNECT_DELAY_MS = 3000
+/** Coalesces bursts of filesystem SSE events into a single full data refresh. */
+const SSE_REFRESH_DEBOUNCE_MS = 300
 /** How long (ms) a toast notification stays visible before fading out. */
 const TOAST_DURATION_MS = 2400
 /** How often (ms) to poll /api/usage for updated token-usage figures. Mirrors APP.usagePollMs on the server. */

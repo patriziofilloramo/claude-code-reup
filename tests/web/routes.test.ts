@@ -7,6 +7,7 @@ import { buildApp } from '../../src/web/routes.js'
 
 const PROJECT_ID = 'known-project'
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'
+const LOCK_ONLY_SESSION_ID = '00000000-0000-0000-0000-000000000002'
 
 describe('web routes', () => {
   let claudeDirectory: string
@@ -221,6 +222,30 @@ describe('web routes', () => {
       pendingToolName: null,
       touchedFiles: [],
     })
+  })
+
+  it('hides older lock-only live processes from projects and live activity', async () => {
+    const projectPath = join(claudeDirectory, 'live-process-workspace')
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(projectPath)
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'lock-only.json'),
+      JSON.stringify({
+        cwd: projectPath,
+        pid: process.pid,
+        sessionId: LOCK_ONLY_SESSION_ID,
+        startedAt: Date.now() - 60 * 60 * 1000,
+      })
+    )
+
+    const [projectsResponse, liveResponse] = await Promise.all([
+      buildApp().request('/api/projects'),
+      buildApp().request('/api/live-activity'),
+    ])
+
+    expect(await projectsResponse.json()).toEqual([])
+    expect(await liveResponse.json()).toEqual([])
   })
 
   it('returns a Markdown handoff packet for the web action bar', async () => {

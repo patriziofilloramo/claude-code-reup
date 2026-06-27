@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { Hono } from 'hono'
 
 import { APP } from '../../config/app.js'
-import { getActiveSessions } from '../../core/session/active-sessions.js'
+import { getActiveSessions, getLiveSessionRecords } from '../../core/session/active-sessions.js'
 import { getClaudeDirectory } from '../../core/project/claude-paths.js'
 import { loadProjectById, loadProjects } from '../../core/project/project-discovery.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../../core/session/session-handoff.js'
@@ -163,9 +163,12 @@ export function registerProjectRoutes(app: Hono): void {
   app.get(
     '/api/live-activity',
     apiRoute(async (context) => {
-      const [activeIds, allProjects] = await Promise.all([getActiveSessions(), loadProjects()])
+      const [liveRecords, allProjects] = await Promise.all([
+        getLiveSessionRecords(),
+        loadProjects(),
+      ])
 
-      if (activeIds.size === 0) return context.json([])
+      if (liveRecords.length === 0) return context.json([])
 
       const sessionIndex = new Map<string, { project: Project; session: Session }>()
       for (const project of allProjects) {
@@ -175,16 +178,16 @@ export function registerProjectRoutes(app: Hono): void {
       }
 
       const entries = await Promise.all(
-        [...activeIds].map(async (sessionId) => {
-          const found = sessionIndex.get(sessionId)
+        liveRecords.map(async (record) => {
+          const found = sessionIndex.get(record.sessionId)
           if (!found) return null
 
           const { project, session } = found
-          const transcriptPath = sessionTranscriptPath(project.id, sessionId)
+          const transcriptPath = sessionTranscriptPath(project.id, record.sessionId)
           const tail = await readSessionTailActivity(transcriptPath)
 
           return {
-            sessionId,
+            sessionId: record.sessionId,
             projectId: project.id,
             projectName: projectDisplayName(project),
             sessionName: session.alias ?? session.name,
@@ -195,7 +198,7 @@ export function registerProjectRoutes(app: Hono): void {
         })
       )
 
-      return context.json(entries.filter((e) => e !== null))
+      return context.json(entries.filter((entry) => entry !== null))
     })
   )
 

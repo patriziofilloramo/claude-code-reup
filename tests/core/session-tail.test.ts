@@ -21,6 +21,24 @@ function toolResultEvent(toolUseId: string, timestamp: string): string {
   })
 }
 
+function parallelToolUseEvent(
+  tools: Array<{ id: string; name: string }>,
+  timestamp: string
+): string {
+  return JSON.stringify({
+    type: 'assistant',
+    timestamp,
+    message: {
+      content: tools.map((tool) => ({
+        type: 'tool_use',
+        id: tool.id,
+        name: tool.name,
+        input: {},
+      })),
+    },
+  })
+}
+
 function isoAgo(ms: number): string {
   return new Date(Date.now() - ms).toISOString()
 }
@@ -112,6 +130,45 @@ describe('readSessionTailActivity', () => {
     const result = await readSessionTailActivity(path)
     expect(result!.lastToolName).toBe('Edit')
     expect(result!.toolPending).toBe(false)
+  })
+
+  it('keeps running state when an earlier parallel tool_use is still unresolved', async () => {
+    const path = join(tmpDir, 'parallel-first-pending.jsonl')
+    await writeFile(
+      path,
+      [
+        parallelToolUseEvent(
+          [
+            { id: 'pending-first', name: 'Bash' },
+            { id: 'resolved-second', name: 'Read' },
+          ],
+          isoAgo(5_000)
+        ),
+        toolResultEvent('resolved-second', isoAgo(4_000)),
+      ].join('\n')
+    )
+    const result = await readSessionTailActivity(path)
+    expect(result!.lastToolName).toBe('Bash')
+    expect(result!.toolPending).toBe(true)
+    expect(result!.state).toBe('running')
+  })
+
+  it('shows the latest unresolved parallel tool when more than one is pending', async () => {
+    const path = join(tmpDir, 'parallel-latest-pending.jsonl')
+    await writeFile(
+      path,
+      parallelToolUseEvent(
+        [
+          { id: 'pending-first', name: 'Bash' },
+          { id: 'pending-second', name: 'Edit' },
+        ],
+        isoAgo(5_000)
+      )
+    )
+    const result = await readSessionTailActivity(path)
+    expect(result!.lastToolName).toBe('Edit')
+    expect(result!.toolPending).toBe(true)
+    expect(result!.state).toBe('running')
   })
 
   it('returns the ISO timestamp of the most recent event', async () => {

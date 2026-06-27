@@ -144,30 +144,12 @@ function countReviewBucketSessions(bucket) {
 }
 
 function buildProjectOrgChipsHtml(project) {
-  var html = ''
-  var tags = project.projectTags || []
-  for (var ti = 0; ti < Math.min(tags.length, 2); ti++) {
-    html +=
-      '<button class="p-tag" type="button" data-tag="' +
-      escapeHtml(tags[ti]) +
-      '">#' +
-      escapeHtml(tags[ti]) +
-      '</button>'
-  }
-  if (tags.length > 2) {
-    html += '<span class="p-tag-overflow">+' + (tags.length - 2) + '</span>'
-  }
-  var assignments = (orgData && orgData.projectGroupAssignments) || {}
-  var groupId = assignments[project.id]
-  if (groupId && orgData) {
-    var group = orgData.groups.find(function (candidate) {
-      return candidate.id === groupId
-    })
-    if (group) {
-      html += '<span class="p-group" title="Group">' + escapeHtml(group.name) + '</span>'
-    }
-  }
-  return html ? '<span class="p-org">' + html + '</span>' : ''
+  // Project-level organization is available in the rail/Inspector. In this
+  // dense project list, repeated operational metadata (cloud, last access,
+  // session count) gets the fixed columns; decorative chips must not steal path
+  // width or shift those columns.
+  void project
+  return ''
 }
 
 function reconcileFocusFilterAfterOrgChange() {
@@ -369,14 +351,22 @@ function shortRelativeTime(isoTimestamp) {
   return relativeTime(isoTimestamp)
 }
 
-/** Builds the LIVE activity strip rows from the current liveActivity snapshot. */
+/** Builds the live activity strip rows from the current liveActivity snapshot. */
 function buildActivitySectionHtml() {
   if (liveActivity.length === 0) return ''
   var rows = ''
+  var count = 0
   for (var i = 0; i < liveActivity.length; i++) {
     var entry = liveActivity[i]
-    var dotClass = 'activity-dot ' + escapeHtml(entry.activityState || 'idle')
-    var label = escapeHtml((entry.projectName || '') + ' / ' + (entry.sessionName || ''))
+    if (!entry.projectId || !entry.sessionId) continue
+    var state = entry.activityState || 'idle'
+    if (state === 'idle') continue
+    var stateLabel =
+      state === 'running'
+        ? STRINGS.activityRunning
+        : state === 'waiting'
+          ? STRINGS.activityWaiting
+          : STRINGS.activityIdle
     var tool = entry.lastToolName
       ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
       : ''
@@ -386,28 +376,42 @@ function buildActivitySectionHtml() {
         '</span>'
       : ''
     rows +=
-      '<div class="rail-item" data-rail-action="select-session" data-project-id="' +
-      escapeHtml(entry.projectId || '') +
+      '<div class="rail-item rail-live-item" data-rail-action="select-session" data-project-id="' +
+      escapeHtml(entry.projectId) +
       '" data-session-id="' +
-      escapeHtml(entry.sessionId || '') +
+      escapeHtml(entry.sessionId) +
       '">' +
-      '<span class="' +
-      dotClass +
+      '<span class="activity-dot ' +
+      escapeHtml(state) +
       '"></span>' +
-      '<span class="rail-item-label">' +
-      label +
+      '<span class="activity-copy">' +
+      '<span class="activity-title">' +
+      escapeHtml(entry.sessionName || entry.sessionId) +
+      '</span>' +
+      '<span class="activity-meta">' +
+      '<span class="activity-state ' +
+      escapeHtml(state) +
+      '">' +
+      escapeHtml(stateLabel) +
+      '</span>' +
+      '<span class="activity-project">' +
+      escapeHtml(entry.projectName || entry.projectId) +
       '</span>' +
       tool +
       time +
+      '</span>' +
+      '</span>' +
       '</div>'
+    count++
   }
+  if (count === 0) return ''
   return buildRailSectionHtml(
     'activity',
-    'LIVE',
+    STRINGS.railActivity,
     '●',
     rows,
-    liveActivity.length,
-    'Active Claude Code sessions and their current tool'
+    count,
+    STRINGS.railActivityTooltip
   )
 }
 

@@ -83,7 +83,7 @@ export default function SessionList({
 
   if (!project) {
     return (
-      <Box flexDirection="column" flexGrow={1} paddingX={2}>
+      <Box flexDirection="column" flexGrow={1} paddingX={1}>
         <Text color={COLORS.dim}>Select a project with → or enter</Text>
       </Box>
     )
@@ -91,7 +91,7 @@ export default function SessionList({
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Box gap={1} paddingX={1}>
+      <Box gap={1}>
         <Text bold color={labelColor}>
           sessions
         </Text>
@@ -106,7 +106,7 @@ export default function SessionList({
       </Box>
 
       {sessions.length === 0 && (
-        <Box marginTop={1} paddingX={2}>
+        <Box marginTop={1} paddingX={1}>
           <Text color={COLORS.dim}>No sessions match your search</Text>
         </Box>
       )}
@@ -142,7 +142,7 @@ export default function SessionList({
             : null
 
         return (
-          <Box key={session.id} marginBottom={0} paddingX={1}>
+          <Box key={session.id} marginBottom={0}>
             <Box flexShrink={0}>
               {showArrow ? <Text color={arrowColor}>▶ </Text> : null}
               <Text color={badge?.color ?? COLORS.dim}>{badge?.text ?? ' '} </Text>

@@ -5,12 +5,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 
+import { encodeProjectPath } from '../../src/core/project/claude-paths.js'
 import { loadProjects } from '../../src/core/project/project-discovery.js'
 
 const PROJECT_ID = 'project-fixture'
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'
 const SECOND_SESSION_ID = '00000000-0000-0000-0000-000000000002'
 const THIRD_SESSION_ID = '00000000-0000-0000-0000-000000000003'
+const FOURTH_SESSION_ID = '00000000-0000-0000-0000-000000000004'
 const executeFile = promisify(execFile)
 
 describe('session loading', () => {
@@ -303,6 +305,91 @@ describe('session loading', () => {
     expect(project.sessions.map((session) => session.id)).toEqual([SESSION_ID])
   })
 
+  it('surfaces fresh live lock sessions before their transcript exists in a scanned project', async () => {
+    const projectPath = join(claudeDirectory, 'ghost-workspace')
+    const encodedProjectId = encodeProjectPath(projectPath)
+    await mkdir(projectPath)
+    await mkdir(join(claudeDirectory, 'projects', encodedProjectId), { recursive: true })
+    const startedAt = Date.now()
+    await writeLiveSessionLock('live-known.json', THIRD_SESSION_ID, projectPath, startedAt)
+
+    const projects = await loadProjects()
+    const project = projects.find((candidate) => candidate.id === encodedProjectId)
+
+    expect(project).toMatchObject({
+      id: encodedProjectId,
+      path: projectPath,
+      sessions: [
+        {
+          id: THIRD_SESSION_ID,
+          messageCount: 0,
+          name: 'New session',
+          projectPath,
+          signals: {
+            analysisComplete: false,
+            pathExists: true,
+          },
+        },
+      ],
+    })
+  })
+
+  it('does not create an orphan project for an older live lock without a transcript directory', async () => {
+    const projectPath = join(claudeDirectory, 'orphan-workspace')
+    const startedAt = Date.now() - 60 * 60 * 1000
+    await mkdir(projectPath)
+    await writeLiveSessionLock('live-orphan.json', FOURTH_SESSION_ID, projectPath, startedAt)
+
+    const projects = await loadProjects()
+
+    expect(projects).toEqual([])
+  })
+
+  it('does not surface older lock-only sessions as real sessions in a scanned project', async () => {
+    const projectPath = join(claudeDirectory, 'stale-ghost-workspace')
+    const encodedProjectId = encodeProjectPath(projectPath)
+    const startedAt = Date.now() - 60 * 60 * 1000
+    await mkdir(projectPath)
+    await mkdir(join(claudeDirectory, 'projects', encodedProjectId), { recursive: true })
+    await writeLiveSessionLock('live-stale-known.json', FOURTH_SESSION_ID, projectPath, startedAt)
+
+    const projects = await loadProjects()
+
+    expect(projects).toEqual([])
+  })
+
+  it('keeps an older live session visible when its transcript file already exists', async () => {
+    const projectPath = join(claudeDirectory, 'slow-first-flush-workspace')
+    const encodedProjectId = encodeProjectPath(projectPath)
+    const encodedProjectDirectory = join(claudeDirectory, 'projects', encodedProjectId)
+    const startedAt = Date.now() - 60 * 60 * 1000
+    await mkdir(projectPath)
+    await mkdir(encodedProjectDirectory, { recursive: true })
+    await writeFile(join(encodedProjectDirectory, `${FOURTH_SESSION_ID}.jsonl`), '')
+    await writeLiveSessionLock(
+      'live-slow-first-flush.json',
+      FOURTH_SESSION_ID,
+      projectPath,
+      startedAt
+    )
+
+    const projects = await loadProjects()
+    const project = projects.find((candidate) => candidate.id === encodedProjectId)
+
+    expect(project).toMatchObject({
+      id: encodedProjectId,
+      path: projectPath,
+      sessions: [
+        {
+          id: FOURTH_SESSION_ID,
+          messageCount: 0,
+          name: 'New session',
+          projectPath,
+        },
+      ],
+    })
+  })
+
   it('resolves current branches independently for sessions in different working directories', async () => {
     const firstWorkspace = join(claudeDirectory, 'first-workspace')
     const secondWorkspace = join(claudeDirectory, 'second-workspace')
@@ -350,5 +437,22 @@ describe('session loading', () => {
         type: 'user',
       })
     )
+  }
+
+  async function writeLiveSessionLock(
+    fileName: string,
+    sessionId: string,
+    cwd: string,
+    startedAt?: number
+  ): Promise<void> {
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    const payload: { cwd: string; pid: number; sessionId: string; startedAt?: number } = {
+      cwd,
+      pid: process.pid,
+      sessionId,
+    }
+    if (startedAt !== undefined) payload.startedAt = startedAt
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(join(sessionsDirectory, fileName), JSON.stringify(payload))
   }
 })

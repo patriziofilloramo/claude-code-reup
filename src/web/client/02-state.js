@@ -12,6 +12,7 @@ let renamingSessionId = null
 let claudeInstructionsProjectId = null
 let claudeInstructionsSaveTimer = null
 let liveUpdatesSource = null
+let liveUpdatesRefreshTimer = null
 let usageRefreshInProgress = false
 let deepLinkProcessed = false
 let ctxProject = null

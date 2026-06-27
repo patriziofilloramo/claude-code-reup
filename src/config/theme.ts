@@ -32,7 +32,16 @@ export const COLORS = colorsFromTheme(
 
 export const SIZES = {
   projectPanelWidth: 30,
-  projectGroupMinTerminalWidth: 180,
+  projectPanelBreakpoints: [
+    { minTerminalWidth: 0, projectPanelWidth: 26 },
+    { minTerminalWidth: 100, projectPanelWidth: 30 },
+    { minTerminalWidth: 140, projectPanelWidth: 34 },
+    { minTerminalWidth: 180, projectPanelWidth: 38 },
+    { minTerminalWidth: 240, projectPanelWidth: 42 },
+    { minTerminalWidth: 300, projectPanelWidth: 56, showProjectGroups: true },
+  ],
+  maxProjectPanelWidth: 80,
+  projectGroupMinTerminalWidth: 300,
   sessionDetailsMinWidth: 72,
-  wideProjectPanelWidth: 44,
+  wideProjectPanelWidth: 52,
 } as const

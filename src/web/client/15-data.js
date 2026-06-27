@@ -112,11 +112,20 @@ async function refreshProjectData() {
 function connectLiveUpdates() {
   if (liveUpdatesSource) liveUpdatesSource.close()
 
+  function scheduleLiveDataRefresh() {
+    markSessionPreviewsStale()
+    if (liveUpdatesRefreshTimer) clearTimeout(liveUpdatesRefreshTimer)
+    liveUpdatesRefreshTimer = setTimeout(function () {
+      liveUpdatesRefreshTimer = null
+      void refreshProjectData()
+      void refreshUsageSummary()
+      void refreshLiveActivity()
+    }, SSE_REFRESH_DEBOUNCE_MS)
+  }
+
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
-    markSessionPreviewsStale()
-    void refreshProjectData()
-    void refreshUsageSummary()
+    scheduleLiveDataRefresh()
   })
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
@@ -130,10 +139,15 @@ function connectLiveUpdates() {
  * No-op (and clears the strip) when no sessions are currently active.
  */
 async function refreshLiveActivity() {
+  function renderLiveActivityConsumers() {
+    renderRail()
+    if (selectedSession) renderInspector(deriveVisibleSessions())
+  }
+
   if (activeSessionIds.size === 0) {
     if (liveActivity.length > 0) {
       liveActivity = []
-      renderRail()
+      renderLiveActivityConsumers()
     }
     return
   }
@@ -141,7 +155,7 @@ async function refreshLiveActivity() {
     var data = await requestJson('/api/live-activity')
     if (!Array.isArray(data)) return
     liveActivity = data
-    renderRail()
+    renderLiveActivityConsumers()
   } catch {
     // non-fatal: the strip keeps its last known data until the next poll
   }
