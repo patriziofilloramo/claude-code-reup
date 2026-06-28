@@ -3,10 +3,11 @@ import * as vscode from 'vscode'
 import { formatContextTokens, formatRelativeTime, statusCodicon } from './formatting.js'
 import { copySessionHandoff } from './handoff.js'
 import { compareCockpitSessions } from './cockpit-model.js'
-import type { SwoopLogger } from './logger.js'
+import { getReupConfigurationValue } from './configuration.js'
+import type { ReupLogger } from './logger.js'
 import type { SessionResumeService } from './resume-target.js'
-import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
-import { sessionMatchesWorkspace } from './swoop-data.js'
+import type { ExtensionSession, ReupDataSource } from './reup-data.js'
+import { sessionMatchesWorkspace } from './reup-data.js'
 
 interface SessionQuickPickItem extends vscode.QuickPickItem {
   session: ExtensionSession
@@ -22,24 +23,24 @@ const COPY_HANDOFF_BUTTON: vscode.QuickInputButton = {
 }
 
 export async function showGlobalResumePicker(
-  dataSource: SwoopDataSource,
-  logger: SwoopLogger,
+  dataSource: ReupDataSource,
+  logger: ReupLogger,
   resumeService: SessionResumeService,
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
 ): Promise<void> {
   await showResumePicker({
     dataSource,
     logger,
-    placeHolder: 'Resume any Claude Code session known to Swoop',
+    placeHolder: 'Resume any Claude Code session known to Reup',
     resumeService,
-    title: 'Swoop: Resume Session',
+    title: 'Reup: Resume Session',
     onOpenInspector,
   })
 }
 
 export async function showWorkspaceResumePicker(
-  dataSource: SwoopDataSource,
-  logger: SwoopLogger,
+  dataSource: ReupDataSource,
+  logger: ReupLogger,
   resumeService: SessionResumeService,
   onOpenInspector?: (session: ExtensionSession) => Promise<void>
 ): Promise<void> {
@@ -51,7 +52,7 @@ export async function showWorkspaceResumePicker(
     dataSource,
     emptyMessage:
       workspacePaths.length > 0
-        ? 'No Swoop sessions match the current workspace.'
+        ? 'No Reup sessions match the current workspace.'
         : 'Open a workspace folder to use Resume Here.',
     filter: (session) =>
       workspacePaths.some((workspacePath) => sessionMatchesWorkspace(session, workspacePath)),
@@ -59,17 +60,17 @@ export async function showWorkspaceResumePicker(
     placeHolder: 'Resume a Claude Code session for the current workspace',
     resumeService,
     sort: (left, right) => compareCockpitSessions(left, right, activeEditorPath),
-    title: 'Swoop: Resume Here',
+    title: 'Reup: Resume Here',
     workspacePath: workspacePaths[0],
     onOpenInspector,
   })
 }
 
 async function showResumePicker(options: {
-  dataSource: SwoopDataSource
+  dataSource: ReupDataSource
   emptyMessage?: string
   filter?: (session: ExtensionSession) => boolean
-  logger: SwoopLogger
+  logger: ReupLogger
   placeHolder: string
   resumeService: SessionResumeService
   title: string
@@ -86,7 +87,7 @@ async function showResumePicker(options: {
     const filteredSessions = options.filter ? model.sessions.filter(options.filter) : model.sessions
     const sessions = options.sort ? [...filteredSessions].sort(options.sort) : filteredSessions
     if (sessions.length === 0) {
-      void vscode.window.showInformationMessage(options.emptyMessage ?? 'No Swoop sessions found.')
+      void vscode.window.showInformationMessage(options.emptyMessage ?? 'No Reup sessions found.')
       return
     }
 
@@ -125,7 +126,7 @@ function toQuickPickItem(session: ExtensionSession): SessionQuickPickItem {
 async function runQuickPick(
   items: SessionQuickPickItem[],
   options: {
-    logger: SwoopLogger
+    logger: ReupLogger
     onOpenInspector?: (session: ExtensionSession) => Promise<void>
     placeHolder: string
     resumeService: SessionResumeService
@@ -165,7 +166,7 @@ async function runQuickPick(
         void options.onOpenInspector(event.item.session).finally(finish)
       } else if (event.button === COPY_HANDOFF_BUTTON) {
         void copySessionHandoff(event.item.session, options.logger)
-          .then(() => vscode.window.showInformationMessage('Swoop handoff packet copied.'))
+          .then(() => vscode.window.showInformationMessage('Reup handoff packet copied.'))
           .catch((error) =>
             vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
           )
@@ -177,5 +178,5 @@ async function runQuickPick(
 }
 
 function includeArchivedSessions(): boolean {
-  return vscode.workspace.getConfiguration('swoop').get<boolean>('includeArchived', false)
+  return getReupConfigurationValue<boolean>('includeArchived', false)
 }

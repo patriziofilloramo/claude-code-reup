@@ -18,12 +18,12 @@ describe('VS Code refresh controller guardrails', () => {
     expect(source).toContain('pendingRefreshReason')
     expect(source).toContain('setVisible(visible: boolean)')
     expect(source).toContain('if (this.disposed || !this.visible) return')
-    expect(extensionSource).toContain('new SwoopRefreshController')
+    expect(extensionSource).toContain('new ReupRefreshController')
     expect(extensionSource).toContain('refreshController,')
   })
 
   it('supports manual, watcher, and interval modes from configuration', () => {
-    expect(manifest.contributes.configuration.properties['swoop.refreshMode']).toMatchObject({
+    expect(manifest.contributes.configuration.properties['reup.refreshMode']).toMatchObject({
       default: 'watch',
       enum: ['manual', 'watch', 'interval'],
     })

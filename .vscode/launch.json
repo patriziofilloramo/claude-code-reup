@@ -2,12 +2,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Swoop VS Code Extension",
+      "name": "Run Reup VS Code Extension",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/extension"],
       "outFiles": ["${workspaceFolder}/extension/dist/**/*.cjs"],
-      "preLaunchTask": "Build Swoop VS Code Extension"
+      "preLaunchTask": "Build Reup VS Code Extension"
     }
   ]
 }

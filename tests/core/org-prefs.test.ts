@@ -25,10 +25,10 @@ describe('org prefs', () => {
   let originalClaudeConfigDirectory: string | undefined
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-org-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'reup-org-test-'))
     originalClaudeConfigDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
-    await mkdir(join(temporaryClaudeDirectory, 'swoop'), { recursive: true })
+    await mkdir(join(temporaryClaudeDirectory, 'reup'), { recursive: true })
   })
 
   afterEach(async () => {
@@ -52,7 +52,7 @@ describe('org prefs', () => {
 
   it('degrades to empty when org.json has an unknown schema version', async () => {
     await writeFile(
-      join(temporaryClaudeDirectory, 'swoop', 'org.json'),
+      join(temporaryClaudeDirectory, 'reup', 'org.json'),
       JSON.stringify({ schemaVersion: 99, groups: [{ id: 'x', name: 'Future' }] })
     )
     const data = await readOrgData()
@@ -61,7 +61,7 @@ describe('org prefs', () => {
   })
 
   it('degrades to empty for malformed org.json', async () => {
-    await writeFile(join(temporaryClaudeDirectory, 'swoop', 'org.json'), 'not-json{{{')
+    await writeFile(join(temporaryClaudeDirectory, 'reup', 'org.json'), 'not-json{{{')
     const data = await readOrgData()
     expect(data.groups).toEqual([])
   })
@@ -72,7 +72,7 @@ describe('org prefs', () => {
 
   it('throws OrgSchemaVersionError on write when persisted schema version is unknown', async () => {
     await writeFile(
-      join(temporaryClaudeDirectory, 'swoop', 'org.json'),
+      join(temporaryClaudeDirectory, 'reup', 'org.json'),
       JSON.stringify({ schemaVersion: 99 })
     )
     await expect(createProjectGroup('New Group')).rejects.toBeInstanceOf(OrgSchemaVersionError)

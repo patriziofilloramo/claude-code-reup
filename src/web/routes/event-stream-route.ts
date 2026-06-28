@@ -41,13 +41,13 @@ export function isRelevantClaudeFile(fileName: string | null): boolean {
   return (
     fileName?.endsWith('.jsonl') === true ||
     fileName?.endsWith('sessions-index.json') === true ||
-    fileName?.endsWith('swoop.json') === true ||
+    fileName?.endsWith('reup.json') === true ||
     fileName === 'settings.json' ||
-    /^swoop[/\\]org\.json$/i.test(fileName ?? '') ||
-    /^swoop[/\\](account-usage|statusline-integration|usage-capture-error)\.json$/i.test(
+    /^reup[/\\]org\.json$/i.test(fileName ?? '') ||
+    /^reup[/\\](account-usage|statusline-integration|usage-capture-error)\.json$/i.test(
       fileName ?? ''
     ) ||
-    /^swoop[/\\]usage[/\\].*\.json$/i.test(fileName ?? '') ||
+    /^reup[/\\]usage[/\\].*\.json$/i.test(fileName ?? '') ||
     /^sessions[/\\].*\.json$/i.test(fileName ?? '')
   )
 }

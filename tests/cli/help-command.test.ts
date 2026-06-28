@@ -28,10 +28,10 @@ describe('CLI help', () => {
     const help = renderMainHelp(false)
 
     expect(help).toContain('Configuration')
-    expect(help).toContain('swoop completion <shell>')
+    expect(help).toContain('reup completion <shell>')
     expect(help).toContain('Features')
-    expect(help).toContain('swoop sync [link|unlink|status] [path]')
-    expect(help).not.toContain('swoop --theme')
+    expect(help).toContain('reup sync [link|unlink|status] [path]')
+    expect(help).not.toContain('reup --theme')
   })
 
   it.each(PUBLIC_COMMANDS)('provides help for the public %s command', async (command) => {
@@ -40,7 +40,7 @@ describe('CLI help', () => {
     await runCli([command, '--help'])
 
     expect(log).toHaveBeenCalledOnce()
-    expect(String(log.mock.calls[0][0])).toContain(`swoop ${command}`)
+    expect(String(log.mock.calls[0][0])).toContain(`reup ${command}`)
     expect(process.exitCode).toBeUndefined()
   })
 
@@ -62,8 +62,8 @@ describe('CLI help', () => {
 
     await runCli(['config', '--help'])
 
-    expect(renderMainHelp(false)).not.toContain('swoop --theme')
-    expect(String(log.mock.calls[0][0])).toContain('swoop --theme <dark|light|terminal>')
+    expect(renderMainHelp(false)).not.toContain('reup --theme')
+    expect(String(log.mock.calls[0][0])).toContain('reup --theme <dark|light|terminal>')
   })
 
   it('documents organization filters for list', async () => {
@@ -82,7 +82,7 @@ describe('CLI help', () => {
 
     runHelpCommand(['unknown'])
 
-    expect(error).toHaveBeenCalledWith('swoop: no help topic for: unknown')
+    expect(error).toHaveBeenCalledWith('reup: no help topic for: unknown')
     expect(process.exitCode).toBe(1)
   })
 })

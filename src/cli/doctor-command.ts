@@ -14,20 +14,20 @@ export function formatDoctorReport(report: DiagnosticsReport): string {
     report.pathMissing.length +
     report.staleLocks.length
 
-  if (issueCount === 0) return 'Swoop Doctor\n\nNo issues found.'
+  if (issueCount === 0) return 'Reup Doctor\n\nNo issues found.'
 
-  const lines = [`Swoop Doctor · ${issueCount} issue${issueCount === 1 ? '' : 's'}`]
+  const lines = [`Reup Doctor · ${issueCount} issue${issueCount === 1 ? '' : 's'}`]
   appendSection(
     lines,
     'Broken session indices',
     report.brokenIndices.map((item) => `${item.projectId}: ${item.reason}`),
-    'Claude Code owns these files; Swoop falls back to readable transcripts.'
+    'Claude Code owns these files; Reup falls back to readable transcripts.'
   )
   appendSection(
     lines,
     'Stale sidecar locks',
     report.staleLocks.map((item) => `${item.path}: ${item.reason}`),
-    'No live owner was detected; Swoop can recover abandoned locks on its next metadata write.'
+    'No live owner was detected; Reup can recover abandoned locks on its next metadata write.'
   )
   appendSection(
     lines,

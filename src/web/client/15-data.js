@@ -13,7 +13,7 @@ async function refreshUsageSummary() {
     liveUsage = await requestJson('/api/usage')
     renderUsageSummary()
   } catch (error) {
-    console.error('[swoop] failed to refresh usage:', error)
+    console.error('[reup] failed to refresh usage:', error)
   } finally {
     usageRefreshInProgress = false
   }
@@ -100,7 +100,7 @@ async function refreshProjectData() {
   } catch (error) {
     elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
-    console.error('[swoop] failed to refresh project data:', error)
+    console.error('[reup] failed to refresh project data:', error)
   }
 }
 

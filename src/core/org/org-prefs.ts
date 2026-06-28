@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { getSwoopDirectory } from '../project/claude-paths.js'
+import { getReupDirectory } from '../project/claude-paths.js'
 import { withAdvisoryFileLock } from '../project/project-sidecar-lock.js'
 import { log } from '../../utils/logger.js'
 import {
@@ -27,11 +27,11 @@ import {
 // ---------------------------------------------------------------------------
 
 function orgJsonPath(): string {
-  return join(getSwoopDirectory(), 'org.json')
+  return join(getReupDirectory(), 'org.json')
 }
 
 function orgLockPath(): string {
-  return join(getSwoopDirectory(), 'org.json.lock')
+  return join(getReupDirectory(), 'org.json.lock')
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ export async function readOrgData(): Promise<OrgData> {
 
 /**
  * Serialises concurrent in-process org mutations. Combined with the filesystem
- * advisory lock, this prevents races from both concurrent Swoop processes and
+ * advisory lock, this prevents races from both concurrent Reup processes and
  * concurrent async operations within the same process.
  */
 let orgWriteQueue: Promise<void> = Promise.resolve()
@@ -95,16 +95,16 @@ let orgWriteQueue: Promise<void> = Promise.resolve()
  * Enqueues an org mutation.
  *
  * The updater receives the current OrgData and mutates it in place.
- * The write is atomic: temp file → rename, same pattern as swoop.json.
+ * The write is atomic: temp file → rename, same pattern as reup.json.
  * Throws OrgSchemaVersionError when org.json contains an unknown schema version
- * (prevents overwriting data written by a newer Swoop version).
+ * (prevents overwriting data written by a newer Reup version).
  */
 async function enqueueOrgUpdate(updater: (data: OrgData) => void): Promise<void> {
   const previousUpdate = orgWriteQueue
   const queuedUpdate = previousUpdate.then(() =>
     withAdvisoryFileLock(orgLockPath(), async () => {
       const data = await readOrgDataFromDisk()
-      // Guard: refuse to write if a newer Swoop version owns this file.
+      // Guard: refuse to write if a newer Reup version owns this file.
       if (data !== null && data.schemaVersion !== ORG_SCHEMA_VERSION) {
         throw new OrgSchemaVersionError(data.schemaVersion)
       }
@@ -134,7 +134,7 @@ async function writeOrgDataAtomically(data: OrgData): Promise<void> {
   const targetPath = orgJsonPath()
   const tempPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
 
-  await mkdir(getSwoopDirectory(), { recursive: true })
+  await mkdir(getReupDirectory(), { recursive: true })
   try {
     await writeFile(tempPath, JSON.stringify(data, null, 2) + '\n', 'utf8')
     await rename(tempPath, targetPath)

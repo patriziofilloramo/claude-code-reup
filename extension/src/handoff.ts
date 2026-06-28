@@ -6,17 +6,17 @@ import {
   readTranscriptHandoffContext,
 } from '../../src/core/session/session-handoff.js'
 import { sessionTranscriptPath } from '../../src/core/session/session-preview.js'
-import type { SwoopLogger } from './logger.js'
-import type { ExtensionSession } from './swoop-data.js'
+import type { ReupLogger } from './logger.js'
+import type { ExtensionSession } from './reup-data.js'
 
 /**
  * Builds the same compact Markdown packet used by the CLI/web/TUI and copies it
  * to the editor clipboard. This is intentionally read-only: it never modifies
- * Claude transcripts or Swoop metadata.
+ * Claude transcripts or Reup metadata.
  */
 export async function copySessionHandoff(
   session: ExtensionSession,
-  logger: SwoopLogger
+  logger: ReupLogger
 ): Promise<void> {
   const coreSession = await findCoreSession(session.projectId, session.id)
   if (!coreSession) {

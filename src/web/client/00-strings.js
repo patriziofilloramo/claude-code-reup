@@ -11,7 +11,7 @@ const STRINGS = {
   projectCloudOk: 'Shared storage — writes directly to cloud',
   projectCloudOffline:
     'Cloud offline — sessions saved locally, new sessions paused until sync resumes',
-  projectCloudUnlinked: 'Device(s) not linked: {devices} — run swoop sync link on those devices',
+  projectCloudUnlinked: 'Device(s) not linked: {devices} — run reup sync link on those devices',
   projectCtxNewSession: '+ new session',
   projectCtxCopyPath: 'copy path',
   projectPathCopied: 'Path copied',
@@ -270,7 +270,7 @@ const STRINGS = {
   syncUnlinkAll: 'Unlink all synced projects',
   syncNoProjects: 'No projects found.',
   syncNoCloudProjects: 'No cloud projects found under detected cloud folders.',
-  syncConfirmManaged: 'Swoop will patch managed sync files for this project. Continue?',
+  syncConfirmManaged: 'Reup will patch managed sync files for this project. Continue?',
   syncConfirmBulk: 'Run this bulk sync operation sequentially?',
   syncOperationDone: 'Sync operation complete',
   syncOperationFailed: 'Sync failed: {error}',

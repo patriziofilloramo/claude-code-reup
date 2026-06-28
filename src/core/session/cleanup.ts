@@ -2,7 +2,7 @@ import type { Project, Session } from './session-model.js'
 
 // -----------------------------------------------------------------------------
 // Built-in heuristic rules for session cleanup (no AI required).
-// Fast, deterministic, scriptable. Run `swoop cleanup --help` for user-facing docs.
+// Fast, deterministic, scriptable. Run `reup cleanup --help` for user-facing docs.
 //
 // Rule thresholds (all adjustable here):
 //   TRIVIAL_MAX_MESSAGES  Sessions with ≤ this many messages are "trivial"
@@ -97,7 +97,7 @@ export function summariseCandidates(candidates: CleanupCandidate[]): string {
   if (byReason.expired) parts.push(`${byReason.expired} expired`)
   if (byReason.stale) parts.push(`${byReason.stale} stale`)
 
-  return `${candidates.length} cleanup candidate${candidates.length === 1 ? '' : 's'}: ${parts.join(', ')} — run \`swoop cleanup\` to review`
+  return `${candidates.length} cleanup candidate${candidates.length === 1 ? '' : 's'}: ${parts.join(', ')} — run \`reup cleanup\` to review`
 }
 
 // -----------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const extensionSource = readFileSync('extension/src/extension.ts', 'utf8')
+const configurationSource = readFileSync('extension/src/configuration.ts', 'utf8')
 const detailSource = readFileSync('extension/src/session-detail.ts', 'utf8')
 const inspectorHtmlSource = readFileSync('extension/src/inspector-html.ts', 'utf8')
 const loggerSource = readFileSync('extension/src/logger.ts', 'utf8')
@@ -13,7 +14,7 @@ const treeSource = readFileSync('extension/src/session-tree.ts', 'utf8')
 
 describe('VS Code extension lifecycle guardrails', () => {
   it('registers long-lived providers and logger as disposables', () => {
-    expect(loggerSource).toContain('export interface SwoopLogger extends vscode.Disposable')
+    expect(loggerSource).toContain('export interface ReupLogger extends vscode.Disposable')
     expect(treeSource).toContain('implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable')
     expect(detailSource).toContain('implements vscode.WebviewViewProvider, vscode.Disposable')
     expect(extensionSource).toContain('logger,')
@@ -36,7 +37,7 @@ describe('VS Code extension lifecycle guardrails', () => {
   })
 
   it('opens a focused Inspector with strict message validation', () => {
-    expect(detailSource).toContain("const INSPECTOR_VIEW_ID = 'swoop.inspector'")
+    expect(detailSource).toContain("const INSPECTOR_VIEW_ID = 'reup.inspector'")
     expect(extensionSource).toContain('registerWebviewViewProvider')
     expect(detailSource).toContain('isInspectorMessage(message)')
     expect(inspectorHtmlSource).toContain("default-src 'none'")
@@ -45,10 +46,18 @@ describe('VS Code extension lifecycle guardrails', () => {
   it('activates for tree context commands as well as top-level commands', () => {
     expect(manifest.activationEvents).toEqual(
       expect.arrayContaining([
-        'onCommand:swoop.tree.copySessionId',
-        'onCommand:swoop.tree.resumeSession',
-        'onCommand:swoop.tree.revealProjectFolder',
+        'onCommand:reup.tree.copySessionId',
+        'onCommand:reup.tree.resumeSession',
+        'onCommand:reup.tree.revealProjectFolder',
       ])
     )
+  })
+
+  it('keeps VS Code setting and memento migration hidden behind Reup helpers', () => {
+    expect(configurationSource).toContain("const CONFIG_SECTION = 'reup'")
+    expect(configurationSource).toContain('LEGACY_CONFIG_SECTION')
+    expect(configurationSource).toContain('getReupConfigurationValue')
+    expect(configurationSource).toContain('getMigratedGlobalState')
+    expect(extensionSource).toContain('getMigratedGlobalState<number>(context, key)')
   })
 })

@@ -11,8 +11,8 @@
 
 export const LABELS = {
   // ── Application ──────────────────────────────────────────────────────────
-  appName: 'swoop',
-  appTitle: 'Swoop — session manager for Claude Code',
+  appName: 'reup',
+  appTitle: 'Reup — session manager for Claude Code',
   appTagline: 'claude code session manager',
   brandProduct: 'claude code',
 
@@ -59,19 +59,19 @@ export const LABELS = {
 
   // ── Inbox command ─────────────────────────────────────────────────────────
   inboxClear: 'Inbox clear. No active sessions or sessions needing attention.',
-  inboxTitle: 'Swoop Inbox',
+  inboxTitle: 'Reup Inbox',
 
   // ── Doctor command ────────────────────────────────────────────────────────
-  doctorTitle: 'Swoop Doctor',
+  doctorTitle: 'Reup Doctor',
   noIssuesFound: 'No issues found.',
   brokenIndices: 'Broken session indices',
-  brokenIndicesExplan: 'Claude Code owns these files; Swoop falls back to readable transcripts.',
+  brokenIndicesExplan: 'Claude Code owns these files; Reup falls back to readable transcripts.',
   staleLocks: 'Stale sidecar locks',
   orphanedTranscripts: 'Orphaned transcripts',
   missingPaths: 'Missing session paths',
 
   // ── Handoff & resume ──────────────────────────────────────────────────────
-  handoffUsage: 'usage: swoop handoff [session-id-or-prefix]',
+  handoffUsage: 'usage: reup handoff [session-id-or-prefix]',
   transcriptNotFound: 'transcript not found for session',
   cannotReadTranscript: 'cannot read transcript for session',
   selectorRequired: 'a session selector is required outside an interactive terminal',
@@ -81,9 +81,9 @@ export const LABELS = {
   terminatedBySignal: 'claude terminated by signal',
 
   // ── Search command ────────────────────────────────────────────────────────
-  searchUsage: 'usage: swoop search [--deep] <query>',
-  searchRequiresTTY: 'swoop search requires an interactive terminal',
-  searchFailed: 'search failed — run with SWOOP_DEBUG=1 for details',
+  searchUsage: 'usage: reup search [--deep] <query>',
+  searchRequiresTTY: 'reup search requires an interactive terminal',
+  searchFailed: 'search failed — run with REUP_DEBUG=1 for details',
 
   // ── Config command ────────────────────────────────────────────────────────
   configUIDesc: 'Open interactive settings UI',
@@ -92,7 +92,7 @@ export const LABELS = {
   configResetDesc: 'Reset one or all settings to defaults',
   configPanelTitle: 'config',
   configColorThemeTitle: 'Color theme',
-  configColorThemeDesc: 'Takes effect when swoop is restarted. The web UI switches live.',
+  configColorThemeDesc: 'Takes effect when reup is restarted. The web UI switches live.',
   configLiveUsageTitle: 'Live usage status line',
   configLiveUsageDesc: "Captures rate-limit data from Claude Code's status line",
   configShellCompletionTitle: 'Shell completion',
@@ -119,7 +119,7 @@ export const LABELS = {
   configSyncFeatureDescription:
     'Per-project memory shared through folders already synced by your cloud provider.',
   configSyncFeatureDescriptionExpanded:
-    'Moves Claude project memory into each project .claude-memory folder and links this device to it. Your existing cloud provider transports the files; Swoop has no account or remote service. Linking is explicit per device and per project.',
+    'Moves Claude project memory into each project .claude-memory folder and links this device to it. Your existing cloud provider transports the files; Reup has no account or remote service. Linking is explicit per device and per project.',
   configSyncLinkedProjectsTitle: 'Synced Project Memory',
   configSyncUnlinkedProjectsTitle: 'Local-Only Projects',
   configSyncRemoteProjectsTitle: 'Remote Project Memory',
@@ -137,13 +137,13 @@ export const LABELS = {
   configCloudIconPartial: 'unlinked use detected on another device',
   configCloudIconOffline: 'offline — shared memory unreachable',
   unknownConfigSubcommand: 'unknown config subcommand: ',
-  configSetUsage: 'usage: swoop config set <key> <value>',
+  configSetUsage: 'usage: reup config set <key> <value>',
   unknownConfigKey: 'unknown key: ',
 
   // ── Sync command ─────────────────────────────────────────────────────────
-  syncWarning: 'swoop sync is experimental — use at your own risk.',
-  syncUsage: 'usage: swoop sync [link|unlink|status] [path]',
-  linkUsage: 'usage: swoop sync link [project-path]',
+  syncWarning: 'reup sync is experimental — use at your own risk.',
+  syncUsage: 'usage: reup sync [link|unlink|status] [path]',
+  linkUsage: 'usage: reup sync link [project-path]',
   allLinked: 'all projects are already synced to cloud storage',
   pathRequired: 'a project path is required outside an interactive terminal',
   noCloudDetected: 'no cloud storage detected — showing all projects',
@@ -215,7 +215,7 @@ export const LABELS = {
   // ── TUI: launch & resume ──────────────────────────────────────────────────
   launchingVerb: 'launching',
   newSessionVerb: 'starting new session in',
-  resumePickerTitle: 'Swoop RESUME',
+  resumePickerTitle: 'Reup RESUME',
   sessionsCountLabel: 'sessions',
   focusLabel: 'Focus:',
 } as const

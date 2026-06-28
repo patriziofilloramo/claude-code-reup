@@ -23,7 +23,7 @@ import {
   type ExtensionCockpitModel,
 } from './cockpit-model.js'
 import { compactProjectName, compactText } from './formatting.js'
-import type { SwoopLogger } from './logger.js'
+import type { ReupLogger } from './logger.js'
 
 const PREVIEW_HINT_LIMIT = 80
 
@@ -77,8 +77,8 @@ export interface LoadExtensionModelOptions {
   workspacePath?: string
 }
 
-export class SwoopDataSource {
-  constructor(private readonly logger: SwoopLogger) {}
+export class ReupDataSource {
+  constructor(private readonly logger: ReupLogger) {}
 
   async loadModel(options: LoadExtensionModelOptions): Promise<ExtensionSessionModel> {
     const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
@@ -88,7 +88,7 @@ export class SwoopDataSource {
       .filter((project) => visibleProjectIds.has(project.id) || options.includeArchived)
       .map((project) => createExtensionProject(project, sessions))
 
-    this.logger.debug('loaded Swoop model', {
+    this.logger.debug('loaded Reup model', {
       projects: extensionProjects.length,
       sessions: sessions.length,
     })
@@ -112,7 +112,7 @@ export class SwoopDataSource {
       .filter((project) => visibleProjectIds.has(project.id) || context.includeArchived)
       .map((project) => createExtensionProject(project, sessions))
     const model = buildCockpitModel(extensionProjects, sessions, context)
-    this.logger.debug('loaded Swoop cockpit model', {
+    this.logger.debug('loaded Reup cockpit model', {
       attention: model.summary.attentionCount,
       projects: extensionProjects.length,
       sessions: sessions.length,

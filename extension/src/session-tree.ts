@@ -8,8 +8,9 @@ import {
   statusThemeIconId,
 } from './formatting.js'
 import type { CockpitProjectGroup, ExtensionCockpitModel } from './cockpit-model.js'
-import type { SwoopLogger } from './logger.js'
-import type { ExtensionProject, ExtensionSession, SwoopDataSource } from './swoop-data.js'
+import { getReupConfigurationValue } from './configuration.js'
+import type { ReupLogger } from './logger.js'
+import type { ExtensionProject, ExtensionSession, ReupDataSource } from './reup-data.js'
 
 type SectionId = 'workspace' | 'attention' | 'recent'
 
@@ -39,7 +40,7 @@ const SECTIONS: Record<SectionId, SectionTreeNode> = {
   workspace: { id: 'workspace', kind: 'section' },
 }
 
-export class SwoopSessionTreeProvider
+export class ReupSessionTreeProvider
   implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable
 {
   private readonly changedEmitter = new vscode.EventEmitter<TreeNode | undefined>()
@@ -58,8 +59,8 @@ export class SwoopSessionTreeProvider
   readonly onDidChangeModel = this.modelChangedEmitter.event
 
   constructor(
-    private readonly dataSource: SwoopDataSource,
-    private readonly logger: SwoopLogger
+    private readonly dataSource: ReupDataSource,
+    private readonly logger: ReupLogger
   ) {}
 
   attachTreeView(treeView: vscode.TreeView<TreeNode>): void {
@@ -75,9 +76,7 @@ export class SwoopSessionTreeProvider
     try {
       const model = await this.dataSource.loadCockpitModel({
         activeEditorPath: vscode.window.activeTextEditor?.document.uri.fsPath,
-        includeArchived: vscode.workspace
-          .getConfiguration('swoop')
-          .get<boolean>('includeArchived', false),
+        includeArchived: getReupConfigurationValue<boolean>('includeArchived', false),
         workspaceRoots: (vscode.workspace.workspaceFolders ?? []).map(
           (folder) => folder.uri.fsPath
         ),
@@ -97,15 +96,15 @@ export class SwoopSessionTreeProvider
         await Promise.all([
           vscode.commands.executeCommand(
             'setContext',
-            'swoop.hasSessions',
+            'reup.hasSessions',
             model.sessions.length > 0
           ),
           vscode.commands.executeCommand(
             'setContext',
-            'swoop.hasWorkspaceSessions',
+            'reup.hasWorkspaceSessions',
             model.summary.workspaceSessionCount > 0
           ),
-          vscode.commands.executeCommand('setContext', 'swoop.hasLoadError', false),
+          vscode.commands.executeCommand('setContext', 'reup.hasLoadError', false),
         ])
       }
       if (shouldNotifyView) {
@@ -125,9 +124,9 @@ export class SwoopSessionTreeProvider
       return changed
     } catch (error) {
       this.hadLoadError = true
-      await vscode.commands.executeCommand('setContext', 'swoop.hasLoadError', true)
+      await vscode.commands.executeCommand('setContext', 'reup.hasLoadError', true)
       this.logger.error('cockpit refresh failed', error)
-      void vscode.window.showErrorMessage('Swoop could not refresh sessions. See Output: Swoop.')
+      void vscode.window.showErrorMessage('Reup could not refresh sessions. See Output: Reup.')
       return false
     }
   }
@@ -305,8 +304,8 @@ function sectionTreeItem(
   }
   const definition = definitions[node.id]
   const item = new vscode.TreeItem(definition.label, definition.state)
-  item.id = `swoop.section.${node.id}`
-  item.contextValue = `swoopSection.${node.id}`
+  item.id = `reup.section.${node.id}`
+  item.contextValue = `reupSection.${node.id}`
   item.iconPath = new vscode.ThemeIcon(definition.icon)
   if (model) {
     const count =
@@ -324,8 +323,8 @@ function projectTreeItem(node: ProjectTreeNode): vscode.TreeItem {
   const { group } = node
   const project = group.project
   const item = new vscode.TreeItem(project.name, vscode.TreeItemCollapsibleState.Expanded)
-  item.id = `swoop.project.${project.id}`
-  item.contextValue = 'swoopProject'
+  item.id = `reup.project.${project.id}`
+  item.contextValue = 'reupProject'
   const visibleSessionCount = group.sessions.length
   item.description = `${visibleSessionCount} session${visibleSessionCount === 1 ? '' : 's'}`
   item.tooltip = [
@@ -342,13 +341,13 @@ function projectTreeItem(node: ProjectTreeNode): vscode.TreeItem {
 function sessionTreeItem(node: SessionTreeNode): vscode.TreeItem {
   const { session } = node
   const item = new vscode.TreeItem(session.title, vscode.TreeItemCollapsibleState.None)
-  item.id = `swoop.session.${session.projectId}.${session.id}`
+  item.id = `reup.session.${session.projectId}.${session.id}`
   item.command = {
     arguments: [node],
-    command: 'swoop.openSessionDetail',
+    command: 'reup.openSessionDetail',
     title: 'Open Session Inspector',
   }
-  item.contextValue = session.isActive ? 'swoopSessionActive' : 'swoopSession'
+  item.contextValue = session.isActive ? 'reupSessionActive' : 'reupSession'
   item.description = [session.branch ?? session.currentBranch, formatRelativeTime(session.updated)]
     .filter(Boolean)
     .join(' · ')

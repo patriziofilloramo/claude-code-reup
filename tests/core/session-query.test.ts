@@ -9,7 +9,7 @@ const document = {
   active: true,
   archived: false,
   branches: ['feat/search', 'main'],
-  project: ['project-id', 'P:\\Projects\\Swoop', '/Users/device/Projects/Swoop'],
+  project: ['project-id', 'P:\\Projects\\Reup', '/Users/device/Projects/Reup'],
   status: 'ok',
   tags: ['important', 'extension'],
   text: ['session-id', 'Improve session search'],
@@ -19,7 +19,7 @@ describe('session query', () => {
   it('matches text and shared metadata qualifiers', () => {
     for (const query of [
       'session search',
-      'project:swoop',
+      'project:reup',
       'branch:search',
       'tag:important',
       '#extension',

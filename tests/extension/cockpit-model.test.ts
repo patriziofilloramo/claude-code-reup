@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildCockpitModel } from '../../extension/src/cockpit-model.js'
-import type { ExtensionProject, ExtensionSession } from '../../extension/src/swoop-data.js'
+import type { ExtensionProject, ExtensionSession } from '../../extension/src/reup-data.js'
 
 describe('buildCockpitModel', () => {
   it('classifies multi-root sessions once and keeps attention elsewhere separate', () => {

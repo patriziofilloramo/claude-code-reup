@@ -8,7 +8,7 @@ import type { ThemeTokens } from '../theme-tokens.js'
  * sacrificing legibility. The web UI adds a subtle scan-line overlay via
  * scanlineOpacity; the TUI approximates the aesthetic through colour alone.
  *
- * Easter egg: holding the "swoop" logo element for ≥3 s triggers a Matrix rain
+ * Easter egg: holding the "reup" logo element for ≥3 s triggers a Matrix rain
  * animation (web only). The scan-line is always on; the rain is opt-in theatre.
  */
 export const terminalTheme: ThemeTokens = {

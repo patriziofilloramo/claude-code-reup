@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path'
 
-import type { ExtensionProject, ExtensionSession } from './swoop-data.js'
+import type { ExtensionProject, ExtensionSession } from './reup-data.js'
 
 export interface CockpitProjectGroup {
   project: ExtensionProject

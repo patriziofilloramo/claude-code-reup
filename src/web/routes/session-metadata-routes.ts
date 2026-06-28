@@ -17,10 +17,10 @@ import { log } from '../../utils/logger.js'
 import { guardedRoute } from './route-helper.js'
 
 /**
- * Registers Swoop sidecar mutation endpoints for session aliases and archive state.
+ * Registers Reup sidecar mutation endpoints for session aliases and archive state.
  *
  * All endpoints are guarded: they require a localhost origin because they write
- * to Swoop's `swoop.json` sidecar files on the server filesystem.
+ * to Reup's `reup.json` sidecar files on the server filesystem.
  */
 export function registerSessionMetadataRoutes(app: Hono): void {
   // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   // ---------------------------------------------------------------------------
   // DELETE /api/sessions/:projectId/:sessionId
-  // Permanently removes the .jsonl transcript and Swoop sidecar entry.
+  // Permanently removes the .jsonl transcript and Reup sidecar entry.
   // ---------------------------------------------------------------------------
 
   app.delete(

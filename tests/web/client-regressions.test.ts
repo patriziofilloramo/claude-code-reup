@@ -233,9 +233,16 @@ describe('web client session-row invariants', () => {
       stylesSource.indexOf('.ftr-item {')
     )
 
-    expect(footerStyles).toContain('height: var(--footer-height);')
+    expect(stylesSource).toContain('--footer-height: 28px;')
+    expect(stylesSource).toContain('--footer-pad-block: 5px;')
+    expect(stylesSource).toContain('--footer-optical-shift: 3px;')
+    expect(stylesSource).toContain('--footer-pad-top:')
+    expect(stylesSource).toContain('--footer-pad-bottom:')
+    expect(footerStyles).not.toContain('height: var(--footer-height);')
     expect(footerStyles).toContain('line-height: 1;')
-    expect(footerStyles).toContain('padding: 0 var(--space-md);')
+    expect(footerStyles).toContain(
+      'padding: var(--footer-pad-top) var(--space-md) var(--footer-pad-bottom);'
+    )
     expect(footerRootStyles).not.toContain('align-items: center;')
     expect(footerStyles).toContain('overflow: hidden;')
     expect(footerStyles).toContain('white-space: nowrap;')
@@ -243,6 +250,7 @@ describe('web client session-row invariants', () => {
     expect(footerStyles).toContain('font-size: 10.5px;')
     expect(footerStyles).toContain('gap: 12px;')
     expect(footerStyles).toContain('height: var(--footer-control-height);')
+    expect(footerStyles).not.toMatch(/\.ftr-item,\s*\.ftr-status/)
     expect(footerStyles).not.toContain('footer-baseline-shift')
     expect(footerStyles).not.toContain('translateY(')
     expect(footerStyles).toContain('height: 16px;')
@@ -714,15 +722,28 @@ describe('web client org layer invariants', () => {
 
     expect(projectRow).toContain('display: grid;')
     expect(projectRow).toContain('grid-template-columns:')
+    expect(projectRow).toContain('var(--project-row-gap)')
     expect(projectRow).toContain('var(--project-cloud-col)')
     expect(projectRow).toContain('var(--project-last-col)')
     expect(projectRow).toContain('var(--project-count-col)')
-    expect(projectRow).toContain('var(--project-action-col)')
+    expect(projectRow).not.toContain('var(--project-action-col)')
     expect(projectCloud).toContain('p-cloud--empty')
     expect(projectCloud).toContain('aria-hidden="true"')
     expect(cloudStyles).toContain('text-align: center;')
     expect(countStyles).toContain('font-variant-numeric: tabular-nums;')
     expect(countStyles).toContain('text-align: right;')
+    expect(
+      stylesSource.slice(
+        stylesSource.indexOf('.p-actions {'),
+        stylesSource.indexOf('.proj-row:hover .p-actions')
+      )
+    ).toContain('position: absolute;')
+    expect(
+      stylesSource.slice(
+        stylesSource.indexOf('.p-actions {'),
+        stylesSource.indexOf('.proj-row:hover .p-actions')
+      )
+    ).toContain('width: calc(var(--project-count-col) + var(--project-row-gap));')
   })
 
   it('uses compact project metadata columns on mobile so names keep priority', () => {
@@ -732,9 +753,12 @@ describe('web client org layer invariants', () => {
       narrowStyles.indexOf('.p-actions {')
     )
 
-    expect(narrowStyles).toContain('--project-cloud-col: 16px;')
-    expect(narrowStyles).toContain('--project-last-col: 34px;')
-    expect(narrowStyles).toContain('--project-count-col: 24px;')
+    expect(stylesSource).toContain('--project-cloud-col: 16px;')
+    expect(stylesSource).toContain('--project-last-col: 4ch;')
+    expect(stylesSource).toContain('--project-count-col: 3ch;')
+    expect(narrowStyles).toContain('--project-row-gap: var(--space-2xs);')
+    expect(narrowStyles).toContain('--project-row-pad-inline: var(--space-md);')
+    expect(narrowStyles).toContain('--project-row-pad-start: var(--space-md);')
     expect(mobileProjectRow).toContain('grid-template-columns:')
     expect(mobileProjectRow).toContain('minmax(0, 1fr)')
     expect(mobileProjectRow).not.toContain('var(--project-action-col)')

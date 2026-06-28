@@ -1,13 +1,14 @@
 import * as vscode from 'vscode'
 
-import type { SwoopLogger } from './logger.js'
-import type { ExtensionSession } from './swoop-data.js'
+import type { ReupLogger } from './logger.js'
+import type { ExtensionSession } from './reup-data.js'
 import { resumeSessionInTerminal, validateResumeSession } from './terminal.js'
+import { getMigratedGlobalState } from './configuration.js'
 
 const CLAUDE_EXTENSION_ID = 'anthropic.claude-code'
 const CLAUDE_RESUME_COMMAND = 'claude-vscode.editor.open'
 // Versioned so users of the earlier implicit-save behavior get one explicit choice.
-const PREFERENCE_KEY = 'swoop.resumeTarget.v2'
+const PREFERENCE_KEY = 'reup.resumeTarget.v2'
 
 export type ResumeTarget = 'claude-extension' | 'terminal'
 
@@ -28,13 +29,13 @@ interface ResumeTargetItem extends vscode.QuickPickItem {
 export class SessionResumeService {
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly logger: SwoopLogger
+    private readonly logger: ReupLogger
   ) {}
 
-  getCapabilities(): ResumeCapabilities {
+  async getCapabilities(): Promise<ResumeCapabilities> {
     const claudeExtensionAvailable =
       vscode.extensions.getExtension(CLAUDE_EXTENSION_ID) !== undefined
-    const storedValue = this.context.globalState.get<unknown>(PREFERENCE_KEY)
+    const storedValue = await getMigratedGlobalState<unknown>(this.context, PREFERENCE_KEY)
     const storedTarget = isResumeTarget(storedValue) ? storedValue : null
 
     return {
@@ -50,14 +51,14 @@ export class SessionResumeService {
     session: ExtensionSession,
     options: ResumeOptions = {}
   ): Promise<ResumeTarget | null> {
-    const capabilities = this.getCapabilities()
+    const capabilities = await this.getCapabilities()
     if (session.advice.code === 'already-active') {
       if (!capabilities.claudeExtensionAvailable) {
         throw new Error(
           'This session is already active. Install or enable the Claude Code extension to jump to its tab.'
         )
       }
-      await vscode.commands.executeCommand(CLAUDE_RESUME_COMMAND, session.id)
+      await openSessionInClaudeExtension(session)
       return 'claude-extension'
     }
     if (session.advice.code === 'path-missing') {
@@ -81,7 +82,7 @@ export class SessionResumeService {
 
     if (target === 'claude-extension' && capabilities.claudeExtensionAvailable) {
       try {
-        await vscode.commands.executeCommand(CLAUDE_RESUME_COMMAND, session.id)
+        await openSessionInClaudeExtension(session)
         if (remember) await this.setPreferredTarget(target)
         return target
       } catch (error) {
@@ -108,6 +109,15 @@ export function isResumeTarget(value: unknown): value is ResumeTarget {
   return value === 'claude-extension' || value === 'terminal'
 }
 
+async function openSessionInClaudeExtension(session: ExtensionSession): Promise<void> {
+  await vscode.commands.executeCommand(
+    CLAUDE_RESUME_COMMAND,
+    session.id,
+    undefined,
+    vscode.ViewColumn.Active
+  )
+}
+
 async function chooseResumeTarget(): Promise<{
   remember: boolean
   target: ResumeTarget
@@ -115,7 +125,7 @@ async function chooseResumeTarget(): Promise<{
   const picker = vscode.window.createQuickPick<ResumeTargetItem>()
   let remember = true
   const updateRememberButton = (): void => {
-    picker.title = `Swoop: Resume With — ${remember ? '✓ Remember my choice' : 'Remember my choice: off'}`
+    picker.title = `Reup: Resume With — ${remember ? '✓ Remember my choice' : 'Remember my choice: off'}`
     picker.buttons = [
       {
         iconPath: new vscode.ThemeIcon(remember ? 'check' : 'circle-large-outline'),

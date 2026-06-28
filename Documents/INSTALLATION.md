@@ -1,6 +1,6 @@
 # Installation And Distribution
 
-Swoop should feel native to install while remaining transparent about changes to
+Reup should feel native to install while remaining transparent about changes to
 the user's machine.
 
 ## Installation Principles
@@ -14,19 +14,19 @@ the user's machine.
 
 ## Windows Installer
 
-The Windows installer should install a self-contained Swoop executable or launcher
+The Windows installer should install a self-contained Reup executable or launcher
 and add it to the current user's `PATH`.
 
 It should offer a pre-selected option:
 
-> Enable PowerShell tab completion for `swoop resume` and `swoop handoff`
+> Enable PowerShell tab completion for `reup resume` and `reup handoff`
 
 When accepted, the installer should:
 
-1. Install a versioned completion script inside Swoop's installation directory.
+1. Install a versioned completion script inside Reup's installation directory.
 2. Detect Windows PowerShell 5.1 and PowerShell 7 profiles separately.
 3. Create missing profile files and parent directories when necessary.
-4. Back up an existing profile before its first Swoop modification.
+4. Back up an existing profile before its first Reup modification.
 5. Add one clearly marked managed block that sources the installed completion
    script.
 6. Avoid duplicate blocks on repair or upgrade.
@@ -35,9 +35,9 @@ When accepted, the installer should:
 Example managed profile block:
 
 ```powershell
-# >>> swoop completion >>>
-. "$env:LOCALAPPDATA\Programs\swoop\completion\swoop.ps1"
-# <<< swoop completion <<<
+# >>> reup completion >>>
+. "$env:LOCALAPPDATA\Programs\reup\completion\reup.ps1"
+# <<< reup completion <<<
 ```
 
 The installer must not weaken PowerShell execution policy. The installed
@@ -65,7 +65,7 @@ npm run build
 npm link
 ```
 
-Shell completion remains opt-in through `swoop completion <shell>`. A future
-managed `swoop config` interface may install or remove the same integration after
+Shell completion remains opt-in through `reup completion <shell>`. A future
+managed `reup config` interface may install or remove the same integration after
 showing the exact profile changes; it must follow the backup and ownership
 rules above.

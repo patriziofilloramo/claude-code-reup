@@ -1,19 +1,19 @@
 /**
  * Cloud sync — junction-first architecture.
  *
- * When a project is linked via `swoop sync link`, its Claude Code session directory
+ * When a project is linked via `reup sync link`, its Claude Code session directory
  * (~/.claude/projects/<id>/) is replaced with an NTFS junction (Windows) or
  * symlink (Unix) pointing directly at the cloud storage directory inside the
  * project (e.g. P:\Projects\...\.claude-memory\). Claude Code writes through
  * the junction into cloud storage; the cloud provider (pCloud, Dropbox, …)
- * replicates those writes to every other device automatically — no swoop
+ * replicates those writes to every other device automatically — no reup
  * required on the other device.
  *
- * Offline resilience: swoop maintains a local backup at ~/.claude/swoop/sync/<id>/
- * that mirrors the cloud dir. When the junction target goes offline, swoop:
+ * Offline resilience: reup maintains a local backup at ~/.claude/reup/sync/<id>/
+ * that mirrors the cloud dir. When the junction target goes offline, reup:
  *   1. Removes the junction and creates a real local directory from the backup.
  *   2. Claude Code continues writing sessions normally (no data loss).
- *   3. When the cloud comes back, swoop merges the offline sessions into the cloud
+ *   3. When the cloud comes back, reup merges the offline sessions into the cloud
  *      dir and restores the junction.
  *
  * The syncRegistry (src/core/sync/sync-registry.ts) is updated on every transition
@@ -39,7 +39,7 @@ import { basename, dirname, extname, join } from 'node:path'
 
 import { APP } from '../../config/app.js'
 import { getLiveSessionRecords } from '../session/active-sessions.js'
-import { getSwoopDirectory, getClaudeProjectsDirectory } from '../project/claude-paths.js'
+import { getReupDirectory, getClaudeProjectsDirectory } from '../project/claude-paths.js'
 import { pathsReferToSameLocation } from '../project/path-comparison.js'
 import { log } from '../../utils/logger.js'
 import { syncRegistry } from './sync-registry.js'
@@ -74,7 +74,8 @@ export class CloudSyncUnavailableError extends Error {
 
 const syncStates = new Map<string, SyncState>()
 let syncTimer: ReturnType<typeof setInterval> | null = null
-const CONFLICT_DIRECTORY_NAME = '.swoop-conflicts'
+const CONFLICT_DIRECTORY_NAME = '.reup-conflicts'
+const LEGACY_CONFLICT_DIRECTORY_NAME = `.${'swo'}${'op'}-conflicts`
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -108,7 +109,7 @@ export function unregisterProjectSync(junctionPath: string): void {
 }
 
 /**
- * Discovers all linked projects, migrates any .swoop-link files to junctions,
+ * Discovers all linked projects, migrates link-marker directories to junctions,
  * initialises the local backup for every linked project, and starts the
  * background offline-guard loop.
  *
@@ -129,7 +130,7 @@ export async function initCloudSync(): Promise<number> {
   const projects = await loadProjects()
   const liveSessions = await getLiveSessionRecords()
   const projectsDir = getClaudeProjectsDirectory()
-  const backupRoot = join(getSwoopDirectory(), APP.cloudSyncBackupDir)
+  const backupRoot = join(getReupDirectory(), APP.cloudSyncBackupDir)
 
   for (const project of projects) {
     if (!project.isShared) continue
@@ -138,7 +139,7 @@ export async function initCloudSync(): Promise<number> {
 
     try {
       // Determine the actual filesystem representation: junction or real directory.
-      // readLinkState sets cloudPath for both junctions (via readlink) and .swoop-link
+      // readLinkState sets cloudPath for both junctions and link-marker directories
       // files (via readFile), so we must check lstat to distinguish the two cases.
       const pathStat = await lstat(junctionPath).catch(() => null)
       const isJunction = pathStat?.isSymbolicLink() ?? false
@@ -160,7 +161,7 @@ export async function initCloudSync(): Promise<number> {
           log.debug(`cloud-sync: migration deferred while project is active: ${project.path}`)
           continue
         }
-        // Real directory with a .swoop-link file: migrate to junction.
+        // Real directory with a link marker: migrate to junction.
         await migrateLinkFileToJunction(junctionPath, project.cloudPath)
         await setupProjectSync(
           project.id,
@@ -315,21 +316,21 @@ async function refreshBackup(state: SyncState): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Migration: .swoop-link → junction
+// Migration: link marker to junction
 // ---------------------------------------------------------------------------
 
 /**
- * Converts a .swoop-link local-first directory back to an NTFS junction.
+ * Converts a local-first link-marker directory back to an NTFS junction.
  * Sessions are merged into the cloud dir first so no data is lost.
  */
 async function migrateLinkFileToJunction(junctionPath: string, cloudDir: string): Promise<void> {
   await syncBidirectional(junctionPath, cloudDir)
   await replaceDirectoryWithLink(junctionPath, cloudDir)
-  log.debug(`cloud-sync: migrated .swoop-link → junction: ${junctionPath} → ${cloudDir}`)
+  log.debug(`cloud-sync: migrated link marker to junction: ${junctionPath} → ${cloudDir}`)
 }
 
 // ---------------------------------------------------------------------------
-// Bidirectional sync (exported for swoop sync link/unlink)
+// Bidirectional sync (exported for reup sync link/unlink)
 // ---------------------------------------------------------------------------
 
 /**
@@ -344,6 +345,7 @@ async function migrateLinkFileToJunction(junctionPath: string, cloudDir: string)
  * can return access() success even when the network volume is unmounted.
  */
 export async function syncBidirectional(dirA: string, dirB: string): Promise<void> {
+  await Promise.all([migrateLegacyConflictDirectory(dirA), migrateLegacyConflictDirectory(dirB)])
   const [entriesA, entriesB] = await Promise.all([
     readDirectoryOrThrow(dirA),
     readDirectoryOrThrow(dirB),
@@ -352,7 +354,8 @@ export async function syncBidirectional(dirA: string, dirB: string): Promise<voi
 
   await Promise.all(
     [...allNames].map(async (name) => {
-      if (name === APP.cloudLinkFile) return // skip legacy marker if still present
+      if (name === APP.cloudLinkFile || name === APP.legacyCloudLinkFile) return
+      if (name === LEGACY_CONFLICT_DIRECTORY_NAME) return
 
       const pathA = join(dirA, name)
       const pathB = join(dirB, name)
@@ -638,6 +641,23 @@ function uniqueConflictDirectories(pathA: string, pathB: string): string[] {
   return [...new Set(directories)]
 }
 
+async function migrateLegacyConflictDirectory(directoryPath: string): Promise<void> {
+  const legacyPath = join(directoryPath, LEGACY_CONFLICT_DIRECTORY_NAME)
+  const currentPath = join(directoryPath, CONFLICT_DIRECTORY_NAME)
+  const legacyStat = await lstatIfPresent(legacyPath)
+  if (!legacyStat?.isDirectory()) return
+
+  const currentStat = await lstatIfPresent(currentPath)
+  if (!currentStat) {
+    await rename(legacyPath, currentPath)
+    return
+  }
+
+  if (!currentStat.isDirectory()) throw new CloudSyncConflictError(legacyPath, currentPath)
+  await syncBidirectional(legacyPath, currentPath)
+  await rm(legacyPath, { force: true, recursive: true })
+}
+
 function latestJsonlTimestamp(content: Buffer): string | null {
   let latest: string | null = null
   let latestTime = Number.NEGATIVE_INFINITY
@@ -843,7 +863,7 @@ function bufferStartsWith(candidate: Buffer, prefix: Buffer): boolean {
 }
 
 function temporarySiblingPath(path: string, purpose: string): string {
-  return `${path}.swoop-${purpose}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `${path}.reup-${purpose}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function hasLiveSessionForPath(

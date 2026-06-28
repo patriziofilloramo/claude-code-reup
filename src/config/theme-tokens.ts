@@ -1,5 +1,5 @@
 /**
- * Unified design-token schema for Swoop themes.
+ * Unified design-token schema for Reup themes.
  *
  * ThemeTokens covers every value used by either the TUI (Ink/React) or the
  * web UI (CSS custom properties). A theme is just a plain object that satisfies

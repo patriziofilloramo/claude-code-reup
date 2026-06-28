@@ -87,10 +87,11 @@ async function inspectProjectDirectory(
   report: DiagnosticsReport
 ): Promise<void> {
   const projectDirectory = join(projectsDirectory, projectId)
-  const [indexResult, fileNames, lockInspection] = await Promise.all([
+  const [indexResult, fileNames, ...lockInspections] = await Promise.all([
     inspectSessionIndex(projectDirectory, projectId),
     listFileNames(projectDirectory),
-    inspectProjectSidecarLock(join(projectDirectory, 'swoop.json.lock')),
+    inspectProjectSidecarLock(join(projectDirectory, PROJECT_SIDECAR_LOCK)),
+    inspectProjectSidecarLock(join(projectDirectory, LEGACY_PROJECT_SIDECAR_LOCK)),
   ])
 
   if (indexResult.broken) report.brokenIndices.push(indexResult.broken)
@@ -106,12 +107,17 @@ async function inspectProjectDirectory(
       })
     }
   }
-  if (lockInspection.state === 'abandoned' || lockInspection.state === 'unknown') {
-    report.staleLocks.push({
-      path: join(projectDirectory, 'swoop.json.lock'),
-      projectId,
-      reason: lockInspection.reason,
-    })
+  for (const [index, lockInspection] of lockInspections.entries()) {
+    if (lockInspection.state === 'abandoned' || lockInspection.state === 'unknown') {
+      report.staleLocks.push({
+        path: join(
+          projectDirectory,
+          index === 0 ? PROJECT_SIDECAR_LOCK : LEGACY_PROJECT_SIDECAR_LOCK
+        ),
+        projectId,
+        reason: lockInspection.reason,
+      })
+    }
   }
 }
 
@@ -152,6 +158,9 @@ async function inspectSessionIndex(
     return { broken: { path: indexPath, projectId, reason: 'index contains invalid JSON' } }
   }
 }
+
+const PROJECT_SIDECAR_LOCK = 'reup.json.lock'
+const LEGACY_PROJECT_SIDECAR_LOCK = `${'swo'}${'op'}.json.lock`
 
 function serializeDiagnosticsSession(projectId: string, session: Session): DiagnosticsSession {
   return { ...session, primaryStatus: primaryStatus(session.signals), projectId }

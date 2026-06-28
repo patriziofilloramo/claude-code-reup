@@ -24,7 +24,7 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
     }
     const { saveThemeName } = await import('../core/theme-preference.js')
     await saveThemeName(themeName as 'dark' | 'light' | 'terminal')
-    process.env['SWOOP_THEME'] = themeName
+    process.env[APP.themeEnvVar] = themeName
     args = [...args.slice(0, themeIdx), ...args.slice(themeIdx + 2)]
     if (args.length === 0) {
       console.log(`Theme set to: ${themeName}`)
@@ -108,7 +108,7 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
       if (commandArguments.length === 0) {
         const { openConfigInterface } = await import('./open-config-interface.js')
         await openConfigInterface({
-          commandName: 'swoop completion',
+          commandName: 'reup completion',
           initialTab: 'Integrations',
           nonInteractiveAlternative: 'pass `powershell`, `bash`, or `zsh` explicitly',
         })
@@ -167,7 +167,7 @@ async function runDoctor(commandArguments: string[]): Promise<void> {
 
 async function createHandoff(commandArguments: string[]): Promise<void> {
   if (commandArguments.length > 1) {
-    failCommand('usage: swoop handoff [session-id-or-prefix]')
+    failCommand('usage: reup handoff [session-id-or-prefix]')
     return
   }
   const { createHandoff } = await import('./handoff-command.js')
@@ -181,7 +181,7 @@ async function resumeSession(commandArguments: string[]): Promise<void> {
 
 function acceptsNoArguments(command: string, commandArguments: string[]): boolean {
   if (commandArguments.length === 0) return true
-  failCommand(`usage: swoop ${command}`)
+  failCommand(`usage: reup ${command}`)
   return false
 }
 

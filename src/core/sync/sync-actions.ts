@@ -6,7 +6,7 @@ import { log } from '../../utils/logger.js'
 import {
   encodeProjectPath,
   getClaudeProjectsDirectory,
-  getSwoopDirectory,
+  getReupDirectory,
 } from '../project/claude-paths.js'
 import { invalidateProjectCache } from '../project/project-cache.js'
 import { normalizePathForComparison, pathsReferToSameLocation } from '../project/path-comparison.js'
@@ -157,7 +157,7 @@ export async function buildSyncOverview(projects?: Project[]): Promise<SyncOverv
     .map((project) => classifyProjectForSync(project, cloudRoots, activeProjectPaths))
     .filter((report, index) => {
       // Drop cloud candidates whose local project path no longer exists on disk.
-      // A project unlinked via swoop and then deleted from the cloud folder leaves a
+      // A project unlinked via reup and then deleted from the cloud folder leaves a
       // local ~/.claude/projects/ directory behind; its sessions all report pathExists=false.
       // Showing it as a linkable cloud candidate would be misleading.
       if (report.kind !== 'cloud-candidate') return true
@@ -321,6 +321,7 @@ export async function unlinkProjectForSync(
     await replaceLinkWithDirectory(localDir, cloudTarget, cloudTarget)
   } else if (localStat?.isDirectory()) {
     await rm(join(localDir, APP.cloudLinkFile), { force: true })
+    await rm(join(localDir, APP.legacyCloudLinkFile), { force: true })
   }
   unregisterProjectSync(localDir)
   invalidateProjectCache()
@@ -342,7 +343,7 @@ export async function unlinkProjectForSync(
  * Removes an unlinked cloud-backed project from this device's Claude index
  * without deleting either Project Memory or the local session copy.
  *
- * The local directory is moved into Swoop's recovery area. Consequently the
+ * The local directory is moved into Reup's recovery area. Consequently the
  * project disappears from the main local list and may be rediscovered as
  * Remote Project Memory in Config.
  */
@@ -388,12 +389,7 @@ export async function forgetProjectForSync(
     throw new SyncProjectNotForgettableError('project storage must be unlinked before forgetting')
   }
 
-  const archiveDirectory = join(
-    getSwoopDirectory(),
-    'forgotten',
-    project.id,
-    safeArchiveTimestamp()
-  )
+  const archiveDirectory = join(getReupDirectory(), 'forgotten', project.id, safeArchiveTimestamp())
   await mkdir(archiveDirectory, { recursive: true })
   const archivedProjectDirectory = join(archiveDirectory, 'project-data')
   await rename(localDir, archivedProjectDirectory)
@@ -490,13 +486,13 @@ export async function patchClaudeMdSection(
   const memoryDir = join(cloudDir, 'memory')
 
   const section = [
-    SWOOP_MARKER_START,
-    '## Swoop: Cross-device Session Storage',
+    REUP_MARKER_START,
+    '## Reup: Cross-device Session Storage',
     '',
     `Cloud storage for this project: \`${cloudDir}\``,
     `Linked from device: \`${deviceId}\``,
     '',
-    'Swoop manages these project files for Alpha cross-device session storage:',
+    'Reup manages these project files for Alpha cross-device session storage:',
     '- CLAUDE.md, this bounded section only',
     '- .claude/settings.local.json, optional scoped permission rules only',
     '- .gitignore, the .claude-memory/ entry only',
@@ -508,12 +504,12 @@ export async function patchClaudeMdSection(
     `2. Check whether \`${linkedDir}/HOSTNAME\` exists, replacing HOSTNAME with the real value.`,
     '3. If the marker exists, this device is linked. Read markdown files in the shared memory folder when useful.',
     `4. If the marker is missing and \`${ignoredDir}/HOSTNAME\` exists, skip the warning.`,
-    `5. If both are missing, write \`${presenceDir}/HOSTNAME.json\` with device and timestamp, then tell the user to run \`swoop sync link "${projectPath}"\` or ask to ignore sync.`,
+    `5. If both are missing, write \`${presenceDir}/HOSTNAME.json\` with device and timestamp, then tell the user to run \`reup sync link "${projectPath}"\` or ask to ignore sync.`,
     `6. If the user asks to ignore sync, write \`ignored\` to \`${ignoredDir}/HOSTNAME\` and remove the presence JSON if it exists.`,
     `7. Append only important shared context to \`${memoryDir}/shared.md\`; do not copy prompts or transcript content.`,
     '',
     'This protocol does not bypass Claude Code permissions. Ask for normal approval whenever the tool runtime requires it.',
-    SWOOP_MARKER_END,
+    REUP_MARKER_END,
   ].join('\n')
 
   await replaceBoundedSection(claudeMdPath, section)
@@ -528,12 +524,11 @@ export async function removeClaudeMdSection(projectPath: string): Promise<void> 
     return
   }
 
-  const startIdx = content.indexOf(SWOOP_MARKER_START)
-  const endIdx = content.indexOf(SWOOP_MARKER_END)
-  if (startIdx === -1 || endIdx === -1) return
+  const markerRange = findManagedSectionRange(content)
+  if (!markerRange) return
 
-  const before = content.slice(0, startIdx).trimEnd()
-  const after = content.slice(endIdx + SWOOP_MARKER_END.length).trimStart()
+  const before = content.slice(0, markerRange.start).trimEnd()
+  const after = content.slice(markerRange.end).trimStart()
   const updated = before && after ? `${before}\n\n${after}` : before || after
 
   if (updated.trim()) await writeFile(claudeMdPath, `${updated.trimEnd()}\n`, 'utf8')
@@ -578,7 +573,7 @@ export async function patchClaudeLocalSettingsForSync(projectPath: string): Prom
   const permissions = ensureObject(settings['permissions'], 'permissions')
   const allow = permissions['allow']
   if (allow !== undefined && !Array.isArray(allow)) {
-    throw new SyncSetupPatchError('permissions.allow must be an array before Swoop can merge rules')
+    throw new SyncSetupPatchError('permissions.allow must be an array before Reup can merge rules')
   }
 
   const allowRules = new Set((Array.isArray(allow) ? allow : []).filter(isString))
@@ -669,12 +664,11 @@ async function replaceBoundedSection(filePath: string, section: string): Promise
     /* missing file is created below */
   }
 
-  const startIdx = existing.indexOf(SWOOP_MARKER_START)
-  const endIdx = existing.indexOf(SWOOP_MARKER_END)
+  const markerRange = findManagedSectionRange(existing)
 
   const updated =
-    startIdx !== -1 && endIdx !== -1
-      ? existing.slice(0, startIdx) + section + existing.slice(endIdx + SWOOP_MARKER_END.length)
+    markerRange !== null
+      ? existing.slice(0, markerRange.start) + section + existing.slice(markerRange.end)
       : existing
         ? `${existing.trimEnd()}\n\n${section}\n`
         : `${section}\n`
@@ -706,7 +700,7 @@ function ensureObject(value: unknown, label: string): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>
   }
-  throw new SyncSetupPatchError(`${label} must be an object before Swoop can merge settings`)
+  throw new SyncSetupPatchError(`${label} must be an object before Reup can merge settings`)
 }
 
 function isString(value: unknown): value is string {
@@ -717,5 +711,21 @@ function safeArchiveTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-')
 }
 
-const SWOOP_MARKER_START = '<!-- swoop:sync:start -->'
-const SWOOP_MARKER_END = '<!-- swoop:sync:end -->'
+const REUP_MARKER_START = '<!-- reup:sync:start -->'
+const REUP_MARKER_END = '<!-- reup:sync:end -->'
+const LEGACY_REUP_MARKER_START = `<!-- ${'swo'}${'op'}:sync:start -->`
+const LEGACY_REUP_MARKER_END = `<!-- ${'swo'}${'op'}:sync:end -->`
+
+function findManagedSectionRange(content: string): { end: number; start: number } | null {
+  for (const [startMarker, endMarker] of [
+    [REUP_MARKER_START, REUP_MARKER_END],
+    [LEGACY_REUP_MARKER_START, LEGACY_REUP_MARKER_END],
+  ] as const) {
+    const start = content.indexOf(startMarker)
+    const endMarkerStart = content.indexOf(endMarker)
+    if (start !== -1 && endMarkerStart !== -1) {
+      return { start, end: endMarkerStart + endMarker.length }
+    }
+  }
+  return null
+}

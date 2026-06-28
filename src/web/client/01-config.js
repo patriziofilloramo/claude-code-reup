@@ -18,7 +18,8 @@ const USAGE_POLL_INTERVAL_MS = 5000
 /** How often (ms) to refresh /api/live-activity when active sessions exist. */
 const LIVE_ACTIVITY_POLL_MS = 3000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
-const CONFIRM_RESUME_PREFERENCE = 'swoop:confirmResume'
+const CONFIRM_RESUME_PREFERENCE = 'reup:confirmResume'
+const LEGACY_CONFIRM_RESUME_PREFERENCE = 'swo' + 'op:confirmResume'
 
 const RISK_RANK = {
   interrupted: 0,
@@ -33,7 +34,31 @@ const CONTEXT_HIGH_THRESHOLD = 150_000
 /** Sessions updated within this many days appear in "recently touched". */
 const RECENT_WITHIN_DAYS = 7
 /** localStorage key prefix for rail collapse state. */
-const RAIL_STORAGE_KEY = 'swoop:rail:'
+const RAIL_STORAGE_KEY = 'reup:rail:'
+const LEGACY_RAIL_STORAGE_KEY = 'swo' + 'op:rail:'
+migrateLegacyLocalStorageKeys()
+
+function migrateLegacyLocalStorageKeys() {
+  try {
+    migrateLocalStorageKey(LEGACY_CONFIRM_RESUME_PREFERENCE, CONFIRM_RESUME_PREFERENCE)
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index)
+      if (!key || !key.startsWith(LEGACY_RAIL_STORAGE_KEY)) continue
+      const nextKey = RAIL_STORAGE_KEY + key.slice(LEGACY_RAIL_STORAGE_KEY.length)
+      migrateLocalStorageKey(key, nextKey)
+    }
+  } catch {
+    /* Storage can be unavailable in restrictive browser modes. */
+  }
+}
+
+function migrateLocalStorageKey(previousKey, nextKey) {
+  if (localStorage.getItem(nextKey) === null) {
+    const previousValue = localStorage.getItem(previousKey)
+    if (previousValue !== null) localStorage.setItem(nextKey, previousValue)
+  }
+  localStorage.removeItem(previousKey)
+}
 
 /**
  * Review bucket definitions in priority order.

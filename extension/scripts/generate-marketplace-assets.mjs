@@ -33,7 +33,7 @@ const frames = [
   ),
   dashboardSvg(
     'resume',
-    'Resume in Claude Code or the terminal — Swoop remembers your choice.',
+    'Resume in Claude Code or the terminal — Reup remembers your choice.',
     'branch:main',
     1,
     1020,
@@ -63,13 +63,13 @@ function dashboardSvg(stage, caption, query, selected, cursorX, cursorY) {
   const sessions =
     stage === 'home'
       ? [
-          ['Fix release blocker', 'swoop · 12m ago · 84 messages', 'main'],
-          ['Implement resume dashboard', 'swoop · 1h ago · 201 messages', 'feat/dashboard'],
+          ['Fix release blocker', 'reup · 12m ago · 84 messages', 'main'],
+          ['Implement resume dashboard', 'reup · 1h ago · 201 messages', 'feat/dashboard'],
           ['Review authentication migration', 'api · 3h ago · 56 messages', 'main'],
           ['Polish onboarding copy', 'web · yesterday · 31 messages', 'content'],
         ]
       : [
-          ['Fix release blocker', 'swoop · 12m ago · 84 messages', 'main'],
+          ['Fix release blocker', 'reup · 12m ago · 84 messages', 'main'],
           ['Review authentication migration', 'api · 3h ago · 56 messages', 'main'],
           ['Prepare launch checklist', 'web · yesterday · 42 messages', 'main'],
         ]
@@ -77,7 +77,7 @@ function dashboardSvg(stage, caption, query, selected, cursorX, cursorY) {
     .map(([title, meta, branch], index) => sessionRow(title, meta, branch, index, selected))
     .join('')
   const projects = [
-    ['swoop', '11', true],
+    ['reup', '11', true],
     ['api-platform', '6', false],
     ['launch-site', '4', false],
     ['mobile-client', '3', false],
@@ -99,7 +99,7 @@ function dashboardSvg(stage, caption, query, selected, cursorX, cursorY) {
       : `
       <text x="790" y="148" class="eyebrow">READY TO RESUME</text>
       <text x="790" y="185" class="h1">${detailTitle}</text>
-      <text x="790" y="212" class="muted">P:\\Projects\\swoop · main · 84 messages</text>
+      <text x="790" y="212" class="muted">P:\\Projects\\reup · main · 84 messages</text>
       <rect x="790" y="236" width="454" height="74" rx="10" fill="#20272b"/>
       <rect x="790" y="236" width="4" height="74" rx="2" fill="${brand.color}"/>
       <text x="810" y="263" class="strong">Safe to resume</text>
@@ -118,7 +118,7 @@ function dashboardSvg(stage, caption, query, selected, cursorX, cursorY) {
     <rect width="${WIDTH}" height="${HEIGHT}" fill="#101315"/>
     <rect width="${WIDTH}" height="96" fill="#15191c"/>
     ${brandMark(24, 20, 52)}
-    <text x="92" y="48" class="brand">Swoop</text>
+    <text x="92" y="48" class="brand">Reup</text>
     <text x="92" y="70" class="subtitle">claude code</text>
     <rect x="232" y="22" width="556" height="48" rx="12" fill="#111619" stroke="#334149"/>
     <text x="254" y="53" class="${query ? 'body' : 'muted'}">${query || 'Find sessions, projects, branches, tags…'}</text>
@@ -178,7 +178,7 @@ function cockpitSvg() {
     <text x="94" y="46" class="section">SESSIONS</text>
     <text x="94" y="94" class="strong">Current Workspace</text>
     <text x="512" y="94" class="muted">4</text>
-    <text x="110" y="140" class="body">swoop</text>
+    <text x="110" y="140" class="body">reup</text>
     <text x="470" y="140" class="muted">11 sessions</text>
     ${rows}
     <text x="94" y="432" class="strong">Needs Attention Elsewhere</text>
@@ -254,11 +254,9 @@ function resumeButtons(stage) {
 function brandMark(x, y, size) {
   return `
     <g transform="translate(${x} ${y}) scale(${size / 256})">
-      <defs><linearGradient id="brand-${x}-${y}" x1="30" y1="24" x2="228" y2="232">
-        <stop stop-color="${brand.color}"/><stop offset="1" stop-color="${brand.colorDeep}"/>
-      </linearGradient></defs>
-      <rect width="256" height="256" rx="52" fill="url(#brand-${x}-${y})"/>
-      <path fill="#fff" d="${brand.path}"/>
+      <rect width="256" height="256" rx="52" fill="${brand.colorDeep}"/>
+      <path fill="${brand.color}" d="${brand.path}"/>
+      <path fill="${brand.colorMid}" d="${brand.accentPath}"/>
     </g>`
 }
 

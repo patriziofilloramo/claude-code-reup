@@ -11,7 +11,7 @@ import { guardedRoute } from './route-helper.js'
  * starting a new one inside a given project directory.
  *
  * Both endpoints are guarded: they require a localhost origin and must not be
- * reachable from any page other than the Swoop web UI itself, because they
+ * reachable from any page other than the Reup web UI itself, because they
  * spawn real system processes.
  */
 export function registerResumeRoute(app: Hono): void {

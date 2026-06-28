@@ -1,6 +1,6 @@
 # Milestone 12 — Organization Layer: Plan
 
-**Goal:** Make Swoop genuinely useful when Claude Code work becomes many parallel threads.
+**Goal:** Make Reup genuinely useful when Claude Code work becomes many parallel threads.
 Triage in seconds, not minutes. Group by intent, not by filesystem path.
 
 ---
@@ -23,15 +23,15 @@ Triage in seconds, not minutes. Group by intent, not by filesystem path.
 
 ### Storage split — final
 
-| What                                           | Where                        | Rationale                                                 |
-| ---------------------------------------------- | ---------------------------- | --------------------------------------------------------- |
-| Session alias, archived, session tags          | `swoop.json` per-project     | Per-project locality; existing atomic write queue         |
-| Project tags                                   | `swoop.json` per-project     | Lives beside the sessions it qualifies                    |
-| Groups, stacks, tag palette, group assignments | `~/.claude/swoop/org.json`   | Global, cross-project; own write queue + advisory lock    |
-| Smart Views                                    | Computed — zero storage      | Derived from `SessionSignals` + `AutomaticSessionContext` |
-| User preferences (theme, cleanup)              | `~/.claude/swoop/prefs.json` | Scalar prefs only — never modified by org operations      |
+| What                                           | Where                       | Rationale                                                 |
+| ---------------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| Session alias, archived, session tags          | `reup.json` per-project     | Per-project locality; existing atomic write queue         |
+| Project tags                                   | `reup.json` per-project     | Lives beside the sessions it qualifies                    |
+| Groups, stacks, tag palette, group assignments | `~/.claude/reup/org.json`   | Global, cross-project; own write queue + advisory lock    |
+| Smart Views                                    | Computed — zero storage     | Derived from `SessionSignals` + `AutomaticSessionContext` |
+| User preferences (theme, cleanup)              | `~/.claude/reup/prefs.json` | Scalar prefs only — never modified by org operations      |
 
-`prefs.json` stays untouched. Org data lives in `org.json`. `swoop config set` can never
+`prefs.json` stays untouched. Org data lives in `org.json`. `reup config set` can never
 corrupt organization data.
 
 ### `org.json` specification
@@ -69,7 +69,7 @@ Empty state: `{ schemaVersion: 1, tagPalette: [], groups: [], stacks: [], projec
 
 **`withOrgLock(updater)`** — mirrors `enqueueProjectSidecarUpdate`: in-process promise queue
 serializing concurrent writes + advisory filesystem lock for multi-process safety. Atomic
-write via temp file + rename, same retry logic as `swoop.json`.
+write via temp file + rename, same retry logic as `reup.json`.
 
 **Schema version safety** — `readOrgData()` can degrade gracefully (unknown version → return
 empty state for UI display). Any write path (`withOrgLock`) must check `schemaVersion` first
@@ -81,10 +81,10 @@ if (data.schemaVersion !== 1) {
 }
 ```
 
-This prevents a downgraded Swoop instance from silently wiping a v2+ org file with an empty
+This prevents a downgraded Reup instance from silently wiping a v2+ org file with an empty
 state overwrite. UI reads degrade; writes never silently corrupt.
 
-**SSE invalidation** — the file watcher in `event-stream-route.ts` watches `~/.claude/swoop/`.
+**SSE invalidation** — the file watcher in `event-stream-route.ts` watches `~/.claude/reup/`.
 Changes to `org.json` emit a `change` SSE event, triggering a full `/api/projects` + `/api/org`
 refresh on connected clients.
 
@@ -92,13 +92,13 @@ refresh on connected clients.
 
 `org.json` is the export payload: groups, stacks, palette, and group assignments.
 
-Session tags and project tags stay in `swoop.json` per-project — they have per-project locality
-and would make `org.json` excessively noisy. Full tag export (sweeping all `swoop.json` sidecars)
+Session tags and project tags stay in `reup.json` per-project — they have per-project locality
+and would make `org.json` excessively noisy. Full tag export (sweeping all `reup.json` sidecars)
 is a Phase 4 feature. MVP export/import is simply: copy `org.json`.
 
 ### `tagPalette` is best-effort cache, not source of truth
 
-Applying a tag writes `swoop.json` (the tag itself). Updating the palette writes `org.json`
+Applying a tag writes `reup.json` (the tag itself). Updating the palette writes `org.json`
 (recency cache for the picker). These are two independent writes — there is no transaction.
 
 If the palette update fails, the tag on the session remains valid. The palette can be
@@ -142,7 +142,7 @@ export function filterProjectsByOrg(
 ): Project[]
 ```
 
-Web routes, `swoop list`, and TUI all call this same function. No HTTP between CLI/TUI and the org layer.
+Web routes, `reup list`, and TUI all call this same function. No HTTP between CLI/TUI and the org layer.
 
 ### Validation rules
 
@@ -164,7 +164,7 @@ Applied at route layer before any core function is called:
 
 ### Focus mode
 
-Transient — stored in `localStorage` (`swoop:focus`). Clearing focus is client-only, no
+Transient — stored in `localStorage` (`reup:focus`). Clearing focus is client-only, no
 server call. The focus bar shows the active filter. Search is scoped to the current focus;
 no silent global fallback. An explicit "Clear focus" or Escape exits focus and returns to
 the global view.
@@ -172,7 +172,7 @@ the global view.
 ### Server-side filters
 
 `/api/projects` adds `?group=:id`, `?stack=:id`, and `?tag=:tag` — these only require reading
-`org.json` and `swoop.json` sidecars, no transcript scan.
+`org.json` and `reup.json` sidecars, no transcript scan.
 
 `?todo` and `?planned` are **not added** in the MVP: they require transcript preview data that
 is not stored in the sidecar. CLI commands `--todo` and `--planned` are Phase 3+ and will do
@@ -208,14 +208,14 @@ Rules:
 - Counts are cross-project totals (for the number label), but the view remains project-scoped
 - Empty Inbox = "Nothing needs attention" message; clean state is a feature
 
-This is Swoop's standout differentiator: one view that tells you what matters without requiring
+This is Reup's standout differentiator: one view that tells you what matters without requiring
 the user to have set up any tags, groups, or stacks first.
 
 ---
 
 ## Data schema
 
-### `swoop.json` additions (per-project)
+### `reup.json` additions (per-project)
 
 ```typescript
 interface SessionSidecarMetadata {
@@ -235,13 +235,13 @@ interface ProjectSidecarMetadata {
 ```typescript
 interface Session {
   // ...existing fields
-  tags?: string[] // NEW: merged from swoop.json
+  tags?: string[] // NEW: merged from reup.json
 }
 
 interface Project {
   // ...existing fields
   group?: string // NEW: groupId from org.json projectGroupAssignments
-  projectTags?: string[] // NEW: from swoop.json
+  projectTags?: string[] // NEW: from reup.json
 }
 ```
 
@@ -321,10 +321,10 @@ No visual overhaul — the UI looks the same but is ready underneath.
 - [x] `readOrgData()` on unknown `schemaVersion`: log warning, return empty for UI reads only
 - [x] `withOrgLock(updater)`: if `schemaVersion` unknown, throw before any mutation (never overwrite)
 - [x] `src/core/org/org-filters.ts` — `filterProjectsByOrg(projects, orgData, filter)` pure function;
-      used by web routes, `swoop list`, and TUI — single source of truth, no HTTP
-- [x] File watcher in `event-stream-route.ts` extended to watch `org.json` alongside `swoop.json`
+      used by web routes, `reup list`, and TUI — single source of truth, no HTTP
+- [x] File watcher in `event-stream-route.ts` extended to watch `org.json` alongside `reup.json`
 
-#### 1b — `swoop.json` extensions ✅
+#### 1b — `reup.json` extensions ✅
 
 - [x] Extend `SessionSidecarMetadata` with `tags?: string[]`
 - [x] Extend `ProjectSidecarMetadata` with `projectTags?: string[]`
@@ -540,19 +540,19 @@ grouping, stack assignment) stays in the web UI for now.
 
 #### 3b — CLI
 
-- [x] `swoop list --group <name>` — projects in group, via `readOrgData()` + `filterProjectsByOrg()`
-- [x] `swoop list --stack <name>` — items in stack, same core path
-- [x] `swoop list --tag <name>` — sessions with matching tag, reads `swoop.json` sidecars directly
-- [x] `swoop list --json` — `tags`, `group`, `projectTags` included in output
+- [x] `reup list --group <name>` — projects in group, via `readOrgData()` + `filterProjectsByOrg()`
+- [x] `reup list --stack <name>` — items in stack, same core path
+- [x] `reup list --tag <name>` — sessions with matching tag, reads `reup.json` sidecars directly
+- [x] `reup list --json` — `tags`, `group`, `projectTags` included in output
 - [x] Help text and completion scripts updated
 - [ ] `--todo` and `--planned` deferred (require transcript scan; out of MVP scope)
 - [x] No HTTP calls to web server; all data from core (`readOrgData`, `readProjectSidecar`)
 
 #### 3c — Tests
 
-- [x] Integration: `swoop list --tag bug` returns only tagged sessions
-- [x] Integration: `swoop list --group work` returns only assigned projects
-- [x] Integration: `swoop list --stack launch` returns stack members
+- [x] Integration: `reup list --tag bug` returns only tagged sessions
+- [x] Integration: `reup list --group work` returns only assigned projects
+- [x] Integration: `reup list --stack launch` returns stack members
 - [x] Unit: shared Smart View priority, archived exclusion, filtering, and cycling
 - [x] Regression: TUI group/focus/provenance surfaces and CLI help/completion flags
 
@@ -562,8 +562,8 @@ grouping, stack assignment) stays in the web UI for now.
 
 - [ ] `--todo pending` and `--planned` CLI filters (transcript scan)
 - [ ] Auto-suggest tags (branch prefix, folder name, status heuristics — opt-in in config)
-- [ ] **Full org export**: `swoop org export` → `org.json` + sweeps all `swoop.json` sidecars for tags
-- [ ] **Org import**: `swoop org import` with merge strategy (skip / overwrite / ask)
+- [ ] **Full org export**: `reup org export` → `org.json` + sweeps all `reup.json` sidecars for tags
+- [ ] **Org import**: `reup org import` with merge strategy (skip / overwrite / ask)
 - [ ] Quick clean sweep — bulk archive from group/stack, skips active sessions
 - [ ] Drag-to-stack (after g picker is proven sufficient)
 - [ ] TODO-aware and plan-aware triage (requires `hasTodos`/`hasPlans` persisted in sidecar after analysis)
@@ -574,7 +574,7 @@ grouping, stack assignment) stays in the web UI for now.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  swoop  [search________________________]  usage bar  [diagnostics] [theme]  │
+│  reup  [search________________________]  usage bar  [diagnostics] [theme]  │
 │──────────────────────────────────────────────────────────────────────────── │
 │ Focus: Launch week  ×    showing 4 of 14 projects                          │
 │──────────────────────────────────────────────────────────────────────────── │
@@ -614,7 +614,7 @@ grouping, stack assignment) stays in the web UI for now.
 
 ```
 1a org.json infrastructure (withOrgLock, atomic write, SSE watcher, org-filters.ts)
-  └→ 1b swoop.json tag extensions
+  └→ 1b reup.json tag extensions
        └→ 1c Session/Project model
             └→ 1d Org CRUD functions
                  └→ 1e Routes

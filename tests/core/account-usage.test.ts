@@ -11,7 +11,7 @@ describe('account usage', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-account-usage-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'reup-account-usage-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
     await writeCredentials('secret-access-token')
@@ -56,7 +56,7 @@ describe('account usage', () => {
       authorization: 'Bearer secret-access-token',
     })
     expect(
-      await readFile(join(temporaryClaudeDirectory, 'swoop', 'account-usage.json'), 'utf8')
+      await readFile(join(temporaryClaudeDirectory, 'reup', 'account-usage.json'), 'utf8')
     ).not.toContain('secret-access-token')
   })
 
@@ -95,9 +95,9 @@ describe('account usage', () => {
   })
 
   it('ignores a corrupt cache instead of exposing malformed limits', async () => {
-    await mkdir(join(temporaryClaudeDirectory, 'swoop'), { recursive: true })
+    await mkdir(join(temporaryClaudeDirectory, 'reup'), { recursive: true })
     await writeFile(
-      join(temporaryClaudeDirectory, 'swoop', 'account-usage.json'),
+      join(temporaryClaudeDirectory, 'reup', 'account-usage.json'),
       JSON.stringify({
         fetchedAt: new Date().toISOString(),
         rateLimits: { fiveHour: 'invalid' },

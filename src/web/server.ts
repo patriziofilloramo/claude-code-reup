@@ -57,17 +57,17 @@ export async function startWeb(commandArguments: string[]): Promise<void> {
   const { initCloudSync } = await import('../core/sync/cloud-sync.js')
   await initCloudSync()
   const requestedPort = parseRequestedPort(commandArguments)
-  const configuredPort = process.env[APP.portEnvVar]
+  const configuredPort = process.env[APP.portEnvVar] ?? process.env[APP.legacyPortEnvVar]
   const preferredPort = configuredPort ? parseInt(configuredPort, 10) : requestedPort
   const port = await findAvailablePort(preferredPort)
   const url = `http://localhost:${port}`
 
   serve({ fetch: buildApp().fetch, hostname: '127.0.0.1', port })
 
-  log.info(`swoop web  →  ${url}`)
+  log.info(`reup web  →  ${url}`)
   log.info('Press Ctrl+C to stop.')
 
-  if (!process.env[APP.noOpenEnvVar]) openBrowser(url)
+  if (!(process.env[APP.noOpenEnvVar] ?? process.env[APP.legacyNoOpenEnvVar])) openBrowser(url)
 }
 
 function parseRequestedPort(commandArguments: string[]): number {

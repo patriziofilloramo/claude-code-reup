@@ -25,11 +25,12 @@ import {
   renderInspectorHtml,
   type InspectorMessage,
 } from './inspector-html.js'
-import type { SwoopLogger } from './logger.js'
+import { getReupConfigurationValue } from './configuration.js'
+import type { ReupLogger } from './logger.js'
 import type { SessionResumeService } from './resume-target.js'
-import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
+import type { ExtensionSession, ReupDataSource } from './reup-data.js'
 
-const INSPECTOR_VIEW_ID = 'swoop.inspector'
+const INSPECTOR_VIEW_ID = 'reup.inspector'
 const ADD_TAG_BUTTON: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('add'),
   tooltip: 'Add a new tag',
@@ -45,7 +46,7 @@ interface SessionReference {
   sessionId: string
 }
 
-export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+export class ReupInspectorProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private readonly viewDisposables: vscode.Disposable[] = []
   private readonly previewCache = new Map<string, PreviewCacheEntry>()
   private selectedReference: SessionReference | null = null
@@ -56,8 +57,8 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
   private view: vscode.WebviewView | null = null
 
   constructor(
-    private readonly dataSource: SwoopDataSource,
-    private readonly logger: SwoopLogger,
+    private readonly dataSource: ReupDataSource,
+    private readonly logger: ReupLogger,
     private readonly onDidMutate: () => Promise<void>,
     private readonly resumeService: SessionResumeService
   ) {}
@@ -115,7 +116,7 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
     const alias = await vscode.window.showInputBox({
       ignoreFocusOut: true,
       placeHolder: 'Leave empty to restore the transcript title',
-      prompt: 'Set a local Swoop alias for this session',
+      prompt: 'Set a local Reup alias for this session',
       value: current.title,
       validateInput: (value) => {
         try {
@@ -183,7 +184,7 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
           break
         case 'copyHandoff':
           await copySessionHandoff(current, this.logger)
-          void vscode.window.showInformationMessage('Swoop handoff packet copied.')
+          void vscode.window.showInformationMessage('Reup handoff packet copied.')
           break
         case 'editAlias':
           await this.editAlias(current)
@@ -214,7 +215,7 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
     candidate: ExtensionSession | null = this.selectedSession
   ): Promise<ExtensionSession | null> {
     if (!candidate) {
-      void vscode.window.showInformationMessage('Select a Swoop session first.')
+      void vscode.window.showInformationMessage('Select a Reup session first.')
       return null
     }
     const current = await this.dataSource.resolveSession(candidate.projectId, candidate.id)
@@ -283,27 +284,25 @@ export class SwoopInspectorProvider implements vscode.WebviewViewProvider, vscod
 }
 
 export async function openSessionDetail(
-  provider: SwoopInspectorProvider,
+  provider: ReupInspectorProvider,
   session: ExtensionSession
 ): Promise<void> {
   await provider.showSession(session)
 }
 
 export async function showSessionDetailPicker(
-  provider: SwoopInspectorProvider,
-  dataSource: SwoopDataSource,
-  logger: SwoopLogger
+  provider: ReupInspectorProvider,
+  dataSource: ReupDataSource,
+  logger: ReupLogger
 ): Promise<void> {
   try {
     const model = await dataSource.loadModel({
-      includeArchived: vscode.workspace
-        .getConfiguration('swoop')
-        .get<boolean>('includeArchived', false),
+      includeArchived: getReupConfigurationValue<boolean>('includeArchived', false),
       includePreviewHints: false,
       workspacePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     })
     if (model.sessions.length === 0) {
-      void vscode.window.showInformationMessage('No Swoop sessions found.')
+      void vscode.window.showInformationMessage('No Reup sessions found.')
       return
     }
     const selected = await vscode.window.showQuickPick(
@@ -316,15 +315,15 @@ export async function showSessionDetailPicker(
       {
         matchOnDescription: true,
         matchOnDetail: true,
-        placeHolder: 'Open a Swoop Session Inspector',
-        title: 'Swoop: Open Session Inspector',
+        placeHolder: 'Open a Reup Session Inspector',
+        title: 'Reup: Open Session Inspector',
       }
     )
     if (selected) await provider.showSession(selected.session)
   } catch (error) {
     logger.error('session inspector picker failed', error)
     void vscode.window.showErrorMessage(
-      error instanceof Error ? error.message : 'Could not open Swoop Session Inspector.'
+      error instanceof Error ? error.message : 'Could not open Reup Session Inspector.'
     )
   }
 }
@@ -336,7 +335,7 @@ async function pickTags(currentTags: string[]): Promise<string[] | null> {
   quickPick.ignoreFocusOut = true
   quickPick.matchOnDescription = true
   quickPick.placeholder = 'Select up to 8 tags'
-  quickPick.title = 'Swoop: Edit Session Tags'
+  quickPick.title = 'Reup: Edit Session Tags'
   quickPick.buttons = [ADD_TAG_BUTTON]
 
   let values = [...new Set([...currentTags, ...orgData.tagPalette])].sort()

@@ -10,7 +10,7 @@ describe('CLI entrypoint', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-cli-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'reup-cli-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
     process.exitCode = undefined
@@ -44,7 +44,7 @@ describe('CLI entrypoint', () => {
 
     await runCli(['not-a-command'])
 
-    expect(error).toHaveBeenCalledWith('swoop: unknown command: not-a-command')
+    expect(error).toHaveBeenCalledWith('reup: unknown command: not-a-command')
     expect(process.exitCode).toBe(1)
   })
 
@@ -52,11 +52,11 @@ describe('CLI entrypoint', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await runCli(['inbox', 'unexpected'])
-    expect(error).toHaveBeenLastCalledWith('swoop: usage: swoop inbox')
+    expect(error).toHaveBeenLastCalledWith('reup: usage: reup inbox')
 
     process.exitCode = undefined
     await runCli(['resume', 'not-a-session'])
-    expect(error).toHaveBeenLastCalledWith('swoop: invalid or unknown session: not-a-session')
+    expect(error).toHaveBeenLastCalledWith('reup: invalid or unknown session: not-a-session')
     expect(process.exitCode).toBe(1)
   })
 
@@ -66,7 +66,7 @@ describe('CLI entrypoint', () => {
     await runCli(['resume'])
 
     expect(error).toHaveBeenCalledWith(
-      'swoop: a session selector is required outside an interactive terminal'
+      'reup: a session selector is required outside an interactive terminal'
     )
     expect(process.exitCode).toBe(1)
   })

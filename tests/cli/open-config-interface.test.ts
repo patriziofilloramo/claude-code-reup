@@ -30,7 +30,7 @@ describe('openConfigInterface', () => {
   it('opens the requested tab after releasing terminal input', async () => {
     setTTYState(true, true)
 
-    await openConfigInterface({ commandName: 'swoop sync', initialTab: 'Features' })
+    await openConfigInterface({ commandName: 'reup sync', initialTab: 'Features' })
 
     expect(releaseTerminalInput).toHaveBeenCalledOnce()
     expect(runConfigApp).toHaveBeenCalledWith({ initialTab: 'Features' })
@@ -42,13 +42,13 @@ describe('openConfigInterface', () => {
     const writeError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await openConfigInterface({
-      commandName: 'swoop config',
-      nonInteractiveAlternative: 'use `swoop config get` in scripts',
+      commandName: 'reup config',
+      nonInteractiveAlternative: 'use `reup config get` in scripts',
     })
 
     expect(process.exitCode).toBe(1)
     expect(writeError).toHaveBeenCalledWith(
-      'swoop: swoop config requires an interactive terminal; use `swoop config get` in scripts'
+      'reup: reup config requires an interactive terminal; use `reup config get` in scripts'
     )
     expect(releaseTerminalInput).not.toHaveBeenCalled()
     expect(runConfigApp).not.toHaveBeenCalled()

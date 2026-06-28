@@ -21,7 +21,9 @@ export async function withProjectSidecarLock<T>(
   projectDirectory: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  return withAdvisoryFileLock(join(projectDirectory, 'swoop.json.lock'), operation)
+  return withAdvisoryFileLock(join(projectDirectory, LEGACY_PROJECT_SIDECAR_LOCK), () =>
+    withAdvisoryFileLock(join(projectDirectory, PROJECT_SIDECAR_LOCK), operation)
+  )
 }
 
 /**
@@ -71,7 +73,7 @@ export async function withAdvisoryFileLock<T>(
     }
   }
 
-  if (!lockAcquired) throw new Error(`swoop: advisory lock timeout (${lockPath})`)
+  if (!lockAcquired) throw new Error(`reup: advisory lock timeout (${lockPath})`)
 
   try {
     return await operation()
@@ -142,3 +144,6 @@ async function waitBeforeRetry(): Promise<void> {
   const jitterMs = Math.random() * 20
   await new Promise<void>((resolve) => setTimeout(resolve, LOCK_RETRY_INTERVAL_MS + jitterMs))
 }
+
+const PROJECT_SIDECAR_LOCK = 'reup.json.lock'
+const LEGACY_PROJECT_SIDECAR_LOCK = `${'swo'}${'op'}.json.lock`

@@ -35,7 +35,7 @@ const SESSION_TRANSCRIPT_FILE_PATTERN =
 
 /**
  * Lock-only sessions are valid during Claude Code's startup/first-flush window.
- * After that, a missing transcript is not a resumable Swoop session; the live
+ * After that, a missing transcript is not a resumable Reup session; the live
  * panel may still surface the process, but project/session discovery should not.
  */
 const LOCK_FILE_GRACE_PERIOD_MS = 2 * 60 * 1000
@@ -207,12 +207,12 @@ function resolveLinkedProjectPath(
  *      real local directory.
  *   2. NTFS junction / symlink detection via lstat: pre-startup state and
  *      fresh installs.
- *   3. Legacy .swoop-link file: projects not yet migrated to junction model.
+ *   3. Legacy link file: projects not yet migrated to junction model.
  */
 async function readLinkState(
   projectDirectory: string
 ): Promise<{ isShared: boolean; cloudPath?: string; cloudOffline?: boolean }> {
-  // 1. Registry — always wins when populated (swoop is running)
+  // 1. Registry — always wins when populated (reup is running)
   const regEntry = syncRegistry.get(projectDirectory)
   if (regEntry) {
     return {
@@ -234,12 +234,14 @@ async function readLinkState(
     /* not a junction */
   }
 
-  // 3. Legacy .swoop-link (will be migrated to junction on next initCloudSync)
-  try {
-    const cloudPath = (await readFile(join(projectDirectory, APP.cloudLinkFile), 'utf8')).trim()
-    if (cloudPath) return { isShared: true, cloudPath }
-  } catch {
-    /* no marker file */
+  // 3. Link marker file (new name first, legacy name for migration).
+  for (const markerFileName of [APP.cloudLinkFile, APP.legacyCloudLinkFile]) {
+    try {
+      const cloudPath = (await readFile(join(projectDirectory, markerFileName), 'utf8')).trim()
+      if (cloudPath) return { isShared: true, cloudPath }
+    } catch {
+      /* no marker file */
+    }
   }
 
   return { isShared: false }

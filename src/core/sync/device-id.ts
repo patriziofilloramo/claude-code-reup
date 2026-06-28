@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 
-import { getSwoopDirectory } from '../project/claude-paths.js'
+import { getReupDirectory } from '../project/claude-paths.js'
 
 const DEVICE_ID_FILENAME = 'device-id'
 
@@ -11,17 +11,17 @@ const DEVICE_ID_FILENAME = 'device-id'
  * first use. Uses the OS hostname — human-readable, stable across reboots,
  * and unique enough for same-user multi-device setups.
  *
- * Stored at ~/.claude/swoop/device-id so it survives swoop reinstalls and is
+ * Stored at ~/.claude/reup/device-id so it survives reup reinstalls and is
  * accessible to the Claude Code agent via its Read tool (enabling the
- * CLAUDE.md "are you linked?" check to work without any swoop process running).
+ * CLAUDE.md "are you linked?" check to work without any reup process running).
  */
 export async function getOrCreateDeviceId(): Promise<string> {
-  const idPath = join(getSwoopDirectory(), DEVICE_ID_FILENAME)
+  const idPath = join(getReupDirectory(), DEVICE_ID_FILENAME)
   try {
     return (await readFile(idPath, 'utf8')).trim()
   } catch {
     const id = hostname()
-    await mkdir(getSwoopDirectory(), { recursive: true })
+    await mkdir(getReupDirectory(), { recursive: true })
     await writeFile(idPath, id, 'utf8')
     return id
   }

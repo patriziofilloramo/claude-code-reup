@@ -7,7 +7,7 @@ The system uses filesystem redirection (Junctions/Symlinks).
 - **Source:** `~/.claude/projects/<project-id>`
 - **Target:** `<project-root>/.claude-memory/`
 
-A project is "Linked" if a `.swoop-link` marker exists in the Source directory, pointing to the Target.
+A project is "Linked" if a `.reup-link` marker exists in the Source directory, pointing to the Target.
 
 ## 2. Issues & Fixes
 
@@ -77,5 +77,5 @@ function getProjectSyncStatus(project) {
 This feature is high-value for developers moving between a workstation and a laptop. By moving the "memory" into the project root:
 
 1. **Context follows the code:** Git branch and history stay aligned.
-2. **Zero-Config on Device B:** Simply running `swoop sync link` on a new device connects it to the existing "Project Memory" without manual ID matching.
+2. **Zero-Config on Device B:** Simply running `reup sync link` on a new device connects it to the existing "Project Memory" without manual ID matching.
 3. **Local-First:** No reliance on third-party APIs for synchronization; the user's existing Cloud Drive (Dropbox/OneDrive/pCloud) handles the transport safely.

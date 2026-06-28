@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const extensionRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(extensionRoot, 'package.json'), 'utf8'))
-const outputPath = join(extensionRoot, 'dist', `swoop-vscode-${manifest.version}.vsix`)
+const outputPath = join(extensionRoot, 'dist', `reup-vscode-${manifest.version}.vsix`)
 const command = process.platform === 'win32' ? 'vsce.cmd' : 'vsce'
 
 const result = spawnSync(command, ['package', '--out', outputPath], {

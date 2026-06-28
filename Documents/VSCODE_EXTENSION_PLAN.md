@@ -13,13 +13,13 @@ full-screen dashboard is an editor-native, resume-focused surface backed by the
 same core functions as TUI and Web, not a copy of the browser administration
 UI.
 
-This document defines the first VS Code extension slice for Swoop. It is written
+This document defines the first VS Code extension slice for Reup. It is written
 for an implementation agent: decisions are explicit, risky ideas are deferred,
 and every phase has a verification target.
 
 ## Executive Summary
 
-Swoop should enter VS Code only if it does something the editor makes uniquely
+Reup should enter VS Code only if it does something the editor makes uniquely
 better. The extension must not be a smaller copy of the web dashboard and must
 not compete with Claude Code's native picker on "global search exists". The
 winning workflow is:
@@ -29,8 +29,8 @@ winning workflow is:
 
 The first extension milestone is therefore an **Editor Resume Proof**:
 
-1. `Swoop: Resume Here` ranks sessions for the current workspace first.
-2. `Swoop: Resume Session` provides a global Quick Pick with health, branch,
+1. `Reup: Resume Here` ranks sessions for the current workspace first.
+2. `Reup: Resume Session` provides a global Quick Pick with health, branch,
    project, active state, TODO/plan hints, and last activity.
 3. A lightweight Activity Bar tree makes active/attention sessions visible
    without opening the web UI.
@@ -49,7 +49,7 @@ The previous plan had good instincts, but it was too broad for Phase 1.
   `../src/core` is probably the right direction, but it still needs a bundle,
   startup, and extension-host proof before it becomes a rule.
 - **"No backend logic required" was inaccurate.** The extension should not
-  create a second parser, but it does need an adapter layer that turns Swoop's
+  create a second parser, but it does need an adapter layer that turns Reup's
   core model into VS Code-friendly view models and commands.
 - **Status bar usage was too early.** Usage has source/freshness complexity.
   Showing stale or partial account limits inside VS Code would damage trust.
@@ -63,7 +63,7 @@ The previous plan had good instincts, but it was too broad for Phase 1.
 
 ### What the extension should beat
 
-Claude Code's native resume flow can search sessions globally. Swoop's VS Code
+Claude Code's native resume flow can search sessions globally. Reup's VS Code
 extension should win when the user needs context before resuming:
 
 - Which sessions belong to the workspace I already have open?
@@ -76,17 +76,17 @@ extension should win when the user needs context before resuming:
 - Not a transcript viewer.
 - Not a second web dashboard.
 - Not a project-management tool.
-- Not a replacement for the Swoop TUI.
-- Not a wrapper that shells out to `swoop list` for every interaction.
+- Not a replacement for the Reup TUI.
+- Not a wrapper that shells out to `reup list` for every interaction.
 
 ## Non-Negotiable Constraints
 
-- Local-first: no Swoop cloud, no telemetry, no account, no API key for core
+- Local-first: no Reup cloud, no telemetry, no account, no API key for core
   features.
 - Read-only toward Claude-owned transcripts.
-- No dependency on an installed `swoop` binary for core extension behavior.
+- No dependency on an installed `reup` binary for core extension behavior.
 - No web server required for the extension.
-- VS Code API usage stays at the edge; Swoop core remains editor-agnostic.
+- VS Code API usage stays at the edge; Reup core remains editor-agnostic.
 - Mutations require explicit confirmation and are not part of the first proof.
 - Windows, macOS, and Linux must remain first-class.
 
@@ -97,14 +97,14 @@ extension should win when the user needs context before resuming:
 ```text
 claude-sessions-manager/
   src/
-    core/                         existing Swoop domain logic
+    core/                         existing Reup domain logic
   extension/
     package.json                  VS Code extension manifest
     tsconfig.json                 extension build config
     esbuild.mjs                   bundles extension host entry
     src/
       extension.ts                activation and command registration
-      swoop-data.ts               adapter from Swoop core to extension DTOs
+      reup-data.ts               adapter from Reup core to extension DTOs
       resume-picker.ts            Quick Pick flows
       session-tree.ts             Activity Bar TreeDataProvider
       terminal.ts                 integrated terminal launch helpers
@@ -117,7 +117,7 @@ claude-sessions-manager/
 - `extension/src/*` may import from `../src/core/*`.
 - `src/core/*` must never import from `vscode`.
 - The extension must not import `src/web/routes/*` or browser client code.
-- The extension must not call Swoop's platform terminal launcher; VS Code has
+- The extension must not call Reup's platform terminal launcher; VS Code has
   its own integrated terminal API.
 - The adapter returns small DTOs, not raw project/session objects everywhere.
 
@@ -168,32 +168,32 @@ Use official VS Code APIs only:
 
 Implementation notes:
 
-- Prefer activation on `onCommand:*` and `onView:swoop.sessions`; avoid `*`.
+- Prefer activation on `onCommand:*` and `onView:reup.sessions`; avoid `*`.
 - Use `window.showQuickPick()` for fast resume flows.
 - Use `window.createTreeView()` with a `TreeDataProvider` for the sidebar.
 - Use `window.createTerminal({ cwd })`, then `terminal.sendText(...)` for
   resume/new-session commands.
 - File watching of `~/.claude/projects` must be verified. If VS Code's watcher
   is unreliable for non-workspace folders on any OS, start with explicit
-  refresh and add a low-frequency refresh only while the Swoop view is visible.
+  refresh and add a low-frequency refresh only while the Reup view is visible.
 
 ## MVP: Editor Resume Proof
 
 ### Phase 0 - Build and data proof
 
-Goal: prove that the extension can bundle and read Swoop core without changing
+Goal: prove that the extension can bundle and read Reup core without changing
 the existing CLI/TUI/web package.
 
 Deliverables:
 
 - [x] `extension/` scaffold with TypeScript + esbuild.
 - [x] `vscode` externalized from the bundle.
-- [x] Direct imports from Swoop core compile inside the extension bundle.
-- [x] `Swoop: Diagnostics` command logs discovered project/session counts to
+- [x] Direct imports from Reup core compile inside the extension bundle.
+- [x] `Reup: Diagnostics` command logs discovered project/session counts to
       an Output Channel.
 - [x] No mutation-capable sidebar yet. A read-only session tree exists because
       it is cheap, useful for Extension Host smoke testing, and does not change
-      Swoop data.
+      Reup data.
 
 Verification:
 
@@ -210,9 +210,9 @@ Goal: make the keyboard path obviously better than a bare picker.
 
 Commands:
 
-- [x] `Swoop: Resume Here`
-- [x] `Swoop: Resume Session`
-- [x] `Swoop: Refresh Sessions`
+- [x] `Reup: Resume Here`
+- [x] `Reup: Resume Session`
+- [x] `Reup: Refresh Sessions`
 
 Behavior:
 
@@ -250,7 +250,7 @@ Goal: provide a passive editor-native navigator without recreating the web UI.
 
 View:
 
-- `Swoop` Activity Bar container.
+- `Reup` Activity Bar container.
 - `Sessions` tree grouped by project.
 - Project rows show name, session count, and latest activity.
 - Session rows show status, title, branch, active state, and relative time.
@@ -262,7 +262,7 @@ Inline/context actions:
 - [x] Copy Handoff packet
 - [x] Reveal Project Folder
 - [x] Refresh
-- [x] Optional automatic refresh via `swoop.refreshMode`: `manual`, `watch`, or
+- [x] Optional automatic refresh via `reup.refreshMode`: `manual`, `watch`, or
       `interval`
 
 Deferred from the first tree:
@@ -277,14 +277,14 @@ after the data refresh model and confirmation UX are solid.
 
 ### Phase 3 - Read-only session detail
 
-Goal: make Swoop's Resume Card available in the editor without building a
+Goal: make Reup's Resume Card available in the editor without building a
 dashboard clone.
 
 Candidate forms, in order:
 
 1. Quick Pick detail text for small summaries.
 2. [x] Read-only virtual Markdown document:
-       `swoop:/session/<project-id>/<id>.md`.
+       `reup:/session/<project-id>/<id>.md`.
 3. Webview detail panel only if Markdown is not expressive enough.
 
 Content:
@@ -319,23 +319,23 @@ The extension should start with very few settings.
 
 Initial settings:
 
-- `swoop.refreshMode`: `manual` | `watch` | `interval`
-- `swoop.includeArchived`: boolean
-- `swoop.showStatusBar`: boolean, default `false` until usage is reliable
+- `reup.refreshMode`: `manual` | `watch` | `interval`
+- `reup.includeArchived`: boolean
+- `reup.showStatusBar`: boolean, default `false` until usage is reliable
 
 Do not expose a large settings surface before the MVP teaches us which controls
 users actually need.
 
 ## Error Handling and Logging
 
-- Create a `Swoop` Output Channel.
+- Create a `Reup` Output Channel.
 - Log extension activation, refresh start/end, project/session counts, and
   recoverable failures.
 - Never log transcript content.
 - User-facing errors should be short and actionable:
   - "Project path no longer exists: <path>"
   - "Claude Code session ID was not found locally."
-  - "Could not read Claude projects directory. Run Swoop Doctor for details."
+  - "Could not read Claude projects directory. Run Reup Doctor for details."
 - Keep unexpected errors in the Output Channel with stack traces.
 
 ## Security and Privacy
@@ -348,7 +348,7 @@ users actually need.
 - Terminal cwd must come from a discovered local project/session path and must
   be checked before launch.
 - Mutation commands, when later added, must require explicit confirmation and
-  reuse Swoop's existing safe metadata functions.
+  reuse Reup's existing safe metadata functions.
 
 ## Testing Strategy
 
@@ -386,7 +386,7 @@ Promote the extension beyond discovery only when all are true:
 
 - A user can resume the right session from an open workspace faster and with
   more confidence than with Claude Code's native picker.
-- The extension uses Swoop's existing core intelligence, not a parallel parser.
+- The extension uses Reup's existing core intelligence, not a parallel parser.
 - It remains local-first and telemetry-free.
 - It starts quickly and does not slow down normal VS Code startup.
 - It works on Windows, macOS, and Linux.
@@ -418,9 +418,9 @@ When implementation starts, do this first:
 
 - [ ] Create `extension/` with a minimal manifest and activation command.
 - [ ] Externalize `vscode` in esbuild.
-- [ ] Add a `Swoop: Diagnostics` command that reads `loadProjects()` and logs
+- [ ] Add a `Reup: Diagnostics` command that reads `loadProjects()` and logs
       counts.
-- [ ] Add `extension/src/swoop-data.ts` with a small DTO mapper.
+- [ ] Add `extension/src/reup-data.ts` with a small DTO mapper.
 - [ ] Verify bundle size and activation time.
 - [ ] Only then implement Quick Pick resume.
 

@@ -30,7 +30,7 @@ export function formatInbox(projects: Project[], activeSessionIds: ReadonlySet<s
   const sessions = collectInboxSessions(projects, activeSessionIds)
   if (sessions.length === 0) return 'Inbox clear. No active sessions or sessions needing attention.'
 
-  const lines = [`Swoop Inbox (${sessions.length})`, '']
+  const lines = [`Reup Inbox (${sessions.length})`, '']
   for (const item of sessions) {
     const session = item.session
     const labels = [item.active ? 'active' : '', item.status !== 'ok' ? item.status : ''].filter(

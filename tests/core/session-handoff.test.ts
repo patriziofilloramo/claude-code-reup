@@ -62,7 +62,7 @@ describe('session handoff', () => {
       openTodos: [],
     })
 
-    expect(output).toContain('# Swoop Handoff: Milestone 4')
+    expect(output).toContain('# Reup Handoff: Milestone 4')
     expect(output).toContain('## Goal\n\nContinue Milestone 4.')
     expect(output).toContain('## Decisions and context\n\nNot available in the transcript.')
     expect(output).toContain('## Changed files detected in transcript\n\nNone detected.')

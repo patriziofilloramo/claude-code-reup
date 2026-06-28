@@ -5,7 +5,7 @@ import {
   rankSessionsForWorkspace,
   sessionMatchesWorkspace,
   type ExtensionSession,
-} from '../../extension/src/swoop-data.js'
+} from '../../extension/src/reup-data.js'
 import type { ResumeAdvice } from '../../src/core/session/resume-advice.js'
 
 function session(overrides: Partial<ExtensionSession>): ExtensionSession {

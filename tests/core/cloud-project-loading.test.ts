@@ -28,6 +28,7 @@ import { APP } from '../../src/config/app.js'
 
 const SESSION_ID = '00000000-0000-0000-0000-000000000101'
 const LOCAL_SESSION_ID = '00000000-0000-0000-0000-000000000202'
+const LEGACY_LINK_FILE = `.${['swo', 'op'].join('')}-link`
 
 describe('cloud-linked project loading', () => {
   let root: string
@@ -38,7 +39,7 @@ describe('cloud-linked project loading', () => {
   let originalProjectSearchPaths: readonly string[]
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'swoop-cloud-project-test-'))
+    root = await mkdtemp(join(tmpdir(), 'reup-cloud-project-test-'))
     claudeDirectory = join(root, 'claude')
     cloudRoot = join(root, 'Cloud')
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
@@ -178,6 +179,34 @@ describe('cloud-linked project loading', () => {
     )
     await expect(loadProjects()).resolves.toEqual([
       expect.objectContaining({
+        isShared: true,
+        path: projectPath,
+      }),
+    ])
+  })
+
+  it('reads a legacy link marker as a shared project during discovery', async () => {
+    const projectPath = join(cloudRoot, 'Apps', 'LegacyLinked')
+    const cloudPath = join(projectPath, '.claude-memory')
+    const projectDirectory = join(claudeDirectory, 'projects', encodeProjectPath(projectPath))
+    await mkdir(projectPath, { recursive: true })
+    await mkdir(cloudPath, { recursive: true })
+    await mkdir(projectDirectory, { recursive: true })
+    await writeFile(join(projectDirectory, LEGACY_LINK_FILE), cloudPath, 'utf8')
+    await writeFile(
+      join(projectDirectory, `${LOCAL_SESSION_ID}.jsonl`),
+      JSON.stringify({
+        cwd: projectPath,
+        message: { content: 'Open legacy linked project' },
+        timestamp: '2026-06-01T09:00:00.000Z',
+        type: 'user',
+      }),
+      'utf8'
+    )
+
+    await expect(loadProjects()).resolves.toEqual([
+      expect.objectContaining({
+        cloudPath,
         isShared: true,
         path: projectPath,
       }),

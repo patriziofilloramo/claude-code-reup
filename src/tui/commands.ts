@@ -182,7 +182,7 @@ export const COMMANDS: readonly CommandDef[] = [
     visibleWhen: 'in-sessions-panel',
     label: 'Focus projects panel',
   },
-  { id: 'config', group: 'app', keybinding: 'C', visibleWhen: 'always', label: 'Configure swoop' },
+  { id: 'config', group: 'app', keybinding: 'C', visibleWhen: 'always', label: 'Configure reup' },
   { id: 'help', group: 'app', keybinding: '?', visibleWhen: 'always', label: 'Keyboard shortcuts' },
   { id: 'quit', group: 'app', keybinding: 'q', visibleWhen: 'always', label: 'Quit' },
 ]

@@ -1,4 +1,4 @@
-# Swoop Roadmap
+# Reup Roadmap
 
 ## Open bugs
 
@@ -9,8 +9,8 @@
       practical risk is low, but the pattern is still fragile. Needs dedicated testing on a clean
       Windows environment before any public release. See `terminal.windows.ts`.
 
-- [x] **Public product and package naming resolved** — the product is **Swoop**, the CLI command is
-      `swoop`, and the available npm package name is `claude-code-swoop`.
+- [x] **Public product and package naming resolved** - the product is **Reup**, the CLI command is
+      `reup`, and the npm package identity is `@patriziofilloramo/reup`.
 
 - [x] **Web layout breaks on small screens** — resolved: two-breakpoint responsive pass.
       640–899 px: left panel shrinks (min-width 160 px), header keyboard hints hidden.
@@ -31,12 +31,12 @@
 
 ## Recommended next focus
 
-Swoop's near-term product bets are:
+Reup's near-term product bets are:
 
 1. **Milestone 12 — Organization layer**: Phase 1, 2 (code), and 3 are shipped. One gap remains:
    5 unit tests (2i) and a manual smoke of the `t → tag → chip → focus` flow. Once those pass,
    M12 is closed. Phase 4 (advanced) is deferred until real-world use.
-2. **Milestone 13 — Live web control panel**: make `swoop web` worth keeping open while working.
+2. **Milestone 13 — Live web control panel**: make `reup web` worth keeping open while working.
    It should show what is active, changing, risky, or close to a limit without becoming a chat UI.
 3. **Milestone 11 — VS Code Workspace Cockpit**: shipped. Remaining: smoke test on clean Windows
    and macOS, and fix the Windows terminal launcher before public release.
@@ -60,7 +60,7 @@ org vocabulary (tags, groups, stacks) as a follow-on after M13 proves the data c
 - [x] Fix path-missing: `access()` per unique `session.projectPath`, not just canonical project
 - [x] `null` vs `false/0` for fast-path unanalysed fields (`interrupted`, `lastToolFailed`,
       `compactionCount` are `null` when `analysisComplete: false`)
-- [x] Swoop sidecar `swoop.json` with per-process serialised atomic write queue
+- [x] Reup sidecar `reup.json` with per-process serialised atomic write queue
 - [x] Archive and alias backend + web UI + TUI toggle (`a` key)
 - [x] Alias rename web UI (inline edit on selected row)
 - [x] Body validation for archive/alias API endpoints
@@ -89,17 +89,17 @@ org vocabulary (tags, groups, stacks) as a follow-on after M13 proves the data c
 
 ## Milestone 4 — Handoff & CLI ✓ done
 
-- [x] `swoop handoff <session>` — compact Markdown continuation packet from transcript-supported facts
-- [x] `swoop inbox` — terminal summary of active and non-archived sessions needing attention
-- [x] `swoop doctor` — non-destructive diagnosis of stale locks, broken indices, orphaned transcripts,
+- [x] `reup handoff <session>` — compact Markdown continuation packet from transcript-supported facts
+- [x] `reup inbox` — terminal summary of active and non-archived sessions needing attention
+- [x] `reup doctor` — non-destructive diagnosis of stale locks, broken indices, orphaned transcripts,
       and missing session paths; shared with web Lost & Found
-- [x] `swoop list --json` — stable, machine-readable session dump with project, activity, and signals
-- [x] Extend `swoop list`: compact human table by default, full JSON with `--json`, global free-text
+- [x] `reup list --json` — stable, machine-readable session dump with project, activity, and signals
+- [x] Extend `reup list`: compact human table by default, full JSON with `--json`, global free-text
       search, and composable active/attention/archived/project/status/limit filters
 - [x] Make compact list ID prefixes directly usable: globally unique adaptive prefixes, safe
       prefix resume, and opt-in PowerShell/Bash/Zsh session-ID completion
 - [x] Rank shell-completion suggestions by current project, active state, and recent activity
-- [x] Open a compact global, searchable picker when interactive `swoop resume` has no selector
+- [x] Open a compact global, searchable picker when interactive `reup resume` has no selector
 
 ---
 
@@ -113,7 +113,7 @@ Anthropic API (plan name, credit spending detail, routine allowances) are tracke
 - [x] Research and document authoritative data sources, trust boundaries, and privacy rules in
       [`Documents/USAGE_VISIBILITY.md`](Documents/USAGE_VISIBILITY.md)
 - [x] Extract transcript-supported model history, latest model, latest context-input tokens, and
-      latest output tokens; expose them in web, TUI, and `swoop list --json`
+      latest output tokens; expose them in web, TUI, and `reup list --json`
 - [x] Add an explicit, reversible account-limit integration that refreshes 5-hour and 7-day
       percentages/reset times, keeps credentials in memory only, and uses status-line observations
       as a fallback without silently replacing an existing status line
@@ -135,12 +135,12 @@ Anthropic API (plan name, credit spending detail, routine allowances) are tracke
 
 - [x] **Global search by default** across projects and sessions in both TUI and web; match project
       name/path, session name/alias/ID, and branch, then navigate directly to the selected result
-- [x] **Configuration foundation**: `swoop config get/set/reset` CLI,
-      `~/.claude/swoop/prefs.json` persisted
+- [x] **Configuration foundation**: `reup config get/set/reset` CLI,
+      `~/.claude/reup/prefs.json` persisted
       per-user preferences, zero-config defaults, extensible for future keys
-- [x] **Configuration TUI**: `swoop config` with keyboard-navigable Interface, Integrations, and
+- [x] **Configuration TUI**: `reup config` with keyboard-navigable Interface, Integrations, and
       Features tabs; integrations show their exact effect and remain reversible
-- [x] Manage live usage and shell-completion integrations through `swoop config`, while preserving
+- [x] Manage live usage and shell-completion integrations through `reup config`, while preserving
       the existing explicit setup/remove commands
 - [x] Add explicit search scopes/qualifiers (`project:`, `branch:`, `status:`, `is:active`,
       `is:archived`); search semantics unchanged for plain-text queries
@@ -190,7 +190,7 @@ milestones faster to implement. No visible behaviour changes — this is purely 
       cloud-sync circular dependency
 - [x] **Test coverage gaps** — added `tests/core/cloud-sync.test.ts` covering `stopSyncLoop`
       idempotency, bidirectional copy, append-only propagation, conflict detection, recursive descent,
-      skip `.swoop-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
+      skip `.reup-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
       existing); also fixed a `syncBidirectional` bug where A-only subdirectories were silently
       skipped instead of being created in B; total test count: 194 (was 180)
 
@@ -205,9 +205,9 @@ No server, no auth — the cloud provider handles transfer.
 
 > ⚠ Experimental: see `CHANGELOG.md` for known risks and the backup procedure.
 
-- [x] `swoop sync link [path]` — creates a per-project NTFS junction pointing the Claude Code
+- [x] `reup sync link [path]` — creates a per-project NTFS junction pointing the Claude Code
       project directory at a shared cloud folder; backs up existing local sessions first
-- [x] `swoop sync unlink [path]` — restores the local directory; sessions written while linked
+- [x] `reup sync unlink [path]` — restores the local directory; sessions written while linked
       remain accessible through the shared folder
 - [x] **Sync registry** (`syncRegistry`) — in-memory `Map` of junction paths to cloud state;
       avoids circular imports between discovery, sync, and memory modules
@@ -216,11 +216,11 @@ No server, no auth — the cloud provider handles transfer.
       while the cloud drive is unmounted; restores on reconnect
 - [x] **Cloud indicator in TUI and web** — `☁` icon coloured green (online), grey (cloud
       offline / sync paused), or orange (one or more devices used the project without
-      running `swoop sync link`)
+      running `reup sync link`)
 - [x] **Offline guard** — new sessions are blocked when a project's cloud storage is
       unreachable; flash message informs the user and resumes automatically on reconnect
-- [x] `swoop sync link [path]` / `swoop sync unlink [path]` — inject / remove a
-      `<!-- swoop:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
+- [x] `reup sync link [path]` / `reup sync unlink [path]` — inject / remove a
+      `<!-- reup:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
       Claude Code on any device to: detect whether the device is linked, write a presence
       file when it is not, warn once, and silently skip after the user dismisses the warning
 - [x] **Cross-device CLAUDE.md protocol** — all check files live inside the shared cloud
@@ -228,7 +228,7 @@ No server, no auth — the cloud provider handles transfer.
       project to run the protocol; no extra permissions required
 - [x] **Unlinked-device detection** — linked devices scan `{cloudDir}/device-presence/` on
       each discovery pass and surface device names as `unlinkedDevices[]` on the `Project`
-      object; orange cloud indicator prompts the user to run `swoop sync link` on that device
+      object; orange cloud indicator prompts the user to run `reup sync link` on that device
 - [x] **Append-only shared memory** — unlinked devices append context to
       `{cloudDir}/memory/shared.md` under a `## HOSTNAME — date` header; avoids pCloud
       conflict copies that would arise from concurrent rewrites
@@ -242,8 +242,8 @@ No server, no auth — the cloud provider handles transfer.
 - [x] Unified design-token schema (`ThemeTokens` interface in `src/config/theme-tokens.ts`) covering
       every value used by TUI and web; a theme is a plain object satisfying the interface
 - [x] Three themes shipped: **Dark** (default), **Light**, **Terminal** (phosphor/CRT)
-- [x] `swoop --theme <name>` CLI — saves preference and applies immediately
-- [x] Theme selection in `swoop config` Interface tab (keyboard-navigable, live preview)
+- [x] `reup --theme <name>` CLI — saves preference and applies immediately
+- [x] Theme selection in `reup config` Interface tab (keyboard-navigable, live preview)
 - [x] Web theme cycle button in footer (◐ dark → ○ light → █ terminal → repeat); persisted via
       `/api/theme` and injected as CSS custom properties at serve time
 - [x] Matrix rain Easter egg — triggered by holding the Terminal theme logo ≥ 3 s in the web UI;
@@ -268,18 +268,18 @@ Improvements shipped after M8:
 - [x] **Command registry** (`src/tui/commands.ts`) — single `COMMANDS` array with `visibleWhen`
       named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
       HelpOverlay and CommandPalette both derive from the same source of truth
-- [x] **`swoop sync`** — renamed from the earlier memory-command prototype throughout: file,
+- [x] **`reup sync`** — renamed from the earlier memory-command prototype throughout: file,
       exports, CLI dispatch, help
       text, documentation, and all user-facing strings; `memory` kept as a backwards-compat alias
-- [x] **Sync tab in `swoop config`** — interactive cursor navigation over unsynced and synced
+- [x] **Sync tab in `reup config`** — interactive cursor navigation over unsynced and synced
       projects; Enter to link/unlink inline without leaving the TUI; uses `linkProjectForTUI` /
       `unlinkProjectForTUI` wrappers that suppress console output during TUI operation
 - [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
       archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
 - [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
       with title (consistent across all tabs); Features tab describes each state in plain text
-- [x] **`swoop --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
-      from `swoop config` line
+- [x] **`reup --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`
+      from `reup config` line
 - [x] **Density toggle removed** — `d` key and comfortable/compact density removed from TUI;
       two stale label keys (`cmdDensityComfortable`, `cmdDensityCompact`) remain in `labels.ts`
       and should be cleaned up
@@ -294,11 +294,11 @@ manual shell setup. Detailed behavior is defined in
 
 - [x] Resolve the public product/package name before producing signed artifacts
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
-- [ ] Add the installed `swoop` launcher to the current user's `PATH`
+- [ ] Add the installed `reup` launcher to the current user's `PATH`
 - [ ] Windows installer: offer pre-selected PowerShell completion integration
       for Windows PowerShell 5.1 and PowerShell 7
 - [ ] Install shell completion as a managed, idempotent, reversible integration;
-      back up profiles before first modification and remove only Swoop-owned blocks
+      back up profiles before first modification and remove only Reup-owned blocks
 - [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments
 - [ ] Publish checksums and document artifact provenance/signing
@@ -320,13 +320,13 @@ Anthropic API. They are tracked here and will be re-evaluated when the API stabi
 
 ## Milestone 11 — VS Code Workspace Cockpit ✓ done
 
-Shipped a full-screen Swoop Workspace Cockpit inside VS Code. The extension
-bundles selected `src/core` modules directly — no installed `swoop` binary
+Shipped a full-screen Reup Workspace Cockpit inside VS Code. The extension
+bundles selected `src/core` modules directly — no installed `reup` binary
 required. All go/no-go criteria were met.
 
 ### Shipped
 
-- [x] Full-screen `SwoopDashboard` webview: workspace-first project/session
+- [x] Full-screen `ReupDashboard` webview: workspace-first project/session
       discovery, progressive detail loading, structured metadata search,
       explicit transcript search, live usage, and context menus
 - [x] `SessionResumeService`: centralized resume-destination selection across
@@ -334,11 +334,11 @@ required. All go/no-go criteria were met.
       preference between Claude Code extension and integrated terminal
 - [x] Activity Bar tree with current-workspace, attention-elsewhere, and
       recent-global sections; stable node identity across refreshes
-- [x] `Swoop: Resume Here` Quick Pick — workspace-first ranking (path match →
+- [x] `Reup: Resume Here` Quick Pick — workspace-first ranking (path match →
       git branch match → active → attention → recency)
-- [x] `Swoop: Resume Session` global Quick Pick with health badges, branch,
+- [x] `Reup: Resume Session` global Quick Pick with health badges, branch,
       project, relative time, active/attention flags, TODO/plan hints
-- [x] `Swoop: Search Sessions` — structured query search via shared core query
+- [x] `Reup: Search Sessions` — structured query search via shared core query
       parser (`session-query.ts`)
 - [x] CSP-restricted Session Inspector webview: goal, progress, plan, TODOs,
       context, branches, file links, tags, and passive Project Memory state
@@ -364,7 +364,7 @@ required. All go/no-go criteria were met.
 
 ## Milestone 12 — Organization layer: tags, groups, and work stacks
 
-Make Swoop useful when Claude Code work stops being "a list of folders" and becomes many
+Make Reup useful when Claude Code work stops being "a list of folders" and becomes many
 parallel investigations, branches, fixes, reviews, and half-finished threads. The goal is a
 lightweight organisation layer that feels faster than filing things manually.
 
@@ -382,7 +382,7 @@ Inbox bucket definitions (as implemented), and Phase 4 advanced ideas.
 
 - `org.json` infrastructure: `readOrgData()`, `withOrgLock()`, atomic write, advisory lock,
   SSE watcher, `filterProjectsByOrg()` shared across web/TUI/CLI
-- Session tags and project tags in `swoop.json`; `Session.tags`, `Project.group`, `Project.projectTags`
+- Session tags and project tags in `reup.json`; `Session.tags`, `Project.group`, `Project.projectTags`
 - Full org CRUD: groups, stacks, stack items, project-group assignments
 - API routes: `/api/org/**`, tag mutation endpoints, `?group`/`?stack`/`?tag` project filters
 - Web left rail: Inbox (7 priority buckets), Stacks, Groups — all collapsible, `localStorage`-persisted
@@ -422,7 +422,7 @@ After real-world use proves the MVP:
 
 - [ ] `--todo pending` and `--planned` CLI filters (require transcript scan)
 - [ ] Suggested tags from branch prefix, folder name, and status signals (opt-in in config)
-- [ ] Portable org export: `swoop org export` → `org.json` + all `swoop.json` tags
+- [ ] Portable org export: `reup org export` → `org.json` + all `reup.json` tags
 - [ ] Org import with merge strategy
 - [ ] Quick clean sweep — bulk archive from group/stack, skips active sessions
 - [ ] Drag-to-stack (after `g` picker is proven sufficient)
@@ -432,14 +432,14 @@ After real-world use proves the MVP:
 
 ## Milestone 13 — Live web control panel
 
-Make `swoop web` worth keeping open on a second monitor or browser tab while Claude Code runs in a
+Make `reup web` worth keeping open on a second monitor or browser tab while Claude Code runs in a
 terminal. The web UI should become a quiet operations panel: active sessions, live limits, recent
 tool activity, and attention signals update without the user refreshing or switching context.
 
 ### Why this matters
 
 The TUI is great for intentional navigation. The web UI can win a different use case: **passive
-awareness while working**. A developer should glance at Swoop and know:
+awareness while working**. A developer should glance at Reup and know:
 
 - which Claude session is active right now
 - whether it is using tools, waiting, interrupted, or recently wrote output
@@ -485,8 +485,8 @@ awareness while working**. A developer should glance at Swoop and know:
 
 ### Safety and performance
 
-- [ ] Add feature toggle in `swoop config`: live web panel on/off
-- [ ] Respect `SWOOP_NO_OPEN` and localhost-only web server constraints
+- [ ] Add feature toggle in `reup config`: live web panel on/off
+- [ ] Respect `REUP_NO_OPEN` and localhost-only web server constraints
 - [ ] Avoid transcript tail reads more often than necessary; batch updates per project
 - [ ] Never expose secret transcript content in the live feed; tool names, file paths, and statuses
       are enough for the first version
@@ -513,7 +513,7 @@ awareness while working**. A developer should glance at Swoop and know:
 
 ### Nice-to-have (validated by competitive analysis, mid-2026)
 
-- [ ] **Credential/secret warning in `swoop handoff`** — Before emitting the handoff Markdown packet,
+- [ ] **Credential/secret warning in `reup handoff`** — Before emitting the handoff Markdown packet,
       scan the session transcript for common secret patterns: `sk-...`, `ANTHROPIC_API_KEY=`,
       `Bearer ...`, `.env` style assignments, and long hex/base64 tokens. Print a warning count
       and require explicit `--force` (or confirmation prompt) before outputting. Never modify
@@ -528,11 +528,11 @@ awareness while working**. A developer should glance at Swoop and know:
 
 ### Advanced — requires API key / opt-in
 
-These features intentionally sit outside the core tool. Swoop's design goal is zero-config,
+These features intentionally sit outside the core tool. Reup's design goal is zero-config,
 lightweight, and local-first. Anything here requires an explicit user action to enable and
 must never activate automatically or affect the default experience.
 
-- [ ] **AI session renaming** — `swoop rename-sessions [project]` reads the first ~10 messages of
+- [ ] **AI session renaming** — `reup rename-sessions [project]` reads the first ~10 messages of
       each un-aliased session, calls the Claude API to suggest a concise meaningful name, then
       shows a preview table before writing anything. `--apply` to commit. Requires
       `ANTHROPIC_API_KEY`. Estimate token cost upfront. Never overwrites existing aliases.

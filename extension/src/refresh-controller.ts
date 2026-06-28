@@ -7,8 +7,9 @@ import {
   getClaudeProjectsDirectory,
 } from '../../src/core/project/claude-paths.js'
 import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
-import type { SwoopLogger } from './logger.js'
+import { affectsReupConfiguration, getReupConfigurationValue } from './configuration.js'
 import { resolveGitDirectory } from './git-workspace.js'
+import type { ReupLogger } from './logger.js'
 
 const SAFETY_REFRESH_MS = 20_000
 const WATCH_DEBOUNCE_MS = 500
@@ -22,9 +23,9 @@ export interface RefreshTarget {
 
 /**
  * Owns refresh lifecycle for the cockpit. No watcher or interval remains active
- * while the Swoop view is hidden.
+ * while the Reup view is hidden.
  */
-export class SwoopRefreshController implements vscode.Disposable {
+export class ReupRefreshController implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = []
   private debounceTimer: NodeJS.Timeout | null = null
   private disposed = false
@@ -37,14 +38,14 @@ export class SwoopRefreshController implements vscode.Disposable {
   private readonly watchers: vscode.FileSystemWatcher[] = []
 
   constructor(
-    private readonly logger: SwoopLogger,
+    private readonly logger: ReupLogger,
     private readonly target: RefreshTarget
   ) {
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
-          event.affectsConfiguration('swoop.refreshMode') ||
-          event.affectsConfiguration('swoop.includeArchived')
+          affectsReupConfiguration(event, 'refreshMode') ||
+          affectsReupConfiguration(event, 'includeArchived')
         ) {
           this.reconfigure()
           this.requestRefresh('configuration')
@@ -189,6 +190,6 @@ export class SwoopRefreshController implements vscode.Disposable {
 }
 
 function readRefreshMode(): RefreshMode {
-  const configured = vscode.workspace.getConfiguration('swoop').get<string>('refreshMode', 'watch')
+  const configured = getReupConfigurationValue<string>('refreshMode', 'watch')
   return configured === 'manual' || configured === 'interval' ? configured : 'watch'
 }

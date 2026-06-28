@@ -22,7 +22,7 @@ const buildOptions = {
 if (watch) {
   const context = await esbuild.context(buildOptions)
   await context.watch()
-  console.log('Swoop VS Code extension build is watching for changes.')
+  console.log('Reup VS Code extension build is watching for changes.')
 } else {
   await esbuild.build(buildOptions)
 }

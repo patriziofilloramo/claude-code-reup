@@ -4,7 +4,7 @@ import {
   buildDashboardModel,
   filterDashboardSessions,
 } from '../../extension/src/dashboard-model.js'
-import type { ExtensionProject, ExtensionSession } from '../../extension/src/swoop-data.js'
+import type { ExtensionProject, ExtensionSession } from '../../extension/src/reup-data.js'
 
 describe('dashboard model', () => {
   it('selects the strongest resume candidate and summarizes the workspace', () => {

@@ -11,9 +11,9 @@ const manifest = JSON.parse(readFileSync('extension/package.json', 'utf8')) as {
   version: string
 }
 const vscodeIgnore = readFileSync('extension/.vscodeignore', 'utf8')
-const activityBarIcon = readFileSync('extension/media/swoop.svg', 'utf8')
-const brandIcon = readFileSync('extension/media/swoop-brand.svg', 'utf8')
-const brandIconPng = readFileSync('extension/media/swoop-brand.png')
+const activityBarIcon = readFileSync('extension/media/reup.svg', 'utf8')
+const brandIcon = readFileSync('extension/media/reup-brand.svg', 'utf8')
+const brandIconPng = readFileSync('extension/media/reup-brand.png')
 const brandSource = readFileSync('src/brand.ts', 'utf8')
 const brandGenerator = readFileSync('extension/scripts/generate-brand-assets.mjs', 'utf8')
 const marketplaceGenerator = readFileSync(
@@ -46,27 +46,31 @@ describe('VS Code product quality guardrails', () => {
     expect(vscodeIgnore).toContain('media/marketplace/**')
   })
 
-  it('generates every extension icon from the canonical Swoop mark', () => {
-    expect(manifest.displayName).toBe('Swoop for Claude Code')
-    expect(manifest.icon).toBe('media/swoop-brand.png')
+  it('generates every extension icon from the canonical Reup mark', () => {
+    expect(manifest.displayName).toBe('Reup for Claude Code')
+    expect(manifest.icon).toBe('media/reup-brand.png')
     expect(manifest.scripts['generate:brand']).toContain('generate-brand-assets.mjs')
     expect(manifest.scripts.compile).toContain('generate:brand')
     expect(brandGenerator).toContain('readBrandDefinition')
-    expect(brandGenerator).toContain("'swoop-brand.svg'")
-    expect(brandGenerator).toContain("'swoop-brand.png'")
-    expect(brandGenerator).toContain("'swoop.svg'")
+    expect(brandGenerator).toContain("'reup-brand.svg'")
+    expect(brandGenerator).toContain("'reup-brand.png'")
+    expect(brandGenerator).toContain("'reup.svg'")
 
-    const canonicalPath = brandSource.match(/export const SWOOP_PATH\s*=\s*['"]([^'"]+)['"]/)?.[1]
+    const canonicalPath = brandSource.match(/export const REUP_PATH\s*=\s*['"]([^'"]+)['"]/)?.[1]
+    const accentPath = brandSource.match(
+      /export const REUP_ACCENT_PATH\s*=\s*['"]([^'"]+)['"]/
+    )?.[1]
     expect(canonicalPath).toBeTruthy()
+    expect(accentPath).toBeTruthy()
     expect(activityBarIcon).toContain('viewBox="0 0 256 256"')
     expect(activityBarIcon).toContain(`d="${canonicalPath}"`)
+    expect(activityBarIcon).toContain(`d="${accentPath}"`)
     expect(activityBarIcon).toContain('<rect')
     expect(activityBarIcon).toContain('rx="44"')
-    expect(brandIcon).toContain('id="swoopMarkGradient"')
-    expect(brandIcon).toContain('stop-color="#2EA8D3"')
-    expect(brandIcon).toContain('stop-color="#187FA8"')
-    expect(brandIcon).toContain(`fill="#FFFFFF" d="${canonicalPath}"`)
-    expect(brandIcon.match(/<path/g)).toHaveLength(1)
+    expect(brandIcon).toContain('fill="#101315"')
+    expect(brandIcon).toContain(`fill="#47D7A1" d="${canonicalPath}"`)
+    expect(brandIcon).toContain(`fill="#F0B85A" d="${accentPath}"`)
+    expect(brandIcon.match(/<path/g)).toHaveLength(2)
     expect(brandIconPng.subarray(1, 4).toString('ascii')).toBe('PNG')
   })
 
@@ -76,11 +80,10 @@ describe('VS Code product quality guardrails', () => {
     expect(marketplaceGenerator).toContain('readBrandDefinition')
     expect(marketplaceGenerator).toContain('dashboard-workflow.gif')
     expect(marketplaceGenerator).toContain('workspace-cockpit.png')
-    expect(extensionReadme).toContain('Stop hunting for the right Claude session')
-    expect(extensionReadme).toContain('Discover')
-    expect(extensionReadme).toContain('Understand')
-    expect(extensionReadme).toContain('Resume safely')
-    expect(extensionReadme).toContain('Reintroduce marketplace images only after publishing')
+    expect(extensionReadme).toContain('Reup for Claude Code')
+    expect(extensionReadme).toContain('local control surface')
+    expect(extensionReadme).toContain('Reup: Open Dashboard')
+    expect(extensionReadme).toContain('All command IDs use the `reup.*` namespace')
     expect(extensionReadme).not.toContain('media/marketplace/dashboard-workflow.gif')
     expect(extensionReadme).not.toContain('media/marketplace/workspace-cockpit.png')
     expect(extensionReadme).not.toContain('data:image')

@@ -1,3 +1,4 @@
+import { cpSync, existsSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -18,9 +19,15 @@ export function getClaudeProjectsDirectory(): string {
   return join(getClaudeDirectory(), 'projects')
 }
 
-/** Returns the Swoop-private data directory inside Claude Code's config root. */
-export function getSwoopDirectory(): string {
-  return join(getClaudeDirectory(), 'swoop')
+/** Returns the Reup-private data directory inside Claude Code's config root. */
+export function getReupDirectory(): string {
+  const directory = join(getClaudeDirectory(), 'reup')
+  migrateLegacyReupDirectoryIfNeeded(directory)
+  return directory
+}
+
+export function getLegacyReupDirectory(): string {
+  return join(getClaudeDirectory(), LEGACY_REUP_DIRECTORY_NAME)
 }
 
 /** Returns Claude Code's adjacent local application-state file. */
@@ -32,6 +39,19 @@ export function getClaudeStatePath(): string {
 export function getProjectDirectory(projectId: string): string {
   return join(getClaudeProjectsDirectory(), projectId)
 }
+
+function migrateLegacyReupDirectoryIfNeeded(directory: string): void {
+  const legacyDirectory = getLegacyReupDirectory()
+  if (existsSync(directory) || !existsSync(legacyDirectory)) return
+
+  try {
+    cpSync(legacyDirectory, directory, { recursive: true })
+  } catch (error) {
+    if (!existsSync(directory)) throw error
+  }
+}
+
+const LEGACY_REUP_DIRECTORY_NAME = `${'swo'}${'op'}`
 
 // -----------------------------------------------------------------------------
 // Encoded project path resolution

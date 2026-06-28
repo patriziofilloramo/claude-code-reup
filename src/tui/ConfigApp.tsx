@@ -61,17 +61,17 @@ const SPINNER_FRAMES = ['|', '/', '-', '\\']
 const SHELLS = [
   {
     label: 'PowerShell',
-    cmd: 'swoop completion powershell | Out-String | Invoke-Expression',
+    cmd: 'reup completion powershell | Out-String | Invoke-Expression',
     profile: '$PROFILE',
   },
   {
     label: 'Bash',
-    cmd: 'eval "$(swoop completion bash)"',
+    cmd: 'eval "$(reup completion bash)"',
     profile: '~/.bashrc or ~/.bash_profile',
   },
   {
     label: 'Zsh',
-    cmd: 'eval "$(swoop completion zsh)"',
+    cmd: 'eval "$(reup completion zsh)"',
     profile: '~/.zshrc',
   },
 ] as const
@@ -303,7 +303,7 @@ export function ConfigApp({
       const next = themes[cursor] ?? 'dark'
       await setUserPref('theme', next)
       setTheme(next)
-      setStatusMsg({ ok: true, text: `Theme set to ${next}; restart swoop to apply` })
+      setStatusMsg({ ok: true, text: `Theme set to ${next}; restart reup to apply` })
       return
     }
 
@@ -530,7 +530,7 @@ export function ConfigApp({
         </Text>
         <Text color={COLORS.muted}>
           <Text color={COLORS.text}>{onClose ? 'esc / q' : 'q'}</Text>
-          {onClose ? ' back to swoop' : ' quit'}
+          {onClose ? ' back to reup' : ' quit'}
         </Text>
       </Box>
     </Box>
@@ -714,10 +714,10 @@ function FeaturesTab({
           active={autoCleanupOnStart !== 'off'}
           description={
             autoCleanupOnStart === 'off'
-              ? 'No automatic cleanup. Run `swoop cleanup` manually.'
+              ? 'No automatic cleanup. Run `reup cleanup` manually.'
               : autoCleanupOnStart === 'auto'
                 ? 'Archives high-confidence cleanup candidates automatically on startup.'
-                : 'Shows cleanup picker before opening swoop; you choose what to archive.'
+                : 'Shows cleanup picker before opening reup; you choose what to archive.'
           }
           focused={cursor === 0}
           label="Cleanup on start"

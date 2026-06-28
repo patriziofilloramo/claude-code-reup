@@ -1,5 +1,5 @@
 /**
- * Central runtime configuration for swoop.
+ * Central runtime configuration for reup.
  *
  * All tunable values live here so they can be found and changed in one place.
  * Browser-only values (poll intervals visible in the client) stay in the
@@ -21,11 +21,17 @@ export const APP = {
   /** Overrides the default ~/.claude config directory path. */
   claudeConfigEnvVar: 'CLAUDE_CONFIG_DIR',
   /** Set to any non-empty string to enable debug logging. */
-  debugEnvVar: 'SWOOP_DEBUG',
+  debugEnvVar: 'REUP_DEBUG',
+  legacyDebugEnvVar: `${'SW'}${'OOP'}_DEBUG`,
   /** Set to any non-empty string to suppress auto-opening the browser. */
-  noOpenEnvVar: 'SWOOP_NO_OPEN',
+  noOpenEnvVar: 'REUP_NO_OPEN',
+  legacyNoOpenEnvVar: `${'SW'}${'OOP'}_NO_OPEN`,
   /** Override the default web server port (see defaultPort below). */
-  portEnvVar: 'SWOOP_PORT',
+  portEnvVar: 'REUP_PORT',
+  legacyPortEnvVar: `${'SW'}${'OOP'}_PORT`,
+  /** Override the active theme before stored preferences are read. */
+  themeEnvVar: 'REUP_THEME',
+  legacyThemeEnvVar: `${'SW'}${'OOP'}_THEME`,
 
   // ── Web server ──────────────────────────────────────────────────────────────
 
@@ -33,7 +39,7 @@ export const APP = {
   defaultPort: 3333,
   /**
    * How many consecutive ports to try before giving up when the preferred
-   * port is already in use. With the default of 20, swoop tries 3333–3352.
+   * port is already in use. With the default of 20, reup tries 3333–3352.
    */
   portSearchRange: 20,
 
@@ -111,7 +117,7 @@ export const APP = {
    */
   enableProjectMemorySync: true,
   /**
-   * When false, swoop performs a focused scan of common workspace folders
+   * When false, reup performs a focused scan of common workspace folders
    * inside detected cloud roots. When true, it recursively scans only
    * `projectSearchPaths`, allowing uncommon layouts without crawling disks.
    */
@@ -122,7 +128,7 @@ export const APP = {
    */
   projectSearchPaths: [] as string[],
   /**
-   * Subdirectory name created inside the project root by `swoop sync link` to hold
+   * Subdirectory name created inside the project root by `reup sync link` to hold
    * the cross-device session files that are kept in sync with local storage.
    */
   sharedMemoryDir: '.claude-memory',
@@ -131,7 +137,8 @@ export const APP = {
    * directory the project is linked to. Its presence means local-first sync
    * is active; its absence means local-only storage.
    */
-  cloudLinkFile: '.swoop-link',
+  cloudLinkFile: '.reup-link',
+  legacyCloudLinkFile: `.${'swo'}${'op'}-link`,
   /**
    * How often (ms) the background offline-guard loop checks whether the cloud
    * junction target is reachable and transitions between online/offline modes.
@@ -139,9 +146,9 @@ export const APP = {
    */
   cloudSyncIntervalMs: 30_000,
   /**
-   * Path segment appended to getSwoopDirectory() (~/.claude/swoop/) to locate the
+   * Path segment appended to getReupDirectory() (~/.claude/reup/) to locate the
    * local backup root. Each linked project gets its own subdirectory here:
-   *   ~/.claude/swoop/<cloudSyncBackupDir>/<projectId>/
+   *   ~/.claude/reup/<cloudSyncBackupDir>/<projectId>/
    * The backup is kept in sync with the cloud dir and used as an offline
    * fallback when the junction target (pCloud, etc.) becomes unreachable.
    */

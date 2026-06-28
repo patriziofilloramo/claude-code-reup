@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 
-export interface SwoopLogger extends vscode.Disposable {
+export interface ReupLogger extends vscode.Disposable {
   debug(message: string, ...details: unknown[]): void
   error(message: string, error?: unknown): void
   info(message: string, ...details: unknown[]): void
@@ -9,8 +9,8 @@ export interface SwoopLogger extends vscode.Disposable {
 }
 
 /** Small Output Channel logger that never writes transcript content. */
-export function createLogger(): SwoopLogger {
-  const output = vscode.window.createOutputChannel('Swoop')
+export function createLogger(): ReupLogger {
+  const output = vscode.window.createOutputChannel('Reup')
 
   function append(level: string, message: string, details: unknown[] = []): void {
     const suffix = details.length > 0 ? ` ${details.map(formatDetail).join(' ')}` : ''

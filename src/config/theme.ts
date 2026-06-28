@@ -7,6 +7,7 @@
  * injected at serve time by the web server using themeToCssVars().
  */
 import { getStoredThemeName } from '../core/theme-preference.js'
+import { APP } from './app.js'
 import { resolveTheme } from './themes/index.js'
 import type { ThemeTokens } from './theme-tokens.js'
 
@@ -27,7 +28,9 @@ export function colorsFromTheme(t: ThemeTokens) {
 }
 
 export const COLORS = colorsFromTheme(
-  resolveTheme(process.env['SWOOP_THEME'] ?? getStoredThemeName())
+  resolveTheme(
+    process.env[APP.themeEnvVar] ?? process.env[APP.legacyThemeEnvVar] ?? getStoredThemeName()
+  )
 )
 
 export const SIZES = {

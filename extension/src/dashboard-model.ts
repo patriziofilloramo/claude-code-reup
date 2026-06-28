@@ -3,7 +3,7 @@ import {
   sessionMatchesParsedQuery,
 } from '../../src/core/session/session-query.js'
 import { compareCockpitSessions } from './cockpit-model.js'
-import type { ExtensionProject, ExtensionSession } from './swoop-data.js'
+import type { ExtensionProject, ExtensionSession } from './reup-data.js'
 
 export type DashboardFilter = 'active' | 'all' | 'archived' | 'attention' | 'workspace'
 

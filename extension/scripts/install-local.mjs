@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url'
 
 const extensionRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(extensionRoot, 'package.json'), 'utf8'))
-const vsixPath = join(extensionRoot, 'dist', `swoop-vscode-${manifest.version}.vsix`)
+const vsixPath = join(extensionRoot, 'dist', `reup-vscode-${manifest.version}.vsix`)
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const codeCommand =
-  process.env.SWOOP_VSCODE_CLI || (process.platform === 'win32' ? 'code.cmd' : 'code')
+  process.env.REUP_VSCODE_CLI || (process.platform === 'win32' ? 'code.cmd' : 'code')
 const vsceCommand = join(
   extensionRoot,
   'node_modules',
@@ -44,9 +44,9 @@ run(
   ['--install-extension', vsixPath, '--force'],
   [
     `Unable to run "${codeCommand}".`,
-    'Install the VS Code shell command, or set SWOOP_VSCODE_CLI to its executable path.',
+    'Install the VS Code shell command, or set REUP_VSCODE_CLI to its executable path.',
     'You can also install the generated VSIX with "Extensions: Install from VSIX...".',
   ].join('\n')
 )
 
-console.log(`Installed Swoop for Claude Code ${manifest.version}. Reload VS Code to activate it.`)
+console.log(`Installed Reup for Claude Code ${manifest.version}. Reload VS Code to activate it.`)

@@ -1,7 +1,7 @@
 /** Org schema version stored in org.json. Bump when the shape changes incompatibly. */
 export const ORG_SCHEMA_VERSION = 1 as const
 
-/** Top-level shape of ~/.claude/swoop/org.json. */
+/** Top-level shape of ~/.claude/reup/org.json. */
 export interface OrgData {
   schemaVersion: typeof ORG_SCHEMA_VERSION
   /** Global ordered tag palette — best-effort recency cache, not source of truth. */

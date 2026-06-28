@@ -21,7 +21,7 @@ export type DirectResumeSelection = { result: DirectResumeTarget } | { error: st
 /** Resumes a selected session, opening an interactive picker when no selector is provided. */
 export async function runResumeCommand(commandArguments: string[]): Promise<void> {
   if (commandArguments.length > 1) {
-    failCommand('usage: swoop resume [session-id-or-prefix]')
+    failCommand('usage: reup resume [session-id-or-prefix]')
     return
   }
 
@@ -100,7 +100,7 @@ export function selectResumeTarget(projects: Project[], selector: string): Direc
     }
   }
 
-  // Preserve direct resume for a valid full UUID that is absent from Swoop's
+  // Preserve direct resume for a valid full UUID that is absent from Reup's
   // current discovery result. Claude Code remains the authority for that ID.
   return isValidSessionId(selector) ? { result: { sessionId: selector } } : selection
 }

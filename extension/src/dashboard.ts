@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from 'node:path'
 
 import * as vscode from 'vscode'
 
-import { BRAND_COLOR_MID, renderSwoopMarkSvg } from '../../src/brand.js'
+import { BRAND_COLOR_MID, renderReupMarkSvg } from '../../src/brand.js'
 import { APP } from '../../src/config/app.js'
 import { resolveTheme } from '../../src/config/themes/index.js'
 import { normalizePathForComparison } from '../../src/core/project/path-comparison.js'
@@ -18,12 +18,12 @@ import {
 } from './dashboard-model.js'
 import type { ExtensionCockpitModel } from './cockpit-model.js'
 import { copySessionHandoff } from './handoff.js'
-import type { SwoopInspectorProvider } from './session-detail.js'
-import type { SwoopLogger } from './logger.js'
+import type { ReupInspectorProvider } from './session-detail.js'
+import type { ReupLogger } from './logger.js'
 import type { ResumeTarget, SessionResumeService } from './resume-target.js'
-import type { ExtensionSession, SwoopDataSource } from './swoop-data.js'
+import type { ExtensionSession, ReupDataSource } from './reup-data.js'
 
-const VIEW_TYPE = 'swoop.dashboard'
+const VIEW_TYPE = 'reup.dashboard'
 
 type DashboardMessage =
   | { type: 'archive'; projectId: string; sessionId: string }
@@ -53,7 +53,7 @@ type DashboardMessage =
   | { type: 'revealProject'; projectId: string; sessionId: string }
   | { type: 'selectSession'; projectId: string; requestId: number; sessionId: string }
 
-export class SwoopDashboard implements vscode.Disposable {
+export class ReupDashboard implements vscode.Disposable {
   private readonly panelDisposables: vscode.Disposable[] = []
   private panel: vscode.WebviewPanel | null = null
   private readonly previewCache = new Map<string, SessionPreview>()
@@ -65,9 +65,9 @@ export class SwoopDashboard implements vscode.Disposable {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly dataSource: SwoopDataSource,
-    private readonly inspector: SwoopInspectorProvider,
-    private readonly logger: SwoopLogger,
+    private readonly dataSource: ReupDataSource,
+    private readonly inspector: ReupInspectorProvider,
+    private readonly logger: ReupLogger,
     private readonly onDidMutate: () => Promise<void>,
     private readonly resumeService: SessionResumeService,
     private readonly onDidChangeVisibility: (visible: boolean) => void,
@@ -81,12 +81,12 @@ export class SwoopDashboard implements vscode.Disposable {
     }
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
-      'Swoop Dashboard',
+      'Reup Dashboard',
       vscode.ViewColumn.One,
       { enableScripts: true, retainContextWhenHidden: true }
     )
     this.panel = panel
-    panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'swoop.svg')
+    panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'reup.svg')
     this.panelDisposables.push(
       panel.webview.onDidReceiveMessage((message: unknown) => {
         if (!isDashboardMessage(message)) {
@@ -143,7 +143,7 @@ export class SwoopDashboard implements vscode.Disposable {
       this.workspaceProjectIds = new Set(model.workspaceProjects.map((group) => group.project.id))
       await this.panel.webview.postMessage({
         model: this.dashboardModel,
-        resumeCapabilities: this.resumeService.getCapabilities(),
+        resumeCapabilities: await this.resumeService.getCapabilities(),
         type: 'model',
         workspaceProjectIds: [...this.workspaceProjectIds],
       })
@@ -256,13 +256,13 @@ export class SwoopDashboard implements vscode.Disposable {
             target: message.target,
           })
           await this.panel?.webview.postMessage({
-            resumeCapabilities: this.resumeService.getCapabilities(),
+            resumeCapabilities: await this.resumeService.getCapabilities(),
             type: 'resumeCapabilities',
           })
           break
         case 'copyHandoff':
           await copySessionHandoff(session, this.logger)
-          void vscode.window.showInformationMessage('Swoop handoff packet copied.')
+          void vscode.window.showInformationMessage('Reup handoff packet copied.')
           break
         case 'editAlias':
           await this.inspector.editAlias(session)
@@ -395,8 +395,10 @@ function isDashboardMessage(value: unknown): value is DashboardMessage {
 function renderDashboardHtml(): string {
   const nonce = randomBytes(18).toString('base64')
   const brandMarkup = renderBrandMarkup()
-  const theme = resolveTheme(process.env['SWOOP_THEME'] ?? getStoredThemeName())
-  const themeCss = `:root{--swoop-accent:${theme.accent};--swoop-accent-hi:${theme.accentHi};--good:${theme.green};--warn:${theme.amber};--orange:${theme.orange};--bad:${theme.red};}`
+  const theme = resolveTheme(
+    process.env[APP.themeEnvVar] ?? process.env[APP.legacyThemeEnvVar] ?? getStoredThemeName()
+  )
+  const themeCss = `:root{--reup-accent:${theme.accent};--reup-accent-hi:${theme.accentHi};--good:${theme.green};--warn:${theme.amber};--orange:${theme.orange};--bad:${theme.red};}`
   return `<!doctype html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
@@ -407,7 +409,7 @@ function renderDashboardHtml(): string {
 }
 
 function renderBrandMarkup(): string {
-  return `<div class="brand"><span class="mark brand-mark">${renderSwoopMarkSvg({ className: 'brand-mark-svg', size: 48 })}</span><span class="brand-copy"><span class="brand-title">Swoop</span><span class="brand-subtitle">claude code</span></span></div>`
+  return `<div class="brand"><span class="mark brand-mark">${renderReupMarkSvg({ className: 'brand-mark-svg', size: 48 })}</span><span class="brand-copy"><span class="brand-title">Reup</span><span class="brand-subtitle">claude code</span></span></div>`
 }
 
 const DASHBOARD_CSS = String.raw`
@@ -417,7 +419,7 @@ const DASHBOARD_CSS = String.raw`
 .hero{border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-radius:12px;padding:14px;margin-bottom:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent)}.eyebrow{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.hero h2{margin:5px 0;font-size:18px}.hero p{margin:0 0 10px;color:var(--muted)}.filter-row{display:flex;gap:6px;margin-bottom:10px}.chip{border:1px solid var(--line);border-radius:999px;padding:4px 9px;background:transparent;color:var(--muted);cursor:pointer}.chip.active{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .session{display:grid;grid-template-columns:12px 1fr;gap:10px;padding:11px 9px;border-radius:9px;cursor:pointer;border:1px solid transparent}.session:hover,.session.active{background:var(--vscode-list-hoverBackground);border-color:var(--line)}.dot{width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--vscode-disabledForeground)}.dot.live{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 18%,transparent)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.session h3{margin:0;font-size:13px}.meta{margin-top:4px;color:var(--muted);font-size:11px;display:flex;gap:7px;flex-wrap:wrap}.tags{color:var(--accent)}.detail h1{font-size:25px;margin:4px 0 7px}.detail h2{font-size:15px;margin:22px 0 7px}.detail p{line-height:1.55}.advice{padding:12px 14px;border-left:3px solid var(--accent);background:var(--vscode-textBlockQuote-background);border-radius:0 8px 8px 0}.actions{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}.facts{display:flex;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px}.fact{padding:4px 7px;border:1px solid var(--line);border-radius:999px}.preview-loading{color:var(--muted);padding:30px 0}.md{line-height:1.55;overflow-wrap:anywhere}.md pre{overflow:auto;background:var(--vscode-textCodeBlock-background);padding:10px;border-radius:7px}.md code{font-family:var(--vscode-editor-font-family);background:var(--vscode-textCodeBlock-background);padding:1px 3px;border-radius:3px}.md table{border-collapse:collapse;width:100%}.md td,.md th{border:1px solid var(--line);padding:5px;text-align:left}.files button{display:block;border:0;background:transparent;color:var(--accent);padding:3px 0;cursor:pointer;text-align:left}.toast{position:fixed;right:18px;bottom:18px;max-width:420px;padding:10px 13px;border:1px solid var(--bad);border-radius:8px;background:var(--panel);box-shadow:0 8px 30px #0005}
 .brand{gap:10px;min-width:118px}.brand .mark{width:32px;height:32px;border-radius:10px;font-size:16px}.brand-mark{position:relative;background:transparent!important}.brand-mark-svg{display:block;width:100%;height:100%}.brand-copy{display:flex;flex-direction:column;line-height:1}.brand-title{font-weight:780;font-size:17px;letter-spacing:-.02em}.brand-subtitle{margin-top:4px;color:${BRAND_COLOR_MID};font-size:9px;font-style:italic;font-weight:550;letter-spacing:.13em;text-transform:lowercase;opacity:.9}.usage{display:flex;align-items:center;gap:7px;margin-left:auto;color:var(--muted);font-size:10px;white-space:nowrap}.usage-heading{font-weight:700;letter-spacing:.08em;text-transform:uppercase}.usage-limit{display:grid;grid-template-columns:auto 42px auto;align-items:center;gap:5px}.usage-bar{height:3px;border-radius:4px;background:var(--vscode-progressBar-background);opacity:.24;overflow:hidden}.usage-fill{display:block;height:100%;background:var(--accent)}.usage-limit.warn .usage-fill{background:var(--warn)}.usage-limit.danger .usage-fill{background:var(--bad)}.usage-limit.stale{opacity:.58}.usage-credit{color:var(--good)}.usage-empty{font-style:italic;opacity:.72}.project-kicker{color:var(--accent);font-family:var(--vscode-editor-font-family);font-size:11px;font-weight:550;line-height:1.45;overflow-wrap:anywhere}.context-menu{position:fixed;z-index:20;min-width:210px;padding:5px;border:1px solid var(--line);border-radius:9px;background:var(--vscode-menu-background,var(--panel));color:var(--vscode-menu-foreground,var(--vscode-foreground));box-shadow:0 12px 35px #0007}.context-menu button{display:flex;width:100%;align-items:center;gap:9px;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:inherit;text-align:left;cursor:pointer}.context-menu button:hover{background:var(--vscode-menu-selectionBackground,var(--vscode-list-hoverBackground));color:var(--vscode-menu-selectionForeground,var(--vscode-foreground))}.context-menu .sep{height:1px;margin:4px;background:var(--line)}.context-menu .danger{color:var(--bad)}
-.search input{padding-right:108px}.deep{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:0 10px;line-height:normal;white-space:nowrap;font-size:12px}.usage-limit{grid-template-columns:auto 52px auto}.usage-bar{display:block;width:52px;height:5px;border:0;border-radius:4px;overflow:hidden;background:color-mix(in srgb,var(--swoop-accent) 16%,transparent);appearance:none;opacity:1}.usage-bar::-webkit-progress-bar{background:color-mix(in srgb,var(--swoop-accent) 16%,transparent);border-radius:4px}.usage-bar::-webkit-progress-value{background:var(--swoop-accent);border-radius:4px;box-shadow:0 0 5px color-mix(in srgb,var(--swoop-accent) 45%,transparent)}.usage-limit.warn .usage-bar::-webkit-progress-value{background:var(--warn)}.usage-limit.danger .usage-bar::-webkit-progress-value{background:var(--bad)}
+.search input{padding-right:108px}.deep{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:0 10px;line-height:normal;white-space:nowrap;font-size:12px}.usage-limit{grid-template-columns:auto 52px auto}.usage-bar{display:block;width:52px;height:5px;border:0;border-radius:4px;overflow:hidden;background:color-mix(in srgb,var(--reup-accent) 16%,transparent);appearance:none;opacity:1}.usage-bar::-webkit-progress-bar{background:color-mix(in srgb,var(--reup-accent) 16%,transparent);border-radius:4px}.usage-bar::-webkit-progress-value{background:var(--reup-accent);border-radius:4px;box-shadow:0 0 5px color-mix(in srgb,var(--reup-accent) 45%,transparent)}.usage-limit.warn .usage-bar::-webkit-progress-value{background:var(--warn)}.usage-limit.danger .usage-bar::-webkit-progress-value{background:var(--bad)}
 @media(max-width:900px){.layout{grid-template-columns:190px 1fr}.detail{display:none}.layout.show-detail .sessions{display:none}.layout.show-detail .detail{display:block}.top{flex-wrap:wrap}.search{order:3;flex-basis:100%;max-width:none}}@media(max-width:620px){.layout{grid-template-columns:1fr}.rail{display:none}.brand-copy{display:none}}
 .loading .brand{margin:auto}.loading .brand .mark{width:48px;height:48px;border-radius:14px;font-size:24px}.resume-split{display:inline-flex}.resume-split .resume-main{border-radius:7px 0 0 7px}.resume-split .resume-menu{min-width:30px;padding:7px 8px;border-left:1px solid color-mix(in srgb,var(--vscode-button-foreground) 25%,transparent);border-radius:0 7px 7px 0}.resume-split button:disabled{opacity:.52;cursor:not-allowed}.remember-choice{display:flex;align-items:center;gap:8px;padding:7px 9px;color:var(--muted);font-size:11px;cursor:pointer}.remember-choice input{accent-color:var(--accent)}
 `
@@ -426,7 +428,7 @@ const DASHBOARD_SCRIPT = String.raw`
 const vscode=acquireVsCodeApi();const app=document.getElementById('app');let model=null,usage=null,resumeCapabilities={claudeExtensionAvailable:false,preferredTarget:null},workspaceIds=new Set(),selected=null,project=null,filter='all',query='',preview=null,previewRequest=0,searchRequest=0,metadataRequest=0,metadataSessionIds=null,deepMatches=null;const saved=vscode.getState()||{},hadSavedSelection=Object.prototype.hasOwnProperty.call(saved,'selected');filter=saved.filter||'all';query=saved.query||'';project=saved.project||null;selected=saved.selected||null;
 window.addEventListener('message',e=>{const m=e.data;if(m.type==='model'){const firstModel=model===null,uiState=captureUiState();model=m.model;resumeCapabilities=m.resumeCapabilities||resumeCapabilities;workspaceIds=new Set(m.workspaceProjectIds);if(selected&&!model.sessions.some(s=>s.id===selected))selected=null;if(firstModel&&!hadSavedSelection&&!selected&&model.continueNow)selected=model.continueNow.id;render();restoreUiState(uiState);requestMetadataSearch();if(selected)loadPreview(selected)}else if(m.type==='resumeCapabilities'){resumeCapabilities=m.resumeCapabilities||resumeCapabilities;renderPreservingUiState()}else if(m.type==='usage'){usage=m.usage;renderUsage()}else if(m.type==='refreshState'){setRefreshState(m.refreshing)}else if(m.type==='preview'&&m.requestId===previewRequest){const uiState=captureUiState();preview=m.preview;renderDetail();restoreUiState(uiState)}else if(m.type==='metadataResults'&&m.requestId===metadataRequest){const uiState=captureUiState();metadataSessionIds=new Set(m.sessionIds);renderSearchResults();restoreUiState(uiState)}else if(m.type==='searchResults'&&m.requestId===searchRequest){deepMatches=m.matches;renderPreservingUiState()}else if(m.type==='searchProgress'&&m.requestId===searchRequest){setSearchStatus(m.scanned+'/'+m.total)}else if(m.type==='error'&&!model){renderLoadError(m.message)}else if(m.type==='error'||m.type==='actionError')toast(m.message)});
 function post(type,extra={}){vscode.postMessage({type,...extra})}function persist(){vscode.setState({filter,query,project,selected})}
-function renderLoadError(message){app.innerHTML='<div class="loading">'+BRAND_MARKUP+'<h2>Could not load Swoop</h2><p>'+esc(message)+'</p><button class="btn primary" id="retry">Try again</button></div>';document.getElementById('retry').onclick=()=>{app.innerHTML='<div class="loading">'+BRAND_MARKUP+'<p>Mapping your Claude work…</p></div>';post('refresh')}}
+function renderLoadError(message){app.innerHTML='<div class="loading">'+BRAND_MARKUP+'<h2>Could not load Reup</h2><p>'+esc(message)+'</p><button class="btn primary" id="retry">Try again</button></div>';document.getElementById('retry').onclick=()=>{app.innerHTML='<div class="loading">'+BRAND_MARKUP+'<p>Mapping your Claude work…</p></div>';post('refresh')}}
 function render(){if(!model){return}const sessions=visibleSessions();app.innerHTML='<div class="shell"><header class="top">'+BRAND_MARKUP+'<div class="search"><input id="search" value="'+esc(query)+'" placeholder="Find sessions, projects, branches, tags…"><button class="btn deep" id="deep">Deep search</button></div><div class="usage" id="usage"></div><button class="btn" id="refresh">Refresh</button></header><main class="layout '+(selected?'show-detail':'')+'" id="layout">'+rail()+'<section class="sessions">'+hero()+filters()+'<div id="search-status"></div>'+sessionRows(sessions)+'</section><section class="detail" id="detail"></section></main></div>';bind();renderUsage();renderDetail()}
 function renderPreservingUiState(resetDetailScroll=false){const state=captureUiState();if(resetDetailScroll)delete state.scroll.detail;render();restoreUiState(state)}
 function captureUiState(){const scroll={};for(const name of ['rail','sessions','detail']){const element=document.querySelector('.'+name);if(element)scroll[name]=[element.scrollLeft,element.scrollTop]}if(!document.hasFocus())return {focus:null,scroll};const element=document.activeElement;if(!(element instanceof HTMLElement)||element===document.body)return {focus:null,scroll};const focus={selector:focusSelector(element),end:null,start:null};if(element instanceof HTMLInputElement){focus.start=element.selectionStart;focus.end=element.selectionEnd}return {focus:focus.selector?focus:null,scroll}}

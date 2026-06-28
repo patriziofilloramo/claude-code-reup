@@ -7,7 +7,7 @@ import {
   projectMemoryDescription,
   statusLabel,
 } from './formatting.js'
-import type { ExtensionSession } from './swoop-data.js'
+import type { ExtensionSession } from './reup-data.js'
 
 export type InspectorMessage =
   | { type: 'archive' }
@@ -108,7 +108,7 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
   ${fileSection('Files Touched', preview.touchedFiles)}
   ${fileSection('Files Read', preview.automaticContext.readFiles)}
   ${preview.pendingToolName ? textSection('Pending Tool', preview.pendingToolName) : ''}
-  <p class="muted">Local transcript-derived view. Swoop never sends this content to a remote service.</p>
+  <p class="muted">Local transcript-derived view. Reup never sends this content to a remote service.</p>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     document.addEventListener('click', (event) => {
@@ -252,7 +252,7 @@ function renderMarkdown(markdown: string): string {
 function renderMarkdownInline(value: string): string {
   const code: string[] = []
   let escaped = escapeHtml(value).replace(/`([^`]+)`/g, (_match, content: string) => {
-    const placeholder = `SWOOPCODEPLACEHOLDER${code.length}END`
+    const placeholder = `REUPCODEPLACEHOLDER${code.length}END`
     code.push(`<code>${content}</code>`)
     return placeholder
   })
@@ -261,7 +261,7 @@ function renderMarkdownInline(value: string): string {
     .replace(/__([^_]+)__/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
   return escaped.replace(
-    /SWOOPCODEPLACEHOLDER(\d+)END/g,
+    /REUPCODEPLACEHOLDER(\d+)END/g,
     (_match, index: string) => code[Number(index)] ?? ''
   )
 }

@@ -13,7 +13,7 @@ describe('usage status-line integration', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-statusline-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'reup-statusline-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
   })
@@ -24,7 +24,7 @@ describe('usage status-line integration', () => {
     await rm(temporaryClaudeDirectory, { force: true, recursive: true })
   })
 
-  it('installs idempotently and removes a new Swoop status line', async () => {
+  it('installs idempotently and removes a new Reup status line', async () => {
     expect(await setupUsageStatusLine()).toMatchObject({ changed: true, replacedExisting: false })
     expect(await setupUsageStatusLine()).toEqual({
       changed: false,
@@ -69,13 +69,13 @@ describe('usage status-line integration', () => {
     expect(await readSettings()).toEqual({ statusLine: previousStatusLine, theme: 'dark' })
   })
 
-  it('refreshes a Swoop-owned command after the executable path changes', async () => {
+  it('refreshes a Reup-owned command after the executable path changes', async () => {
     const previousStatusLine = { command: 'original-statusline', type: 'command' }
     const oldCcmCommand = 'node "/old/location/index.js" usage capture'
     await writeSettings({ statusLine: { command: oldCcmCommand, type: 'command' } })
-    await mkdir(join(temporaryClaudeDirectory, 'swoop'), { recursive: true })
+    await mkdir(join(temporaryClaudeDirectory, 'reup'), { recursive: true })
     await writeFile(
-      join(temporaryClaudeDirectory, 'swoop', 'statusline-integration.json'),
+      join(temporaryClaudeDirectory, 'reup', 'statusline-integration.json'),
       JSON.stringify({
         hadPreviousStatusLine: true,
         installedCommand: oldCcmCommand,
@@ -97,7 +97,7 @@ describe('usage status-line integration', () => {
     expect(await readSettings()).toEqual({ statusLine: previousStatusLine })
   })
 
-  it('upgrades a Swoop-owned status line that predates periodic refresh', async () => {
+  it('upgrades a Reup-owned status line that predates periodic refresh', async () => {
     await setupUsageStatusLine()
     const configured = await readSettings()
     const statusLine = configured['statusLine'] as { command: string; type: 'command' }

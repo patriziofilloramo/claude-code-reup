@@ -341,7 +341,7 @@ function showToast(message, variant) {
 }
 
 function reportClientError(error, context) {
-  console.error('[swoop] unhandled client error' + (context ? ' (' + context + ')' : ''), error)
+  console.error('[reup] unhandled client error' + (context ? ' (' + context + ')' : ''), error)
   try {
     if (elements.footerStatus) {
       elements.footerStatus.textContent = STRINGS.clientUnexpectedStatus
@@ -349,7 +349,7 @@ function reportClientError(error, context) {
     }
     showToast(STRINGS.clientUnexpectedError, 'err')
   } catch (reportError) {
-    console.error('[swoop] failed to report client error:', reportError)
+    console.error('[reup] failed to report client error:', reportError)
   }
 }
 

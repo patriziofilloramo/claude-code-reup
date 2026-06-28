@@ -14,7 +14,7 @@ describe('web routes', () => {
   let originalClaudeDirectory: string | undefined
 
   beforeEach(async () => {
-    claudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-routes-test-'))
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'reup-routes-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = claudeDirectory
   })
@@ -256,7 +256,7 @@ describe('web routes', () => {
 
     expect(response.status).toBe(200)
     expect(body.context.goal).toBe('hello')
-    expect(body.markdown).toContain('# Swoop Handoff:')
+    expect(body.markdown).toContain('# Reup Handoff:')
     expect(body.markdown).toContain('## Goal\n\nhello')
     expect(body.markdown).toContain(`claude --resume ${SESSION_ID}`)
   })

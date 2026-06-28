@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { APP } from '../../config/app.js'
-import { getSwoopDirectory, getClaudeDirectory } from '../project/claude-paths.js'
+import { getReupDirectory, getClaudeDirectory } from '../project/claude-paths.js'
 import { clearLiveUsageSnapshots } from './live-usage.js'
 
 const INTEGRATION_SCHEMA_VERSION = 1
@@ -29,7 +29,7 @@ interface StatusLineConfiguration {
   type: 'command'
 }
 
-/** Installs Swoop as the user-level Claude Code status line. */
+/** Installs Reup as the user-level Claude Code status line. */
 export async function setupUsageStatusLine(replaceExisting = false): Promise<SetupResult> {
   const settings = await readJsonObject(getSettingsPath())
   const integration = await readIntegration()
@@ -77,7 +77,7 @@ export async function setupUsageStatusLine(replaceExisting = false): Promise<Set
   return { changed: true, command: installedCommand, replacedExisting: hadPreviousStatusLine }
 }
 
-/** Returns true when Swoop's usage capture is the active Claude Code status line. */
+/** Returns true when Reup's usage capture is the active Claude Code status line. */
 export async function isUsageStatusLineConfigured(): Promise<boolean> {
   const integration = await readIntegration()
   if (!integration) return false
@@ -92,7 +92,7 @@ export async function removeUsageStatusLine(): Promise<RemoveResult> {
 
   const settings = await readJsonObject(getSettingsPath())
   if (statusLineCommand(settings['statusLine']) !== integration.installedCommand) {
-    throw new Error('Claude Code statusLine changed after Swoop setup; refusing to overwrite it')
+    throw new Error('Claude Code statusLine changed after Reup setup; refusing to overwrite it')
   }
 
   if (integration.hadPreviousStatusLine) settings['statusLine'] = integration.previousStatusLine
@@ -124,7 +124,7 @@ function getSettingsPath(): string {
 }
 
 function getIntegrationPath(): string {
-  return join(getSwoopDirectory(), 'statusline-integration.json')
+  return join(getReupDirectory(), 'statusline-integration.json')
 }
 
 async function readIntegration(): Promise<StatusLineIntegration | null> {

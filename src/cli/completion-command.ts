@@ -8,25 +8,25 @@ type SupportedShell = 'bash' | 'powershell' | 'zsh'
 
 const COMPLETION_SCRIPTS: Record<SupportedShell, string> = {
   bash: [
-    '_swoop_complete() {',
+    '_reup_complete() {',
     '  local current="${COMP_WORDS[COMP_CWORD]}"',
     '  if [[ "$COMP_CWORD" -eq 2 && ("${COMP_WORDS[1]}" == "resume" || "${COMP_WORDS[1]}" == "handoff") ]]; then',
     '    compopt -o nosort 2>/dev/null || true',
-    '    COMPREPLY=( $(swoop __complete-session-ids "$current") )',
+    '    COMPREPLY=( $(reup __complete-session-ids "$current") )',
     '  elif [[ "${COMP_WORDS[1]}" == "list" && "$current" == -* ]]; then',
     '    COMPREPLY=( $(compgen -W "--active --archived --attention --json --limit --project --status --tag --group --stack" -- "$current") )',
     '  fi',
     '}',
-    'complete -F _swoop_complete swoop',
+    'complete -F _reup_complete reup',
   ].join('\n'),
-  powershell: String.raw`Register-ArgumentCompleter -Native -CommandName swoop, swoop.cmd -ScriptBlock {
+  powershell: String.raw`Register-ArgumentCompleter -Native -CommandName reup, reup.cmd -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
   if ($elements.Count -ge 2 -and $elements[1] -in @('resume', 'handoff')) {
-    $swoopCommand = Get-Command swoop.cmd -ErrorAction SilentlyContinue
-    if (-not $swoopCommand) { $swoopCommand = Get-Command swoop -ErrorAction SilentlyContinue }
-    if ($swoopCommand) {
-      & $swoopCommand __complete-session-ids $wordToComplete | ForEach-Object {
+    $reupCommand = Get-Command reup.cmd -ErrorAction SilentlyContinue
+    if (-not $reupCommand) { $reupCommand = Get-Command reup -ErrorAction SilentlyContinue }
+    if ($reupCommand) {
+      & $reupCommand __complete-session-ids $wordToComplete | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
       }
     }
@@ -36,38 +36,38 @@ const COMPLETION_SCRIPTS: Record<SupportedShell, string> = {
       ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_) }
   }
 }`,
-  zsh: String.raw`_swoop_complete() {
+  zsh: String.raw`_reup_complete() {
   if (( CURRENT == 3 )) && [[ "$words[2]" == "resume" || "$words[2]" == "handoff" ]]; then
-    compadd -V swoop-sessions -- $(swoop __complete-session-ids "$words[CURRENT]")
+    compadd -V reup-sessions -- $(reup __complete-session-ids "$words[CURRENT]")
   elif [[ "$words[2]" == "list" && "$words[CURRENT]" == -* ]]; then
     compadd -- --active --archived --attention --json --limit --project --status --tag --group --stack
   fi
 }
-compdef _swoop_complete swoop`,
+compdef _reup_complete reup`,
 }
 
 const ACTIVATION_INSTRUCTIONS: Record<SupportedShell, string[]> = {
   bash: [
     'Paste the script above into your terminal to activate for this session.',
     'For persistent completion, add this line to ~/.bashrc or ~/.bash_profile:',
-    '  eval "$(swoop completion bash)"',
+    '  eval "$(reup completion bash)"',
   ],
   zsh: [
     'Paste the script above into your terminal to activate for this session.',
     'For persistent completion, add this line to ~/.zshrc:',
-    '  eval "$(swoop completion zsh)"',
+    '  eval "$(reup completion zsh)"',
   ],
   powershell: [
     'Paste the script above into your PowerShell session to activate for this session.',
     'For persistent completion, add this line to your $PROFILE:',
-    '  swoop completion powershell | Out-String | Invoke-Expression',
+    '  reup completion powershell | Out-String | Invoke-Expression',
   ],
 }
 
 /** Prints a shell-native completion registration script to stdout with activation instructions on stderr. */
 export function printCompletionScript(commandArguments: string[]): void {
   if (commandArguments.length !== 1 || !isSupportedShell(commandArguments[0])) {
-    failCommand('usage: swoop completion <powershell|bash|zsh>')
+    failCommand('usage: reup completion <powershell|bash|zsh>')
     return
   }
 
@@ -75,7 +75,7 @@ export function printCompletionScript(commandArguments: string[]): void {
   writeOutput(COMPLETION_SCRIPTS[shell])
 
   // Activation instructions are only useful when the user reads stdout directly.
-  // Suppress them when stdout is piped/captured (eval "$(swoop completion bash)", etc.)
+  // Suppress them when stdout is piped/captured (eval "$(reup completion bash)", etc.)
   // so the extra output doesn't confuse scripts that source the result.
   if (process.stdout.isTTY) {
     const lines = ACTIVATION_INSTRUCTIONS[shell]

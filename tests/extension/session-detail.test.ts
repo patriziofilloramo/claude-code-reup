@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { isInspectorMessage, renderInspectorHtml } from '../../extension/src/inspector-html.js'
-import type { ExtensionSession } from '../../extension/src/swoop-data.js'
+import type { ExtensionSession } from '../../extension/src/reup-data.js'
 import { extractSessionPreview } from '../../src/core/session/session-preview.js'
 
 describe('VS Code Session Inspector', () => {
@@ -72,7 +72,7 @@ describe('VS Code Session Inspector', () => {
                 '',
                 '| Name | Value |',
                 '| --- | --- |',
-                '| Package | `swoop` |',
+                '| Package | `reup` |',
                 '',
                 '```ts',
                 'const unsafe = "<script>"',
@@ -97,7 +97,7 @@ describe('VS Code Session Inspector', () => {
     expect(html).toContain('<ol><li>First step</li><li>Second <code>step</code></li></ol>')
     expect(html).toContain('<table>')
     expect(html).toContain('<th>Name</th>')
-    expect(html).toContain('<td><code>swoop</code></td>')
+    expect(html).toContain('<td><code>reup</code></td>')
     expect(html).toContain('&lt;script&gt;')
     expect(html).not.toContain('const unsafe = "<script>"')
   })

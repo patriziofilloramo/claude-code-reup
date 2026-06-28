@@ -3,30 +3,62 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { APP } from '../../src/config/app.js'
-import { getSwoopDirectory } from '../../src/core/project/claude-paths.js'
+import { getReupDirectory } from '../../src/core/project/claude-paths.js'
 
-const LEGACY_NAME = ['c', 'c', 'm'].join('')
+const LEGACY_NAME = ['swo', 'op'].join('')
+const LEGACY_ENV_PREFIX = ['SW', 'OOP'].join('')
 const REPOSITORY_ROOT = process.cwd()
-const PUBLIC_DOCUMENTS = ['CHANGELOG.md', 'CLAUDE.md', 'README.md', 'ROADMAP.md']
+const PUBLIC_DOCUMENTS = [
+  'CHANGELOG.md',
+  'CLAUDE.md',
+  'README.md',
+  'ROADMAP.md',
+  'extension/README.md',
+]
 const PUBLIC_DIRECTORIES = ['Documents', 'src']
 
-describe('Swoop branding', () => {
+describe('Reup branding', () => {
   it('publishes the canonical package and executable names', async () => {
     const packageJson = JSON.parse(await readRepositoryFile('package.json')) as {
       bin: Record<string, string>
       name: string
     }
 
-    expect(packageJson.name).toBe('claude-code-swoop')
-    expect(packageJson.bin).toEqual({ swoop: './dist/index.js' })
+    expect(packageJson.name).toBe('@patriziofilloramo/reup')
+    expect(packageJson.bin).toEqual({ reup: './dist/index.js' })
   })
 
-  it('uses Swoop identifiers for persistent data and environment variables', () => {
-    expect(getSwoopDirectory()).toMatch(/[\\/]swoop$/)
-    expect(APP.cloudLinkFile).toBe('.swoop-link')
-    expect(APP.debugEnvVar).toBe('SWOOP_DEBUG')
-    expect(APP.noOpenEnvVar).toBe('SWOOP_NO_OPEN')
-    expect(APP.portEnvVar).toBe('SWOOP_PORT')
+  it('publishes the canonical VS Code extension identity', async () => {
+    const manifest = JSON.parse(await readRepositoryFile('extension/package.json')) as {
+      contributes: {
+        commands: Array<{ command: string }>
+        viewsContainers: Record<string, unknown>
+      }
+      displayName: string
+      name: string
+      publisher: string
+    }
+
+    expect(manifest.name).toBe('reup-vscode')
+    expect(manifest.displayName).toBe('Reup for Claude Code')
+    expect(manifest.publisher).toBe('reup-local')
+    expect(Object.keys(manifest.contributes.viewsContainers)).toEqual(['activitybar'])
+    expect(manifest.contributes.commands.every((entry) => entry.command.startsWith('reup.'))).toBe(
+      true
+    )
+  })
+
+  it('uses Reup identifiers for persistent data and environment variables', () => {
+    expect(getReupDirectory()).toMatch(/[\\/]reup$/)
+    expect(APP.cloudLinkFile).toBe('.reup-link')
+    expect(APP.debugEnvVar).toBe('REUP_DEBUG')
+    expect(APP.legacyDebugEnvVar).toBe(`${LEGACY_ENV_PREFIX}_DEBUG`)
+    expect(APP.noOpenEnvVar).toBe('REUP_NO_OPEN')
+    expect(APP.legacyNoOpenEnvVar).toBe(`${LEGACY_ENV_PREFIX}_NO_OPEN`)
+    expect(APP.portEnvVar).toBe('REUP_PORT')
+    expect(APP.legacyPortEnvVar).toBe(`${LEGACY_ENV_PREFIX}_PORT`)
+    expect(APP.themeEnvVar).toBe('REUP_THEME')
+    expect(APP.legacyThemeEnvVar).toBe(`${LEGACY_ENV_PREFIX}_THEME`)
   })
 
   it('does not expose the legacy name in critical public surfaces', async () => {
@@ -41,9 +73,30 @@ describe('Swoop branding', () => {
   })
 
   it('uses the canonical sidecar, theme environment variable, and web title', async () => {
-    expect(await readRepositoryFile('src/core/session/session-metadata.ts')).toContain('swoop.json')
-    expect(await readRepositoryFile('src/config/theme.ts')).toContain('SWOOP_THEME')
-    expect(await readRepositoryFile('src/web/ui.html')).toContain('<title>Swoop</title>')
+    expect(await readRepositoryFile('src/core/session/session-metadata.ts')).toContain('reup.json')
+    expect(APP.themeEnvVar).toBe('REUP_THEME')
+    expect(await readRepositoryFile('src/web/ui.html')).toContain('<title>Reup</title>')
+  })
+
+  it('keeps hidden migration helpers for browser and VS Code state', async () => {
+    const clientConfig = await readRepositoryFile('src/web/client/01-config.js')
+    const extensionConfig = await readRepositoryFile('extension/src/configuration.ts')
+
+    expect(clientConfig).toContain("CONFIRM_RESUME_PREFERENCE = 'reup:confirmResume'")
+    expect(clientConfig).toContain("RAIL_STORAGE_KEY = 'reup:rail:'")
+    expect(clientConfig).toContain('migrateLegacyLocalStorageKeys()')
+    expect(extensionConfig).toContain("const CONFIG_SECTION = 'reup'")
+    expect(extensionConfig).toContain('getMigratedGlobalState')
+  })
+
+  it('uses the Reup restore mark instead of the old S-curve asset direction', async () => {
+    const brandSource = await readRepositoryFile('src/brand.ts')
+
+    expect(brandSource).toContain("BRAND_COLOR = '#47D7A1'")
+    expect(brandSource).toContain("BRAND_COLOR_DEEP = '#101315'")
+    expect(brandSource).toContain("BRAND_COLOR_MID = '#F0B85A'")
+    expect(brandSource).toContain('REUP_ACCENT_PATH')
+    expect(brandSource).not.toContain('S-curve')
   })
 })
 

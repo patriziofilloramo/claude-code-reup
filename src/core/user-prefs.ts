@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { ThemeName } from '../config/theme-tokens.js'
-import { getSwoopDirectory } from './project/claude-paths.js'
+import { getReupDirectory } from './project/claude-paths.js'
 
 export type AutoCleanup = 'off' | 'on' | 'auto'
 export type CrossDeviceSessionStorage = 'off' | 'on'
@@ -53,7 +53,7 @@ export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: 
 }
 
 function prefsPath(): string {
-  return join(getSwoopDirectory(), 'prefs.json')
+  return join(getReupDirectory(), 'prefs.json')
 }
 
 export function readUserPrefsSync(): UserPrefs {
@@ -115,7 +115,7 @@ export async function readUserPrefs(): Promise<UserPrefs> {
 }
 
 export function writeUserPrefsSync(prefs: UserPrefs): void {
-  mkdirSync(getSwoopDirectory(), { recursive: true })
+  mkdirSync(getReupDirectory(), { recursive: true })
   writeFileSync(prefsPath(), JSON.stringify(prefs, null, 2) + '\n', 'utf8')
 }
 

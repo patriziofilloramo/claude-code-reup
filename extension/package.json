@@ -1,15 +1,15 @@
 {
-  "name": "swoop-vscode",
-  "displayName": "Swoop for Claude Code",
+  "name": "reup-vscode",
+  "displayName": "Reup for Claude Code",
   "description": "Find, understand, and safely resume Claude Code sessions across every project.",
-  "version": "0.1.24",
-  "publisher": "swoop-local",
+  "version": "0.1.25",
+  "publisher": "reup-local",
   "private": true,
-  "icon": "media/swoop-brand.png",
+  "icon": "media/reup-brand.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/patriziofilloramo/claude-code-swoop.git"
+    "url": "https://github.com/patriziofilloramo/reup.git"
   },
   "type": "module",
   "engines": {
@@ -33,109 +33,109 @@
   },
   "main": "./dist/extension.cjs",
   "activationEvents": [
-    "onCommand:swoop.diagnostics",
-    "onCommand:swoop.focusCockpit",
-    "onCommand:swoop.openSessionDetail",
-    "onCommand:swoop.openDashboard",
-    "onCommand:swoop.refreshSessions",
-    "onCommand:swoop.resumeHere",
-    "onCommand:swoop.resumeSession",
-    "onCommand:swoop.searchSessions",
-    "onCommand:swoop.tree.copyHandoff",
-    "onCommand:swoop.tree.copySessionId",
-    "onCommand:swoop.tree.editAlias",
-    "onCommand:swoop.tree.editTags",
-    "onCommand:swoop.tree.resumeSession",
-    "onCommand:swoop.tree.revealProjectFolder",
-    "onCommand:swoop.tree.toggleArchive",
-    "onView:swoop.sessions",
-    "onView:swoop.inspector"
+    "onCommand:reup.diagnostics",
+    "onCommand:reup.focusCockpit",
+    "onCommand:reup.openSessionDetail",
+    "onCommand:reup.openDashboard",
+    "onCommand:reup.refreshSessions",
+    "onCommand:reup.resumeHere",
+    "onCommand:reup.resumeSession",
+    "onCommand:reup.searchSessions",
+    "onCommand:reup.tree.copyHandoff",
+    "onCommand:reup.tree.copySessionId",
+    "onCommand:reup.tree.editAlias",
+    "onCommand:reup.tree.editTags",
+    "onCommand:reup.tree.resumeSession",
+    "onCommand:reup.tree.revealProjectFolder",
+    "onCommand:reup.tree.toggleArchive",
+    "onView:reup.sessions",
+    "onView:reup.inspector"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "swoop.openDashboard",
-        "title": "Swoop: Open Dashboard",
+        "command": "reup.openDashboard",
+        "title": "Reup: Open Dashboard",
         "icon": "$(dashboard)"
       },
       {
-        "command": "swoop.diagnostics",
-        "title": "Swoop: Diagnostics"
+        "command": "reup.diagnostics",
+        "title": "Reup: Diagnostics"
       },
       {
-        "command": "swoop.focusCockpit",
-        "title": "Swoop: Focus Workspace Cockpit"
+        "command": "reup.focusCockpit",
+        "title": "Reup: Focus Workspace Cockpit"
       },
       {
-        "command": "swoop.refreshSessions",
-        "title": "Swoop: Refresh Sessions",
+        "command": "reup.refreshSessions",
+        "title": "Reup: Refresh Sessions",
         "icon": "$(refresh)"
       },
       {
-        "command": "swoop.resumeHere",
-        "title": "Swoop: Resume Here",
+        "command": "reup.resumeHere",
+        "title": "Reup: Resume Here",
         "icon": "$(play)"
       },
       {
-        "command": "swoop.resumeSession",
-        "title": "Swoop: Resume Session",
+        "command": "reup.resumeSession",
+        "title": "Reup: Resume Session",
         "icon": "$(history)"
       },
       {
-        "command": "swoop.searchSessions",
-        "title": "Swoop: Search Sessions",
+        "command": "reup.searchSessions",
+        "title": "Reup: Search Sessions",
         "icon": "$(search)"
       },
       {
-        "command": "swoop.openSessionDetail",
+        "command": "reup.openSessionDetail",
         "title": "Open Resume Card",
         "icon": "$(preview)"
       },
       {
-        "command": "swoop.tree.copySessionId",
+        "command": "reup.tree.copySessionId",
         "title": "Copy Session ID",
         "icon": "$(copy)"
       },
       {
-        "command": "swoop.tree.copyHandoff",
+        "command": "reup.tree.copyHandoff",
         "title": "Copy Handoff",
         "icon": "$(clippy)"
       },
       {
-        "command": "swoop.tree.editAlias",
+        "command": "reup.tree.editAlias",
         "title": "Edit Session Alias",
         "icon": "$(edit)"
       },
       {
-        "command": "swoop.tree.editTags",
+        "command": "reup.tree.editTags",
         "title": "Edit Session Tags",
         "icon": "$(tag)"
       },
       {
-        "command": "swoop.tree.toggleArchive",
+        "command": "reup.tree.toggleArchive",
         "title": "Archive / Unarchive Session",
         "icon": "$(archive)"
       },
       {
-        "command": "swoop.tree.resumeSession",
+        "command": "reup.tree.resumeSession",
         "title": "Resume Session",
         "icon": "$(play)"
       },
       {
-        "command": "swoop.tree.revealProjectFolder",
+        "command": "reup.tree.revealProjectFolder",
         "title": "Reveal Project Folder",
         "icon": "$(folder-opened)"
       }
     ],
     "configuration": {
-      "title": "Swoop",
+      "title": "Reup",
       "properties": {
-        "swoop.includeArchived": {
+        "reup.includeArchived": {
           "type": "boolean",
           "default": false,
-          "description": "Include archived sessions in Swoop's VS Code views."
+          "description": "Include archived sessions in Reup's VS Code views."
         },
-        "swoop.refreshMode": {
+        "reup.refreshMode": {
           "type": "string",
           "enum": [
             "manual",
@@ -143,119 +143,119 @@
             "interval"
           ],
           "default": "watch",
-          "description": "Controls refresh while the Swoop view is visible. Watch follows Claude and Git state; interval refreshes every 20 seconds; manual refreshes only on request."
+          "description": "Controls refresh while the Reup view is visible. Watch follows Claude and Git state; interval refreshes every 20 seconds; manual refreshes only on request."
         },
-        "swoop.showStatusBar": {
+        "reup.showStatusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show the compact Swoop active/attention indicator while the cockpit is visible."
+          "description": "Show the compact Reup active/attention indicator while the cockpit is visible."
         }
       }
     },
     "menus": {
       "view/title": [
         {
-          "command": "swoop.openDashboard",
-          "when": "view == swoop.sessions",
+          "command": "reup.openDashboard",
+          "when": "view == reup.sessions",
           "group": "navigation@0"
         },
         {
-          "command": "swoop.resumeHere",
-          "when": "view == swoop.sessions",
+          "command": "reup.resumeHere",
+          "when": "view == reup.sessions",
           "group": "navigation@1"
         },
         {
-          "command": "swoop.resumeSession",
-          "when": "view == swoop.sessions",
+          "command": "reup.resumeSession",
+          "when": "view == reup.sessions",
           "group": "navigation@2"
         },
         {
-          "command": "swoop.searchSessions",
-          "when": "view == swoop.sessions",
+          "command": "reup.searchSessions",
+          "when": "view == reup.sessions",
           "group": "navigation@3"
         },
         {
-          "command": "swoop.refreshSessions",
-          "when": "view == swoop.sessions",
+          "command": "reup.refreshSessions",
+          "when": "view == reup.sessions",
           "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
-          "command": "swoop.openSessionDetail",
-          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "command": "reup.openSessionDetail",
+          "when": "view == reup.sessions && viewItem == reupSession",
           "group": "inline"
         },
         {
-          "command": "swoop.tree.resumeSession",
-          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "command": "reup.tree.resumeSession",
+          "when": "view == reup.sessions && viewItem == reupSession",
           "group": "inline@2"
         },
         {
-          "command": "swoop.tree.copySessionId",
-          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "command": "reup.tree.copySessionId",
+          "when": "view == reup.sessions && viewItem == reupSession",
           "group": "navigation"
         },
         {
-          "command": "swoop.tree.copyHandoff",
-          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "command": "reup.tree.copyHandoff",
+          "when": "view == reup.sessions && viewItem == reupSession",
           "group": "navigation@2"
         },
         {
-          "command": "swoop.tree.editAlias",
-          "when": "view == swoop.sessions && (viewItem == swoopSession || viewItem == swoopSessionActive)",
+          "command": "reup.tree.editAlias",
+          "when": "view == reup.sessions && (viewItem == reupSession || viewItem == reupSessionActive)",
           "group": "navigation@3"
         },
         {
-          "command": "swoop.tree.editTags",
-          "when": "view == swoop.sessions && (viewItem == swoopSession || viewItem == swoopSessionActive)",
+          "command": "reup.tree.editTags",
+          "when": "view == reup.sessions && (viewItem == reupSession || viewItem == reupSessionActive)",
           "group": "navigation@4"
         },
         {
-          "command": "swoop.tree.toggleArchive",
-          "when": "view == swoop.sessions && viewItem == swoopSession",
+          "command": "reup.tree.toggleArchive",
+          "when": "view == reup.sessions && viewItem == reupSession",
           "group": "navigation@5"
         },
         {
-          "command": "swoop.tree.revealProjectFolder",
-          "when": "view == swoop.sessions && viewItem == swoopProject",
+          "command": "reup.tree.revealProjectFolder",
+          "when": "view == reup.sessions && viewItem == reupProject",
           "group": "navigation"
         }
       ]
     },
     "views": {
-      "swoop": [
+      "reup": [
         {
-          "id": "swoop.sessions",
+          "id": "reup.sessions",
           "name": "Sessions",
-          "icon": "media/swoop.svg"
+          "icon": "media/reup.svg"
         },
         {
-          "id": "swoop.inspector",
+          "id": "reup.inspector",
           "name": "Session Inspector",
           "type": "webview",
-          "icon": "media/swoop.svg"
+          "icon": "media/reup.svg"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "swoop.sessions",
-        "contents": "[Open Swoop Dashboard](command:swoop.openDashboard)\\n\\nNo Claude Code sessions were found.\\n[Refresh Swoop](command:swoop.refreshSessions)",
-        "when": "!swoop.hasSessions && !swoop.hasLoadError"
+        "view": "reup.sessions",
+        "contents": "[Open Reup Dashboard](command:reup.openDashboard)\\n\\nNo Claude Code sessions were found.\\n[Refresh Reup](command:reup.refreshSessions)",
+        "when": "!reup.hasSessions && !reup.hasLoadError"
       },
       {
-        "view": "swoop.sessions",
-        "contents": "Swoop could not read local session data.\\n[Show diagnostics](command:swoop.diagnostics)",
-        "when": "swoop.hasLoadError"
+        "view": "reup.sessions",
+        "contents": "Reup could not read local session data.\\n[Show diagnostics](command:reup.diagnostics)",
+        "when": "reup.hasLoadError"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "swoop",
-          "title": "Swoop",
-          "icon": "media/swoop.svg"
+          "id": "reup",
+          "title": "Reup",
+          "icon": "media/reup.svg"
         }
       ]
     }

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { copyFile, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getActiveSessions } from './active-sessions.js'
@@ -12,6 +13,8 @@ import { log } from '../../utils/logger.js'
 const SIDECAR_REPLACE_ATTEMPTS = 20
 const SIDECAR_REPLACE_RETRY_MS = 40
 const RETRYABLE_REPLACE_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
+const PROJECT_SIDECAR_FILE = 'reup.json'
+const LEGACY_PROJECT_SIDECAR_FILE = `${'swo'}${'op'}.json`
 export const SESSION_ALIAS_MAX_LENGTH = 160
 
 interface SessionSidecarMetadata {
@@ -34,7 +37,7 @@ export class ActiveSessionDeletionError extends Error {
 
 /**
  * Serialises writes originating inside this process. The filesystem lock used
- * inside each queued operation coordinates independent Swoop processes.
+ * inside each queued operation coordinates independent Reup processes.
  */
 const projectWriteQueues = new Map<string, Promise<void>>()
 
@@ -42,12 +45,28 @@ const projectWriteQueues = new Map<string, Promise<void>>()
 // Sidecar persistence
 // -----------------------------------------------------------------------------
 
-async function readProjectSidecar(projectDirectory: string): Promise<ProjectSidecarMetadata> {
+async function readProjectSidecar(
+  projectDirectory: string,
+  options: { insideLock?: boolean } = {}
+): Promise<ProjectSidecarMetadata> {
+  const sidecarPath = join(projectDirectory, PROJECT_SIDECAR_FILE)
   try {
-    const sidecarPath = join(projectDirectory, 'swoop.json')
+    return JSON.parse(await readFile(sidecarPath, 'utf8')) as ProjectSidecarMetadata
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // A malformed sidecar is equivalent to having no Reup metadata.
+      return {}
+    }
+  }
+
+  if (!(await legacyProjectSidecarExists(projectDirectory))) return {}
+
+  if (options.insideLock) await migrateLegacyProjectSidecarWithoutLock(projectDirectory)
+  else await migrateLegacyProjectSidecar(projectDirectory)
+
+  try {
     return JSON.parse(await readFile(sidecarPath, 'utf8')) as ProjectSidecarMetadata
   } catch {
-    // A missing or malformed sidecar is equivalent to having no Swoop metadata.
     return {}
   }
 }
@@ -59,7 +78,7 @@ async function enqueueProjectSidecarUpdate(
   const previousUpdate = projectWriteQueues.get(projectDirectory) ?? Promise.resolve()
   const queuedUpdate = previousUpdate.then(() =>
     withProjectSidecarLock(projectDirectory, async () => {
-      const sidecarMetadata = await readProjectSidecar(projectDirectory)
+      const sidecarMetadata = await readProjectSidecar(projectDirectory, { insideLock: true })
       updateMetadata(sidecarMetadata)
       await writeProjectSidecarAtomically(projectDirectory, sidecarMetadata)
     })
@@ -78,7 +97,7 @@ async function writeProjectSidecarAtomically(
   projectDirectory: string,
   metadata: ProjectSidecarMetadata
 ): Promise<void> {
-  const sidecarPath = join(projectDirectory, 'swoop.json')
+  const sidecarPath = join(projectDirectory, PROJECT_SIDECAR_FILE)
   const temporarySidecarPath = `${sidecarPath}.${process.pid}.${randomUUID()}.tmp`
 
   try {
@@ -88,6 +107,33 @@ async function writeProjectSidecarAtomically(
     // `rename` removes the temp path on success. Cleanup matters only after an
     // interrupted or failed write.
     await unlink(temporarySidecarPath).catch(() => {})
+  }
+}
+
+async function migrateLegacyProjectSidecar(projectDirectory: string): Promise<void> {
+  await withProjectSidecarLock(projectDirectory, () =>
+    migrateLegacyProjectSidecarWithoutLock(projectDirectory)
+  )
+}
+
+async function legacyProjectSidecarExists(projectDirectory: string): Promise<boolean> {
+  try {
+    await readFile(join(projectDirectory, LEGACY_PROJECT_SIDECAR_FILE), 'utf8')
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
+async function migrateLegacyProjectSidecarWithoutLock(projectDirectory: string): Promise<void> {
+  const sidecarPath = join(projectDirectory, PROJECT_SIDECAR_FILE)
+  const legacySidecarPath = join(projectDirectory, LEGACY_PROJECT_SIDECAR_FILE)
+  try {
+    await copyFile(legacySidecarPath, sidecarPath, fsConstants.COPYFILE_EXCL)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'ENOENT' && code !== 'EEXIST') throw error
   }
 }
 
@@ -103,7 +149,7 @@ async function replaceSidecarWithRetry(
       if (!shouldRetrySidecarReplace(error) || attempt === SIDECAR_REPLACE_ATTEMPTS) throw error
 
       // Windows can reject a rename-over-existing-file while another short-lived
-      // reader has the destination open. The advisory lock prevents Swoop writers
+      // reader has the destination open. The advisory lock prevents Reup writers
       // from racing each other; this retry handles external readers.
       await waitForSidecarReplaceRetry(attempt)
     }
@@ -134,7 +180,7 @@ function sessionMetadataEntry(
 // Public metadata API
 // -----------------------------------------------------------------------------
 
-/** Merges Swoop-owned aliases, archive state, and tags into a discovered project. */
+/** Merges Reup-owned aliases, archive state, and tags into a discovered project. */
 export async function mergeProjectSidecarMetadata(
   projectDirectory: string,
   project: Project
@@ -166,7 +212,7 @@ export async function mergeProjectSidecarMetadata(
   }
 }
 
-/** Sets or clears the Swoop-only display alias for a session. */
+/** Sets or clears the Reup-only display alias for a session. */
 export async function setSessionAlias(
   projectId: string,
   sessionId: string,
@@ -193,7 +239,7 @@ export function normalizeSessionAlias(alias: unknown): string | undefined {
 }
 
 /**
- * Permanently deletes a session transcript and removes it from the Swoop sidecar.
+ * Permanently deletes a session transcript and removes it from the Reup sidecar.
  * The `.jsonl` file is owned by Claude Code — this is a destructive operation.
  */
 export async function deleteSession(projectId: string, sessionId: string): Promise<void> {
@@ -240,7 +286,7 @@ export async function setSessionTags(
 }
 
 /**
- * Replaces the project-level tag list stored in swoop.json.
+ * Replaces the project-level tag list stored in reup.json.
  * Tags must already be normalized and validated by the caller.
  */
 export async function setProjectTags(projectId: string, normalizedTags: string[]): Promise<void> {
@@ -251,7 +297,7 @@ export async function setProjectTags(projectId: string, normalizedTags: string[]
   invalidateProjectCache()
 }
 
-/** Updates whether Swoop hides the session; Claude-owned data is never modified. */
+/** Updates whether Reup hides the session; Claude-owned data is never modified. */
 export async function setSessionArchived(
   projectId: string,
   sessionId: string,

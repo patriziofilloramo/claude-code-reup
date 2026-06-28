@@ -1,11 +1,11 @@
 # Cross-Device Project Memory
 
-This document is the implementation reference for Swoop's cross-device Claude
+This document is the implementation reference for Reup's cross-device Claude
 session storage. It describes the current behavior, the filesystem protocol,
 the discovery and UI models, safety rules, known limitations, and the design
 decisions behind them.
 
-The feature is intentionally local-first. Swoop does not upload sessions,
+The feature is intentionally local-first. Reup does not upload sessions,
 maintain a cloud account, or operate a remote coordination service. It places
 Claude Code's per-project storage inside the project folder and relies on an
 existing filesystem sync provider such as OneDrive, Dropbox, pCloud, Google
@@ -25,9 +25,9 @@ Drive, or iCloud to transport those files.
 
 ### Non-goals
 
-- Swoop is not a cloud storage provider.
-- Swoop does not notify other devices through a server or push channel.
-- Swoop does not create a global catalog file at the root of every cloud drive.
+- Reup is not a cloud storage provider.
+- Reup does not notify other devices through a server or push channel.
+- Reup does not create a global catalog file at the root of every cloud drive.
 - Discovering a remote project does not automatically link it.
 - Opening or resuming a project does not automatically opt the device into
   shared storage.
@@ -36,17 +36,17 @@ Drive, or iCloud to transport those files.
 
 ## 2. Terminology
 
-| Term                   | Meaning                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| Project root           | The actual code directory, for example `P:\Projects\Phone\Xiaomi17`.                                  |
-| Local Claude directory | Claude Code's normal per-project storage at `~/.claude/projects/<project-id>`.                        |
-| Project Memory         | The shared directory at `<project-root>/.claude-memory`.                                              |
-| Linked device          | A device whose local Claude directory redirects to Project Memory.                                    |
-| Unlinked use           | Evidence that a Claude session used the project on a device that was not linked.                      |
-| Remote project         | Project Memory discovered on disk for a project this device has never used or linked.                 |
-| Cloud provider         | The external filesystem synchronization software. It transports files but is not controlled by Swoop. |
-| Online                 | The Project Memory directory can currently be enumerated.                                             |
-| Offline                | A linked Project Memory target cannot currently be enumerated.                                        |
+| Term                   | Meaning                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| Project root           | The actual code directory, for example `P:\Projects\Phone\Xiaomi17`.                                 |
+| Local Claude directory | Claude Code's normal per-project storage at `~/.claude/projects/<project-id>`.                       |
+| Project Memory         | The shared directory at `<project-root>/.claude-memory`.                                             |
+| Linked device          | A device whose local Claude directory redirects to Project Memory.                                   |
+| Unlinked use           | Evidence that a Claude session used the project on a device that was not linked.                     |
+| Remote project         | Project Memory discovered on disk for a project this device has never used or linked.                |
+| Cloud provider         | The external filesystem synchronization software. It transports files but is not controlled by Reup. |
+| Online                 | The Project Memory directory can currently be enumerated.                                            |
+| Offline                | A linked Project Memory target cannot currently be enumerated.                                       |
 
 The word "cloud" in the UI describes where the project folder is transported.
 The storage model itself is ordinary local filesystem I/O.
@@ -81,7 +81,7 @@ P:\Projects\Phone\Xiaomi17\
 │   │   └── IGNORED-PC
 │   ├── memory\
 │   │   └── shared.md
-│   └── .swoop-conflicts\
+│   └── .reup-conflicts\
 │       └── ... conflict artifacts when required
 ├── CLAUDE.md
 └── project files...
@@ -89,7 +89,7 @@ P:\Projects\Phone\Xiaomi17\
 ~/.claude/projects/P--Projects-Phone-Xiaomi17
   -> P:\Projects\Phone\Xiaomi17\.claude-memory
 
-~/.claude/swoop/
+~/.claude/reup/
 ├── device-id
 ├── prefs.json
 └── sync/
@@ -104,15 +104,15 @@ to `.claude-memory`.
 
 ### Project ID encoding
 
-Swoop uses the same path-shaped directory convention as Claude Code:
+Reup uses the same path-shaped directory convention as Claude Code:
 
 - Windows drive paths become `<DRIVE>--<segments-separated-by-hyphens>`.
 - Unix paths lose the leading slash and use hyphens between segments.
 - On Windows, decoding is filesystem-aware because literal hyphens make the
-  encoded representation ambiguous. Swoop walks existing directories and
+  encoded representation ambiguous. Reup walks existing directories and
   prefers the longest matching real path segment.
 
-If the local Claude directory does not exist yet, `swoop sync link <path>`
+If the local Claude directory does not exist yet, `reup sync link <path>`
 computes the expected project ID and creates the link directly.
 
 ## 4. What makes a project linked
@@ -126,14 +126,14 @@ then remains the authoritative record that the project is linked.
 
 Link state is resolved in this order:
 
-1. The runtime sync registry, when Swoop has initialized cloud sync.
+1. The runtime sync registry, when Reup has initialized cloud sync.
 2. A junction or symlink at `~/.claude/projects/<project-id>`.
-3. A legacy `.swoop-link` file inside the local Claude directory.
+3. A legacy `.reup-link` file inside the local Claude directory.
 
-`.swoop-link` is retained only for migration from the older local-first sync
-implementation. On initialization, Swoop merges its local directory with the
+`.reup-link` is retained only for migration from the older local-first sync
+implementation. On initialization, Reup merges its local directory with the
 recorded target and converts it to a junction/symlink. New links do not depend
-on `.swoop-link`.
+on `.reup-link`.
 
 The file `.claude-memory/linked/<device-id>` is separate from the filesystem
 link. It is shared evidence that a named device intentionally performed the
@@ -142,10 +142,10 @@ multi-device state, but it does not itself redirect Claude Code storage.
 
 ## 5. Device identity and markers
 
-Swoop creates a persistent device ID at:
+Reup creates a persistent device ID at:
 
 ```text
-~/.claude/swoop/device-id
+~/.claude/reup/device-id
 ```
 
 The initial value is the operating-system hostname. Persisting it prevents
@@ -161,7 +161,7 @@ does not automatically rewrite an existing device ID.
 Created after the local filesystem link succeeds. Its JSON content currently
 contains the device ID; the filename is the meaningful lookup key.
 
-When this marker is written, Swoop removes:
+When this marker is written, Reup removes:
 
 ```text
 .claude-memory/device-presence/<device-id>.json
@@ -180,7 +180,7 @@ This means the device used the project while it was not linked and the user has
 not dismissed the warning. It is durable unresolved evidence, not a heartbeat.
 The marker may remain after that Claude process exits.
 
-Swoop itself does not infer this state from network activity. The managed
+Reup itself does not infer this state from network activity. The managed
 section in the project's `CLAUDE.md` instructs Claude Code to:
 
 1. Read the hostname.
@@ -211,7 +211,7 @@ For a single device:
 3. A presence marker without a linked marker means unresolved unlinked use.
 
 Markers are transported by the cloud provider like every other file. There is
-no separate Swoop messaging channel between devices.
+no separate Reup messaging channel between devices.
 
 ## 6. Feature enablement
 
@@ -228,14 +228,14 @@ user preference crossDeviceSessionStorage === "on"
 
 When the effective feature is off:
 
-- Swoop does not initialize the background cloud-sync guard.
+- Reup does not initialize the background cloud-sync guard.
 - Config does not scan for remote Project Memory.
 - Project discovery does not inspect Project Memory marker folders.
 - TUI and web project lists render no cloud status icon.
 
 Turning the feature off does not automatically unlink existing filesystem
 junctions. The redirection is persistent filesystem state, so Claude Code may
-still write through an already-existing junction. Use `swoop sync unlink` when
+still write through an already-existing junction. Use `reup sync unlink` when
 the intent is to restore local-only storage.
 
 ## 7. Linking a project
@@ -243,7 +243,7 @@ the intent is to restore local-only storage.
 The explicit operation is:
 
 ```bash
-swoop sync link <project-path>
+reup sync link <project-path>
 ```
 
 The implementation performs these steps:
@@ -262,7 +262,7 @@ The implementation performs these steps:
    - No local directory: create the link.
 8. Write `.claude-memory/linked/<device-id>`.
 9. Remove the current device's stale presence marker.
-10. Patch the bounded Swoop section in `CLAUDE.md` by default.
+10. Patch the bounded Reup section in `CLAUDE.md` by default.
 11. Optionally patch `.gitignore` and Claude's local permission rules when
     requested by the caller.
 
@@ -274,7 +274,7 @@ creation fails, the original directory is restored.
 
 Changing the storage path while Claude Code has a live session could split
 writes between two directories or replace a directory underneath an open
-writer. Swoop checks live session records and blocks the operation. Bulk
+writer. Reup checks live session records and blocks the operation. Bulk
 operations report these projects as skipped rather than forcing the change.
 
 ## 8. Unlinking a project
@@ -282,10 +282,10 @@ operations report these projects as skipped rather than forcing the change.
 The explicit operation is:
 
 ```bash
-swoop sync unlink <project-path>
+reup sync unlink <project-path>
 ```
 
-Swoop:
+Reup:
 
 1. Confirms that the project is linked.
 2. Refuses the operation while a live session uses the project.
@@ -293,7 +293,7 @@ Swoop:
 4. Removes the junction/symlink only after staging succeeds.
 5. Moves the staged directory into Claude Code's normal local location.
 6. Removes the current device's linked marker.
-7. Removes the bounded Swoop section from the project's `CLAUDE.md`.
+7. Removes the bounded Reup section from the project's `CLAUDE.md`.
 
 Unlinking does not delete `.claude-memory`. Other linked devices may still use
 it, and it remains recoverable data in the project folder.
@@ -314,7 +314,7 @@ This is intentionally different from unlinking:
 - Forget removes that local Claude index entry from active discovery.
 - `.claude-memory` is never deleted or modified by forget.
 - The local directory is moved, not deleted, to
-  `~/.claude/swoop/forgotten/<project-id>/<timestamp>/project-data`.
+  `~/.claude/reup/forgotten/<project-id>/<timestamp>/project-data`.
 - A manifest beside the archive records the project ID, project path, shared
   path, and archive time.
 
@@ -331,12 +331,12 @@ local redirect. The archived local copy remains available for manual recovery.
 
 ### `CLAUDE.md`
 
-Swoop edits only the bounded region between:
+Reup edits only the bounded region between:
 
 ```html
-<!-- swoop:sync:start -->
+<!-- reup:sync:start -->
 ...
-<!-- swoop:sync:end -->
+<!-- reup:sync:end -->
 ```
 
 Existing project instructions outside those markers are preserved. Re-linking
@@ -354,7 +354,7 @@ Session transcripts already live in `.claude-memory`.
 
 ### `.gitignore`
 
-If requested, Swoop adds exactly:
+If requested, Reup adds exactly:
 
 ```gitignore
 .claude-memory/
@@ -365,7 +365,7 @@ patch is optional in the current link flow and is not enabled by default.
 
 ### `.claude/settings.local.json`
 
-If requested, Swoop merges narrowly scoped allow rules for:
+If requested, Reup merges narrowly scoped allow rules for:
 
 - Reading `.claude-memory/**`.
 - Writing `device-presence/**`.
@@ -378,7 +378,7 @@ overwriting the file.
 
 ## 10. Main project discovery
 
-The main Swoop project list is deliberately local-device scoped.
+The main Reup project list is deliberately local-device scoped.
 
 `loadProjects()` starts from entries already present under:
 
@@ -418,7 +418,7 @@ The loader determines whether the current device is linked from:
 
 1. The runtime sync registry.
 2. The local directory's junction/symlink state.
-3. A legacy `.swoop-link` file.
+3. A legacy `.reup-link` file.
 
 It then reads Project Memory markers, filters presence entries that also have a
 linked marker, and attaches the resulting state to the `Project` model.
@@ -461,7 +461,7 @@ unlinked entries whose device also has a linked marker.
 
 ### Default focused discovery
 
-With `APP.enableAdvancedDiscovery === false`, Swoop detects known provider roots
+With `APP.enableAdvancedDiscovery === false`, Reup detects known provider roots
 and looks for common workspace directories:
 
 ```text
@@ -495,7 +495,7 @@ APP.enableAdvancedDiscovery = true
 APP.projectSearchPaths = ['~/Documents/Projects']
 ```
 
-Swoop does a full scan only inside the explicitly configured paths. It does not
+Reup does a full scan only inside the explicitly configured paths. It does not
 combine them with detected cloud roots. The same depth, ignore, and concurrency
 rules still apply.
 
@@ -544,7 +544,7 @@ live Claude session ends.
 
 Project Memory found by Config discovery for a project that this device has
 never used or explicitly linked. These entries are intentionally absent from
-the main Swoop project list.
+the main Reup project list.
 
 Remote discovery is an inventory for possible linking, not an assertion that
 the project belongs in this device's daily workspace.
@@ -597,7 +597,7 @@ records a mismatch that deserves attention.
 
 ### Grey
 
-The current device is linked, but Swoop cannot enumerate the shared target.
+The current device is linked, but Reup cannot enumerate the shared target.
 When a local backup exists and no session is active, the offline guard replaces
 the broken link with that backup so work can continue.
 
@@ -609,7 +609,7 @@ When the TUI or web server starts, `initCloudSync()`:
 2. Returns immediately if the effective feature is disabled.
 3. Loads locally known projects.
 4. Initializes only projects linked on this device.
-5. Migrates legacy `.swoop-link` directories when safe.
+5. Migrates legacy `.reup-link` directories when safe.
 6. Creates or refreshes each project's local backup.
 7. Starts a periodic guard when at least one project is managed.
 
@@ -627,7 +627,7 @@ misclassify that project as local-only.
 
 ### Reachability check
 
-Swoop probes the shared directory with `readdir`, not only `access`. Some
+Reup probes the shared directory with `readdir`, not only `access`. Some
 virtual drives report successful access even while the mounted content cannot
 actually be enumerated.
 
@@ -635,21 +635,21 @@ actually be enumerated.
 
 If a previously online target becomes unreachable:
 
-1. Swoop checks for a live Claude session in that project.
+1. Reup checks for a live Claude session in that project.
 2. If active, it defers the transition.
 3. If inactive, it copies the local backup into a staged directory.
 4. It removes the junction.
 5. It moves the staged real directory into Claude's local project path.
 6. It marks the state offline with a pending merge.
 
-If no backup exists during initial startup, Swoop leaves the broken junction in
+If no backup exists during initial startup, Reup leaves the broken junction in
 place because it has no safe data source from which to construct a local copy.
 
 ### Coming back online
 
 If an offline target becomes reachable:
 
-1. Swoop defers while a Claude session is active.
+1. Reup defers while a Claude session is active.
 2. It performs a bidirectional merge between the offline local directory and
    Project Memory.
 3. It mirrors the converged shared directory into the backup.
@@ -662,7 +662,7 @@ This also picks up changes delivered by the cloud provider from other devices.
 ## 15. Merge and conflict behavior
 
 Both linking and online recovery may need to reconcile two directory trees.
-Swoop recursively applies these rules:
+Reup recursively applies these rules:
 
 1. A file present on only one side is copied to the other side.
 2. Matching directories are traversed recursively.
@@ -693,7 +693,7 @@ lines may produce an imperfect document even though content is retained.
 
 ### Divergent non-Markdown files
 
-Before convergence, Swoop writes into `.swoop-conflicts` on both sides:
+Before convergence, Reup writes into `.reup-conflicts` on both sides:
 
 - The complete side-A content.
 - The complete side-B content.
@@ -727,11 +727,11 @@ Claude on device A
   -> cloud provider
   -> project/.claude-memory on device B
   -> ~/.claude/projects/<id> junction
-  -> Claude or Swoop on device B
+  -> Claude or Reup on device B
 ```
 
-Swoop does not need to run continuously on the receiving device for the cloud
-provider to deliver files. Swoop is needed there to create the local link,
+Reup does not need to run continuously on the receiving device for the cloud
+provider to deliver files. Reup is needed there to create the local link,
 display status, manage backups, and recover across offline transitions.
 
 ### How another device learns about a new project
@@ -744,18 +744,18 @@ learn about Project Memory in two ways:
 2. The user opens Config > Features, where focused or advanced discovery scans
    allowed roots and lists it under Remote Project Memory.
 
-This is a deliberate privacy and scope tradeoff. Swoop does not write indexing
+This is a deliberate privacy and scope tradeoff. Reup does not write indexing
 files into every cloud provider root merely to announce projects.
 
 ## 17. Design decisions and tradeoffs
 
-### Project-root storage instead of a Swoop cloud database
+### Project-root storage instead of a Reup cloud database
 
 Keeping memory under the project root aligns session transport with the code
 folder the user already chose to synchronize. Moving or excluding the project
 also moves or excludes its memory.
 
-Tradeoff: Swoop inherits the behavior, delays, conflicts, and availability of
+Tradeoff: Reup inherits the behavior, delays, conflicts, and availability of
 the external provider.
 
 ### Explicit per-device linking
@@ -780,8 +780,8 @@ Tradeoff: orange is not live state and requires explicit resolution or ignore.
 
 ### No cloud-root catalog
 
-A root catalog would make discovery faster and could notify other Swoop
-instances where to look, but it would write Swoop metadata into every provider
+A root catalog would make discovery faster and could notify other Reup
+instances where to look, but it would write Reup metadata into every provider
 root and introduce catalog consistency problems. The current design scans only
 when needed and only within bounded roots.
 
@@ -836,7 +836,7 @@ device marker exists.
 ### Grey cloud appears
 
 The linked target is not enumerable. Check the provider mount and network. If a
-backup exists, Swoop transitions to local offline mode when the project is not
+backup exists, Reup transitions to local offline mode when the project is not
 active, then merges and restores the link after recovery.
 
 ### Link or unlink is unavailable
@@ -846,19 +846,19 @@ storage topology.
 
 ### The project contains conflict artifacts
 
-Inspect `.swoop-conflicts/*.json` first. The manifest identifies both preserved
+Inspect `.reup-conflicts/*.json` first. The manifest identifies both preserved
 copies and why one became canonical. Do not delete the artifacts until the
 desired content has been verified.
 
 ### Device name changed
 
-The persistent `~/.claude/swoop/device-id` may still contain the old hostname.
+The persistent `~/.claude/reup/device-id` may still contain the old hostname.
 Markers use that stored value. Changing device identity manually requires
 cleaning or reconciling old linked, presence, and ignored markers.
 
 ### Feature was disabled but sessions still reach Project Memory
 
-Disabling hides and suspends Swoop's feature behavior; it does not remove an
+Disabling hides and suspends Reup's feature behavior; it does not remove an
 existing filesystem junction. Explicitly unlink the project.
 
 ## 19. Security and privacy
@@ -872,12 +872,12 @@ history.
 - Keep `.claude-memory/` out of Git unless committing transcripts is an
   intentional choice.
 - Review shared-folder permissions before linking a confidential project.
-- Remember that provider retention and version history are outside Swoop's
+- Remember that provider retention and version history are outside Reup's
   control.
 - The optional Claude permission rules are narrowly scoped, but the normal
   Claude Code approval model remains authoritative.
 
-Swoop's web server is local, and this feature does not add a remote Swoop API.
+Reup's web server is local, and this feature does not add a remote Reup API.
 The external provider still receives every file placed in the synchronized
 project folder.
 
@@ -890,9 +890,9 @@ project folder.
 | `APP.enableAdvancedDiscovery`               | `false`          | Use explicit recursive search paths instead of focused provider discovery. |
 | `APP.projectSearchPaths`                    | `[]`             | Roots used only in advanced discovery mode.                                |
 | `APP.sharedMemoryDir`                       | `.claude-memory` | Shared directory name inside each project.                                 |
-| `APP.cloudLinkFile`                         | `.swoop-link`    | Legacy link marker retained for migration.                                 |
+| `APP.cloudLinkFile`                         | `.reup-link`     | Legacy link marker retained for migration.                                 |
 | `APP.cloudSyncIntervalMs`                   | `30000`          | Online/offline guard and backup refresh interval.                          |
-| `APP.cloudSyncBackupDir`                    | `sync`           | Backup directory below `~/.claude/swoop`.                                  |
+| `APP.cloudSyncBackupDir`                    | `sync`           | Backup directory below `~/.claude/reup`.                                   |
 
 ## 21. Implementation map
 
@@ -924,7 +924,7 @@ Future changes should preserve these rules:
 4. Config may show a broader remote inventory.
 5. A linked marker overrides stale presence for the same device.
 6. Orange represents unresolved unlinked use, not real-time activity.
-7. The master switch and user preference both gate icons and active Swoop sync
+7. The master switch and user preference both gate icons and active Reup sync
    behavior.
 8. Disabling the feature does not silently alter persistent filesystem links.
 9. Broad discovery remains opt-in and bounded by explicit search paths.
@@ -933,4 +933,4 @@ Future changes should preserve these rules:
 11. Divergent content is preserved before convergence.
 12. Offline/online topology changes are deferred while Claude is actively
     writing to the project.
-13. Cloud provider behavior is never presented as a guarantee made by Swoop.
+13. Cloud provider behavior is never presented as a guarantee made by Reup.

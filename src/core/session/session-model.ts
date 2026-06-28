@@ -1,5 +1,5 @@
 /**
- * Independent facts derived from transcript analysis, Swoop metadata, and path checks.
+ * Independent facts derived from transcript analysis, Reup metadata, and path checks.
  * Multiple signals can apply to the same session simultaneously.
  *
  * When `analysisComplete` is false, transcript-derived values are `null` rather
@@ -45,11 +45,11 @@ export interface Project {
   group?: string
   /** Human-readable name of the group, resolved from org.json by applyOrgMetadata(). */
   groupName?: string
-  /** Swoop tags applied to the project itself (all its sessions inherit them). */
+  /** Reup tags applied to the project itself (all its sessions inherit them). */
   projectTags?: string[]
   /**
    * True when the project's storage directory is linked to a cloud location
-   * (either via a .swoop-link file or a legacy NTFS junction / symlink).
+   * (either via a .reup-link file or a legacy NTFS junction / symlink).
    * Used to show the cloud shared-storage indicator in the UI.
    */
   isShared: boolean
@@ -60,7 +60,7 @@ export interface Project {
    */
   cloudPath?: string
   /**
-   * True when the cloud junction target is temporarily unreachable and swoop
+   * True when the cloud junction target is temporarily unreachable and reup
    * has switched the project to a local backup directory. Sessions written
    * while offline will be merged back to the cloud when it comes online.
    * Shown as grey cloud in the UI so the user knows sync is paused.
@@ -73,7 +73,7 @@ export interface Project {
   linkedDevices?: string[]
   /**
    * Device names that wrote a presence file to the cloud directory while not
-   * linked (i.e. they opened the project without running `swoop sync link`).
+   * linked (i.e. they opened the project without running `reup sync link`).
    * Populated from {cloudDir}/device-presence/ on each discovery pass.
    * Shown as orange cloud in the UI to prompt the user to link that device.
    */
@@ -82,7 +82,7 @@ export interface Project {
 
 export interface Session {
   alias?: string
-  /** Swoop-owned tags stored in swoop.json per-project. Never written to Claude transcripts. */
+  /** Reup-owned tags stored in reup.json per-project. Never written to Claude transcripts. */
   tags?: string[]
   context: SessionContextMetrics
   created: string

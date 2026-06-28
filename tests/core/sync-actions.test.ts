@@ -20,9 +20,10 @@ import type { Project } from '../../src/core/session/session-model.js'
 
 describe('sync actions', () => {
   let root: string
+  const legacyMarkerPrefix = ['swo', 'op'].join('')
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'swoop-sync-actions-test-'))
+    root = await mkdtemp(join(tmpdir(), 'reup-sync-actions-test-'))
   })
 
   afterEach(async () => {
@@ -75,8 +76,33 @@ describe('sync actions', () => {
 
     const content = await readFile(join(projectPath, 'CLAUDE.md'), 'utf8')
     expect(content).toContain('# User Notes')
-    expect(content.match(/<!-- swoop:sync:start -->/g)).toHaveLength(1)
-    expect(content.match(/<!-- swoop:sync:end -->/g)).toHaveLength(1)
+    expect(content.match(/<!-- reup:sync:start -->/g)).toHaveLength(1)
+    expect(content.match(/<!-- reup:sync:end -->/g)).toHaveLength(1)
+  })
+
+  it('replaces a legacy CLAUDE.md sync section with the Reup section', async () => {
+    const projectPath = join(root, 'project')
+    const legacyStart = `<!-- ${legacyMarkerPrefix}:sync:start -->`
+    const legacyEnd = `<!-- ${legacyMarkerPrefix}:sync:end -->`
+    await mkdir(projectPath)
+    await writeFile(
+      join(projectPath, 'CLAUDE.md'),
+      ['# User Notes', '', legacyStart, 'old sync instructions', legacyEnd, '', 'Keep this.'].join(
+        '\n'
+      ),
+      'utf8'
+    )
+
+    await patchClaudeMdSection(projectPath, join(projectPath, '.claude-memory'), 'device-a')
+
+    const content = await readFile(join(projectPath, 'CLAUDE.md'), 'utf8')
+    expect(content).toContain('# User Notes')
+    expect(content).toContain('Keep this.')
+    expect(content).toContain('<!-- reup:sync:start -->')
+    expect(content).toContain('<!-- reup:sync:end -->')
+    expect(content).not.toContain(legacyStart)
+    expect(content).not.toContain(legacyEnd)
+    expect(content).not.toContain('old sync instructions')
   })
 
   it('patches .gitignore idempotently', async () => {
@@ -132,7 +158,7 @@ describe('sync actions', () => {
 
       expect(result.status).toBe('forgotten')
       await expect(access(localDirectory)).rejects.toThrow()
-      const archivedRoot = join(claudeDirectory, 'swoop', 'forgotten', item.id)
+      const archivedRoot = join(claudeDirectory, 'reup', 'forgotten', item.id)
       const timestamps = await readdir(archivedRoot)
       expect(timestamps).toHaveLength(1)
       expect(
@@ -161,7 +187,7 @@ describe('discoverCloudLinkedProjects', () => {
   let root: string
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'swoop-discover-test-'))
+    root = await mkdtemp(join(tmpdir(), 'reup-discover-test-'))
   })
 
   afterEach(async () => {

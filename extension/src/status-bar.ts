@@ -1,19 +1,20 @@
 import * as vscode from 'vscode'
 
 import { formatContextTokens, formatRelativeTime } from './formatting.js'
+import { affectsReupConfiguration, getReupConfigurationValue } from './configuration.js'
 import type { ExtensionCockpitModel } from './cockpit-model.js'
 
 export class CockpitStatusBar implements vscode.Disposable {
   private readonly configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration('swoop.showStatusBar')) this.render()
+    if (affectsReupConfiguration(event, 'showStatusBar')) this.render()
   })
   private model: ExtensionCockpitModel | null = null
   private readonly statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 90)
   private visible = false
 
   constructor() {
-    this.statusBar.command = 'swoop.focusCockpit'
-    this.statusBar.name = 'Swoop Cockpit'
+    this.statusBar.command = 'reup.focusCockpit'
+    this.statusBar.name = 'Reup Cockpit'
   }
 
   setVisible(visible: boolean): void {
@@ -32,7 +33,7 @@ export class CockpitStatusBar implements vscode.Disposable {
   }
 
   private render(): void {
-    const enabled = vscode.workspace.getConfiguration('swoop').get<boolean>('showStatusBar', true)
+    const enabled = getReupConfigurationValue<boolean>('showStatusBar', true)
     const summary = this.model?.summary
     if (
       !enabled ||
@@ -48,7 +49,7 @@ export class CockpitStatusBar implements vscode.Disposable {
       summary.activeCount > 0 ? `$(pulse) ${summary.activeCount}` : null,
       summary.attentionCount > 0 ? `$(warning) ${summary.attentionCount}` : null,
     ].filter(Boolean)
-    this.statusBar.text = `Swoop ${parts.join(' · ')}`
+    this.statusBar.text = `Reup ${parts.join(' · ')}`
     this.statusBar.tooltip = statusTooltip(this.model!)
     this.statusBar.show()
   }
@@ -56,7 +57,7 @@ export class CockpitStatusBar implements vscode.Disposable {
 
 function statusTooltip(model: ExtensionCockpitModel): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(undefined, true)
-  tooltip.appendMarkdown('**Swoop Workspace Cockpit**\n\n')
+  tooltip.appendMarkdown('**Reup Workspace Cockpit**\n\n')
   tooltip.appendMarkdown(`- Active sessions: ${model.summary.activeCount}\n`)
   tooltip.appendMarkdown(`- Need attention: ${model.summary.attentionCount}\n`)
   tooltip.appendMarkdown(`- In current workspace: ${model.summary.workspaceSessionCount}\n`)
@@ -67,8 +68,6 @@ function statusTooltip(model: ExtensionCockpitModel): vscode.MarkdownString {
   if (largestContext !== null) {
     tooltip.appendMarkdown(`- Largest analysed context: ${formatContextTokens(largestContext)}\n`)
   }
-  tooltip.appendMarkdown(
-    `\nUpdated ${formatRelativeTime(model.generatedAt)}. Click to focus Swoop.`
-  )
+  tooltip.appendMarkdown(`\nUpdated ${formatRelativeTime(model.generatedAt)}. Click to focus Reup.`)
   return tooltip
 }

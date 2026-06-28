@@ -68,14 +68,23 @@
   --space-lg: 12px;
 
   /* ── Repeated row metadata columns ───────────────────────────────────────── */
-  --project-cloud-col: 18px;
-  --project-last-col: 38px;
-  --project-count-col: 28px;
-  --project-action-col: 20px;
+  --project-row-gap: var(--space-xs);
+  --project-row-pad-inline: var(--space-md);
+  --project-row-pad-start: var(--space-lg);
+  --project-cloud-col: 16px;
+  --project-last-col: 4ch;
+  --project-count-col: 3ch;
   --session-time-col: 74px;
   --session-action-col: 26px;
-  --footer-height: 24px;
+  --footer-height: 28px;
   --footer-control-height: 18px;
+  /* Footer block padding. JetBrains Mono's tall ascent / short descent makes
+     glyphs sit low in their line box, so we bias the symmetric base padding
+     upward by --footer-optical-shift to recentre the text. */
+  --footer-pad-block: 5px;
+  --footer-optical-shift: 3px;
+  --footer-pad-top: calc(var(--footer-pad-block) - var(--footer-optical-shift));
+  --footer-pad-bottom: calc(var(--footer-pad-block) + var(--footer-optical-shift));
 }
 
 html,
@@ -648,14 +657,15 @@ body {
   cursor: pointer;
   display: grid;
   font-size: 12px;
-  gap: var(--space-xs);
+  gap: var(--project-row-gap);
   grid-template-columns:
     minmax(0, 1fr)
     var(--project-cloud-col)
     var(--project-last-col)
-    var(--project-count-col)
-    var(--project-action-col);
-  padding: var(--space-xs) var(--space-md) var(--space-xs) var(--space-lg);
+    var(--project-count-col);
+  padding: var(--space-xs) var(--project-row-pad-inline) var(--space-xs)
+    var(--project-row-pad-start);
+  position: relative;
   transition: background 0.08s;
   user-select: none;
 }
@@ -704,6 +714,7 @@ body {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  transition: opacity 0.1s;
 }
 
 /* ── Right panel ─────────────────────────────────────────────────────────── */
@@ -1480,13 +1491,11 @@ body {
   flex-shrink: 0;
   font-size: 10.5px;
   gap: 12px;
-  height: var(--footer-height);
   line-height: 1;
   overflow: hidden;
-  padding: 0 var(--space-md);
+  padding: var(--footer-pad-top) var(--space-md) var(--footer-pad-bottom);
   white-space: nowrap;
 }
-.ftr-item,
 .ftr-status,
 .ftr-diagnostics,
 .ftr-theme-btn,
@@ -2168,14 +2177,22 @@ body {
   align-items: center;
   display: flex;
   gap: 0;
+  inset: 0 var(--project-row-pad-inline) 0 auto;
   justify-content: flex-end;
   opacity: 0;
   pointer-events: none;
+  position: absolute;
   transition: opacity 0.1s;
+  width: calc(var(--project-count-col) + var(--project-row-gap));
 }
-.proj-row:hover .p-actions {
-  opacity: 1;
-  pointer-events: auto;
+@media (hover: hover) {
+  .proj-row:hover .p-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .proj-row:hover .p-cnt {
+    opacity: 0;
+  }
 }
 .p-act-btn {
   background: none;
@@ -2184,8 +2201,10 @@ body {
   cursor: pointer;
   font-family: var(--font);
   font-size: 13px;
+  height: 18px;
   line-height: 1;
-  padding: 1px 5px;
+  min-width: 18px;
+  padding: 1px 0;
 }
 .p-act-btn:hover {
   color: var(--accent);
@@ -2299,10 +2318,9 @@ body {
 /* ≤639 px: single-panel mode — one column at a time */
 @media (max-width: 639px) {
   :root {
-    --project-cloud-col: 16px;
-    --project-last-col: 34px;
-    --project-count-col: 24px;
-    --project-action-col: 0px;
+    --project-row-gap: var(--space-2xs);
+    --project-row-pad-inline: var(--space-md);
+    --project-row-pad-start: var(--space-md);
   }
 
   .pnl-left {
@@ -2356,14 +2374,11 @@ body {
   }
 
   .proj-row {
-    gap: var(--space-2xs);
     grid-template-columns:
       minmax(0, 1fr)
       var(--project-cloud-col)
       var(--project-last-col)
       var(--project-count-col);
-    padding-left: var(--space-md);
-    padding-right: var(--space-md);
   }
 
   .p-actions {
@@ -2452,10 +2467,12 @@ body {
 
   /* Footer: mobile has no reliable hover/right-click contract; keep only stateful controls. */
   .ftr {
+    align-items: center;
     gap: var(--space-sm);
-    height: var(--footer-height);
     justify-content: flex-end;
-    padding: 0 var(--space-md);
+    /* Reuse the base footer padding tokens — the previous mobile reset to
+       padding 0 + fixed height reintroduced the glyph-low problem. */
+    padding: var(--footer-pad-top) var(--space-md) var(--footer-pad-bottom);
   }
   .ftr-item {
     display: none;

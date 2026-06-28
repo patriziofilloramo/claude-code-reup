@@ -13,7 +13,7 @@ describe('diagnostics', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-diagnostics-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'reup-diagnostics-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory
   })
@@ -48,7 +48,7 @@ describe('diagnostics', () => {
       })
     )
     await writeFile(join(indexedProjectDirectory, `${ORPHANED_SESSION_ID}.jsonl`), '{}')
-    await writeFile(join(indexedProjectDirectory, 'swoop.json.lock'), '2147483647')
+    await writeFile(join(indexedProjectDirectory, 'reup.json.lock'), '2147483647')
     await writeFile(join(brokenProjectDirectory, 'sessions-index.json'), '{broken')
 
     const report = await buildDiagnosticsReport()
@@ -67,7 +67,7 @@ describe('diagnostics', () => {
   it('does not report fresh invalid locks as abandoned', async () => {
     const projectDirectory = join(temporaryClaudeDirectory, 'projects', 'project')
     await mkdir(projectDirectory, { recursive: true })
-    const lockPath = join(projectDirectory, 'swoop.json.lock')
+    const lockPath = join(projectDirectory, 'reup.json.lock')
     await writeFile(lockPath, 'not-a-pid')
     const freshTimestamp = new Date()
     await utimes(lockPath, freshTimestamp, freshTimestamp)

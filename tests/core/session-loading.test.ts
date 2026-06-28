@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
@@ -13,6 +13,7 @@ const SESSION_ID = '00000000-0000-0000-0000-000000000001'
 const SECOND_SESSION_ID = '00000000-0000-0000-0000-000000000002'
 const THIRD_SESSION_ID = '00000000-0000-0000-0000-000000000003'
 const FOURTH_SESSION_ID = '00000000-0000-0000-0000-000000000004'
+const LEGACY_SIDECAR_FILE = `${['swo', 'op'].join('')}.json`
 const executeFile = promisify(execFile)
 
 describe('session loading', () => {
@@ -21,7 +22,7 @@ describe('session loading', () => {
   let originalClaudeDirectory: string | undefined
 
   beforeEach(async () => {
-    claudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-loading-test-'))
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'reup-loading-test-'))
     projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = claudeDirectory
@@ -34,7 +35,7 @@ describe('session loading', () => {
     await rm(claudeDirectory, { force: true, recursive: true })
   })
 
-  it('derives session metadata from JSONL and merges Swoop sidecar metadata', async () => {
+  it('derives session metadata from JSONL and merges Reup sidecar metadata', async () => {
     const projectPath = join(claudeDirectory, 'workspace')
     await mkdir(projectPath)
     await writeFile(
@@ -64,7 +65,7 @@ describe('session loading', () => {
       ].join('\n')
     )
     await writeFile(
-      join(projectDirectory, 'swoop.json'),
+      join(projectDirectory, 'reup.json'),
       JSON.stringify({ sessions: { [SESSION_ID]: { alias: 'Core refactor', archived: true } } })
     )
 
@@ -94,6 +95,46 @@ describe('session loading', () => {
       lastToolFailed: false,
       pathExists: true,
     })
+  })
+
+  it('copies legacy sidecar metadata to reup.json when the new sidecar is missing', async () => {
+    const projectPath = join(claudeDirectory, 'legacy-sidecar-workspace')
+    await mkdir(projectPath)
+    await writeSessionTranscript(SESSION_ID, projectPath, 'main')
+    await writeFile(
+      join(projectDirectory, LEGACY_SIDECAR_FILE),
+      JSON.stringify({ sessions: { [SESSION_ID]: { alias: 'Migrated alias' } } }),
+      'utf8'
+    )
+
+    const [project] = await loadProjects()
+
+    expect(project.sessions[0].alias).toBe('Migrated alias')
+    expect(await readFile(join(projectDirectory, 'reup.json'), 'utf8')).toContain('Migrated alias')
+    expect(await readFile(join(projectDirectory, LEGACY_SIDECAR_FILE), 'utf8')).toContain(
+      'Migrated alias'
+    )
+  })
+
+  it('keeps reup.json authoritative when both new and legacy sidecars exist', async () => {
+    const projectPath = join(claudeDirectory, 'new-sidecar-workspace')
+    await mkdir(projectPath)
+    await writeSessionTranscript(SESSION_ID, projectPath, 'main')
+    await writeFile(
+      join(projectDirectory, LEGACY_SIDECAR_FILE),
+      JSON.stringify({ sessions: { [SESSION_ID]: { alias: 'Legacy alias' } } }),
+      'utf8'
+    )
+    await writeFile(
+      join(projectDirectory, 'reup.json'),
+      JSON.stringify({ sessions: { [SESSION_ID]: { alias: 'Current alias' } } }),
+      'utf8'
+    )
+
+    const [project] = await loadProjects()
+
+    expect(project.sessions[0].alias).toBe('Current alias')
+    expect(await readFile(join(projectDirectory, 'reup.json'), 'utf8')).toContain('Current alias')
   })
 
   it('tracks model changes and ignores synthetic model identifiers', async () => {
@@ -414,10 +455,10 @@ describe('session loading', () => {
   async function createGitRepository(directory: string, branch: string): Promise<void> {
     await mkdir(directory)
     await executeFile('git', ['init', '-q'], { cwd: directory })
-    await executeFile('git', ['config', 'user.email', 'swoop-tests@example.invalid'], {
+    await executeFile('git', ['config', 'user.email', 'reup-tests@example.invalid'], {
       cwd: directory,
     })
-    await executeFile('git', ['config', 'user.name', 'swoop tests'], { cwd: directory })
+    await executeFile('git', ['config', 'user.name', 'reup tests'], { cwd: directory })
     await executeFile('git', ['commit', '--allow-empty', '-q', '-m', 'initial'], { cwd: directory })
     await executeFile('git', ['checkout', '-q', '-b', branch], { cwd: directory })
   }

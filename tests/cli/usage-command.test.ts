@@ -22,7 +22,7 @@ const SNAPSHOT: LiveUsageSnapshot = {
 
 describe('usage command formatting', () => {
   it('prints a compact status-line value from supported fields', () => {
-    expect(formatStatusLineUsage(SNAPSHOT)).toBe('swoop | ctx 42% | 5h 81% | 7d 23%')
+    expect(formatStatusLineUsage(SNAPSHOT)).toBe('reup | ctx 42% | 5h 81% | 7d 23%')
   })
 
   it('distinguishes unavailable, waiting, fresh, and stale states', () => {

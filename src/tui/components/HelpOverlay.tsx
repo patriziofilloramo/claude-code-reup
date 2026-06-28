@@ -22,7 +22,7 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
       >
         <Box marginBottom={1}>
           <Text bold color={COLORS.accent}>
-            swoop
+            reup
           </Text>
           <Text color={COLORS.muted}> keyboard shortcuts</Text>
         </Box>

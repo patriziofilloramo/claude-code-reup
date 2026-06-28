@@ -6,11 +6,11 @@ const CONFIG_KEYS = Object.entries(PREF_SPECS)
   .join('\n')
 
 const COMMAND_HELP: Readonly<Record<string, string>> = {
-  cleanup: `swoop cleanup - review and archive stale sessions
+  cleanup: `reup cleanup - review and archive stale sessions
 
 Usage:
-  swoop cleanup
-  swoop cleanup --dry-run
+  reup cleanup
+  reup cleanup --dry-run
 
 Candidate rules:
   empty       No messages
@@ -24,58 +24,58 @@ Options:
 
 Interactive cleanup never archives a session without confirmation.`,
 
-  completion: `swoop completion - configure shell completion
+  completion: `reup completion - configure shell completion
 
 Usage:
-  swoop completion <shell>
+  reup completion <shell>
 
 Shells:
   powershell
   bash
   zsh
 
-Prints session-ID completion for swoop resume and swoop handoff.
+Prints session-ID completion for reup resume and reup handoff.
 Run without a shell in an interactive terminal to open the Integrations panel.`,
 
-  config: `swoop config - manage persistent settings
+  config: `reup config - manage persistent settings
 
 Usage:
-  swoop config
-  swoop config get [key]
-  swoop config set <key> <value>
-  swoop config reset [key]
+  reup config
+  reup config get [key]
+  reup config set <key> <value>
+  reup config reset [key]
 
 Keys:
 ${CONFIG_KEYS}
 
 Run without arguments to open the interactive configuration panel.
-The compatibility shortcut swoop --theme <dark|light|terminal> remains supported.`,
+The compatibility shortcut reup --theme <dark|light|terminal> remains supported.`,
 
-  doctor: `swoop doctor - diagnose local session data
-
-Usage:
-  swoop doctor
-
-Runs non-destructive health checks. Swoop never repairs Claude-owned files automatically.`,
-
-  handoff: `swoop handoff - create a continuation packet
+  doctor: `reup doctor - diagnose local session data
 
 Usage:
-  swoop handoff [session-id-or-prefix]
+  reup doctor
+
+Runs non-destructive health checks. Reup never repairs Claude-owned files automatically.`,
+
+  handoff: `reup handoff - create a continuation packet
+
+Usage:
+  reup handoff [session-id-or-prefix]
 
 Prints a compact Markdown summary grounded in the selected session transcript.`,
 
-  inbox: `swoop inbox - show sessions needing attention
+  inbox: `reup inbox - show sessions needing attention
 
 Usage:
-  swoop inbox
+  reup inbox
 
 Lists active sessions and non-archived sessions with actionable signals.`,
 
-  list: `swoop list - list sessions across projects
+  list: `reup list - list sessions across projects
 
 Usage:
-  swoop list [query] [options]
+  reup list [query] [options]
 
 Options:
   --active             Show active sessions only
@@ -89,50 +89,50 @@ Options:
   --group <name>       Filter by project group
   --stack <name>       Filter by work stack`,
 
-  resume: `swoop resume - resume a Claude Code session
+  resume: `reup resume - resume a Claude Code session
 
 Usage:
-  swoop resume [session-id-or-prefix]
+  reup resume [session-id-or-prefix]
 
 Run without a selector in an interactive terminal to open the ranked session picker.`,
 
-  search: `swoop search - search and resume sessions
+  search: `reup search - search and resume sessions
 
 Usage:
-  swoop search [--deep] <query>
+  reup search [--deep] <query>
 
 Options:
   --deep  Search transcript content instead of session metadata`,
 
-  sync: `swoop sync - manage cross-device session storage (Alpha)
+  sync: `reup sync - manage cross-device session storage (Alpha)
 
 Usage:
-  swoop sync
-  swoop sync link [project-path]
-  swoop sync link --all-cloud
-  swoop sync unlink [project-path]
-  swoop sync unlink --all
-  swoop sync status
+  reup sync
+  reup sync link [project-path]
+  reup sync link --all-cloud
+  reup sync unlink [project-path]
+  reup sync unlink --all
+  reup sync status
 
 Moves session storage into the project and links Claude Code to it, allowing an
 existing file-sync provider to carry sessions across your own devices. It does
 not share sessions with other users.`,
 
-  usage: `swoop usage - monitor Claude usage limits
+  usage: `reup usage - monitor Claude usage limits
 
 Usage:
-  swoop usage
-  swoop usage --json
-  swoop usage toggle
-  swoop usage setup [--replace]
-  swoop usage remove
+  reup usage
+  reup usage --json
+  reup usage toggle
+  reup usage setup [--replace]
+  reup usage remove
 
 Usage capture is local, optional, and reversible.`,
 
-  web: `swoop web - open the local browser interface
+  web: `reup web - open the local browser interface
 
 Usage:
-  swoop web [--port <port>]
+  reup web [--port <port>]
 
 The web server listens on localhost only.`,
 }
@@ -142,7 +142,7 @@ export function isHelpRequest(commandArguments: string[]): boolean {
   return commandArguments.length === 1 && ['--help', '-h'].includes(commandArguments[0]!)
 }
 
-/** Builds the concise product-level command map shown by `swoop --help`. */
+/** Builds the concise product-level command map shown by `reup --help`. */
 export function renderMainHelp(useColor = process.stdout.isTTY === true): string {
   const bold = (text: string) => (useColor ? `\x1b[1m${text}\x1b[0m` : text)
   const dim = (text: string) => (useColor ? `\x1b[2m${text}\x1b[0m` : text)
@@ -152,40 +152,40 @@ export function renderMainHelp(useColor = process.stdout.isTTY === true): string
   }
 
   return [
-    `${bold('swoop')} - session manager for Claude Code`,
+    `${bold('reup')} - session manager for Claude Code`,
     '',
     bold('Interfaces'),
-    row('swoop', 'Open terminal UI', 'default'),
-    row('swoop web', 'Open browser UI'),
+    row('reup', 'Open terminal UI', 'default'),
+    row('reup web', 'Open browser UI'),
     '',
     bold('Sessions'),
-    row('swoop resume [id]', 'Resume a session'),
-    row('swoop list [query]', 'List sessions', '--json for machine-readable'),
-    row('swoop search <query>', 'Search session metadata or content'),
-    row('swoop inbox', 'Show sessions needing attention'),
-    row('swoop handoff [id]', 'Create a continuation packet'),
+    row('reup resume [id]', 'Resume a session'),
+    row('reup list [query]', 'List sessions', '--json for machine-readable'),
+    row('reup search <query>', 'Search session metadata or content'),
+    row('reup inbox', 'Show sessions needing attention'),
+    row('reup handoff [id]', 'Create a continuation packet'),
     '',
     bold('Maintenance'),
-    row('swoop cleanup', 'Review stale or empty sessions'),
-    row('swoop doctor', 'Diagnose local session data'),
-    row('swoop usage [action]', 'Monitor Claude usage limits'),
+    row('reup cleanup', 'Review stale or empty sessions'),
+    row('reup doctor', 'Diagnose local session data'),
+    row('reup usage [action]', 'Monitor Claude usage limits'),
     '',
     bold('Configuration'),
-    row('swoop config', 'Open configuration panel'),
-    row('swoop completion <shell>', 'Print shell completion setup'),
+    row('reup config', 'Open configuration panel'),
+    row('reup completion <shell>', 'Print shell completion setup'),
     '',
     bold('Features'),
-    row('swoop sync [link|unlink|status] [path]', 'Manage cross-device session storage', 'Alpha'),
+    row('reup sync [link|unlink|status] [path]', 'Manage cross-device session storage', 'Alpha'),
     '',
     bold('Options'),
     row('-h, --help', 'Show help'),
     row('-v, --version', 'Show version'),
     '',
-    dim('Run `swoop help <command>` or `swoop <command> --help` for details.'),
+    dim('Run `reup help <command>` or `reup <command> --help` for details.'),
   ].join('\n')
 }
 
-/** Handles the public `swoop help [command]` interface. */
+/** Handles the public `reup help [command]` interface. */
 export function runHelpCommand(commandArguments: string[]): void {
   if (commandArguments.length === 0 || isHelpRequest(commandArguments)) {
     writeOutput(renderMainHelp())
@@ -193,7 +193,7 @@ export function runHelpCommand(commandArguments: string[]): void {
   }
 
   if (commandArguments.length !== 1) {
-    failCommand('usage: swoop help [command]')
+    failCommand('usage: reup help [command]')
     return
   }
 

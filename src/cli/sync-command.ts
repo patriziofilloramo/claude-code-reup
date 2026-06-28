@@ -63,14 +63,14 @@ export async function runSyncCommand(args: string[]): Promise<void> {
       return
     case undefined:
       await openConfigInterface({
-        commandName: 'swoop sync',
+        commandName: 'reup sync',
         initialTab: 'Features',
         nonInteractiveAlternative:
-          'use `swoop sync link <path>` or `swoop sync unlink <path>` in scripts',
+          'use `reup sync link <path>` or `reup sync unlink <path>` in scripts',
       })
       return
     default:
-      failCommand('usage: swoop sync [link|unlink|status] [path]')
+      failCommand('usage: reup sync [link|unlink|status] [path]')
   }
 }
 
@@ -78,14 +78,14 @@ async function linkSync(args: string[]): Promise<void> {
   const allCloud = args.includes('--all-cloud')
   const paths = args.filter((arg) => arg !== '--all-cloud')
   if (paths.length > 1 || (allCloud && paths.length > 0)) {
-    failCommand('usage: swoop sync link [project-path] [--all-cloud]')
+    failCommand('usage: reup sync link [project-path] [--all-cloud]')
     return
   }
 
   printAlphaWarning([
     'Sessions are moved into the cloud directory through a filesystem link.',
-    'Swoop updates CLAUDE.md. Managed .gitignore and permission rules are only added from the Features UI.',
-    'Run `swoop sync unlink <path>` to restore local-only storage.',
+    'Reup updates CLAUDE.md. Managed .gitignore and permission rules are only added from the Features UI.',
+    'Run `reup sync unlink <path>` to restore local-only storage.',
   ])
 
   const projects = await loadProjects()
@@ -117,7 +117,7 @@ async function unlinkSync(args: string[]): Promise<void> {
   const all = args.includes('--all')
   const paths = args.filter((arg) => arg !== '--all')
   if (paths.length > 1 || (all && paths.length > 0)) {
-    failCommand('usage: swoop sync unlink [project-path] [--all]')
+    failCommand('usage: reup sync unlink [project-path] [--all]')
     return
   }
 
@@ -184,7 +184,7 @@ async function unlinkInteractively(projects: Project[]): Promise<void> {
   const picked = await runProjectPicker(
     linkedProjects,
     undefined,
-    'Swoop SYNC UNLINK',
+    'Reup SYNC UNLINK',
     'select a project to unlink'
   )
   releaseTerminalInput()

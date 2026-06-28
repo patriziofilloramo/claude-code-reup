@@ -14,20 +14,20 @@ const manifest = JSON.parse(readFileSync('extension/package.json', 'utf8')) as {
 
 describe('VS Code handoff command guardrails', () => {
   it('registers a session-scoped copy handoff command', () => {
-    expect(manifest.activationEvents).toContain('onCommand:swoop.tree.copyHandoff')
+    expect(manifest.activationEvents).toContain('onCommand:reup.tree.copyHandoff')
     expect(manifest.contributes.commands).toContainEqual(
       expect.objectContaining({
-        command: 'swoop.tree.copyHandoff',
+        command: 'reup.tree.copyHandoff',
         title: 'Copy Handoff',
       })
     )
     expect(manifest.contributes.menus['view/item/context']).toContainEqual(
       expect.objectContaining({
-        command: 'swoop.tree.copyHandoff',
-        when: 'view == swoop.sessions && viewItem == swoopSession',
+        command: 'reup.tree.copyHandoff',
+        when: 'view == reup.sessions && viewItem == reupSession',
       })
     )
-    expect(extensionSource).toContain("registerCommand('swoop.tree.copyHandoff'")
+    expect(extensionSource).toContain("registerCommand('reup.tree.copyHandoff'")
   })
 
   it('reuses core handoff generation and copies only to the clipboard', () => {

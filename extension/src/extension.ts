@@ -1,48 +1,44 @@
 import * as vscode from 'vscode'
 
 import { copySessionHandoff } from './handoff.js'
-import { SwoopDashboard } from './dashboard.js'
+import { ReupDashboard } from './dashboard.js'
 import { createLogger } from './logger.js'
-import { SwoopRefreshController } from './refresh-controller.js'
+import { ReupRefreshController } from './refresh-controller.js'
 import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-picker.js'
 import { SessionResumeService } from './resume-target.js'
 import { showSessionSearch } from './session-search.js'
 import {
   openSessionDetail,
   showSessionDetailPicker,
-  SwoopInspectorProvider,
+  ReupInspectorProvider,
 } from './session-detail.js'
-import { asProjectTreeNode, asSessionTreeNode, SwoopSessionTreeProvider } from './session-tree.js'
-import { SwoopDataSource } from './swoop-data.js'
+import { asProjectTreeNode, asSessionTreeNode, ReupSessionTreeProvider } from './session-tree.js'
+import { ReupDataSource } from './reup-data.js'
 import { CockpitStatusBar } from './status-bar.js'
+import { getMigratedGlobalState, getReupConfigurationValue } from './configuration.js'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = createLogger()
-  const dataSource = new SwoopDataSource(logger)
+  const dataSource = new ReupDataSource(logger)
   const resumeService = new SessionResumeService(context, logger)
-  const treeProvider = new SwoopSessionTreeProvider(dataSource, logger)
-  let dashboard: SwoopDashboard | null = null
+  const treeProvider = new ReupSessionTreeProvider(dataSource, logger)
+  let dashboard: ReupDashboard | null = null
   let dashboardVisible = false
   let treeVisible = false
-  let refreshController: SwoopRefreshController | null = null
+  let refreshController: ReupRefreshController | null = null
   const updateRefreshVisibility = (): void => {
     // Continuous filesystem watching is reserved for the dashboard. Keeping
     // it attached to a contributed TreeView can make the shared VS Code
     // sidebar appear perpetually busy while Claude is writing transcripts.
-    // The tree receives one-shot refreshes when opened and after Swoop actions.
+    // The tree receives one-shot refreshes when opened and after Reup actions.
     refreshController?.setVisible(dashboardVisible)
   }
   const refreshAll = async (): Promise<void> => {
     const changed = await treeProvider.refresh({ notifyView: treeVisible })
     if (changed) await dashboard?.refresh(treeProvider.getModel() ?? undefined)
   }
-  const inspectorProvider = new SwoopInspectorProvider(
-    dataSource,
-    logger,
-    refreshAll,
-    resumeService
-  )
-  dashboard = new SwoopDashboard(
+  const inspectorProvider = new ReupInspectorProvider(dataSource, logger, refreshAll, resumeService)
+  dashboard = new ReupDashboard(
     context,
     dataSource,
     inspectorProvider,
@@ -55,15 +51,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     () => treeProvider.getModel()
   )
-  const treeView = vscode.window.createTreeView('swoop.sessions', {
+  const treeView = vscode.window.createTreeView('reup.sessions', {
     showCollapseAll: true,
     treeDataProvider: treeProvider,
   })
   treeProvider.attachTreeView(treeView)
-  refreshController = new SwoopRefreshController(logger, { refresh: refreshAll })
+  refreshController = new ReupRefreshController(logger, { refresh: refreshAll })
   const statusBar = new CockpitStatusBar()
 
-  logger.info('Swoop extension activated')
+  logger.info('Reup extension activated')
 
   context.subscriptions.push(
     logger,
@@ -86,37 +82,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       statusBar.update(model)
       void inspectorProvider.refreshSelected(model.sessions)
     }),
-    vscode.window.registerWebviewViewProvider('swoop.inspector', inspectorProvider, {
+    vscode.window.registerWebviewViewProvider('reup.inspector', inspectorProvider, {
       webviewOptions: { retainContextWhenHidden: false },
     }),
-    vscode.commands.registerCommand('swoop.diagnostics', async () => {
+    vscode.commands.registerCommand('reup.diagnostics', async () => {
       await runDiagnostics(dataSource, logger)
     }),
-    vscode.commands.registerCommand('swoop.refreshSessions', async () => {
+    vscode.commands.registerCommand('reup.refreshSessions', async () => {
       await refreshAll()
     }),
-    vscode.commands.registerCommand('swoop.openDashboard', async () => {
+    vscode.commands.registerCommand('reup.openDashboard', async () => {
       await dashboard?.open()
     }),
-    vscode.commands.registerCommand('swoop.focusCockpit', async () => {
-      await vscode.commands.executeCommand('swoop.sessions.focus')
+    vscode.commands.registerCommand('reup.focusCockpit', async () => {
+      await vscode.commands.executeCommand('reup.sessions.focus')
     }),
-    vscode.commands.registerCommand('swoop.resumeHere', async () => {
+    vscode.commands.registerCommand('reup.resumeHere', async () => {
       await showWorkspaceResumePicker(dataSource, logger, resumeService, (session) =>
         inspectorProvider.showSession(session)
       )
     }),
-    vscode.commands.registerCommand('swoop.resumeSession', async () => {
+    vscode.commands.registerCommand('reup.resumeSession', async () => {
       await showGlobalResumePicker(dataSource, logger, resumeService, (session) =>
         inspectorProvider.showSession(session)
       )
     }),
-    vscode.commands.registerCommand('swoop.searchSessions', async () => {
+    vscode.commands.registerCommand('reup.searchSessions', async () => {
       await showSessionSearch(dataSource, logger, resumeService, (session) =>
         inspectorProvider.showSession(session)
       )
     }),
-    vscode.commands.registerCommand('swoop.openSessionDetail', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.openSessionDetail', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (!sessionNode) {
         await showSessionDetailPicker(inspectorProvider, dataSource, logger)
@@ -127,11 +123,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch (error) {
         logger.error('open session detail failed', error)
         void vscode.window.showErrorMessage(
-          error instanceof Error ? error.message : 'Could not open Swoop Session Inspector.'
+          error instanceof Error ? error.message : 'Could not open Reup Session Inspector.'
         )
       }
     }),
-    vscode.commands.registerCommand('swoop.tree.resumeSession', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.resumeSession', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (!sessionNode) return
       try {
@@ -142,38 +138,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
       }
     }),
-    vscode.commands.registerCommand('swoop.tree.copySessionId', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.copySessionId', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (!sessionNode) return
       await vscode.env.clipboard.writeText(sessionNode.session.id)
-      void vscode.window.showInformationMessage('Swoop session ID copied.')
+      void vscode.window.showInformationMessage('Reup session ID copied.')
     }),
-    vscode.commands.registerCommand('swoop.tree.copyHandoff', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.copyHandoff', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (!sessionNode) return
       try {
         await copySessionHandoff(sessionNode.session, logger)
-        void vscode.window.showInformationMessage('Swoop handoff packet copied.')
+        void vscode.window.showInformationMessage('Reup handoff packet copied.')
       } catch (error) {
         logger.error('copy handoff failed', error)
         void vscode.window.showErrorMessage(
-          error instanceof Error ? error.message : 'Could not copy Swoop handoff packet.'
+          error instanceof Error ? error.message : 'Could not copy Reup handoff packet.'
         )
       }
     }),
-    vscode.commands.registerCommand('swoop.tree.editAlias', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.editAlias', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (sessionNode) await inspectorProvider.editAlias(sessionNode.session)
     }),
-    vscode.commands.registerCommand('swoop.tree.toggleArchive', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.toggleArchive', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (sessionNode) await inspectorProvider.toggleArchive(sessionNode.session)
     }),
-    vscode.commands.registerCommand('swoop.tree.editTags', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.editTags', async (node: unknown) => {
       const sessionNode = asSessionTreeNode(node)
       if (sessionNode) await inspectorProvider.editTags(sessionNode.session)
     }),
-    vscode.commands.registerCommand('swoop.tree.revealProjectFolder', async (node: unknown) => {
+    vscode.commands.registerCommand('reup.tree.revealProjectFolder', async (node: unknown) => {
       const projectNode = asProjectTreeNode(node)
       if (!projectNode) return
       await vscode.commands.executeCommand(
@@ -192,11 +188,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 async function openDashboardOnFirstUse(
   context: vscode.ExtensionContext,
-  dashboard: SwoopDashboard
+  dashboard: ReupDashboard
 ): Promise<void> {
   const onboardingGeneration = 1
-  const key = 'swoop.dashboard.onboardingGeneration'
-  if (context.globalState.get<number>(key) === onboardingGeneration) return
+  const key = 'reup.dashboard.onboardingGeneration'
+  if ((await getMigratedGlobalState<number>(context, key)) === onboardingGeneration) return
   await context.globalState.update(key, onboardingGeneration)
   await dashboard.open()
 }
@@ -206,14 +202,12 @@ export function deactivate(): void {
 }
 
 async function runDiagnostics(
-  dataSource: SwoopDataSource,
+  dataSource: ReupDataSource,
   logger: ReturnType<typeof createLogger>
 ): Promise<void> {
   try {
     const model = await dataSource.loadModel({
-      includeArchived: vscode.workspace
-        .getConfiguration('swoop')
-        .get<boolean>('includeArchived', false),
+      includeArchived: getReupConfigurationValue('includeArchived', false),
       includePreviewHints: false,
       workspacePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     })
@@ -224,11 +218,11 @@ async function runDiagnostics(
     })
     logger.show()
     void vscode.window.showInformationMessage(
-      `Swoop found ${model.sessions.length} sessions across ${model.projects.length} projects.`
+      `Reup found ${model.sessions.length} sessions across ${model.projects.length} projects.`
     )
   } catch (error) {
     logger.error('diagnostics failed', error)
     logger.show()
-    void vscode.window.showErrorMessage('Swoop diagnostics failed. See Output: Swoop.')
+    void vscode.window.showErrorMessage('Reup diagnostics failed. See Output: Reup.')
   }
 }

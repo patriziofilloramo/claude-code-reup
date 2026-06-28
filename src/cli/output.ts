@@ -5,6 +5,6 @@ export function writeOutput(output: string): void {
 
 /** Marks a command as failed after printing a concise diagnostic. */
 export function failCommand(message: string): void {
-  console.error(`swoop: ${message}`)
+  console.error(`reup: ${message}`)
   process.exitCode = 1
 }

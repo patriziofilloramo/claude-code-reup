@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -47,7 +47,7 @@ describe('readSessionTailActivity', () => {
   let tmpDir: string
 
   beforeEach(async () => {
-    tmpDir = await mkdtemp(join(tmpdir(), 'swoop-tail-test-'))
+    tmpDir = await mkdtemp(join(tmpdir(), 'reup-tail-test-'))
   })
 
   afterEach(async () => {

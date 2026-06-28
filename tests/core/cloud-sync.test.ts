@@ -30,7 +30,7 @@ describe('stopSyncLoop', () => {
 
 describe('unregisterProjectSync', () => {
   it('removes stale runtime state that would override the unlinked filesystem', () => {
-    const projectPath = join(tmpdir(), 'swoop-unregistered-project')
+    const projectPath = join(tmpdir(), 'reup-unregistered-project')
     syncRegistry.set(projectPath, {
       cloudDir: join(projectPath, '.claude-memory'),
       hasPendingMerge: false,
@@ -47,9 +47,10 @@ describe('syncBidirectional', () => {
   let dirA: string
   let dirB: string
   let root: string
+  const legacyConflictDirectory = `.${['swo', 'op'].join('')}-conflicts`
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'swoop-sync-test-'))
+    root = await mkdtemp(join(tmpdir(), 'reup-sync-test-'))
     dirA = join(root, 'a')
     dirB = join(root, 'b')
     await mkdir(dirA, { recursive: true })
@@ -138,13 +139,13 @@ describe('syncBidirectional', () => {
     await expect(lstat(join(dirB, 'memory'))).rejects.toThrow() // not copied
   })
 
-  it('skips the legacy .swoop-link marker', async () => {
-    await writeFile(join(dirA, '.swoop-link'), '/cloud/path', 'utf8')
+  it('skips the legacy .reup-link marker', async () => {
+    await writeFile(join(dirA, '.reup-link'), '/cloud/path', 'utf8')
     await writeFile(join(dirA, 'session.jsonl'), 'data', 'utf8')
 
     await syncBidirectional(dirA, dirB)
 
-    await expect(readFile(join(dirB, '.swoop-link'), 'utf8')).rejects.toThrow()
+    await expect(readFile(join(dirB, '.reup-link'), 'utf8')).rejects.toThrow()
     expect(await readFile(join(dirB, 'session.jsonl'), 'utf8')).toBe('data')
   })
 
@@ -162,7 +163,7 @@ describe('syncBidirectional', () => {
     expect(await readFile(join(dirA, sessionFile), 'utf8')).toBe(newerTranscript)
     expect(await readFile(join(dirB, sessionFile), 'utf8')).toBe(newerTranscript)
 
-    const conflictFiles = await readdir(join(dirB, '.swoop-conflicts'))
+    const conflictFiles = await readdir(join(dirB, '.reup-conflicts'))
     const sideA = conflictFiles.find((name) => name.includes('.side-a.'))
     const sideB = conflictFiles.find((name) => name.includes('.side-b.'))
     const manifest = conflictFiles.find((name) => name.includes('.conflict.'))
@@ -170,9 +171,9 @@ describe('syncBidirectional', () => {
     expect(sideA).toBeDefined()
     expect(sideB).toBeDefined()
     expect(manifest).toBeDefined()
-    expect(await readFile(join(dirB, '.swoop-conflicts', sideA!), 'utf8')).toBe(olderTranscript)
-    expect(await readFile(join(dirB, '.swoop-conflicts', sideB!), 'utf8')).toBe(newerTranscript)
-    expect(await readFile(join(dirB, '.swoop-conflicts', manifest!), 'utf8')).toContain(
+    expect(await readFile(join(dirB, '.reup-conflicts', sideA!), 'utf8')).toBe(olderTranscript)
+    expect(await readFile(join(dirB, '.reup-conflicts', sideB!), 'utf8')).toBe(newerTranscript)
+    expect(await readFile(join(dirB, '.reup-conflicts', manifest!), 'utf8')).toContain(
       '"reason": "latest-jsonl-timestamp"'
     )
   })
@@ -191,10 +192,23 @@ describe('syncBidirectional', () => {
     )
 
     await syncBidirectional(dirA, dirB)
-    const firstPassFiles = (await readdir(join(dirB, '.swoop-conflicts'))).sort()
+    const firstPassFiles = (await readdir(join(dirB, '.reup-conflicts'))).sort()
     await syncBidirectional(dirA, dirB)
 
-    expect((await readdir(join(dirB, '.swoop-conflicts'))).sort()).toEqual(firstPassFiles)
+    expect((await readdir(join(dirB, '.reup-conflicts'))).sort()).toEqual(firstPassFiles)
+  })
+
+  it('migrates legacy conflict artifacts into .reup-conflicts before syncing', async () => {
+    await mkdir(join(dirA, legacyConflictDirectory))
+    await writeFile(join(dirA, legacyConflictDirectory, 'old.conflict.json'), '{}\n', 'utf8')
+
+    await syncBidirectional(dirA, dirB)
+
+    await expect(
+      readFile(join(dirA, legacyConflictDirectory, 'old.conflict.json'), 'utf8')
+    ).rejects.toThrow()
+    expect(await readFile(join(dirA, '.reup-conflicts', 'old.conflict.json'), 'utf8')).toBe('{}\n')
+    expect(await readFile(join(dirB, '.reup-conflicts', 'old.conflict.json'), 'utf8')).toBe('{}\n')
   })
 
   it('auto-merges independently-edited .md files into a union of their lines', async () => {
@@ -237,14 +251,14 @@ describe('syncBidirectional', () => {
 
     await syncBidirectional(dirA, dirB)
 
-    const conflictFiles = await readdir(join(dirB, '.swoop-conflicts'))
+    const conflictFiles = await readdir(join(dirB, '.reup-conflicts'))
     const sideA = conflictFiles.find((name) => name.includes('.side-a.'))
     const sideB = conflictFiles.find((name) => name.includes('.side-b.'))
 
     expect(sideA).toBeDefined()
     expect(sideB).toBeDefined()
-    expect(await readFile(join(dirB, '.swoop-conflicts', sideA!))).toEqual(contentA)
-    expect(await readFile(join(dirB, '.swoop-conflicts', sideB!))).toEqual(contentB)
+    expect(await readFile(join(dirB, '.reup-conflicts', sideA!))).toEqual(contentA)
+    expect(await readFile(join(dirB, '.reup-conflicts', sideB!))).toEqual(contentB)
   })
 
   it('still reports a conflict for file-directory type mismatches', async () => {
@@ -261,7 +275,7 @@ describe('mirrorDirectory', () => {
   let source: string
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'swoop-mirror-test-'))
+    root = await mkdtemp(join(tmpdir(), 'reup-mirror-test-'))
     source = join(root, 'source')
     destination = join(root, 'destination')
     await mkdir(source, { recursive: true })
@@ -287,7 +301,7 @@ describe('transactional link replacement', () => {
   let root: string
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'swoop-link-test-'))
+    root = await mkdtemp(join(tmpdir(), 'reup-link-test-'))
   })
 
   afterEach(async () => {

@@ -14,7 +14,7 @@ describe('getActiveSessions', () => {
   let temporaryClaudeDirectory: string
 
   beforeEach(async () => {
-    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-active-test-'))
+    temporaryClaudeDirectory = await mkdtemp(join(tmpdir(), 'reup-active-test-'))
     activeSessionsDirectory = join(temporaryClaudeDirectory, 'sessions')
     originalClaudeConfigDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = temporaryClaudeDirectory

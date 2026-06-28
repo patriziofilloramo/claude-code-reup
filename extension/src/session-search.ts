@@ -6,9 +6,10 @@ import {
 } from '../../src/core/session/session-query.js'
 import { formatRelativeTime, statusCodicon } from './formatting.js'
 import { copySessionHandoff } from './handoff.js'
-import type { SwoopLogger } from './logger.js'
+import { getReupConfigurationValue } from './configuration.js'
+import type { ReupLogger } from './logger.js'
 import type { SessionResumeService } from './resume-target.js'
-import type { ExtensionContentMatch, ExtensionSession, SwoopDataSource } from './swoop-data.js'
+import type { ExtensionContentMatch, ExtensionSession, ReupDataSource } from './reup-data.js'
 
 interface SearchItem extends vscode.QuickPickItem {
   session: ExtensionSession
@@ -28,21 +29,19 @@ const COPY_BUTTON: vscode.QuickInputButton = {
 }
 
 export async function showSessionSearch(
-  dataSource: SwoopDataSource,
-  logger: SwoopLogger,
+  dataSource: ReupDataSource,
+  logger: ReupLogger,
   resumeService: SessionResumeService,
   onOpenInspector: (session: ExtensionSession) => Promise<void>
 ): Promise<void> {
-  const includeArchived = vscode.workspace
-    .getConfiguration('swoop')
-    .get<boolean>('includeArchived', false)
+  const includeArchived = getReupConfigurationValue<boolean>('includeArchived', false)
   const model = await dataSource.loadModel({
     includeArchived,
     includePreviewHints: false,
     workspacePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
   })
   const picker = vscode.window.createQuickPick<SearchItem>()
-  picker.title = 'Swoop: Search Sessions'
+  picker.title = 'Reup: Search Sessions'
   picker.placeholder = 'Search title, project, branch, tag, status or ID'
   picker.matchOnDescription = false
   picker.matchOnDetail = false
@@ -84,7 +83,7 @@ export async function showSessionSearch(
         vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Window,
-            title: 'Swoop: searching transcripts',
+            title: 'Reup: searching transcripts',
           },
           async (progress) => {
             let previous = 0
@@ -101,7 +100,7 @@ export async function showSessionSearch(
               }
             )
             picker.items = matches.map(deepSearchItem)
-            picker.title = `Swoop: Transcript Results (${matches.length})`
+            picker.title = `Reup: Transcript Results (${matches.length})`
           }
         )
       )
@@ -127,7 +126,7 @@ export async function showSessionSearch(
           )
       } else if (event.button === COPY_BUTTON) {
         void copySessionHandoff(event.item.session, logger)
-          .then(() => vscode.window.showInformationMessage('Swoop handoff packet copied.'))
+          .then(() => vscode.window.showInformationMessage('Reup handoff packet copied.'))
           .catch((error) =>
             vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
           )

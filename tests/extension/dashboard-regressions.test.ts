@@ -19,22 +19,22 @@ const manifest = JSON.parse(readFileSync('extension/package.json', 'utf8')) as {
 describe('full-screen dashboard guardrails', () => {
   it('declares a primary singleton dashboard command', () => {
     expect(manifest.contributes.commands).toContainEqual(
-      expect.objectContaining({ command: 'swoop.openDashboard' })
+      expect.objectContaining({ command: 'reup.openDashboard' })
     )
-    expect(manifest.activationEvents).toContain('onCommand:swoop.openDashboard')
+    expect(manifest.activationEvents).toContain('onCommand:reup.openDashboard')
     expect(manifest.contributes.menus['view/title'][0]).toEqual(
-      expect.objectContaining({ command: 'swoop.openDashboard' })
+      expect.objectContaining({ command: 'reup.openDashboard' })
     )
-    expect(extensionSource).toContain('let dashboard: SwoopDashboard | null = null')
+    expect(extensionSource).toContain('let dashboard: ReupDashboard | null = null')
     expect(source).toContain('this.panel.reveal(vscode.ViewColumn.One)')
   })
 
   it('keeps title-bar actions compact and exposes archived sessions in the dashboard', () => {
     expect(manifest.contributes.commands).toContainEqual(
-      expect.objectContaining({ command: 'swoop.resumeHere', icon: '$(play)' })
+      expect.objectContaining({ command: 'reup.resumeHere', icon: '$(play)' })
     )
     expect(manifest.contributes.commands).toContainEqual(
-      expect.objectContaining({ command: 'swoop.resumeSession', icon: '$(history)' })
+      expect.objectContaining({ command: 'reup.resumeSession', icon: '$(history)' })
     )
     expect(source).toContain("nav('archived','Archived'")
     expect(source).toContain('data-filter="archived"')
@@ -64,12 +64,12 @@ describe('full-screen dashboard guardrails', () => {
   it('uses one shared brand lockup for loading and the dashboard header', () => {
     expect(source).toContain("from '../../src/brand.js'")
     expect(source).not.toContain("from './brand.js'")
-    expect(source).toContain('renderSwoopMarkSvg')
+    expect(source).toContain('renderReupMarkSvg')
     expect(source).toContain('function renderBrandMarkup()')
     expect(source).toContain('${brandMarkup}<p>Mapping your Claude work')
     expect(source).toContain("'+BRAND_MARKUP+'")
     expect(source).not.toContain('aria-hidden="true">✱</span>')
-    expect(source.match(/class="brand-title">Swoop/g)).toHaveLength(1)
+    expect(source.match(/class="brand-title">Reup/g)).toHaveLength(1)
   })
 
   it('shows and polls live usage by default only while visible', () => {
@@ -122,14 +122,16 @@ describe('full-screen dashboard guardrails', () => {
     expect(source).toContain('if(!menu.contains(event.target))closeMenu()')
   })
 
-  it('uses shared Swoop semantic theme tokens with a visible usage accent', () => {
-    expect(source).toContain('resolveTheme(process.env')
+  it('uses shared Reup semantic theme tokens with a visible usage accent', () => {
+    expect(source).toContain('resolveTheme(')
+    expect(source).toContain('process.env[APP.themeEnvVar]')
+    expect(source).toContain('process.env[APP.legacyThemeEnvVar]')
     expect(source).toContain('getStoredThemeName()')
-    expect(source).toContain('--swoop-accent:${theme.accent}')
+    expect(source).toContain('--reup-accent:${theme.accent}')
     expect(source).toContain('--good:${theme.green}')
     expect(source).toContain('--accent:var(--vscode-focusBorder')
     expect(source).toContain('appearance:none;opacity:1')
-    expect(source).toContain('var(--swoop-accent)')
+    expect(source).toContain('var(--reup-accent)')
   })
 
   it('offers one validated remembered resume policy across every extension surface', () => {
@@ -145,6 +147,9 @@ describe('full-screen dashboard guardrails', () => {
     expect(resumeTargetSource).toContain(
       "const CLAUDE_RESUME_COMMAND = 'claude-vscode.editor.open'"
     )
+    expect(resumeTargetSource).toContain('async function openSessionInClaudeExtension')
+    expect(resumeTargetSource).toContain('vscode.ViewColumn.Active')
+    expect(resumeTargetSource).not.toContain('executeCommand(CLAUDE_RESUME_COMMAND, session.id)')
     expect(resumeTargetSource).toContain('falling back to terminal')
     expect(resumeTargetSource).toContain('context.globalState.update')
     expect(resumeTargetSource).toContain('isResumeTarget(storedValue)')
@@ -164,8 +169,8 @@ describe('full-screen dashboard guardrails', () => {
   })
 
   it('opens onboarding once per dashboard generation rather than every patch release', () => {
-    expect(extensionSource).toContain("const key = 'swoop.dashboard.onboardingGeneration'")
+    expect(extensionSource).toContain("const key = 'reup.dashboard.onboardingGeneration'")
     expect(extensionSource).toContain('const onboardingGeneration = 1')
-    expect(extensionSource).not.toContain('swoop.dashboard.onboardingVersion')
+    expect(extensionSource).not.toContain('reup.dashboard.onboardingVersion')
   })
 })

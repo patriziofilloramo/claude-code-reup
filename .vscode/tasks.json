@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build Swoop VS Code Extension",
+      "label": "Build Reup VS Code Extension",
       "type": "shell",
       "command": "npm run compile",
       "options": {
@@ -17,7 +17,7 @@
       }
     },
     {
-      "label": "Install Swoop VS Code Extension Locally",
+      "label": "Install Reup VS Code Extension Locally",
       "type": "shell",
       "command": "npm run install:extension",
       "options": {

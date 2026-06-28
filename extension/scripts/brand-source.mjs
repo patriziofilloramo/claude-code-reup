@@ -7,10 +7,11 @@ export const extensionRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 export async function readBrandDefinition() {
   const source = await readFile(join(extensionRoot, '..', 'src', 'brand.ts'), 'utf8')
   return {
+    accentPath: readExport(source, 'REUP_ACCENT_PATH'),
     color: readExport(source, 'BRAND_COLOR'),
     colorDeep: readExport(source, 'BRAND_COLOR_DEEP'),
     colorMid: readExport(source, 'BRAND_COLOR_MID'),
-    path: readExport(source, 'SWOOP_PATH'),
+    path: readExport(source, 'REUP_PATH'),
   }
 }
 

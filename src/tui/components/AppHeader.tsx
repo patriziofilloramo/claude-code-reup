@@ -1,6 +1,5 @@
 import { Box, Text, useStdout } from 'ink'
 
-import { BRAND_COLOR } from '../../brand.js'
 import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { LiveUsageSummary, UsageLimitWindow } from '../../core/usage/live-usage.js'
@@ -44,7 +43,6 @@ export default function AppHeader({ usage, version }: AppHeaderProps) {
       paddingX={1}
     >
       <Box gap={0}>
-        <Text color={BRAND_COLOR}>∫ </Text>
         <Text bold color={COLORS.accent}>
           {LABELS.appName}
         </Text>

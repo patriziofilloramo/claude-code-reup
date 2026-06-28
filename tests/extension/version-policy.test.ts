@@ -21,7 +21,7 @@ describe('VS Code extension release policy', () => {
     expect(tasks.tasks).toContainEqual(
       expect.objectContaining({
         command: 'npm run install:extension',
-        label: 'Install Swoop VS Code Extension Locally',
+        label: 'Install Reup VS Code Extension Locally',
       })
     )
   })

@@ -13,10 +13,10 @@ describe('org routes', () => {
   let originalClaudeDirectory: string | undefined
 
   beforeEach(async () => {
-    claudeDirectory = await mkdtemp(join(tmpdir(), 'swoop-org-routes-test-'))
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'reup-org-routes-test-'))
     originalClaudeDirectory = process.env.CLAUDE_CONFIG_DIR
     process.env.CLAUDE_CONFIG_DIR = claudeDirectory
-    await mkdir(join(claudeDirectory, 'swoop'), { recursive: true })
+    await mkdir(join(claudeDirectory, 'reup'), { recursive: true })
   })
 
   afterEach(async () => {
@@ -29,7 +29,7 @@ describe('org routes', () => {
   // GET /api/org
   // ---------------------------------------------------------------------------
 
-  it('returns an empty org state for a fresh swoop directory', async () => {
+  it('returns an empty org state for a fresh reup directory', async () => {
     const response = await buildApp().request('/api/org')
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({

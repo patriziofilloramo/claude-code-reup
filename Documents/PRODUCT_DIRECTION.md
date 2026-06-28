@@ -1,25 +1,25 @@
-# Swoop Product Direction
+# Reup Product Direction
 
 ## Mission
 
 > **Make Claude Code work observable, prioritised, and safe to resume —
-> with zero configuration and no Swoop cloud.**
+> with zero configuration and no Reup cloud.**
 
-Swoop is the local control plane between your Claude Code sessions and your
+Reup is the local control plane between your Claude Code sessions and your
 next action. It is not just a session browser, not a transcript viewer, and not
 a replacement for Claude Code's own picker. It answers the question that comes
 before resuming: _"What was happening, what needs attention, and what should I
 do next?"_
 
 The experience benchmark: a developer who closed their laptop mid-task should
-be able to open Swoop, understand the state of their Claude Code work, and
+be able to open Reup, understand the state of their Claude Code work, and
 resume or clean up the right item in under ten seconds - with confidence, not
 guesswork.
 
 ## Design Constraints (non-negotiable)
 
-- **Zero configuration.** Works out of the box with a `swoop` invocation.
-- **No Swoop-operated cloud, no account, no telemetry.**
+- **Zero configuration.** Works out of the box with a `reup` invocation.
+- **No Reup-operated cloud, no account, no telemetry.**
 - **Fast to open habitually** — sub-second TUI start, no loading spinners.
 - **No API key required for core features.**
 - **Light.** Adding a feature that makes the tool heavier requires a feature
@@ -28,15 +28,15 @@ guesswork.
 ## Positioning
 
 Claude Code already has a capable native session picker and can search across
-projects from its resume flow. Swoop should not compete by claiming "global
+projects from its resume flow. Reup should not compete by claiming "global
 session search" as its main reason to exist.
 
-Swoop's navigator can still be better for power users: it is faster to scan,
+Reup's navigator can still be better for power users: it is faster to scan,
 shows projects and sessions together, exposes IDs and aliases, supports deep
 search and filters, and works as TUI, web UI, and scriptable CLI. That is a real
 UX advantage, but it is not the primary product hook.
 
-Swoop's strongest role is:
+Reup's strongest role is:
 
 > A local Claude Code control plane that shows what is running, what needs
 > attention, what is safe to resume, and what should be cleaned up next.
@@ -52,14 +52,14 @@ The product should answer:
 
 ## Competitive Landscape (as of mid-2026)
 
-| Tool               | Approach                     | What Swoop does that they don't                        |
+| Tool               | Approach                     | What Reup does that they don't                         |
 | ------------------ | ---------------------------- | ------------------------------------------------------ |
 | Claude Code native | Built-in picker/resume flow  | Health signals, inbox, usage, diagnostics, automation  |
 | Blackcrab          | GUI grid, multi-session view | Health signals, usage visibility, handoff              |
 | ccresume           | Minimal CUI picker           | Everything beyond pick-and-resume                      |
 | claude-code-viewer | Web with live streaming      | Lighter, local-first, no API key, session intelligence |
 
-Swoop's moat is **operational intelligence plus surface choice**. Intelligence
+Reup's moat is **operational intelligence plus surface choice**. Intelligence
 means session health, context drift, rate-limit state, recovery paths, and
 pre-resume summaries. Surface choice means the same local facts are useful from
 the terminal, web, scripts, and eventually VS Code. A prettier picker alone is
@@ -67,17 +67,17 @@ not defensible; a reliable local operations console is.
 
 ## Strategic Bets
 
-Swoop's next differentiators should be built around three reinforcing bets:
+Reup's next differentiators should be built around three reinforcing bets:
 
 1. **Web organization for many projects and sessions.** The web UI should become
    the best place to group, tag, stack, triage, and focus Claude Code work. The
    winning concept is not generic labels; it is work organization by intent:
    "Launch week", "Auth migration", "Waiting on review", "High-context work".
 2. **An always-open live web panel.** Developers should be able to keep
-   `swoop web` open while Claude Code runs elsewhere and immediately see active
+   `reup web` open while Claude Code runs elsewhere and immediately see active
    sessions, changing state, latest tool activity, usage freshness, and attention
    events. It should be calm and glanceable, not a transcript stream.
-3. **A VS Code extension that surfaces Swoop intelligence natively.** The
+3. **A VS Code extension that surfaces Reup intelligence natively.** The
    shipped extension uses a resume-focused full-screen dashboard plus compact
    editor companion views. It brings active state, usage, resume cards, search,
    and safe actions into the editor without copying the browser administration
@@ -102,7 +102,7 @@ parsers or state.
 
 ### Multi-Surface Control Plane
 
-Swoop should make the same local session intelligence available where developers
+Reup should make the same local session intelligence available where developers
 already work:
 
 - TUI for fast keyboard-first navigation
@@ -147,7 +147,7 @@ This is more valuable than building a full transcript viewer first.
 
 ### Zero-Effort Context
 
-Swoop should prefer facts Claude Code already records over manual user input. The user should get
+Reup should prefer facts Claude Code already records over manual user input. The user should get
 rich organization and resume context with almost no extra bookkeeping.
 
 Good automatic sources include:
@@ -163,7 +163,7 @@ Good automatic sources include:
 - IDE diagnostics and file-history snapshots when available
 
 The rule: extract structured facts first, label freshness/source clearly, and never mutate
-Claude-owned artifacts to make Swoop's view prettier.
+Claude-owned artifacts to make Reup's view prettier.
 
 ### Context Drift
 
@@ -175,7 +175,7 @@ Warn when the recorded context no longer matches the current environment:
 - Session appears active elsewhere
 - Repository changed significantly since last activity
 
-Warnings should explain the issue and offer the exact safe resume action. Swoop
+Warnings should explain the issue and offer the exact safe resume action. Reup
 should not automatically switch branches or alter worktrees.
 
 ### Lost And Found
@@ -200,14 +200,14 @@ Claude Code configuration.
 
 ### Composable CLI
 
-Power-user commands can make Swoop valuable beyond its interfaces:
+Power-user commands can make Reup valuable beyond its interfaces:
 
 ```text
-swoop inbox
-swoop doctor
-swoop search <query>
-swoop list
-swoop handoff <session>
+reup inbox
+reup doctor
+reup search <query>
+reup list
+reup handoff <session>
 ```
 
 Commands should produce concise human output and provide machine-readable output
@@ -219,7 +219,7 @@ focus must not silently change search semantics.
 
 ## Explicit Non-Goals
 
-- Swoop-hosted cloud synchronization, accounts, or team features
+- Reup-hosted cloud synchronization, accounts, or team features
 - Generic support for every AI coding tool
 - Embedded terminals or an Electron wrapper
 - Full billing or cost-accounting dashboards
@@ -238,7 +238,7 @@ When choosing what to build next, apply this filter in order:
 3. **Does it make an existing workflow faster without adding complexity?**
    → Medium priority. Worth doing if the gain is clear and the surface stays clean.
 4. **Does it put existing intelligence into a surface where developers already work?**
-   → Medium priority. VS Code can qualify if it exposes Swoop's signals and actions, not
+   → Medium priority. VS Code can qualify if it exposes Reup's signals and actions, not
    if it only duplicates the native picker.
 5. **Is it UI polish, navigation convenience, or parity with a competitor?**
    → Low priority. Only if it costs little and doesn't add cognitive surface.
@@ -265,20 +265,20 @@ document should change only when the product's direction changes.
 
 ---
 
-## Naming Brief (for research)
+## Naming Decision
 
 ### Current state
 
 | Identifier      | Value                     | Status                    |
 | --------------- | ------------------------- | ------------------------- |
-| Product brand   | Swoop                     | Final                     |
-| CLI command     | `swoop`                   | Final                     |
-| npm package     | `claude-code-swoop`       | Available and selected    |
+| Product brand   | Reup                      | Final                     |
+| CLI command     | `reup`                    | Final                     |
+| npm package     | `@patriziofilloramo/reup` | Final scoped package      |
 | Repository name | `claude-sessions-manager` | Rename before publication |
 
-The public product name is resolved. Swoop is the human-facing brand and CLI
-command; `claude-code-swoop` is the descriptive npm package name. The remaining
-publication task is selecting and creating the public repository location.
+The public product name is resolved. Reup is the human-facing brand and CLI
+command. The unscoped npm name `reup` is occupied by an unrelated package, so
+publishing uses `@patriziofilloramo/reup` while exposing only the `reup` binary.
 
 ### What the tool is
 
@@ -289,7 +289,7 @@ It provides:
 - Health signals for each session (interrupted, expiring, context drift)
 - Usage / rate-limit visibility before you commit to resuming
 - Cross-device sync via OS junctions / symlinks (no cloud account required)
-- A composable CLI for scripting (`swoop inbox`, `swoop doctor`, `swoop list`, etc.)
+- A composable CLI for scripting (`reup inbox`, `reup doctor`, `reup list`, etc.)
 
 Target users: individual developers who use Claude Code daily and manage multiple
 projects / sessions. The tool is never user-facing to end customers — it is a
@@ -306,17 +306,17 @@ A good name for this tool should:
    queue, orbit, lens, relay, trace, mark, anchor, dock, scout, helm, pilot.
 3. **Not infringe on Anthropic / Claude branding** — the name should not
    start with "claude" (likely to conflict with Anthropic's own tooling going
-   forward). The selected package name uses "claude-code" descriptively while
-   the product itself remains independently branded as Swoop.
+   forward). The public package is scoped under the maintainer namespace while
+   the product itself remains independently branded as Reup.
 4. **Sound like a developer tool** — lowercase, terse, Unix-flavoured.
    Not marketing language. Examples of the right register: `tmux`, `fzf`,
    `zoxide`, `rg`, `bat`, `gh`, `mise`, `atuin`, `navi`.
 5. **Be unique enough in the Claude / AI tooling ecosystem** that searches
    for the name surface this tool, not something else.
 
-### What to check for each candidate name
+### Publication Checks
 
-For every candidate name the researcher proposes, verify:
+Before publishing artifacts, re-check only for newly significant collisions:
 
 - [ ] `npm` registry: `https://www.npmjs.com/package/<name>` — available?
 - [ ] `npm` scoped: `https://www.npmjs.com/package/@<scope>/<name>` — if unscoped is taken
@@ -324,21 +324,21 @@ For every candidate name the researcher proposes, verify:
 - [ ] Homebrew: `https://formulae.brew.sh/formula/<name>` — any conflict?
 - [ ] General web search for `<name> npm` and `<name> cli` — any confusion risk?
 
-The CLI command and npm package intentionally differ: users type `swoop`, while
-the package publishes as `claude-code-swoop`.
+The CLI command and npm package intentionally differ: users type `reup`, while
+the package publishes as `@patriziofilloramo/reup`.
 
 ### Names already in the Claude / AI tools space (avoid or note conflicts)
 
 Known npm packages to avoid clashing with:
 
 - `claude` — Anthropic SDK
-- `claude-code-swoop` — selected for this project
+- `reup` unscoped npm package - occupied by an unrelated legacy package
 - `ccresume`, `blackcrab`, `claude-code-viewer` — competing tools
 - Anything prefixed `@anthropic-ai/` — reserved for Anthropic
 
-### Candidate name patterns to explore
+### Retired Candidate Notes
 
-The researcher should explore (but is not limited to) these patterns:
+These historical patterns are retained only as context for why Reup was selected:
 
 - **Two-letter or three-letter commands**: `csm`, `csx`, `csk`, `cpx`, `cre`
 - **Short compound words**: `sesskit`, `resumark`, `contex`, `inboxd`
@@ -347,14 +347,14 @@ The researcher should explore (but is not limited to) these patterns:
 - **Metaphor-driven**: tools that "dock", "anchor", "orbit", "helm" a session
 - **Action-first**: resume-focused words — `repick`, `recall`, `recon`, `recontext`
 
-### Deliverable expected from the researcher
+### Final Naming State
 
-A ranked shortlist of **5–10 candidate names**, each with:
+The final naming state is:
 
-1. Confirm the selected **npm package name** remains available immediately before publishing.
-2. Confirm the selected **CLI command** has no newly significant ecosystem collision.
-3. **Availability status** for npm, GitHub, Homebrew, and web search
-4. **One-sentence rationale** for why this name fits the tool's identity
-5. Any **risks or caveats** (trademark-adjacent, confusable with something else, etc.)
+1. Product brand: **Reup**
+2. CLI command: `reup`
+3. npm package: `@patriziofilloramo/reup`
+4. VS Code package: `reup-vscode`
+5. VS Code command and view prefix: `reup.*`
 
-The final choice will be made by the project owner after reviewing the shortlist.
+Do not reopen the old naming shortlist unless a concrete legal or distribution blocker appears.
