@@ -3,6 +3,7 @@ import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
 import type { ListedSession } from '../cli/list-command.js'
 import { shortestUniqueIdPrefix } from '../cli/list-command.js'
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import { relativeTime } from '../utils/time.js'
 import { createVisibleWindow } from './session-view.js'
@@ -95,18 +96,19 @@ export function SearchResultsPicker({
     <Box flexDirection="column">
       <Box gap={2} marginBottom={1} paddingX={1}>
         <Text>
-          search:{' '}
+          {LABELS.searchPrefix}{' '}
           <Text bold color={COLORS.accent}>
             {query}
           </Text>
         </Text>
         <Text color={COLORS.muted}>
-          {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
+          {sessions.length} {LABELS.wordSession}
+          {sessions.length !== 1 ? 's' : ''} {LABELS.wordFound}
         </Text>
         {onDeepSearch ? (
           <Text bold color={COLORS.orange}>
-            TAB deep search
-            <Text color={COLORS.muted}> scans transcripts</Text>
+            {LABELS.deepSearchCta}
+            <Text color={COLORS.muted}> {LABELS.deepSearchScansTranscripts}</Text>
           </Text>
         ) : null}
       </Box>
@@ -125,7 +127,7 @@ export function SearchResultsPicker({
       <Box flexDirection="column" marginBottom={1}>
         {sessions.length === 0 ? (
           <Box paddingX={1}>
-            <Text color={COLORS.muted}>No sessions match.</Text>
+            <Text color={COLORS.muted}>{LABELS.noSessionsMatchSentence}</Text>
           </Box>
         ) : (
           visibleRows.map((row, index) => {
@@ -161,18 +163,18 @@ export function SearchResultsPicker({
         paddingX={1}
       >
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>enter</Text> resume
+          <Text color={COLORS.text}>{LABELS.keyEnter}</Text> {LABELS.wordResume}
         </Text>
         {onDeepSearch && (
           <Text color={COLORS.orange}>
-            <Text bold>tab</Text> deep search
+            <Text bold>{LABELS.keyTab}</Text> {LABELS.hintDeepSearch.replace('tab ', '')}
           </Text>
         )}
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text> navigate
+          <Text color={COLORS.text}>{LABELS.keyUpDown}</Text> {LABELS.wordNavigate}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>esc</Text> quit
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text> {LABELS.wordQuit}
         </Text>
       </Box>
     </Box>

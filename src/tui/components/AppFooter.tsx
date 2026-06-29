@@ -34,14 +34,17 @@ export default function AppFooter({
       return (
         <>
           <Text>
-            <Text color={COLORS.ok}>▶ enter</Text>
-            <Text color={COLORS.muted}> resume session</Text>
+            <Text color={COLORS.ok}>▶ {LABELS.keyEnter}</Text>
+            <Text color={COLORS.muted}>
+              {' '}
+              {LABELS.wordResume} {LABELS.wordSession}
+            </Text>
           </Text>
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>f</Text>
-            {' files  '}
-            <Text color={COLORS.text}>esc</Text>
-            {' back'}
+            <Text color={COLORS.text}>{LABELS.keyFiles}</Text>
+            {' ' + LABELS.wordFiles + '  '}
+            <Text color={COLORS.text}>{LABELS.keyEsc}</Text>
+            {' ' + LABELS.wordBack}
           </Text>
         </>
       )
@@ -51,16 +54,16 @@ export default function AppFooter({
       return (
         <>
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>esc</Text> clear
+            <Text color={COLORS.text}>{LABELS.keyEsc}</Text> {LABELS.wordClear}
           </Text>
           <Text color={COLORS.orange}>
-            <Text bold>tab</Text> deep search
+            <Text bold>{LABELS.keyTab}</Text> {LABELS.hintDeepSearch.replace('tab ', '')}
           </Text>
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>↑↓</Text> nav
+            <Text color={COLORS.text}>{LABELS.keyUpDown}</Text> {LABELS.wordNav}
           </Text>
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>enter</Text> resume
+            <Text color={COLORS.text}>{LABELS.keyEnter}</Text> {LABELS.wordResume}
           </Text>
         </>
       )
@@ -69,12 +72,12 @@ export default function AppFooter({
     if (isProjectActionMenuOpen || isSessionActionMenuOpen) {
       return (
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text>
-          {' nav  '}
-          <Text color={COLORS.text}>enter</Text>
-          {' run  '}
-          <Text color={COLORS.text}>esc</Text>
-          {' close'}
+          <Text color={COLORS.text}>{LABELS.keyUpDown}</Text>
+          {' ' + LABELS.wordNav + '  '}
+          <Text color={COLORS.text}>{LABELS.keyEnter}</Text>
+          {' ' + LABELS.wordRun + '  '}
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text>
+          {' ' + LABELS.wordClose}
         </Text>
       )
     }
@@ -82,14 +85,16 @@ export default function AppFooter({
     if (bulkSelectedCount > 0) {
       return (
         <>
-          <Text color={COLORS.warn}>{bulkSelectedCount} selected</Text>
+          <Text color={COLORS.warn}>
+            {bulkSelectedCount} {LABELS.wordSelected}
+          </Text>
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>A</Text>
-            {' archive  '}
-            <Text color={COLORS.text}>D</Text>
-            {' delete  '}
-            <Text color={COLORS.text}>esc</Text>
-            {' clear'}
+            <Text color={COLORS.text}>{LABELS.keyArchive}</Text>
+            {' ' + LABELS.wordArchive + '  '}
+            <Text color={COLORS.text}>{LABELS.keyDelete}</Text>
+            {' ' + LABELS.wordDelete + '  '}
+            <Text color={COLORS.text}>{LABELS.keyEsc}</Text>
+            {' ' + LABELS.wordClear}
           </Text>
         </>
       )
@@ -98,39 +103,39 @@ export default function AppFooter({
     return (
       <>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.ok}>▶ enter</Text> resume
+          <Text color={COLORS.ok}>▶ {LABELS.keyEnter}</Text> {LABELS.wordResume}
         </Text>
         {focusedPanel === 'sessions' && !compact ? (
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>p</Text> preview
+            <Text color={COLORS.text}>{LABELS.keyPreview}</Text> {LABELS.wordPreview}
           </Text>
         ) : null}
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>← →</Text> panels
+          <Text color={COLORS.text}>{LABELS.keyLeftRight}</Text> {LABELS.wordPanels}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text> nav
+          <Text color={COLORS.text}>{LABELS.keyUpDown}</Text> {LABELS.wordNav}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>esc</Text> back
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text> {LABELS.wordBack}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>space</Text> actions
+          <Text color={COLORS.text}>{LABELS.keySpace}</Text> {LABELS.wordActions}
         </Text>
         {!compact ? <Text color={COLORS.muted}>{LABELS.hintFocus}</Text> : null}
         {focusedPanel === 'sessions' && !compact ? (
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>s</Text> select
+            <Text color={COLORS.text}>{LABELS.keySelect}</Text> {LABELS.wordSelect}
           </Text>
         ) : null}
         {compact ? null : (
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>q</Text> quit
+            <Text color={COLORS.text}>{LABELS.keyQuit}</Text> {LABELS.wordQuit}
           </Text>
         )}
         {compact ? null : (
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>^K</Text> commands
+            <Text color={COLORS.text}>{LABELS.keyCommandPalette}</Text> {LABELS.wordCommands}
           </Text>
         )}
       </>

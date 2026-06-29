@@ -10,14 +10,15 @@ const searchResultsSource = readFileSync('src/tui/SearchResultsPicker.tsx', 'utf
 describe('TUI search UI guardrails', () => {
   it('gives deep search a visible accent from normal search surfaces', () => {
     expect(appFooterSource).toContain('COLORS.orange')
-    expect(appFooterSource).toContain('<Text bold>tab</Text> deep search')
-    expect(searchResultsSource).toContain('TAB deep search')
-    expect(searchResultsSource).toContain('scans transcripts')
+    expect(appFooterSource).toContain('<Text bold>{LABELS.keyTab}</Text>')
+    expect(appFooterSource).toContain('LABELS.hintDeepSearch')
+    expect(searchResultsSource).toContain('LABELS.deepSearchCta')
+    expect(searchResultsSource).toContain('LABELS.deepSearchScansTranscripts')
     expect(searchResultsSource).toContain('COLORS.orange')
   })
 
   it('keeps deep search results list-like while separating snippets from metadata', () => {
-    expect(deepSearchSource).toContain('DEEP SEARCH')
+    expect(deepSearchSource).toContain('LABELS.deepSearchTitle')
     expect(deepSearchSource).toContain("{'HITS'.padEnd")
     expect(deepSearchSource).toContain('row.matches.padEnd')
     expect(deepSearchSource).toContain('↳')

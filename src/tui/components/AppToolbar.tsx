@@ -34,7 +34,9 @@ export default function AppToolbar({
         <SearchBar query={searchQuery} />
       ) : (
         <Box gap={2}>
-          <Text color={COLORS.dim}>{isLoading ? '…' : projectCount} projects</Text>
+          <Text color={COLORS.dim}>
+            {isLoading ? '…' : projectCount} {LABELS.wordProjects}
+          </Text>
           {focusLabel ? (
             <Text color={COLORS.accent}>
               {LABELS.focusLabel} {focusLabel}
@@ -42,10 +44,10 @@ export default function AppToolbar({
           ) : null}
           <Text color={COLORS.muted}>
             {'  '}
-            <Text color={COLORS.text}>/</Text>
-            {' search  '}
-            <Text color={COLORS.text}>tab</Text>
-            {' switch'}
+            <Text color={COLORS.text}>{LABELS.keySearch}</Text>
+            {' ' + LABELS.wordSearch + '  '}
+            <Text color={COLORS.text}>{LABELS.keyTab}</Text>
+            {' ' + LABELS.wordSwitch}
           </Text>
         </Box>
       )}

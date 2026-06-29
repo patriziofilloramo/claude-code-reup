@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { Project } from '../core/session/session-model.js'
 import { createVisibleWindow } from './session-view.js'
@@ -20,8 +21,8 @@ const PICKER_CHROME_ROWS = 6
 function ProjectPicker({
   projects,
   note,
-  title = 'Reup SYNC LINK',
-  subtitle = 'select a project to link',
+  title = LABELS.syncLinkTitle,
+  subtitle = LABELS.syncLinkSubtitle,
   onSelect,
 }: {
   projects: Project[]
@@ -111,7 +112,8 @@ function ProjectPicker({
           {title}
         </Text>
         <Text color={COLORS.dim}>
-          {filtered.length} project{filtered.length !== 1 ? 's' : ''}
+          {filtered.length} {LABELS.wordProject}
+          {filtered.length !== 1 ? 's' : ''}
         </Text>
       </Box>
       <Box paddingX={1}>
@@ -122,7 +124,7 @@ function ProjectPicker({
       <Box flexDirection="column" marginY={1}>
         {items.length === 0 ? (
           <Box paddingX={1}>
-            <Text color={COLORS.muted}>No projects match.</Text>
+            <Text color={COLORS.muted}>{LABELS.noProjectsMatch}</Text>
           </Box>
         ) : (
           visibleItems.map((item, index) =>
@@ -153,16 +155,16 @@ function ProjectPicker({
         paddingX={1}
       >
         <Text color={COLORS.muted}>
-          <Text color={COLORS.ok}>▶ enter</Text> link
+          <Text color={COLORS.ok}>▶ {LABELS.keyEnter}</Text> {LABELS.wordLink}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>/</Text> search
+          <Text color={COLORS.text}>{LABELS.keySearch}</Text> {LABELS.wordSearch}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text> navigate
+          <Text color={COLORS.text}>{LABELS.keyUpDown}</Text> {LABELS.wordNavigate}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>esc</Text> cancel
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text> {LABELS.wordCancel}
         </Text>
       </Box>
     </Box>
@@ -178,7 +180,7 @@ function AllRow({ isSelected, count }: { isSelected: boolean; count: number }) {
     <Box gap={1} paddingX={1}>
       <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
       <Text bold={isSelected} color={COLORS.ok}>
-        all projects
+        {LABELS.allProjects}
       </Text>
       <Text color={COLORS.dim}>({count})</Text>
     </Box>

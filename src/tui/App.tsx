@@ -4,6 +4,7 @@ import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 import { join } from 'node:path'
 
 import { APP } from '../config/app.js'
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import { getActiveSessions } from '../core/session/active-sessions.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
@@ -798,7 +799,7 @@ function App({ onResume }: AppProps) {
     if (isLoading) {
       return (
         <Box flexGrow={1} padding={1}>
-          <Text color={COLORS.dim}>scanning sessions…</Text>
+          <Text color={COLORS.dim}>{LABELS.scanningSessions}</Text>
         </Box>
       )
     }
@@ -806,7 +807,7 @@ function App({ onResume }: AppProps) {
       return (
         <Box flexDirection="column" flexGrow={1} padding={1}>
           <Text bold color={COLORS.danger}>
-            failed to load sessions
+            {LABELS.loadSessionsFailed}
           </Text>
           <Text color={COLORS.muted}>{loadError}</Text>
         </Box>
@@ -815,14 +816,14 @@ function App({ onResume }: AppProps) {
     if (projects.length === 0) {
       return (
         <Box flexGrow={1} padding={1}>
-          <Text color={COLORS.muted}>no projects found in ~/.claude/projects/</Text>
+          <Text color={COLORS.muted}>{LABELS.noProjectsFoundInClaude}</Text>
         </Box>
       )
     }
     if (matchingProjects.length === 0) {
       return (
         <Box flexGrow={1} padding={1}>
-          <Text color={COLORS.muted}>no projects or sessions match your search</Text>
+          <Text color={COLORS.muted}>{LABELS.noProjectsOrSessionsMatchSearch}</Text>
         </Box>
       )
     }

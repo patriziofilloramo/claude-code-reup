@@ -1,5 +1,6 @@
 import { Box, Text, useInput } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import { COMMANDS, GROUP_LABELS, GROUP_ORDER } from '../commands.js'
 
@@ -22,9 +23,9 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
       >
         <Box marginBottom={1}>
           <Text bold color={COLORS.accent}>
-            reup
+            {LABELS.appName}
           </Text>
-          <Text color={COLORS.muted}> keyboard shortcuts</Text>
+          <Text color={COLORS.muted}> {LABELS.keyboardShortcutsTitle}</Text>
         </Box>
 
         {GROUP_ORDER.map((group, gi) => {
@@ -48,8 +49,8 @@ export default function HelpOverlay({ onClose }: { onClose: () => void }) {
 
       <Box marginTop={1}>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>esc / ?</Text>
-          {' close'}
+          <Text color={COLORS.text}>{LABELS.keyEsc} / ?</Text>
+          {' ' + LABELS.wordClose}
         </Text>
       </Box>
     </Box>

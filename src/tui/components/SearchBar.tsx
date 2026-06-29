@@ -1,5 +1,6 @@
 import { Box, Text } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 
 interface SearchBarProps {
@@ -14,9 +15,7 @@ export default function SearchBar({ query }: SearchBarProps) {
       </Text>
       <Text color={COLORS.text}>{query}</Text>
       <Text color={COLORS.accent}>█</Text>
-      {query.length === 0 && (
-        <Text color={COLORS.dim}>e.g. fix auth, branch:main, tag:deploy, is:active</Text>
-      )}
+      {query.length === 0 && <Text color={COLORS.dim}>{LABELS.searchPlaceholder}</Text>}
     </Box>
   )
 }

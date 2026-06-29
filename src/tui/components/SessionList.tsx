@@ -1,5 +1,6 @@
 import { Box, Text, useStdout } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { Project, Session } from '../../core/session/session-model.js'
 import { primaryStatus } from '../../core/session/session-signals.js'
@@ -84,7 +85,7 @@ export default function SessionList({
   if (!project) {
     return (
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
-        <Text color={COLORS.dim}>Select a project with → or enter</Text>
+        <Text color={COLORS.dim}>{LABELS.selectProjectHint}</Text>
       </Box>
     )
   }
@@ -93,7 +94,7 @@ export default function SessionList({
     <Box flexDirection="column" flexGrow={1}>
       <Box gap={1}>
         <Text bold color={labelColor}>
-          sessions
+          {LABELS.wordSessions}
         </Text>
         <Text color={isFocused ? COLORS.accent : COLORS.dim}>({totalCount})</Text>
         {showFullSummary ? (
@@ -107,7 +108,7 @@ export default function SessionList({
 
       {sessions.length === 0 && (
         <Box marginTop={1} paddingX={1}>
-          <Text color={COLORS.dim}>No sessions match your search</Text>
+          <Text color={COLORS.dim}>{LABELS.noSessionsMatchSearch}</Text>
         </Box>
       )}
 

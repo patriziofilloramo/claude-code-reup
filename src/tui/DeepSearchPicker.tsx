@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
 import { getActiveSessions } from '../core/session/active-sessions.js'
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { ContentMatch } from '../core/session/session-search.js'
 import type { Project } from '../core/session/session-model.js'
@@ -146,21 +147,22 @@ function DeepSearchPicker({
     <Box flexDirection="column">
       <Box gap={2} marginBottom={1} paddingX={1}>
         <Text bold color={COLORS.orange}>
-          DEEP SEARCH
+          {LABELS.deepSearchTitle}
         </Text>
         <Text>
-          query{' '}
+          {LABELS.deepSearchQueryLabel}{' '}
           <Text bold color={COLORS.accent}>
             {query}
           </Text>
         </Text>
         {isLoading ? (
           <Text color={COLORS.orange}>
-            scanning {progress.scanned}/{progress.total}…
+            {LABELS.deepSearchScanning} {progress.scanned}/{progress.total}…
           </Text>
         ) : (
           <Text color={COLORS.muted}>
-            {results.length} session{results.length !== 1 ? 's' : ''} found
+            {results.length} {LABELS.wordSession}
+            {results.length !== 1 ? 's' : ''} {LABELS.wordFound}
           </Text>
         )}
       </Box>
@@ -180,11 +182,13 @@ function DeepSearchPicker({
       <Box flexDirection="column" marginBottom={1}>
         {isLoading ? (
           <Box paddingX={1}>
-            <Text color={COLORS.muted}>Scanning transcripts…</Text>
+            <Text color={COLORS.muted}>{LABELS.deepSearchScanningTranscripts}</Text>
           </Box>
         ) : results.length === 0 ? (
           <Box paddingX={1}>
-            <Text color={COLORS.muted}>No sessions contain "{query}".</Text>
+            <Text color={COLORS.muted}>
+              {LABELS.deepSearchNoSessionsContain} "{query}".
+            </Text>
           </Box>
         ) : (
           visiblePairs.map(({ match, row }, idx) => {
@@ -232,18 +236,21 @@ function DeepSearchPicker({
           paddingX={1}
         >
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>enter</Text> resume
+            <Text color={COLORS.text}>{LABELS.keyEnter}</Text> {LABELS.wordResume}
           </Text>
           {onBack && (
             <Text color={COLORS.muted}>
-              <Text color={COLORS.text}>esc · tab</Text> back
+              <Text color={COLORS.text}>
+                {LABELS.keyEsc} · {LABELS.keyTab}
+              </Text>{' '}
+              {LABELS.wordBack}
             </Text>
           )}
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>↑↓</Text> navigate
+            <Text color={COLORS.text}>{LABELS.keyUpDown}</Text> {LABELS.wordNavigate}
           </Text>
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>q</Text> quit
+            <Text color={COLORS.text}>{LABELS.keyQuit}</Text> {LABELS.wordQuit}
           </Text>
         </Box>
       ) : null}

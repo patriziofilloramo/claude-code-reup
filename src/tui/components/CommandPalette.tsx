@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import { GROUP_LABELS, GROUP_ORDER } from '../commands.js'
 
@@ -118,7 +119,7 @@ export default function CommandPalette({ commands, onClose, onExecute }: Command
           {query ? (
             <Text color={COLORS.text}>{query}</Text>
           ) : (
-            <Text color={COLORS.dim}>search commands…</Text>
+            <Text color={COLORS.dim}>{LABELS.searchCommandsPlaceholder}</Text>
           )}
         </Box>
 
@@ -129,7 +130,7 @@ export default function CommandPalette({ commands, onClose, onExecute }: Command
         {/* Command list */}
         {commandItems.length === 0 ? (
           <Box paddingX={1}>
-            <Text color={COLORS.dim}>no matching commands</Text>
+            <Text color={COLORS.dim}>{LABELS.noMatchingCommands}</Text>
           </Box>
         ) : (
           displayItems.slice(0, 16).map((item) =>
@@ -159,12 +160,12 @@ export default function CommandPalette({ commands, onClose, onExecute }: Command
 
       <Box marginTop={1}>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text>
-          {' nav  '}
-          <Text color={COLORS.text}>enter</Text>
-          {' run  '}
-          <Text color={COLORS.text}>esc</Text>
-          {' close'}
+          <Text color={COLORS.text}>{LABELS.keyUpDown}</Text>
+          {' ' + LABELS.wordNav + '  '}
+          <Text color={COLORS.text}>{LABELS.keyEnter}</Text>
+          {' ' + LABELS.wordRun + '  '}
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text>
+          {' ' + LABELS.wordClose}
         </Text>
       </Box>
     </Box>

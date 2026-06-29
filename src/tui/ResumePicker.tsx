@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { RankedSession } from '../core/session/session-ranking.js'
 import { filterSessionCandidates } from '../core/session/session-ranking.js'
@@ -101,21 +102,23 @@ export function ResumePicker({
     <Box flexDirection="column">
       <Box gap={1} paddingX={1}>
         <Text bold color={COLORS.accent}>
-          Reup RESUME
+          {LABELS.resumePickerDirectoryTitle}
         </Text>
-        <Text color={COLORS.dim}>{matchingCandidates.length} sessions</Text>
+        <Text color={COLORS.dim}>
+          {matchingCandidates.length} {LABELS.wordSessions}
+        </Text>
       </Box>
       <Box paddingX={1}>
         <Text color={COLORS.muted} wrap="truncate">
           {isSearchOpen
             ? `search: ${query}`
-            : `current directory: ${currentDirectory ?? 'unknown'}`}
+            : `${LABELS.currentDirectoryLabel} ${currentDirectory ?? LABELS.unknownLabel}`}
         </Text>
       </Box>
       <Box flexDirection="column" marginY={1}>
         {matchingCandidates.length === 0 ? (
           <Box paddingX={1}>
-            <Text color={COLORS.muted}>No sessions match.</Text>
+            <Text color={COLORS.muted}>{LABELS.noSessionsMatchSentence}</Text>
           </Box>
         ) : (
           visibleCandidates.map((candidate, index) => (
@@ -138,21 +141,22 @@ export function ResumePicker({
         paddingX={1}
       >
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>enter</Text> resume
+          <Text color={COLORS.text}>{LABELS.keyEnter}</Text> {LABELS.wordResume}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>/</Text> search
+          <Text color={COLORS.text}>{LABELS.keySearch}</Text> {LABELS.wordSearch}
         </Text>
         {onDeepSearch && isSearchOpen && (
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>tab</Text> deep search
+            <Text color={COLORS.text}>{LABELS.keyTab}</Text>{' '}
+            {LABELS.hintDeepSearch.replace('tab ', '')}
           </Text>
         )}
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>up/down</Text> navigate
+          <Text color={COLORS.text}>{LABELS.keyUpDownWords}</Text> {LABELS.wordNavigate}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>esc</Text> quit
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text> {LABELS.wordQuit}
         </Text>
       </Box>
     </Box>
@@ -181,7 +185,9 @@ function ResumePickerRow({
       >
         {sessionName}
       </Text>
-      {candidate.inCurrentDirectory ? <Text color={COLORS.accent}>current</Text> : null}
+      {candidate.inCurrentDirectory ? (
+        <Text color={COLORS.accent}>{LABELS.currentLabel}</Text>
+      ) : null}
       <Text color={COLORS.muted}>{projectName}</Text>
       <Text color={COLORS.dim}>{relativeTime(session.updated)}</Text>
       <Text color={COLORS.dim}>{session.id.slice(0, 8)}</Text>

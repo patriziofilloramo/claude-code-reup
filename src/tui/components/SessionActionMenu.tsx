@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { Session } from '../../core/session/session-model.js'
 import { primaryStatus } from '../../core/session/session-signals.js'
@@ -103,7 +104,7 @@ export default function SessionActionMenu({
               {branch}
             </Text>
           ) : null}
-          {isActive ? <Text color={COLORS.ok}>● active</Text> : null}
+          {isActive ? <Text color={COLORS.ok}>{LABELS.labelActive}</Text> : null}
           {needsAttention ? (
             <Text
               color={
@@ -139,12 +140,12 @@ export default function SessionActionMenu({
       {/* Footer hint */}
       <Box marginTop={1}>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.dim}>↑↓</Text>
-          {' nav  '}
-          <Text color={COLORS.dim}>enter</Text>
-          {' run  '}
-          <Text color={COLORS.dim}>esc</Text>
-          {' close'}
+          <Text color={COLORS.dim}>{LABELS.keyUpDown}</Text>
+          {' ' + LABELS.wordNav + '  '}
+          <Text color={COLORS.dim}>{LABELS.keyEnter}</Text>
+          {' ' + LABELS.wordRun + '  '}
+          <Text color={COLORS.dim}>{LABELS.keyEsc}</Text>
+          {' ' + LABELS.wordClose}
         </Text>
       </Box>
     </Box>

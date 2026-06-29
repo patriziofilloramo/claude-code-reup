@@ -1,5 +1,6 @@
 import { Box, Text, useStdout } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { Project } from '../../core/session/session-model.js'
 import {
@@ -41,7 +42,7 @@ export default function ProjectList({
     >
       <Box gap={1} paddingX={1}>
         <Text bold color={labelColor}>
-          projects
+          {LABELS.wordProjects}
         </Text>
         <Text color={isFocused ? COLORS.accent : COLORS.dim}>({totalCount})</Text>
       </Box>

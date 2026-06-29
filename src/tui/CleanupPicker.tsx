@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Box, Text, render, useApp, useInput } from 'ink'
 
+import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { CleanupCandidate } from '../core/session/cleanup.js'
 import { REASON_LABELS } from '../core/session/cleanup.js'
@@ -73,11 +74,12 @@ function CleanupPicker({ candidates, onConfirm, onAbort }: CleanupPickerProps) {
       {/* Header */}
       <Box gap={1} marginBottom={1}>
         <Text bold color={COLORS.accent}>
-          reup cleanup
+          {LABELS.cleanupTitle}
         </Text>
         <Text color={COLORS.muted}>—</Text>
         <Text color={COLORS.muted}>
-          {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
+          {candidates.length} {LABELS.cleanupCandidate}
+          {candidates.length === 1 ? '' : 's'}
         </Text>
       </Box>
 
@@ -123,22 +125,22 @@ function CleanupPicker({ candidates, onConfirm, onAbort }: CleanupPickerProps) {
         paddingX={1}
       >
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text> nav
+          <Text color={COLORS.text}>{LABELS.keyUpDown}</Text> {LABELS.wordNav}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>space</Text> select
+          <Text color={COLORS.text}>{LABELS.keySpace}</Text> {LABELS.wordSelect}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>a</Text> all/none
+          <Text color={COLORS.text}>{LABELS.keyAll}</Text> {LABELS.allNone}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={selectedCount > 0 ? COLORS.warn : COLORS.text}>enter</Text>{' '}
+          <Text color={selectedCount > 0 ? COLORS.warn : COLORS.text}>{LABELS.keyEnter}</Text>{' '}
           {selectedCount > 0
-            ? `archive ${selectedCount} session${selectedCount === 1 ? '' : 's'}`
-            : 'confirm (nothing selected)'}
+            ? `${LABELS.wordArchive} ${selectedCount} ${LABELS.wordSession}${selectedCount === 1 ? '' : 's'}`
+            : LABELS.confirmNothingSelected}
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>q</Text> cancel
+          <Text color={COLORS.text}>{LABELS.keyQuit}</Text> {LABELS.wordCancel}
         </Text>
       </Box>
     </Box>

@@ -22,9 +22,9 @@ describe('TUI organization parity guardrails', () => {
 
   it('exposes archive and confirmed delete actions while bulk sessions are selected', () => {
     expect(footerSource).toContain('if (bulkSelectedCount > 0)')
-    expect(footerSource).toContain('bulkSelectedCount} selected')
-    expect(footerSource).toContain("{' archive  '}")
-    expect(footerSource).toContain("{' delete  '}")
+    expect(footerSource).toContain('bulkSelectedCount} {LABELS.wordSelected}')
+    expect(footerSource).toContain('LABELS.wordArchive')
+    expect(footerSource).toContain('LABELS.wordDelete')
     expect(appSource).toContain("input === 'D' && focusedPanel === 'sessions'")
     expect(appSource).toContain('pendingDeleteIds.size > 0')
     expect(appSource).toContain('D confirm')

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
 
+import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import { getSessionLockInfo } from '../../core/session/active-sessions.js'
 import type { SessionLockInfo } from '../../core/session/active-sessions.js'
@@ -97,12 +98,16 @@ export default function ResumeCard({
       <Box gap={2} marginBottom={1} paddingLeft={2}>
         {branch ? <Text color={COLORS.muted}>{branch}</Text> : null}
         <Text color={COLORS.dim}>{relativeTime(session.updated)}</Text>
-        <Text color={COLORS.dim}>{session.messageCount} msgs</Text>
+        <Text color={COLORS.dim}>
+          {session.messageCount} {LABELS.messageCountSuffix}
+        </Text>
         {model ? <Text color={COLORS.border}>{shortModelName(model)}</Text> : null}
         {contextTokens !== null ? (
-          <Text color={COLORS.dim}>{formatTokenCount(contextTokens)} ctx</Text>
+          <Text color={COLORS.dim}>
+            {formatTokenCount(contextTokens)} {LABELS.contextSuffix}
+          </Text>
         ) : null}
-        <Text color={COLORS.border}>· preview</Text>
+        <Text color={COLORS.border}>{LABELS.resumeCardPreviewSuffix}</Text>
       </Box>
 
       {session.tags && session.tags.length > 0 ? (
@@ -127,7 +132,7 @@ export default function ResumeCard({
       {/* ── Live / status signals ────────────────────────────────────────── */}
       {isActive ? (
         <Box flexDirection="column" marginBottom={1}>
-          <Text color={COLORS.ok}>⚡ another session is already live right now</Text>
+          <Text color={COLORS.ok}>{LABELS.activeSessionWarningTitle}</Text>
           {lockInfo ? (
             <Text color={COLORS.dim}>
               {'   '}
@@ -137,25 +142,19 @@ export default function ResumeCard({
             </Text>
           ) : null}
           <Box flexDirection="column" marginTop={1} paddingLeft={2}>
-            <Text color={COLORS.warn}>resuming here will start a second instance. this means:</Text>
-            <Text color={COLORS.muted}>
-              {'  · both processes write to the same transcript — it will get scrambled'}
-            </Text>
-            <Text color={COLORS.muted}>
-              {'  · neither Claude will see what the other is doing'}
-            </Text>
-            <Text color={COLORS.muted}>
-              {'  · simultaneous file edits can overwrite each other'}
-            </Text>
+            <Text color={COLORS.warn}>{LABELS.activeSessionWarningIntro}</Text>
+            <Text color={COLORS.muted}>{LABELS.activeSessionWarningTranscript}</Text>
+            <Text color={COLORS.muted}>{LABELS.activeSessionWarningVisibility}</Text>
+            <Text color={COLORS.muted}>{LABELS.activeSessionWarningFiles}</Text>
           </Box>
         </Box>
       ) : status === 'expiring' ? (
         <Box marginBottom={1}>
-          <Text color={COLORS.danger}>⚠ expiring soon — transcript will be removed shortly</Text>
+          <Text color={COLORS.danger}>{LABELS.expiringWarning}</Text>
         </Box>
       ) : status === 'path-missing' ? (
         <Box marginBottom={1}>
-          <Text color={COLORS.danger}>⚠ project path not found on this machine</Text>
+          <Text color={COLORS.danger}>{LABELS.pathMissingWarning}</Text>
         </Box>
       ) : null}
 
@@ -188,11 +187,8 @@ export default function ResumeCard({
       {/* ── Stopped mid-task ─────────────────────────────────────────────── */}
       {!isLoading && interrupted ? (
         <Box flexDirection="column" marginBottom={1}>
-          <Text color={COLORS.warn}>⚠ Claude stopped mid-task</Text>
-          <Text color={COLORS.muted}>
-            {' '}
-            resuming picks up where it left off — the last step may run again
-          </Text>
+          <Text color={COLORS.warn}>{LABELS.interruptedWarningTitle}</Text>
+          <Text color={COLORS.muted}>{LABELS.interruptedWarningBody}</Text>
         </Box>
       ) : null}
 
@@ -200,7 +196,7 @@ export default function ResumeCard({
       {!isLoading && preview && preview.touchedFiles.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>
           <Text color={COLORS.dim}>
-            {'files in use · '}
+            {LABELS.filesInUseLabel}
             <Text color={COLORS.textSub}>{preview.touchedFiles.length}</Text>
           </Text>
           {filesExpanded
@@ -217,17 +213,20 @@ export default function ResumeCard({
       <Box flexGrow={1} />
       <Box gap={3}>
         <Text>
-          <Text color={COLORS.ok}>▶ enter</Text>
-          <Text color={COLORS.muted}> resume session</Text>
+          <Text color={COLORS.ok}>▶ {LABELS.keyEnter}</Text>
+          <Text color={COLORS.muted}>
+            {' '}
+            {LABELS.wordResume} {LABELS.wordSession}
+          </Text>
         </Text>
         <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>esc</Text>
-          {' back'}
+          <Text color={COLORS.text}>{LABELS.keyEsc}</Text>
+          {' ' + LABELS.wordBack}
         </Text>
         {!isLoading && preview && preview.touchedFiles.length > 0 ? (
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>f</Text>
-            {' files'}
+            <Text color={COLORS.text}>{LABELS.keyFiles}</Text>
+            {' ' + LABELS.wordFiles}
           </Text>
         ) : null}
       </Box>
