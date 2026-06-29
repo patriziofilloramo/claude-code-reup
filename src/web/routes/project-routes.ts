@@ -12,6 +12,7 @@ import { isValidSessionId } from '../../core/session/session-model.js'
 import type { Project, Session } from '../../core/session/session-model.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import { readSessionTailActivity } from '../../core/session/session-tail.js'
+import { isResumeVisibleSession } from '../../core/session/session-visibility.js'
 import { filterProjectsByOrg } from '../../core/org/org-filters.js'
 import { readOrgData } from '../../core/org/org-prefs.js'
 import { log } from '../../utils/logger.js'
@@ -68,6 +69,7 @@ export function registerProjectRoutes(app: Hono): void {
       for (const project of projects) {
         const projectName = projectDisplayName(project)
         for (const session of project.sessions) {
+          if (!isResumeVisibleSession(session)) continue
           if (
             normalizedQuery &&
             !sessionMatchesQuery(session, project, projectName, normalizedQuery)
@@ -173,6 +175,7 @@ export function registerProjectRoutes(app: Hono): void {
       const sessionIndex = new Map<string, { project: Project; session: Session }>()
       for (const project of allProjects) {
         for (const session of project.sessions) {
+          if (!isResumeVisibleSession(session)) continue
           sessionIndex.set(session.id, { project, session })
         }
       }
@@ -241,7 +244,9 @@ async function resolveProjectSession(
   const project = await loadProjectById(projectId)
   if (!project) return { response: Response.json({ error: 'project not found' }, { status: 404 }) }
 
-  const session = project.sessions.find((candidate) => candidate.id === sessionId)
+  const session = project.sessions.find(
+    (candidate) => candidate.id === sessionId && isResumeVisibleSession(candidate)
+  )
   if (!session) return { response: Response.json({ error: 'session not found' }, { status: 404 }) }
 
   return { project, session }

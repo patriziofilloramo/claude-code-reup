@@ -780,6 +780,7 @@ function App({ onResume }: AppProps) {
             resumeSession(match.session)
           }}
           onBack={() => setIsDeepSearchOpen(false)}
+          showFooter={false}
         />
       )
     }

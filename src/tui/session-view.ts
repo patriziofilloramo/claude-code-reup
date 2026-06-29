@@ -5,6 +5,7 @@ import {
   sessionQueryHasQualifiers,
 } from '../core/session/session-query.js'
 import { primaryStatus } from '../core/session/session-signals.js'
+import { isResumeListVisibleSession } from '../core/session/session-visibility.js'
 
 /** Reserves one body row for the selected session's optional detail line. */
 export function calculateMaximumVisibleSessions(
@@ -63,9 +64,10 @@ export function deriveSearchResults(
   const hasQualifiers = sessionQueryHasQualifiers(parsed)
 
   return projects.flatMap((project) => {
-    const visibleSessions = project.sessions.filter(
-      (session) => showArchived || !session.signals.archived
+    const visibleSessions = project.sessions.filter((session) =>
+      isResumeListVisibleSession(session, { includeArchived: showArchived })
     )
+    if (visibleSessions.length === 0) return []
 
     // Whole-project qualifier: filter out projects not matching project: term
     if (parsed.projectTerms.length > 0) {

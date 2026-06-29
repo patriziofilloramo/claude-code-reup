@@ -68,6 +68,21 @@ describe('session handoff', () => {
     expect(output).toContain('## Changed files detected in transcript\n\nNone detected.')
     expect(output).toContain(`claude --resume ${SESSION_ID}`)
   })
+
+  it('does not treat context usage reports as the handoff goal', () => {
+    const lines = [
+      JSON.stringify({
+        type: 'user',
+        message: { content: 'Finish the extension dashboard.' },
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: { content: '## Context Usage\n\n**Model:** claude-sonnet-4-6' },
+      }),
+    ]
+
+    expect(analyzeTranscriptForHandoff(lines).goal).toBe('Finish the extension dashboard.')
+  })
 })
 
 function createSession(): Session {

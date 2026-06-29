@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  isExtensionSessionVisible,
   isAttentionStatus,
   rankSessionsForWorkspace,
   sessionMatchesWorkspace,
   type ExtensionSession,
 } from '../../extension/src/reup-data.js'
 import type { ResumeAdvice } from '../../src/core/session/resume-advice.js'
+import { isResumeVisibleSession } from '../../src/core/session/session-visibility.js'
 
 function session(overrides: Partial<ExtensionSession>): ExtensionSession {
   return {
@@ -96,4 +98,28 @@ describe('VS Code extension data adapter helpers', () => {
     expect(isAttentionStatus('expiring')).toBe(true)
     expect(isAttentionStatus('path-missing')).toBe(true)
   })
+
+  it('keeps zero-message sessions out of resume-oriented extension surfaces', () => {
+    expect(isResumeVisibleSession({ messageCount: 0 })).toBe(false)
+    expect(isResumeVisibleSession({ messageCount: 1 })).toBe(true)
+
+    expect(
+      isExtensionSessionVisible(rawSession({ messageCount: 0 }), { includeArchived: true })
+    ).toBe(false)
+    expect(
+      isExtensionSessionVisible(rawSession({ archived: true }), { includeArchived: false })
+    ).toBe(false)
+    expect(
+      isExtensionSessionVisible(rawSession({ archived: true }), { includeArchived: true })
+    ).toBe(true)
+  })
 })
+
+function rawSession(overrides: { archived?: boolean; messageCount?: number } = {}) {
+  return {
+    messageCount: overrides.messageCount ?? 1,
+    signals: {
+      archived: overrides.archived ?? false,
+    },
+  }
+}

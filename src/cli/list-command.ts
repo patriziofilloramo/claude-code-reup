@@ -12,6 +12,7 @@ import type {
   SessionStatus,
 } from '../core/session/session-model.js'
 import { primaryStatus } from '../core/session/session-signals.js'
+import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import { relativeTime } from '../utils/time.js'
 import { failCommand, writeOutput } from './output.js'
 
@@ -246,7 +247,9 @@ export function createListedSessions(
   activeSessionIds: ReadonlySet<string>
 ): ListedSession[] {
   return projects.flatMap((project) =>
-    project.sessions.map((session) => serializeListedSession(project, session, activeSessionIds))
+    project.sessions
+      .filter(isResumeVisibleSession)
+      .map((session) => serializeListedSession(project, session, activeSessionIds))
   )
 }
 

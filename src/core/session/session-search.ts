@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { getProjectDirectory } from '../project/claude-paths.js'
 import type { Project, Session } from './session-model.js'
+import { isResumeVisibleSession } from './session-visibility.js'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -36,6 +37,7 @@ export async function searchTranscripts(
   const pairs: Array<{ project: Project; session: Session }> = []
   for (const project of projects) {
     for (const session of project.sessions) {
+      if (!isResumeVisibleSession(session)) continue
       pairs.push({ project, session })
     }
   }

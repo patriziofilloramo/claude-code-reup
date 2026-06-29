@@ -130,6 +130,22 @@ describe('deriveSearchResults', () => {
       { ...releaseProject, sessions: [archivedSession] },
     ])
   })
+
+  it('does not show lock-only ghost sessions as resumable TUI rows', () => {
+    const ghostSession = createSession({
+      id: '00000000-0000-0000-0000-000000000010',
+      messageCount: 0,
+      name: 'New session',
+    })
+    const ghostProject: Project = {
+      id: 'ghost-project',
+      path: '/work/release-dashboard',
+      sessions: [ghostSession],
+    }
+
+    expect(deriveSearchResults([ghostProject], '', false)).toEqual([])
+    expect(deriveSearchResults([ghostProject], 'release-dashboard', true)).toEqual([])
+  })
 })
 
 describe('deriveSearchResults search qualifiers', () => {

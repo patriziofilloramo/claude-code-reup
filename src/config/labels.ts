@@ -26,7 +26,7 @@ export const LABELS = {
   handoffDesc: 'Print a compact continuation packet (picker if no session given)',
   resumeCommandDesc: 'Pick a session, or resume by full ID or unambiguous prefix',
   searchCommandDesc: 'Search sessions by metadata; add --deep to search content',
-  usageCommandDesc: 'Show observed usage or configure its feed; toggle on/off',
+  usageCommandDesc: 'Show observed usage limits; use --json for tools',
   syncCommandDesc: 'Manage cross-device project memory sync (link / unlink / status)',
   configCommandDesc: 'Read or write user preferences',
   completionCommandDesc: 'Print shell completion setup',

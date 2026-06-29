@@ -36,7 +36,7 @@ describe('full-screen dashboard guardrails', () => {
     expect(manifest.contributes.commands).toContainEqual(
       expect.objectContaining({ command: 'reup.resumeSession', icon: '$(history)' })
     )
-    expect(source).toContain("nav('archived','Archived'")
+    expect(source).toContain("focusNav('archived','Archived'")
     expect(source).toContain('data-filter="archived"')
     expect(source).toContain('includeArchived: true')
   })
@@ -59,6 +59,65 @@ describe('full-screen dashboard guardrails', () => {
     expect(source).toContain('showSessionMenu')
     expect(source).toContain('copyProjectPath')
     expect(source).toContain('openProject')
+  })
+
+  it('keeps project rail names primary and Project Memory status in a stable metadata column', () => {
+    expect(source).toContain("import { projectMemoryDescription } from './formatting.js'")
+    expect(source).toContain('const PROJECT_MEMORY_DESCRIPTIONS')
+    expect(source).toContain('.project{display:grid;grid-template-columns:minmax(0,1fr) 16px 3ch}')
+    expect(source).toContain(
+      `<span class="name">'+esc(p.name)+'</span>'+projectCloud(p)+'<span class="count">`
+    )
+    expect(source).toContain('function projectCloud(p)')
+    expect(source).toContain('class="cloud empty" aria-hidden="true">☁</span>')
+    expect(source).toContain("PROJECT_MEMORY_DESCRIPTIONS[status]||''")
+    expect(source).not.toContain("?'☁':'□'")
+  })
+
+  it('keeps projects primary and focus controls secondary in the extension rail', () => {
+    const rail = source.slice(
+      source.indexOf('function rail()'),
+      source.indexOf('function projectCloud')
+    )
+
+    expect(rail).toContain(
+      'return \'<aside class="rail"><div class="section-title">Projects</div>\'+projectRows+focusBlock+\'</aside>\''
+    )
+    expect(rail).toContain('focusBlock=focusRows?\'<div class="rail-focus"')
+    expect(source).toContain(
+      '.rail-focus{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}'
+    )
+    expect(source).toContain('.rail-focus .nav{color:var(--muted)}')
+  })
+
+  it('omits zero-count focus rows and hides the focus group when empty', () => {
+    const rail = source.slice(
+      source.indexOf('function rail()'),
+      source.indexOf('function projectCloud')
+    )
+
+    expect(rail).toContain('secondaryFocusRows=[')
+    expect(rail).toContain("focusNav('workspace','Current workspace',workspaceCount)")
+    expect(rail).toContain("focusNav('active','Active now',model.summary.active)")
+    expect(rail).toContain("focusNav('attention','Needs attention',model.summary.attention)")
+    expect(rail).toContain("focusNav('archived','Archived',model.summary.archived)")
+    expect(rail).toContain('focusBlock=focusRows?\'<div class="rail-focus"')
+    expect(source).toContain(
+      "function focusNav(id,label,count){return count>0?nav(id,label,count):''}"
+    )
+  })
+
+  it('keeps the All sessions reset stable while any focus row is visible', () => {
+    const rail = source.slice(
+      source.indexOf('function rail()'),
+      source.indexOf('function projectCloud')
+    )
+
+    expect(rail).toContain("showAll=allCount>0&&(secondaryFocusRows||project||filter!=='all')")
+    expect(rail).toContain(
+      "focusRows=(showAll?nav('all','All sessions',allCount):'')+secondaryFocusRows"
+    )
+    expect(rail).not.toContain("project||filter!=='all'?nav('all','All sessions',allCount):''")
   })
 
   it('uses one shared brand lockup for loading and the dashboard header', () => {

@@ -53,8 +53,8 @@ export default function AppFooter({
           <Text color={COLORS.muted}>
             <Text color={COLORS.text}>esc</Text> clear
           </Text>
-          <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>tab</Text> deep search
+          <Text color={COLORS.orange}>
+            <Text bold>tab</Text> deep search
           </Text>
           <Text color={COLORS.muted}>
             <Text color={COLORS.text}>↑↓</Text> nav
@@ -86,6 +86,8 @@ export default function AppFooter({
           <Text color={COLORS.muted}>
             <Text color={COLORS.text}>A</Text>
             {' archive  '}
+            <Text color={COLORS.text}>D</Text>
+            {' delete  '}
             <Text color={COLORS.text}>esc</Text>
             {' clear'}
           </Text>

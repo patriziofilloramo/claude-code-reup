@@ -191,6 +191,35 @@ describe('live usage', () => {
     })
   })
 
+  it('reads account limits even before the status-line capture hook is configured', async () => {
+    await writeFile(
+      join(temporaryClaudeDirectory, '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'test-token' } })
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              five_hour: { resets_at: '2026-06-11T23:00:00Z', utilization: 55 },
+            }),
+            { status: 200 }
+          )
+      )
+    )
+
+    await expect(
+      readLiveUsageSummary(Date.parse('2026-06-10T20:02:00.000Z'))
+    ).resolves.toMatchObject({
+      captureStatus: 'off',
+      configured: false,
+      limitsSource: 'account-api',
+      limitsStatus: 'fresh',
+      rateLimits: { fiveHour: { usedPercentage: 55 } },
+    })
+  })
+
   it('accepts the newest same-session values without preserving older limits', async () => {
     const observed = parseStatusLineUsage(
       {

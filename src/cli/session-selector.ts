@@ -1,5 +1,6 @@
 import type { Project, Session } from '../core/session/session-model.js'
 import { isValidSessionId } from '../core/session/session-model.js'
+import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 
 export interface SelectedSession {
   project: Project
@@ -18,6 +19,7 @@ export function selectSession(projects: Project[], selector: string): SessionSel
 
   for (const project of projects) {
     for (const session of project.sessions) {
+      if (!isResumeVisibleSession(session)) continue
       const sessionId = session.id.toLowerCase()
       if (
         sessionId === normalizedSelector ||

@@ -13,7 +13,6 @@ import type {
   UsageLimitWindow,
 } from '../core/usage/live-usage.js'
 import {
-  isUsageStatusLineConfigured,
   removeUsageStatusLine,
   setupUsageStatusLine,
 } from '../core/usage/usage-statusline-integration.js'
@@ -39,10 +38,6 @@ export async function runUsageCommand(commandArguments: string[]): Promise<void>
     case 'remove':
       if (actionArguments.length > 0) return failUsage()
       await removeUsage()
-      return
-    case 'toggle':
-      if (actionArguments.length > 0) return failUsage()
-      await toggleUsage()
       return
     case 'capture':
       if (actionArguments.length > 0) return
@@ -97,12 +92,6 @@ function ansi(code: string, text: string): string {
   return `${code}${text}${ANSI.reset}`
 }
 
-function progressBar(percent: number, width = 20): string {
-  const filled = Math.min(width, Math.round((percent / 100) * width))
-  const empty = width - filled
-  return ansi(limitColor(percent), '█'.repeat(filled)) + ansi(ANSI.dim, '░'.repeat(empty))
-}
-
 function limitColor(percent: number): string {
   if (percent >= 100) return ANSI.red
   if (percent >= 90) return ANSI.orange
@@ -110,20 +99,19 @@ function limitColor(percent: number): string {
   return ANSI.cyan
 }
 
-/** Compact single-line metric: label + bar + percentage + optional reset note. */
-function metricChip(label: string, percent: number, note = ''): string {
-  const bar = progressBar(percent, 10)
-  const pct = ansi(limitColor(percent), roundedPercentage(percent).padStart(4))
-  const notePart = note ? ansi(ANSI.dim, ' ' + note) : ''
-  return ansi(ANSI.dim, label) + ' ' + bar + pct + notePart
+/** Small account-window metric: make usage prominent and reset secondary. */
+function metricCard(label: string, percent: number, resetAt: string | null | undefined): string {
+  const pct = ansi(limitColor(percent), roundedPercentage(percent).padStart(3))
+  const reset = resetAt ? ansi(ANSI.dim, `  resets in ${formatResetCountdown(resetAt)}`) : ''
+  return `${ansi(ANSI.dim, label)} ${pct}${reset}`
 }
 
-/** Compact ANSI summary shown by `reup usage` — matches the TUI/web inline style. */
+/** Compact ANSI summary shown by `reup usage`, optimized for a standalone CLI readout. */
 export function renderUsageSummary(summary: LiveUsageSummary): string {
   const INDENT = '  '
   const { snapshot } = summary
 
-  const title = ansi(ANSI.bold + ANSI.cyan, 'reup') + ansi(ANSI.dim, ' · usage')
+  const title = ansi(ANSI.bold + ANSI.cyan, 'reup usage')
 
   // Header line: title · optional agent · staleness note
   const agentPart = snapshot?.agentName ? ansi(ANSI.dim, '  / ' + snapshot.agentName) : ''
@@ -132,27 +120,24 @@ export function renderUsageSummary(summary: LiveUsageSummary): string {
   const header = INDENT + title + agentPart + creditsPart + stalenessNote
 
   // Metrics line: account-level windows only (ctx is per-session, not meaningful here)
-  const chips: string[] = []
+  const metrics: string[] = []
   if (summary.rateLimits.fiveHour) {
     const { usedPercentage, resetsAt } = summary.rateLimits.fiveHour
-    const note = resetsAt ? 'reset ' + formatResetCountdown(resetsAt) : ''
-    chips.push(metricChip('5h', usedPercentage, note))
+    metrics.push(metricCard('5h', usedPercentage, resetsAt))
   }
   if (summary.rateLimits.sevenDay) {
     const { usedPercentage, resetsAt } = summary.rateLimits.sevenDay
-    const note = resetsAt ? 'reset ' + formatResetCountdown(resetsAt) : ''
-    chips.push(metricChip('7d', usedPercentage, note))
+    metrics.push(metricCard('7d', usedPercentage, resetsAt))
   }
 
-  if (chips.length === 0) {
+  if (metrics.length === 0) {
     const unavailableMessage = summary.limitsIssue
       ? `account limits unavailable: ${summary.limitsIssue}`
       : 'account limits unavailable'
     return ['', header, INDENT + ansi(ANSI.dim, unavailableMessage), ''].join('\n')
   }
 
-  const metricsLine = INDENT + chips.join('   ')
-  return ['', header, metricsLine, ''].join('\n')
+  return ['', header, ...metrics.map((metric) => INDENT + metric), ''].join('\n')
 }
 
 export function formatStatusLineUsage(snapshot: LiveUsageSnapshot): string {
@@ -168,14 +153,6 @@ export function formatStatusLineUsage(snapshot: LiveUsageSnapshot): string {
       : '',
   ].filter(Boolean)
   return labels.length > 0 ? `reup | ${labels.join(' | ')}` : 'reup | usage captured'
-}
-
-async function toggleUsage(): Promise<void> {
-  if (await isUsageStatusLineConfigured()) {
-    await removeUsage()
-  } else {
-    await setupUsage([])
-  }
 }
 
 async function setupUsage(actionArguments: string[]): Promise<void> {
@@ -325,5 +302,5 @@ function readStdin(): Promise<string> {
 }
 
 function failUsage(): void {
-  failCommand('usage: reup usage [--json|toggle|setup [--replace]|remove]')
+  failCommand('usage: reup usage [--json|setup [--replace]|remove]')
 }

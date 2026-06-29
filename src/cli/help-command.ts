@@ -123,11 +123,11 @@ not share sessions with other users.`,
 Usage:
   reup usage
   reup usage --json
-  reup usage toggle
   reup usage setup [--replace]
   reup usage remove
 
-Usage capture is local, optional, and reversible.`,
+Usage is shown by default where available. setup/remove manage the optional
+Claude Code status-line capture hook; --json emits the same summary for tools.`,
 
   web: `reup web - open the local browser interface
 

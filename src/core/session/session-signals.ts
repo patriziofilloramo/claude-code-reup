@@ -20,7 +20,10 @@ export interface TranscriptSignals {
 
 /** Returns days remaining in Claude Code's default 30-day cleanup window. */
 export function calculateExpiryDays(updatedAt: string): number {
-  const ageMs = Date.now() - new Date(updatedAt).getTime()
+  const updatedMs = Date.parse(updatedAt)
+  if (!Number.isFinite(updatedMs)) return 0
+
+  const ageMs = Date.now() - updatedMs
   const remainingMs = CLAUDE_CLEANUP_WINDOW_MS - ageMs
   return Math.max(0, Math.round(remainingMs / (24 * 60 * 60 * 1000)))
 }

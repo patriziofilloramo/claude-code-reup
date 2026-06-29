@@ -1,11 +1,11 @@
-import { basename } from 'node:path'
-
 import type { SessionStatus } from '../../src/core/session/session-model.js'
 import type { ProjectSyncStatus } from '../../src/core/sync/project-sync-status.js'
 import { relativeTime } from '../../src/utils/time.js'
 
 export function compactProjectName(projectPath: string): string {
-  return basename(projectPath) || projectPath
+  return (
+    projectPath.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/') || projectPath
+  )
 }
 
 export function compactText(value: string, maxLength: number): string {

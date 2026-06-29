@@ -14,6 +14,11 @@ import { primaryStatus } from '../../src/core/session/session-signals.js'
 import { getResumeAdvice, type ResumeAdvice } from '../../src/core/session/resume-advice.js'
 import { searchTranscripts } from '../../src/core/session/session-search.js'
 import {
+  isResumeListVisibleSession,
+  isResumeVisibleSession,
+  type ResumeListSessionInput,
+} from '../../src/core/session/session-visibility.js'
+import {
   getProjectSyncStatus,
   type ProjectSyncStatus,
 } from '../../src/core/sync/project-sync-status.js'
@@ -85,7 +90,7 @@ export class ReupDataSource {
     const sessions = await createExtensionSessions(projects, activeSessionIds, options)
     const visibleProjectIds = new Set(sessions.map((session) => session.projectId))
     const extensionProjects = projects
-      .filter((project) => visibleProjectIds.has(project.id) || options.includeArchived)
+      .filter((project) => visibleProjectIds.has(project.id))
       .map((project) => createExtensionProject(project, sessions))
 
     this.logger.debug('loaded Reup model', {
@@ -109,7 +114,7 @@ export class ReupDataSource {
     })
     const visibleProjectIds = new Set(sessions.map((session) => session.projectId))
     const extensionProjects = projects
-      .filter((project) => visibleProjectIds.has(project.id) || context.includeArchived)
+      .filter((project) => visibleProjectIds.has(project.id))
       .map((project) => createExtensionProject(project, sessions))
     const model = buildCockpitModel(extensionProjects, sessions, context)
     this.logger.debug('loaded Reup cockpit model', {
@@ -125,7 +130,7 @@ export class ReupDataSource {
     const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
     const project = projects.find((candidate) => candidate.id === projectId)
     const session = project?.sessions.find((candidate) => candidate.id === sessionId)
-    if (!project || !session) return null
+    if (!project || !session || !isResumeVisibleSession(session)) return null
     return createExtensionSession(project, session, activeSessionIds, {
       includePreviewHints: false,
     })
@@ -143,7 +148,9 @@ export class ReupDataSource {
     const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
     const searchableProjects = projects.map((project) => ({
       ...project,
-      sessions: project.sessions.filter((session) => includeArchived || !session.signals.archived),
+      sessions: project.sessions.filter((session) =>
+        isExtensionSessionVisible(session, { includeArchived })
+      ),
     }))
     const matches = await searchTranscripts(query, searchableProjects, onProgress)
     return Promise.all(
@@ -191,6 +198,13 @@ export function sessionMatchesWorkspace(
   return workspaceScore(session, workspacePath) > 0
 }
 
+export function isExtensionSessionVisible(
+  session: ResumeListSessionInput,
+  options: Pick<LoadExtensionModelOptions, 'includeArchived'>
+): boolean {
+  return isResumeListVisibleSession(session, options)
+}
+
 async function createExtensionSessions(
   projects: Project[],
   activeSessionIds: ReadonlySet<string>,
@@ -198,7 +212,7 @@ async function createExtensionSessions(
 ): Promise<ExtensionSession[]> {
   const rawRows = projects.flatMap((project) =>
     project.sessions
-      .filter((session) => options.includeArchived || !session.signals.archived)
+      .filter((session) => isExtensionSessionVisible(session, options))
       .map((session) => ({ project, session }))
   )
 

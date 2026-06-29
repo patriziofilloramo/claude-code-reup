@@ -11,6 +11,7 @@ import type { Project, Session, SessionStatus } from '../core/session/session-mo
 import type { TranscriptHandoffContext } from '../core/session/session-handoff.js'
 import type { SessionPreview } from '../core/session/session-preview.js'
 import { primaryStatus } from '../core/session/session-signals.js'
+import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import {
   getProjectSyncStatus,
   isProjectMemorySyncEnabled,
@@ -186,7 +187,7 @@ export function serializeProject(
 ): ApiProject {
   return {
     ...project,
-    sessions: project.sessions.map(serializeSession),
+    sessions: project.sessions.filter(isResumeVisibleSession).map(serializeSession),
     syncStatus: getProjectSyncStatus(project, projectMemorySyncEnabled),
   }
 }

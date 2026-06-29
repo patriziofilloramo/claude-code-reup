@@ -218,6 +218,94 @@ describe('session loading', () => {
     expect(await loadProjects()).toEqual([])
   })
 
+  it('ignores partial tool transcripts with no human request to resume', async () => {
+    const projectPath = join(claudeDirectory, 'partial-tool-workspace')
+    await mkdir(projectPath)
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      [
+        "import { readFile } from 'node:fs/promises'",
+        "console.log('not json')",
+        JSON.stringify({
+          cwd: projectPath,
+          message: { content: [{ text: 'Now I edit the route.', type: 'text' }] },
+          timestamp: '2026-06-01T10:00:00.000Z',
+          type: 'assistant',
+        }),
+        JSON.stringify({
+          cwd: projectPath,
+          message: {
+            content: [
+              {
+                id: 'tool-1',
+                input: { file_path: join(projectPath, 'src', 'route.ts') },
+                name: 'Edit',
+                type: 'tool_use',
+              },
+            ],
+          },
+          timestamp: '2026-06-01T10:01:00.000Z',
+          type: 'assistant',
+        }),
+        JSON.stringify({
+          message: { content: [{ tool_use_id: 'tool-1', type: 'tool_result' }] },
+          timestamp: '2026-06-01T10:02:00.000Z',
+          type: 'user',
+        }),
+      ].join('\n')
+    )
+
+    expect(await loadProjects()).toEqual([])
+  })
+
+  it('does not count split assistant tool-use events as conversation messages', async () => {
+    const projectPath = join(claudeDirectory, 'split-tool-workspace')
+    await mkdir(projectPath)
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      [
+        JSON.stringify({
+          cwd: projectPath,
+          message: { content: 'Add the route' },
+          timestamp: '2026-06-01T10:00:00.000Z',
+          type: 'user',
+        }),
+        JSON.stringify({
+          message: { content: [{ text: 'I will edit the route.', type: 'text' }] },
+          timestamp: '2026-06-01T10:01:00.000Z',
+          type: 'assistant',
+        }),
+        JSON.stringify({
+          message: {
+            content: [
+              {
+                id: 'tool-1',
+                input: { file_path: join(projectPath, 'src', 'route.ts') },
+                name: 'Edit',
+                type: 'tool_use',
+              },
+            ],
+          },
+          timestamp: '2026-06-01T10:02:00.000Z',
+          type: 'assistant',
+        }),
+        JSON.stringify({
+          message: { content: [{ tool_use_id: 'tool-1', type: 'tool_result' }] },
+          timestamp: '2026-06-01T10:03:00.000Z',
+          type: 'user',
+        }),
+      ].join('\n')
+    )
+
+    const [project] = await loadProjects()
+    expect(project.sessions[0]).toMatchObject({
+      id: SESSION_ID,
+      messageCount: 2,
+      name: 'Add the route',
+      projectPath,
+    })
+  })
+
   it('skips context usage reports when deriving a session title', async () => {
     const projectPath = join(claudeDirectory, 'context-title-workspace')
     await mkdir(projectPath)
@@ -251,6 +339,34 @@ describe('session loading', () => {
 
     const [project] = await loadProjects()
     expect(project.sessions[0].updated).toBe(fallbackTime.toISOString())
+  })
+
+  it('normalizes transcript timestamps by chronology instead of line order', async () => {
+    const projectPath = join(claudeDirectory, 'timestamp-order-workspace')
+    await mkdir(projectPath)
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      [
+        JSON.stringify({
+          cwd: projectPath,
+          message: { content: [{ text: 'Done', type: 'text' }] },
+          timestamp: '2026-06-01T10:00:00.001Z',
+          type: 'assistant',
+        }),
+        JSON.stringify({
+          cwd: projectPath,
+          message: { content: 'Review timestamp ordering' },
+          timestamp: '2026-06-01T10:00:00.000Z',
+          type: 'user',
+        }),
+      ].join('\n')
+    )
+
+    const [project] = await loadProjects()
+    expect(project.sessions[0]).toMatchObject({
+      created: '2026-06-01T10:00:00.000Z',
+      updated: '2026-06-01T10:00:00.001Z',
+    })
   })
 
   it('keeps transcript-derived signals unknown when using the index fast path', async () => {
@@ -344,6 +460,57 @@ describe('session loading', () => {
 
     const [project] = await loadProjects()
     expect(project.sessions.map((session) => session.id)).toEqual([SESSION_ID])
+  })
+
+  it('normalizes indexed chronology and filters malformed indexed sessions', async () => {
+    const projectPath = join(claudeDirectory, 'indexed-shape-workspace')
+    await mkdir(projectPath)
+    await Promise.all([
+      writeFile(join(projectDirectory, `${SESSION_ID}.jsonl`), '{}'),
+      writeFile(join(projectDirectory, `${SECOND_SESSION_ID}.jsonl`), '{}'),
+      writeFile(join(projectDirectory, `${THIRD_SESSION_ID}.jsonl`), '{}'),
+    ])
+    await writeFile(
+      join(projectDirectory, 'sessions-index.json'),
+      JSON.stringify({
+        sessions: [
+          {
+            created: '2026-06-01T10:05:00.000Z',
+            id: SESSION_ID,
+            messageCount: 1,
+            name: 'Chronology drift',
+            projectPath,
+            updated: '2026-06-01T10:00:00.000Z',
+          },
+          {
+            created: '2026-06-01T11:00:00.000Z',
+            id: SECOND_SESSION_ID,
+            messageCount: Number.NaN,
+            name: 'Invalid count',
+            projectPath,
+            updated: '2026-06-01T11:05:00.000Z',
+          },
+          {
+            created: 'not-a-date',
+            id: THIRD_SESSION_ID,
+            messageCount: 2,
+            name: 'Invalid date',
+            projectPath,
+            updated: '2026-06-01T12:05:00.000Z',
+          },
+        ],
+      })
+    )
+
+    const [project] = await loadProjects()
+    expect(project.sessions).toHaveLength(1)
+    expect(project.sessions[0]).toMatchObject({
+      created: '2026-06-01T10:00:00.000Z',
+      id: SESSION_ID,
+      messageCount: 1,
+      updated: '2026-06-01T10:05:00.000Z',
+    })
+    expect(project.sessions[0].signals.expiresInDays).not.toBeNaN()
   })
 
   it('surfaces fresh live lock sessions before their transcript exists in a scanned project', async () => {

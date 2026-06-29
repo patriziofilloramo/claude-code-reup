@@ -8,8 +8,9 @@ import type { Project } from '../core/session/session-model.js'
 import { relativeTime } from '../utils/time.js'
 import { createVisibleWindow } from './session-view.js'
 
-// header(1) + blank(1) + col-header(1) + rows-margin-bottom(1) + footer-border+content(2) + 1 buffer
-const CHROME_ROWS = 7
+const FOOTER_ROWS = 2
+// header(1) + blank(1) + col-header(1) + rows-margin-bottom(1) + optional footer + 1 buffer
+const CHROME_ROWS = 5 + FOOTER_ROWS
 
 function truncate(value: string, maxLength: number): string {
   const compact = value.replace(/\s+/g, ' ').trim()
@@ -35,11 +36,13 @@ function DeepSearchPicker({
   projects,
   onSelect,
   onBack,
+  showFooter = true,
 }: {
   query: string
   projects: Project[]
   onSelect: (match: ContentMatch) => void
   onBack?: () => void
+  showFooter?: boolean
 }) {
   const { exit } = useApp()
   const { stdout } = useStdout()
@@ -75,7 +78,8 @@ function DeepSearchPicker({
   }, [query, projects])
 
   // Each result occupies 2 terminal rows (table row + snippet line)
-  const maxVisible = Math.max(2, Math.floor(((stdout?.rows ?? 20) - CHROME_ROWS) / 2))
+  const chromeRows = showFooter ? CHROME_ROWS : CHROME_ROWS - FOOTER_ROWS
+  const maxVisible = Math.max(2, Math.floor(((stdout?.rows ?? 20) - chromeRows) / 2))
   const items = results ?? []
 
   const rowData: RowData[] = items.map((m) => {
@@ -135,20 +139,23 @@ function DeepSearchPicker({
     exit()
   })
 
-  // Snippet indent: past cursor(2) + state column(state+2)
-  const snippetIndent = '  ' + ' '.repeat(widths.state + 2 + 2)
+  // Snippet indent: past cursor(2) + state column(state+2), aligned under the title.
+  const snippetIndent = '  ' + ' '.repeat(widths.state + 2)
 
   return (
     <Box flexDirection="column">
       <Box gap={2} marginBottom={1} paddingX={1}>
+        <Text bold color={COLORS.orange}>
+          DEEP SEARCH
+        </Text>
         <Text>
-          deep search:{' '}
+          query{' '}
           <Text bold color={COLORS.accent}>
             {query}
           </Text>
         </Text>
         {isLoading ? (
-          <Text color={COLORS.dim}>
+          <Text color={COLORS.orange}>
             scanning {progress.scanned}/{progress.total}…
           </Text>
         ) : (
@@ -165,7 +172,7 @@ function DeepSearchPicker({
           {'PROJECT'.padEnd(widths.project + 2)}
           {'SESSION'.padEnd(widths.session + 2)}
           {'UPDATED'.padEnd(widths.updated + 2)}
-          {'MATCHES'.padEnd(widths.matches + 2)}
+          {'HITS'.padEnd(widths.matches + 2)}
           {'ID PREFIX'}
         </Text>
       </Box>
@@ -196,13 +203,15 @@ function DeepSearchPicker({
                   </Text>
                   <Text bold={isSelected}>{row.session.padEnd(widths.session + 2)}</Text>
                   <Text color={COLORS.dim}>{row.updated.padEnd(widths.updated + 2)}</Text>
-                  <Text color={COLORS.dim}>{row.matches.padEnd(widths.matches + 2)}</Text>
+                  <Text color={isSelected ? COLORS.orange : COLORS.dim}>
+                    {row.matches.padEnd(widths.matches + 2)}
+                  </Text>
                   <Text color={COLORS.dim}>{row.id}</Text>
                 </Box>
-                <Box>
-                  <Text color={COLORS.dim} wrap="truncate">
-                    {snippetIndent}
-                    <Text color={isSelected ? COLORS.muted : COLORS.dim}>{row.snippet}</Text>
+                <Box marginBottom={1}>
+                  <Text color={isSelected ? COLORS.accent : COLORS.dim} wrap="truncate">
+                    {snippetIndent}↳{' '}
+                    <Text color={isSelected ? COLORS.textSub : COLORS.dim}>{row.snippet}</Text>
                   </Text>
                 </Box>
               </Box>
@@ -211,31 +220,33 @@ function DeepSearchPicker({
         )}
       </Box>
 
-      <Box
-        borderBottom={false}
-        borderColor={COLORS.border}
-        borderLeft={false}
-        borderRight={false}
-        borderStyle="single"
-        borderTop={true}
-        gap={2}
-        paddingX={1}
-      >
-        <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>enter</Text> resume
-        </Text>
-        {onBack && (
+      {showFooter ? (
+        <Box
+          borderBottom={false}
+          borderColor={COLORS.border}
+          borderLeft={false}
+          borderRight={false}
+          borderStyle="single"
+          borderTop={true}
+          gap={2}
+          paddingX={1}
+        >
           <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>esc · tab</Text> back
+            <Text color={COLORS.text}>enter</Text> resume
           </Text>
-        )}
-        <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>↑↓</Text> navigate
-        </Text>
-        <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>q</Text> quit
-        </Text>
-      </Box>
+          {onBack && (
+            <Text color={COLORS.muted}>
+              <Text color={COLORS.text}>esc · tab</Text> back
+            </Text>
+          )}
+          <Text color={COLORS.muted}>
+            <Text color={COLORS.text}>↑↓</Text> navigate
+          </Text>
+          <Text color={COLORS.muted}>
+            <Text color={COLORS.text}>q</Text> quit
+          </Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }

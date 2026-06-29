@@ -341,14 +341,17 @@ function compareSessionsByRecentActivity(left: Session, right: Session): number 
 async function loadIndexedSessions(projectDirectory: string): Promise<Session[] | null> {
   try {
     const indexContent = await readFile(join(projectDirectory, 'sessions-index.json'), 'utf8')
-    const sessionIndex = JSON.parse(indexContent) as { sessions?: Session[] }
+    const sessionIndex = JSON.parse(indexContent) as { sessions?: unknown[] }
     if (!sessionIndex.sessions?.length) return null
 
     const resumableSessions = (
       await Promise.all(
-        sessionIndex.sessions.map(async (session) =>
-          (await indexedSessionHasTranscript(projectDirectory, session)) ? session : null
-        )
+        sessionIndex.sessions.map(async (entry) => {
+          const session = normalizeIndexedSession(entry)
+          return session && (await indexedSessionHasTranscript(projectDirectory, session))
+            ? session
+            : null
+        })
       )
     ).filter((session): session is Session => session !== null)
     if (resumableSessions.length === 0) return null
@@ -366,17 +369,49 @@ async function loadIndexedSessions(projectDirectory: string): Promise<Session[] 
   }
 }
 
+function normalizeIndexedSession(entry: unknown): Session | null {
+  if (entry === null || typeof entry !== 'object') return null
+  const session = entry as Partial<Session>
+  if (typeof session.id !== 'string' || !isValidSessionId(session.id)) return null
+  if (!isPositiveInteger(session.messageCount)) return null
+  if (!isNonEmptyString(session.name) || !isNonEmptyString(session.projectPath)) return null
+  if (!isValidDateString(session.created) || !isValidDateString(session.updated)) return null
+
+  const createdMs = Date.parse(session.created)
+  const updatedMs = Date.parse(session.updated)
+  return {
+    ...session,
+    created: createdMs <= updatedMs ? session.created : session.updated,
+    id: session.id,
+    messageCount: session.messageCount,
+    name: session.name,
+    projectPath: session.projectPath,
+    updated: updatedMs >= createdMs ? session.updated : session.created,
+  } as Session
+}
+
 async function indexedSessionHasTranscript(
   projectDirectory: string,
   session: Session
 ): Promise<boolean> {
-  if (!isValidSessionId(session.id) || session.messageCount === 0) return false
   try {
     await access(join(projectDirectory, `${session.id}.jsonl`))
     return true
   } catch {
     return false
   }
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isValidDateString(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value))
 }
 
 function createUnanalysedContextMetrics(): SessionContextMetrics {

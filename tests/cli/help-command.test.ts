@@ -77,6 +77,17 @@ describe('CLI help', () => {
     expect(help).toContain('--stack <name>')
   })
 
+  it('keeps usage help focused on status and JSON output', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runCli(['usage', '--help'])
+
+    const help = String(log.mock.calls[0][0])
+    expect(help).toContain('reup usage --json')
+    expect(help).toContain('setup/remove manage the optional')
+    expect(help).not.toContain('reup usage toggle')
+  })
+
   it('rejects unknown help topics cleanly', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 

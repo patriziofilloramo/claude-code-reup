@@ -289,7 +289,7 @@ function sectionTreeItem(
     attention: {
       icon: 'warning',
       label: 'Needs Attention Elsewhere',
-      state: vscode.TreeItemCollapsibleState.Expanded,
+      state: vscode.TreeItemCollapsibleState.Collapsed,
     },
     recent: {
       icon: 'history',

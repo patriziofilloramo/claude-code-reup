@@ -40,7 +40,11 @@ export function analyzeTranscriptForHandoff(lines: string[]): TranscriptHandoffC
 
     const message = event['message'] as Record<string, unknown> | undefined
     const content = message?.['content']
-    if (event['type'] === 'user' && !containsOnlyToolResults(content)) {
+    if (
+      event['type'] === 'user' &&
+      !containsOnlyToolResults(content) &&
+      !isContextUsageReport(content)
+    ) {
       const userText = extractText(content)
       if (userText) goal = compactText(userText)
     }
@@ -140,6 +144,11 @@ function extractText(content: unknown): string {
       .map((block) => block['text'])
       .join('\n')
   )
+}
+
+function isContextUsageReport(content: unknown): boolean {
+  const text = extractText(content).trimStart()
+  return text.startsWith('## Context Usage') && text.includes('**Model:**')
 }
 
 function normalizeText(text: string): string {

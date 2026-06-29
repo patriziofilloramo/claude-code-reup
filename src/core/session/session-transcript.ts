@@ -12,6 +12,7 @@ interface CollectedTranscriptMetadata {
   customTitle: string
   firstHumanMessage: string
   gitBranch?: string
+  humanMessageCount: number
   messageCount: number
   projectPath?: string
   summary: string
@@ -40,8 +41,8 @@ export async function parseSessionTranscript(
 
     const metadata = collectTranscriptMetadata(lines)
     // Claude can leave metadata-only remnants after deleting a session. They
-    // have titles or agent names but no conversation and cannot be resumed.
-    if (metadata.messageCount === 0) return null
+    // have titles, agent names, or partial tool output but no human request to resume.
+    if (metadata.messageCount === 0 || metadata.humanMessageCount === 0) return null
 
     const createdAt = metadata.createdAt ?? transcriptStats.birthtime.toISOString()
     const updatedAt = metadata.updatedAt ?? transcriptStats.mtime.toISOString()
@@ -87,6 +88,7 @@ function collectTranscriptMetadata(lines: string[]): CollectedTranscriptMetadata
     },
     customTitle: '',
     firstHumanMessage: '',
+    humanMessageCount: 0,
     messageCount: 0,
     summary: '',
   }
@@ -146,8 +148,15 @@ function collectTranscriptTimestamps(
   event: Record<string, unknown>
 ): void {
   if (typeof event['timestamp'] !== 'string') return
-  metadata.createdAt ??= event['timestamp']
-  metadata.updatedAt = event['timestamp']
+  const timestampMs = Date.parse(event['timestamp'])
+  if (!Number.isFinite(timestampMs)) return
+
+  if (!metadata.createdAt || timestampMs < Date.parse(metadata.createdAt)) {
+    metadata.createdAt = event['timestamp']
+  }
+  if (!metadata.updatedAt || timestampMs > Date.parse(metadata.updatedAt)) {
+    metadata.updatedAt = event['timestamp']
+  }
 }
 
 function collectConversationMetadata(
@@ -155,15 +164,18 @@ function collectConversationMetadata(
   event: Record<string, unknown>
 ): void {
   if (event['type'] === 'assistant') {
-    metadata.messageCount++
+    if (isMeaningfulAssistantMessage(messageContentFromEvent(event))) metadata.messageCount++
     collectAssistantContextMetrics(metadata.context, event)
     return
   }
   if (event['type'] !== 'user') return
 
   const messageContent = messageContentFromEvent(event)
-  if (!containsOnlyToolResults(messageContent)) metadata.messageCount++
-  if (!metadata.firstHumanMessage && !isContextUsageReport(messageContent)) {
+  if (!isMeaningfulUserMessage(messageContent)) return
+
+  metadata.humanMessageCount++
+  metadata.messageCount++
+  if (!metadata.firstHumanMessage) {
     metadata.firstHumanMessage = firstTextBlockContent(messageContent)
       .slice(0, APP.titleMaxChars)
       .trim()
@@ -223,6 +235,15 @@ function isNonNegativeNumber(value: unknown): value is number {
 
 function messageContentFromEvent(event: Record<string, unknown>): unknown {
   return (event['message'] as Record<string, unknown> | undefined)?.['content']
+}
+
+function isMeaningfulAssistantMessage(content: unknown): boolean {
+  return firstTextBlockContent(content).trim().length > 0
+}
+
+function isMeaningfulUserMessage(content: unknown): boolean {
+  if (containsOnlyToolResults(content) || isContextUsageReport(content)) return false
+  return firstTextBlockContent(content).trim().length > 0
 }
 
 function containsOnlyToolResults(content: unknown): boolean {

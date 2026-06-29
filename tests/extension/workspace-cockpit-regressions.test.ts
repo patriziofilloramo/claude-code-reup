@@ -25,10 +25,17 @@ describe('workspace cockpit guardrails', () => {
   })
 
   it('refreshes workspace, attention, and recent sections without stealing tree focus', () => {
+    const definitionsStart = treeSource.indexOf('const definitions:')
+    const attentionDefinition = treeSource.slice(
+      treeSource.indexOf('attention: {', definitionsStart),
+      treeSource.indexOf('recent: {', definitionsStart)
+    )
+
     expect(treeSource).toContain("type SectionId = 'workspace' | 'attention' | 'recent'")
     expect(treeSource).toContain("label: 'Current Workspace'")
     expect(treeSource).toContain("label: 'Needs Attention Elsewhere'")
     expect(treeSource).toContain("label: 'Recent Elsewhere'")
+    expect(attentionDefinition).toContain('state: vscode.TreeItemCollapsibleState.Collapsed')
     expect(treeSource).toContain('const nextSessionNodes = new Map')
     expect(treeSource).toContain('this.sessionNodes.get(session.id) ?? sessionNode')
     expect(treeSource).toContain('cockpitModelFingerprint(model)')

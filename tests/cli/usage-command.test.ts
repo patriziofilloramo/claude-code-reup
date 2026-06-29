@@ -54,7 +54,21 @@ describe('usage command formatting', () => {
     expect(renderUsageSummary(summary(SNAPSHOT, true, 'fresh'))).toContain('\x1b[38;2;34;211;238m')
   })
 
-  it('uses accent colour for stale bars — staleness is conveyed by the header note', () => {
+  it('renders compact account-window rows without heavy block bars', () => {
+    const output = renderUsageSummary(summary(SNAPSHOT, true, 'fresh'))
+
+    expect(output).toContain('reup usage')
+    expect(output).toContain('5h')
+    expect(output).toContain('81%')
+    expect(output).toContain('7d')
+    expect(output).toContain('23%')
+    expect(output).not.toContain('reset unavailable')
+    expect(output).not.toContain('█')
+    expect(output).not.toContain('░')
+    expect(output).not.toContain('\x1b[38;2;34;211;238m\x1b[0m')
+  })
+
+  it('uses accent colour for stale percentages — staleness is conveyed by the header note', () => {
     const output = renderUsageSummary(summary(SNAPSHOT, true, 'stale'))
     expect(output).toContain('\x1b[38;2;34;211;238m')
     expect(output).toContain('updated')

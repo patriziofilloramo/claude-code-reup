@@ -174,7 +174,7 @@ export async function readLiveUsageSummary(now = Date.now()): Promise<LiveUsageS
     readUsageCaptureError(),
     readUsageCreditsEnabled(),
   ])
-  const accountUsage = integration.configured ? await readAccountUsage(now) : null
+  const accountUsage = await readAccountUsage(now)
   const selection = selectNewestSnapshot(snapshots)
   const snapshot = selection?.snapshot ?? null
   const freshness = snapshot
@@ -184,7 +184,8 @@ export async function readLiveUsageSummary(now = Date.now()): Promise<LiveUsageS
     : 'unavailable'
   const captureStatus = determineCaptureStatus(integration, captureError, snapshot, freshness)
   const fallbackLimits = selectNewestLimits(snapshots, now)
-  const accountLimits = accountUsage?.snapshot
+  const accountLimits = accountUsage.snapshot
+  const shouldExposeAccountIssue = integration.configured || accountUsage.snapshot !== null
   const limitsUpdatedAt = accountLimits?.fetchedAt ?? fallbackLimits?.updatedAt ?? null
   const rateLimits = accountLimits?.rateLimits ?? fallbackLimits?.rateLimits ?? {}
   const limitsSource = accountLimits
@@ -209,7 +210,7 @@ export async function readLiveUsageSummary(now = Date.now()): Promise<LiveUsageS
     captureStatus,
     configured: integration.configured,
     freshness,
-    limitsIssue: accountUsage?.issue ?? null,
+    limitsIssue: shouldExposeAccountIssue ? accountUsage.issue : null,
     limitsSource,
     limitsStatus,
     limitsUpdatedAt,

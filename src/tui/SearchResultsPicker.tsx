@@ -103,6 +103,12 @@ export function SearchResultsPicker({
         <Text color={COLORS.muted}>
           {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
         </Text>
+        {onDeepSearch ? (
+          <Text bold color={COLORS.orange}>
+            TAB deep search
+            <Text color={COLORS.muted}> scans transcripts</Text>
+          </Text>
+        ) : null}
       </Box>
 
       <Box paddingX={1}>
@@ -158,8 +164,8 @@ export function SearchResultsPicker({
           <Text color={COLORS.text}>enter</Text> resume
         </Text>
         {onDeepSearch && (
-          <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>tab</Text> deep search
+          <Text color={COLORS.orange}>
+            <Text bold>tab</Text> deep search
           </Text>
         )}
         <Text color={COLORS.muted}>

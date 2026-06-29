@@ -103,6 +103,25 @@ describe('list command', () => {
     })
   })
 
+  it('does not list lock-only zero-message sessions as resumable rows', () => {
+    const project: Project = {
+      id: 'encoded-project',
+      path: '/workspace/reup',
+      sessions: [
+        createSession({ name: 'Real session' }),
+        createSession({
+          id: '11111111-1111-1111-1111-111111111111',
+          messageCount: 0,
+          name: 'New session',
+        }),
+      ],
+    }
+
+    expect(createListedSessions([project], new Set()).map((session) => session.name)).toEqual([
+      'Real session',
+    ])
+  })
+
   it('parses free-text queries and composable filters', () => {
     expect(
       parseListOptions([

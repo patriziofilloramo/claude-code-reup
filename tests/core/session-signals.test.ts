@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeSignalsFromLines, primaryStatus } from '../../src/core/session/session-signals.js'
+import {
+  calculateExpiryDays,
+  computeSignalsFromLines,
+  primaryStatus,
+} from '../../src/core/session/session-signals.js'
 
 const DAY_MS = 24 * 60 * 60 * 1_000
 
@@ -140,6 +144,10 @@ describe('computeSignalsFromLines', () => {
 
     expect(signals.expiresInDays).toBeGreaterThanOrEqual(4)
     expect(signals.expiresInDays).toBeLessThanOrEqual(6)
+  })
+
+  it('treats invalid expiry timestamps as already expired instead of returning NaN', () => {
+    expect(calculateExpiryDays('not-a-date')).toBe(0)
   })
 
   it('skips malformed lines without throwing', () => {

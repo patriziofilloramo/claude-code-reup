@@ -20,6 +20,17 @@ describe('TUI organization parity guardrails', () => {
     expect(footerSource).toContain('LABELS.hintFocus')
   })
 
+  it('exposes archive and confirmed delete actions while bulk sessions are selected', () => {
+    expect(footerSource).toContain('if (bulkSelectedCount > 0)')
+    expect(footerSource).toContain('bulkSelectedCount} selected')
+    expect(footerSource).toContain("{' archive  '}")
+    expect(footerSource).toContain("{' delete  '}")
+    expect(appSource).toContain("input === 'D' && focusedPanel === 'sessions'")
+    expect(appSource).toContain('pendingDeleteIds.size > 0')
+    expect(appSource).toContain('D confirm')
+    expect(appSource).toContain('esc cancel')
+  })
+
   it('surfaces organization and provenance without duplicating metadata logic', () => {
     expect(projectListSource).toContain('project.groupName')
     expect(projectListSource).toContain('projectPanelLayout.showProjectGroups')
