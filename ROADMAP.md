@@ -31,20 +31,18 @@
 
 ## Recommended next focus
 
-Reup's near-term product bets are:
+Core milestones are closed:
 
-1. **Milestone 12 — Organization layer**: Phase 1, 2 (code), and 3 are shipped. One gap remains:
-   5 unit tests (2i) and a manual smoke of the `t → tag → chip → focus` flow. Once those pass,
-   M12 is closed. Phase 4 (advanced) is deferred until real-world use.
-2. **Milestone 13 — Live web control panel**: make `reup web` worth keeping open while working.
-   It should show what is active, changing, risky, or close to a limit without becoming a chat UI.
-3. **Milestone 11 — VS Code Workspace Cockpit**: shipped. Remaining: smoke test on clean Windows
-   and macOS, and fix the Windows terminal launcher before public release.
+- **Milestone 12 — Organization layer**: ✓ closed. Phases 1–3 shipped; 2i unit tests passing;
+  manual smoke signed off. Phase 4 (advanced) deferred until real-world use.
+- **Milestone 13 — Live web control panel**: ✓ closed lean. Strip, heartbeat, and freshness-aware
+  meters shipped and unit-tested; config toggle + attention feed archived to protect zero-config.
+- **Milestone 11 — VS Code Workspace Cockpit**: shipped (smoke on clean Windows/macOS pending).
 
-**Recommended order:** write the 5 missing Phase 2i tests and run the manual smoke (one short
-session). Then move to Milestone 13 — the live web panel is the next product differentiator and
-builds cleanly on the existing SSE and live-usage infrastructure. The VS Code extension can absorb
-org vocabulary (tags, groups, stacks) as a follow-on after M13 proves the data contracts stable.
+**On hold (do not start yet):** pre-release hardening — Windows terminal launcher (open High bug),
+M11/M12 manual smokes on clean Windows and macOS, then Milestone 9 (installers). Resume when the
+release window opens. Blocked items (M10 / Phase 4 / AI renaming) stay parked until the end.
+Throughout: keep the bar high — lightweight, zero-config, fast, easy.
 
 ---
 
@@ -362,7 +360,7 @@ required. All go/no-go criteria were met.
 
 ---
 
-## Milestone 12 — Organization layer: tags, groups, and work stacks
+## Milestone 12 — Organization layer: tags, groups, and work stacks ✓ done
 
 Make Reup useful when Claude Code work stops being "a list of folders" and becomes many
 parallel investigations, branches, fixes, reviews, and half-finished threads. The goal is a
@@ -371,10 +369,10 @@ lightweight organisation layer that feels faster than filing things manually.
 See [`Documents/MILESTONE_12_PLAN.md`](Documents/MILESTONE_12_PLAN.md) for the full spec,
 Inbox bucket definitions (as implemented), and Phase 4 advanced ideas.
 
-### Status: Phase 1, 2, 3 shipped — test hardening remaining
+### Status: closed ✓ — Phases 1–3 shipped, 2i tests passing
 
 **Phase 1 — Foundation** ✅ complete  
-**Phase 2 — Web Organization UI** ✅ complete (code), 🔲 tests pending  
+**Phase 2 — Web Organization UI** ✅ complete (code + 2i tests)  
 **Phase 3 — TUI + CLI parity** ✅ complete  
 **Phase 4 — Advanced** deferred until MVP is proven in real use
 
@@ -404,14 +402,14 @@ Inbox bucket definitions (as implemented), and Phase 4 advanced ideas.
 | Expiring soon    | expiresInDays ≤ 7                                                                            |
 | Recently touched | updated within RECENT_WITHIN_DAYS                                                            |
 
-### Remaining before M12 is closed
+### Closed
 
 - [x] **Unit tests (2i)** — done. Behavioural core tests in
       `tests/core/session-smart-view.test.ts` cover bucket priority order, archived
       exclusion, and fixture-project counts/filtering (`filterProjectsBySmartView`).
       Client-invariant tests in `tests/web/org-inbox.test.ts` cover the focus filter,
       chip overflow cap (`buildTagChipsHtml`), and tag-picker recency order.
-- [ ] **Manual smoke**: `t` → tag applied → chip visible in row → click chip → focus filters sessions → `×` clears focus
+- [x] **Manual smoke** — signed off (`t` → tag → chip → click → focus → `×`).
 
 ### Why this matters
 
@@ -429,7 +427,13 @@ After real-world use proves the MVP:
 
 ---
 
-## Milestone 13 — Live web control panel
+## Milestone 13 — Live web control panel ✓ done (lean)
+
+**Closed lean.** Shipped + unit-tested: live activity strip, selected-session heartbeat (latest
+tool + last-update time), tool trace, and freshness-aware usage meters (`fresh`/`stale`/`unavailable`,
+never stale-as-live). **Archived to protect zero-config / lightweight:** the config toggle (an on/off
+flag contradicts zero-config) and the attention feed (a growing feed is visible weight — the Inbox +
+live strip already cover it). Pinned watch list stays deferred. See the MVP slice below for detail.
 
 Make `reup web` worth keeping open on a second monitor or browser tab while Claude Code runs in a
 terminal. The web UI should become a quiet operations panel: active sessions, live limits, recent
@@ -496,13 +500,13 @@ awareness while working**. A developer should glance at Reup and know:
 1. [x] Live activity strip for active/recent sessions (`buildActivitySectionHtml`)
 2. [x] Selected-session heartbeat with latest tool/status and last update time
 3. [x] Freshness-aware usage bars (`fresh`/`stale`/`unavailable` in usage core)
-4. [ ] Attention feed — **reshaped under the zero-config / almost-hidden principle**:
-       drop the persistent "feed" (the Inbox buckets + live strip already surface
-       attention). If kept at all, only a quiet, ephemeral "what changed since you
-       looked away" cue — never a growing log.
-5. [~] Tests for freshness, throttling, and stale display — keep. **Config toggle
-   dropped**: a live-panel on/off flag contradicts the zero-config principle; the
-   panel must stay light enough to always be on and simply ignorable.
+4. [~] Attention feed — **archived (not building)**. A persistent, growing feed is
+   visible weight; the Inbox buckets + live activity strip already surface what
+   deserves attention next, with no extra UI.
+5. [x] Tests for freshness / stale display — done (`tests/core/live-usage.test.ts`,
+       `account-usage.test.ts`, `session-tail.test.ts`). **Config toggle archived**:
+       a live-panel on/off flag contradicts zero-config; the panel is light enough
+       to always be on and simply ignorable.
 
 > Design constraint (applies to all remaining M13 work): lightweight, zero-config,
 > fast, easy. Features should be almost-hidden and elegant — discoverable by those
