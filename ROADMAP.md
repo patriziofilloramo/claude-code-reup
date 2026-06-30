@@ -406,12 +406,11 @@ Inbox bucket definitions (as implemented), and Phase 4 advanced ideas.
 
 ### Remaining before M12 is closed
 
-- [ ] **Unit tests (2i)** — 5 tests not yet written:
-  - Inbox bucket assignment: priority ordering, archived sessions excluded
-  - Smart View counts from fixture projects
-  - Focus filter applied to project/session list
-  - Chip overflow cap (`buildTagChipsHtml(tags, max)`)
-  - Tag picker recent-first sort
+- [x] **Unit tests (2i)** — done. Behavioural core tests in
+      `tests/core/session-smart-view.test.ts` cover bucket priority order, archived
+      exclusion, and fixture-project counts/filtering (`filterProjectsBySmartView`).
+      Client-invariant tests in `tests/web/org-inbox.test.ts` cover the focus filter,
+      chip overflow cap (`buildTagChipsHtml`), and tag-picker recency order.
 - [ ] **Manual smoke**: `t` → tag applied → chip visible in row → click chip → focus filters sessions → `×` clears focus
 
 ### Why this matters
@@ -494,11 +493,20 @@ awareness while working**. A developer should glance at Reup and know:
 
 ### MVP slice
 
-1. [ ] Live activity strip for active/recent sessions
-2. [ ] Selected-session heartbeat with latest tool/status and last update time
-3. [ ] Freshness-aware usage bars in the web header and detail panel
-4. [ ] Attention feed with only high-signal events
-5. [ ] Config toggle and tests for freshness, throttling, and stale display
+1. [x] Live activity strip for active/recent sessions (`buildActivitySectionHtml`)
+2. [x] Selected-session heartbeat with latest tool/status and last update time
+3. [x] Freshness-aware usage bars (`fresh`/`stale`/`unavailable` in usage core)
+4. [ ] Attention feed — **reshaped under the zero-config / almost-hidden principle**:
+       drop the persistent "feed" (the Inbox buckets + live strip already surface
+       attention). If kept at all, only a quiet, ephemeral "what changed since you
+       looked away" cue — never a growing log.
+5. [~] Tests for freshness, throttling, and stale display — keep. **Config toggle
+   dropped**: a live-panel on/off flag contradicts the zero-config principle; the
+   panel must stay light enough to always be on and simply ignorable.
+
+> Design constraint (applies to all remaining M13 work): lightweight, zero-config,
+> fast, easy. Features should be almost-hidden and elegant — discoverable by those
+> who want them, ignorable by everyone else. No config toggles, no visible weight.
 
 ### Product guardrails
 
@@ -520,11 +528,15 @@ awareness while working**. A developer should glance at Reup and know:
       transcript content. Competes directly with Mantra's credential-redaction feature but stays
       read-only and local-first. Maps to "Is it safe to share this?" — priority filter #2.
 
-- [ ] **Files-touched list in resume card** — Populate the "Recently touched files" field in the
-      resume card by extracting `tool_use` write/edit/create events from the session JSONL. Show a
-      compact deduplicated list capped at ~5 paths with a `+N more` overflow. No diff, no replay —
-      just the file names. Closes a gap all four reviewed tools have: you can see what Claude _said_
-      but not what it _changed_. Priority filter #1 (helps decide whether to resume).
+- [x] **Files-touched list in resume card** — done, and extended well past the original
+      idea. Touched files are extracted from `tool_use` write events
+      (`session-automatic-context.ts`) and shown in every surface. On top of that, a full
+      **reverse file→session lookup** shipped (`session-file-search.ts`:
+      `searchTouchedFiles` / `collectTouchedFiles`): "which sessions edited this file?".
+      Exposed as `reup touched <path>` (CLI), a TUI finder (`t`), and — the elegant,
+      almost-hidden form — a "touched by N other sessions" affordance on each touched file
+      in the web inspector and the VS Code inspector + dashboard. Reads only the immutable
+      recorded write events; never diffs or replays.
 
 ### Advanced — requires API key / opt-in
 
