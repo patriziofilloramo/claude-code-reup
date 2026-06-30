@@ -12,6 +12,12 @@ import {
 } from '../../src/core/session/session-preview.js'
 import { primaryStatus } from '../../src/core/session/session-signals.js'
 import { getResumeAdvice, type ResumeAdvice } from '../../src/core/session/resume-advice.js'
+import {
+  collectTouchedFiles,
+  pathIdentityKey,
+  searchTouchedFiles,
+  type TouchedFileSummary,
+} from '../../src/core/session/session-file-search.js'
 import { searchTranscripts } from '../../src/core/session/session-search.js'
 import {
   isResumeListVisibleSession,
@@ -76,6 +82,16 @@ export interface ExtensionContentMatch {
   snippet: string
 }
 
+export type ExtensionTouchedFile = TouchedFileSummary
+
+export interface ExtensionTouchedMatch {
+  gitBranch: string | null
+  lastTouchedAt: string | null
+  matchCount: number
+  matchedPaths: string[]
+  session: ExtensionSession
+}
+
 export interface LoadExtensionModelOptions {
   includeArchived: boolean
   includePreviewHints: boolean
@@ -83,7 +99,27 @@ export interface LoadExtensionModelOptions {
 }
 
 export class ReupDataSource {
+  private touchedCountCache: Map<string, number> | null = null
+
   constructor(private readonly logger: ReupLogger) {}
+
+  /**
+   * Returns how many sessions edited each file, keyed by path identity. Cached
+   * for the data source's lifetime — one transcript scan reused across every
+   * inspector render. Call invalidateTouchedFileCounts() after data changes.
+   */
+  async touchedFileCounts(includeArchived: boolean): Promise<Map<string, number>> {
+    if (this.touchedCountCache) return this.touchedCountCache
+    const files = await this.listTouchedFiles(includeArchived)
+    const counts = new Map<string, number>()
+    for (const file of files) counts.set(pathIdentityKey(file.path), file.sessionCount)
+    this.touchedCountCache = counts
+    return counts
+  }
+
+  invalidateTouchedFileCounts(): void {
+    this.touchedCountCache = null
+  }
 
   async loadModel(options: LoadExtensionModelOptions): Promise<ExtensionSessionModel> {
     const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
@@ -160,6 +196,32 @@ export class ReupDataSource {
           includePreviewHints: false,
         }),
         snippet: match.snippet,
+      }))
+    )
+  }
+
+  /** Lists every file written across sessions, most recently touched first. */
+  async listTouchedFiles(includeArchived: boolean): Promise<ExtensionTouchedFile[]> {
+    const projects = await loadProjects()
+    return collectTouchedFiles(projects, { includeArchived })
+  }
+
+  /** Finds the sessions that wrote a file matching the given path, most relevant first. */
+  async searchTouchedSessions(
+    path: string,
+    includeArchived: boolean
+  ): Promise<ExtensionTouchedMatch[]> {
+    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const matches = await searchTouchedFiles(path, projects, { includeArchived })
+    return Promise.all(
+      matches.map(async (match) => ({
+        gitBranch: match.gitBranch,
+        lastTouchedAt: match.lastTouchedAt,
+        matchCount: match.matchCount,
+        matchedPaths: match.matchedPaths,
+        session: await createExtensionSession(match.project, match.session, activeSessionIds, {
+          includePreviewHints: false,
+        }),
       }))
     )
   }

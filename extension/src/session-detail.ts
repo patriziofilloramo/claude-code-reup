@@ -12,6 +12,7 @@ import {
   setSessionArchived,
   setSessionTags,
 } from '../../src/core/session/session-metadata.js'
+import { pathIdentityKey } from '../../src/core/session/session-file-search.js'
 import {
   loadSessionPreview,
   sessionTranscriptPath,
@@ -24,11 +25,13 @@ import {
   isInspectorMessage,
   renderInspectorHtml,
   type InspectorMessage,
+  type TouchedOverlap,
 } from './inspector-html.js'
 import { getReupConfigurationValue } from './configuration.js'
 import type { ReupLogger } from './logger.js'
 import type { SessionResumeService } from './resume-target.js'
 import type { ExtensionSession, ReupDataSource } from './reup-data.js'
+import { pickTouchedSession } from './touched-search.js'
 
 const INSPECTOR_VIEW_ID = 'reup.inspector'
 const ADD_TAG_BUTTON: vscode.QuickInputButton = {
@@ -204,6 +207,9 @@ export class ReupInspectorProvider implements vscode.WebviewViewProvider, vscode
         case 'openFile':
           await this.openPreviewFile(current, message.path)
           break
+        case 'touchedSessions':
+          await this.showTouchedSessions(current, message.path)
+          break
       }
     } catch (error) {
       this.logger.error(`inspector action failed: ${message.type}`, error)
@@ -247,11 +253,31 @@ export class ReupInspectorProvider implements vscode.WebviewViewProvider, vscode
     const session = this.selectedSession
     const preview = await this.loadPreview(session)
     if (requestId !== this.renderRequestId || this.selectedSession !== session || !this.view) return
+    const overlap = await this.computeTouchedOverlap(preview)
+    if (requestId !== this.renderRequestId || this.selectedSession !== session || !this.view) return
     this.selectedPreview = preview
-    const renderKey = JSON.stringify([session, preview])
+    const renderKey = JSON.stringify([session, preview, overlap])
     if (this.lastRenderKey === renderKey) return
     this.lastRenderKey = renderKey
-    this.view.webview.html = renderInspectorHtml(session, preview)
+    this.view.webview.html = renderInspectorHtml(session, preview, overlap)
+  }
+
+  /** Maps each touched file to how many *other* sessions also edited it. */
+  private async computeTouchedOverlap(preview: SessionPreview): Promise<TouchedOverlap> {
+    const includeArchived = getReupConfigurationValue<boolean>('includeArchived', false)
+    const counts = await this.dataSource.touchedFileCounts(includeArchived)
+    const overlap: TouchedOverlap = {}
+    for (const path of preview.touchedFiles) {
+      const total = counts.get(pathIdentityKey(path)) ?? 1
+      if (total > 1) overlap[path] = total - 1
+    }
+    return overlap
+  }
+
+  /** Opens a picker of the other sessions that edited the given file. */
+  private async showTouchedSessions(current: ExtensionSession, path: string): Promise<void> {
+    const session = await pickTouchedSession(this.dataSource, current.id, path)
+    if (session) await this.showSession(session)
   }
 
   private async loadPreview(session: ExtensionSession): Promise<SessionPreview> {

@@ -23,6 +23,7 @@ const SEGMENTS = [
   '01-config.js', // tunable constants, risk rank
   '02-state.js', // mutable application state (all let variables)
   '03-elements.js', // DOM element references
+  '04-loading-screen.js', // Matrix-style boot loader shown until first data render
   '04-format-request.js', // formatters (relativeTime, escapeHtml…) + HTTP helpers
   '05-projects.js', // project list rendering and selection
   '06-sessions.js', // session view model, filtering, and selection
@@ -31,6 +32,7 @@ const SEGMENTS = [
   '09-resume.js', // resume confirmation dialog and terminal launch
   '10-instructions-drawer.js', // CLAUDE.md editor drawer
   '11-diagnostics-drawer.js', // Lost & Found diagnostics drawer
+  '13-touched-files.js', // Touched-file cross-session overlap (inspector inline expand)
   '12-sync-drawer.js', // Experimental shared session sync drawer
   '12-new-session.js', // start-new-session action
   '13-ctx-menu.js', // context menu (project and session)

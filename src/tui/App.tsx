@@ -24,6 +24,7 @@ import { forgetProjectForSync } from '../core/sync/sync-actions.js'
 import { copyToClipboard, openDirectory } from '../utils/system.js'
 import { ConfigApp } from './ConfigApp.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
+import { TouchedFinder } from './TouchedFinder.js'
 import AppFooter from './components/AppFooter.js'
 import AppHeader from './components/AppHeader.js'
 import AppToolbar from './components/AppToolbar.js'
@@ -92,6 +93,7 @@ function App({ onResume }: AppProps) {
   const [isSessionActionMenuOpen, setIsSessionActionMenuOpen] = useState(false)
   const [resumeCardSession, setResumeCardSession] = useState<Session | null>(null)
   const [isDeepSearchOpen, setIsDeepSearchOpen] = useState(false)
+  const [isTouchedFinderOpen, setIsTouchedFinderOpen] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set())
@@ -513,6 +515,9 @@ function App({ onResume }: AppProps) {
       case 'toggle-archived':
         setShowArchivedSessions((v) => !v)
         break
+      case 'touched-finder':
+        setIsTouchedFinderOpen(true)
+        break
       case 'cycle-focus':
         setSmartViewId((current) => nextSessionSmartView(current))
         setSelectedProjectIndex(0)
@@ -568,6 +573,7 @@ function App({ onResume }: AppProps) {
     if (isCommandPaletteOpen) return
     if (isProjectActionMenuOpen) return
     if (isSessionActionMenuOpen) return
+    if (isTouchedFinderOpen) return
     if (resumeCardSession) return
 
     const escapePressed = key.escape || input === '\x1b'
@@ -640,6 +646,10 @@ function App({ onResume }: AppProps) {
     }
     if (!isLoading && input === 'a') {
       setShowArchivedSessions((visible) => !visible)
+      return
+    }
+    if (!isLoading && input === 't') {
+      setIsTouchedFinderOpen(true)
       return
     }
     if (!isLoading && input === 'f') {
@@ -771,6 +781,20 @@ function App({ onResume }: AppProps) {
   }
 
   function renderApplicationBody() {
+    if (isTouchedFinderOpen) {
+      return (
+        <TouchedFinder
+          activeSessionIds={activeSessionIds}
+          onClose={() => setIsTouchedFinderOpen(false)}
+          onResume={(session) => {
+            setIsTouchedFinderOpen(false)
+            resumeSession(session)
+          }}
+          projects={projects}
+        />
+      )
+    }
+
     if (isDeepSearchOpen) {
       return (
         <DeepSearchPicker
@@ -896,6 +920,7 @@ function App({ onResume }: AppProps) {
         isResumeCardOpen={resumeCardSession !== null}
         isSearchOpen={isSearchOpen}
         isSessionActionMenuOpen={isSessionActionMenuOpen}
+        isTouchedFinderOpen={isTouchedFinderOpen}
         statusMessage={statusMessage}
       />
     </Box>

@@ -10,6 +10,7 @@ interface AppFooterProps {
   isResumeCardOpen: boolean
   isSearchOpen: boolean
   isSessionActionMenuOpen: boolean
+  isTouchedFinderOpen: boolean
   statusMessage: string | null
 }
 
@@ -20,10 +21,15 @@ export default function AppFooter({
   isResumeCardOpen,
   isSearchOpen,
   isSessionActionMenuOpen,
+  isTouchedFinderOpen,
   statusMessage,
 }: AppFooterProps) {
   const { stdout } = useStdout()
   const compact = (stdout?.columns ?? 80) < 100
+
+  // The touched finder is a full-screen overlay that renders its own
+  // step-specific footer; stepping aside avoids a second, conflicting hint bar.
+  if (isTouchedFinderOpen) return null
 
   function renderHints() {
     if (statusMessage) {

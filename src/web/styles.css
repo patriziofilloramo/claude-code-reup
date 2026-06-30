@@ -1562,6 +1562,124 @@ body {
   background: rgb(var(--amber-rgb) / 0.1);
 }
 
+/* ── Soft Matrix loader (deep search, touched expansion) ────────────────── */
+
+.msoft {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  padding: 44px 0;
+}
+.msoft-compact {
+  gap: 7px;
+  padding: 10px 0;
+}
+.msoft-rain {
+  color: var(--green, #00ff41);
+  display: flex;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 16px;
+  gap: 6px;
+}
+.msoft-compact .msoft-rain {
+  font-size: 13px;
+  gap: 4px;
+}
+.msoft-rain span {
+  animation: msoft-pulse 1.1s ease-in-out infinite;
+  opacity: 0.16;
+}
+@keyframes msoft-pulse {
+  0%,
+  100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.9;
+    text-shadow: 0 0 8px rgb(var(--green-rgb, 0 255 65) / 0.6);
+  }
+}
+.msoft-label {
+  color: var(--muted);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 3px;
+}
+.msoft-compact .msoft-label {
+  font-size: 10.5px;
+  letter-spacing: 2px;
+}
+.msoft-cursor {
+  animation: msoft-blink 1s steps(1) infinite;
+  margin-left: 2px;
+}
+@keyframes msoft-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ── Touched-file cross-session overlap ─────────────────────────────────── */
+
+.touched-row {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+}
+.touched-row.touched-linked {
+  cursor: pointer;
+}
+.touched-row.touched-linked:hover {
+  color: var(--text);
+}
+.touched-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.touched-caret {
+  color: var(--muted2);
+  flex: none;
+  font-size: 9px;
+}
+.touched-caret-empty {
+  visibility: hidden;
+}
+.touched-count {
+  color: rgb(var(--amber-rgb) / 0.7);
+  flex: none;
+  font-size: 10px;
+}
+.touched-expand {
+  border-left: 1px solid var(--border);
+  margin: 2px 0 4px 6px;
+  padding-left: 8px;
+}
+.touched-other {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  overflow: hidden;
+  padding: 2px 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.touched-other:hover {
+  color: var(--text);
+}
+.touched-other-active {
+  color: var(--green);
+}
+.touched-expand-note {
+  color: var(--muted2);
+  font-size: 10.5px;
+  padding: 2px 0;
+}
+
 /* ── Lost & Found panel ─────────────────────────────────────────────────── */
 
 .lf-body {

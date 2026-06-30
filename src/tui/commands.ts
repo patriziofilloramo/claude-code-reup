@@ -106,6 +106,13 @@ export const COMMANDS: readonly CommandDef[] = [
     label: 'Toggle archived sessions',
   },
   {
+    id: 'touched-finder',
+    group: 'navigation',
+    keybinding: 't',
+    visibleWhen: 'always',
+    label: 'Find sessions by touched file',
+  },
+  {
     id: 'cycle-focus',
     group: 'navigation',
     keybinding: 'f',

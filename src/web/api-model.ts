@@ -74,6 +74,42 @@ export interface ApiDeepSearchResponse {
   matches: ApiDeepSearchHit[]
 }
 
+/**
+ * One file written across sessions. Returned by `GET /api/touched/files`.
+ * The reverse-lookup view lists these, then drills into the sessions per file.
+ */
+export interface ApiTouchedFile {
+  path: string
+  sessionCount: number
+  lastTouchedAt: string
+  gitBranch: string | null
+}
+
+/** Full response envelope for `GET /api/touched/files`. */
+export interface ApiTouchedFilesResponse {
+  files: ApiTouchedFile[]
+}
+
+/**
+ * One session that wrote a queried file. Returned by `GET /api/touched/sessions`.
+ * Ordered by reverse-lookup relevance (edit count, then most recent touch).
+ */
+export interface ApiTouchedSession {
+  sessionId: string
+  sessionName: string
+  projectId: string
+  projectName: string
+  matchCount: number
+  lastTouchedAt: string | null
+  gitBranch: string | null
+  active: boolean
+}
+
+/** Full response envelope for `GET /api/touched/sessions`. */
+export interface ApiTouchedSessionsResponse {
+  matches: ApiTouchedSession[]
+}
+
 // ---------------------------------------------------------------------------
 // Active-session response
 // ---------------------------------------------------------------------------

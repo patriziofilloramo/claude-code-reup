@@ -7,6 +7,7 @@ import { ReupRefreshController } from './refresh-controller.js'
 import { showGlobalResumePicker, showWorkspaceResumePicker } from './resume-picker.js'
 import { SessionResumeService } from './resume-target.js'
 import { showSessionSearch } from './session-search.js'
+import { showTouchedFileSearch } from './touched-search.js'
 import {
   openSessionDetail,
   showSessionDetailPicker,
@@ -109,6 +110,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('reup.searchSessions', async () => {
       await showSessionSearch(dataSource, logger, resumeService, (session) =>
+        inspectorProvider.showSession(session)
+      )
+    }),
+    vscode.commands.registerCommand('reup.findTouchedFile', async () => {
+      await showTouchedFileSearch(dataSource, logger, resumeService, (session) =>
         inspectorProvider.showSession(session)
       )
     }),

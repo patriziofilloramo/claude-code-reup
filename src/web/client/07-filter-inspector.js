@@ -234,31 +234,6 @@ function buildPreviewMarkdownBlockHtml(label, text, blockClass, icon) {
   )
 }
 
-/** Returns the "files touched" preview section. */
-function buildTouchedFilesHtml(preview, session) {
-  if (!preview.touchedFiles || preview.touchedFiles.length === 0) return ''
-  const rows = preview.touchedFiles
-    .map(function (file) {
-      return (
-        '<div class="preview-file" title="' +
-        escapeHtml(file) +
-        '">' +
-        escapeHtml(projectRelativePath(file, session.projectPath)) +
-        '</div>'
-      )
-    })
-    .join('')
-  return (
-    '<div class="preview-block">' +
-    buildPreviewLabelHtml(
-      fmt(STRINGS.previewFilesTouched, { count: preview.touchedFiles.length }),
-      '✎'
-    ) +
-    rows +
-    '</div>'
-  )
-}
-
 /**
  * Maps AutomaticFactSource values to reader-friendly labels.
  * Returns the raw value for any unknown source so new sources surface visibly.

@@ -219,8 +219,12 @@ function renderSessions() {
   renderFilterBar()
   renderInspector(visibleSessions)
 
-  const emptyHtml = buildEmptySessionListHtml(visibleSessions)
-  elements.sessionList.innerHTML = emptyHtml || listedSessions.map(buildSessionRowHtml).join('')
+  if (deepSearchActive && deepSearchLoading) {
+    elements.sessionList.innerHTML = matrixSoftLoaderHtml(STRINGS.sessionSearching)
+  } else {
+    const emptyHtml = buildEmptySessionListHtml(visibleSessions)
+    elements.sessionList.innerHTML = emptyHtml || listedSessions.map(buildSessionRowHtml).join('')
+  }
 
   if (renamingSessionId) {
     const input = elements.sessionList.querySelector('.s-rename-input')

@@ -104,6 +104,24 @@ Usage:
 Options:
   --deep  Search transcript content instead of session metadata`,
 
+  touched: `reup touched - find sessions that edited a file
+
+Usage:
+  reup touched [path] [options]
+
+With a path, lists which sessions wrote or edited a file whose path matches it,
+reading the write events Claude Code already recorded in each transcript.
+Matching is case-insensitive and ignores path-separator style, so a fragment
+like "session-query" or "core/session" both work.
+
+With no path, opens an interactive picker of files edited in the current
+project; pick one to see the sessions that touched it and resume.
+
+Options:
+  --archived       Include archived sessions in the lookup
+  --json           Emit machine-readable JSON
+  --limit <count>  Limit the number of results`,
+
   sync: `reup sync - manage cross-device session storage (Alpha)
 
 Usage:
@@ -162,6 +180,7 @@ export function renderMainHelp(useColor = process.stdout.isTTY === true): string
     row('reup resume [id]', 'Resume a session'),
     row('reup list [query]', 'List sessions', '--json for machine-readable'),
     row('reup search <query>', 'Search session metadata or content'),
+    row('reup touched [path]', 'Find sessions that edited a file'),
     row('reup inbox', 'Show sessions needing attention'),
     row('reup handoff [id]', 'Create a continuation packet'),
     '',

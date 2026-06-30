@@ -14,6 +14,7 @@ const PUBLIC_COMMANDS = [
   'resume',
   'search',
   'sync',
+  'touched',
   'usage',
   'web',
 ]

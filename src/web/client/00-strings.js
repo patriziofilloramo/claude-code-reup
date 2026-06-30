@@ -152,6 +152,13 @@ const STRINGS = {
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
 
+  // ── Touched-file cross-session overlap ────────────────────────────────────
+  touchedOthersOne: 'touched by 1 other session',
+  touchedOthersMany: 'touched by {n} other sessions',
+  touchedExpandLoading: 'Loading…',
+  touchedExpandFailed: 'Failed to load sessions.',
+  touchedExpandEmpty: 'No other sessions touched this file.',
+
   // ── Diagnostics / Lost & Found ────────────────────────────────────────────
   diagnosticsScanning: 'Scanning…',
   diagnosticsLoadFailed: 'Failed to load diagnostics.',

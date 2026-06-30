@@ -86,6 +86,12 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
       return
     }
 
+    case 'touched': {
+      const { runTouchedCommand } = await import('./touched-command.js')
+      await runTouchedCommand(commandArguments)
+      return
+    }
+
     case 'usage': {
       const { runUsageCommand } = await import('./usage-command.js')
       await runUsageCommand(commandArguments)

@@ -1,3 +1,5 @@
+import { extractWriteToolPaths, isWriteLikeTool } from './session-touched-files.js'
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -454,13 +456,10 @@ function collectToolFileFacts(
 ): void {
   if (!input) return
 
-  const path = stringValue(input['file_path']) ?? stringValue(input['path'])
-  const notebookPath = stringValue(input['notebook_path'])
-
   if (isWriteLikeTool(normalizedToolName)) {
-    if (path) touchedFiles.push(path)
-    if (notebookPath) touchedFiles.push(notebookPath)
+    touchedFiles.push(...extractWriteToolPaths(input))
   } else if (normalizedToolName === 'read') {
+    const path = stringValue(input['file_path']) ?? stringValue(input['path'])
     if (path) readFiles.push(path)
   }
 }
@@ -496,14 +495,6 @@ function collectAgentFacts(
     addIfString(agentNames, input['subagent_type'])
     addIfString(agentNames, input['description'])
   }
-}
-
-function isWriteLikeTool(normalizedToolName: string): boolean {
-  return (
-    normalizedToolName.includes('edit') ||
-    normalizedToolName === 'write' ||
-    normalizedToolName === 'notebookedit'
-  )
 }
 
 function isTaskTool(normalizedToolName: string): boolean {

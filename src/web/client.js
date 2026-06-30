@@ -161,6 +161,13 @@ const STRINGS = {
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
 
+  // ── Touched-file cross-session overlap ────────────────────────────────────
+  touchedOthersOne: 'touched by 1 other session',
+  touchedOthersMany: 'touched by {n} other sessions',
+  touchedExpandLoading: 'Loading…',
+  touchedExpandFailed: 'Failed to load sessions.',
+  touchedExpandEmpty: 'No other sessions touched this file.',
+
   // ── Diagnostics / Lost & Found ────────────────────────────────────────────
   diagnosticsScanning: 'Scanning…',
   diagnosticsLoadFailed: 'Failed to load diagnostics.',
@@ -665,6 +672,179 @@ const elements = {
   orgManagerList: elementById('org-manager-list'),
   orgManagerClose: elementById('org-manager-close'),
 }
+// ---------------------------------------------------------------------------
+// Matrix-style boot loader
+//
+// The first /api/projects round-trip leaves both panels empty — a black flash
+// until data lands. This overlays a Matrix rain plus a "decrypting" status
+// readout, then dissolves once the first render arrives. Shown once, on the
+// initial load only; self-contained (no HTML/CSS dependencies).
+// ---------------------------------------------------------------------------
+
+var loadingOverlay = null
+var loadingRaf = null
+var loadingResize = null
+var loadingStatusTimer = null
+var loadingBarTimer = null
+var loadingShownAt = 0
+var loadingDismissed = false
+
+var LOADING_GLYPHS = 'ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉ0123456789<>/\\[]{}#*='
+var LOADING_MESSAGES = ['ESTABLISHING LINK', 'DECRYPTING TRANSCRIPTS', 'INDEXING SESSIONS']
+var LOADING_MIN_MS = 750
+var LOADING_SAFETY_MS = 8000
+
+function showLoadingOverlay() {
+  if (loadingOverlay || loadingDismissed || !document.body) return
+  loadingShownAt = Date.now()
+
+  var overlay = document.createElement('div')
+  overlay.id = 'reup-loading'
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;' +
+    'background:#050a05;transition:opacity 0.5s ease;' +
+    'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace'
+
+  var canvas = document.createElement('canvas')
+  canvas.style.cssText = 'position:absolute;inset:0;opacity:0.5'
+  overlay.appendChild(canvas)
+
+  var panel = document.createElement('div')
+  panel.style.cssText =
+    'position:relative;text-align:center;color:#00ff41;text-shadow:0 0 10px rgba(0,255,65,0.55)'
+  panel.innerHTML =
+    '<div style="font-size:44px;font-weight:700;letter-spacing:10px;padding-left:10px">reup</div>' +
+    '<div class="rl-status" style="margin-top:18px;font-size:13px;letter-spacing:3px;' +
+    'min-height:1em;color:#8fffb0"></div>' +
+    '<div class="rl-bar" style="margin-top:12px;font-size:13px;letter-spacing:2px"></div>'
+  overlay.appendChild(panel)
+  document.body.appendChild(overlay)
+
+  loadingOverlay = overlay
+  startLoadingRain(canvas)
+  startLoadingStatus(panel.querySelector('.rl-status'), panel.querySelector('.rl-bar'))
+  setTimeout(hideLoadingOverlay, LOADING_SAFETY_MS)
+}
+
+function startLoadingRain(canvas) {
+  var ctx = canvas.getContext('2d')
+  var width = 0
+  var height = 0
+  var columns = 0
+  var drops = []
+
+  loadingResize = function () {
+    width = canvas.width = window.innerWidth
+    height = canvas.height = window.innerHeight
+    columns = Math.floor(width / 14)
+    drops = drops.slice(0, columns)
+    while (drops.length < columns) drops.push(Math.random() * -height)
+  }
+  loadingResize()
+  window.addEventListener('resize', loadingResize)
+
+  function draw() {
+    ctx.fillStyle = 'rgba(5,10,5,0.08)'
+    ctx.fillRect(0, 0, width, height)
+    ctx.font = '14px monospace'
+    for (var i = 0; i < columns; i++) {
+      ctx.fillStyle = i % 7 === 0 ? '#c8ffc8' : '#00ff41'
+      ctx.fillText(
+        LOADING_GLYPHS[Math.floor(Math.random() * LOADING_GLYPHS.length)],
+        i * 14,
+        drops[i]
+      )
+      if (drops[i] > height && Math.random() > 0.975) drops[i] = 0
+      drops[i] += 14
+    }
+    loadingRaf = requestAnimationFrame(draw)
+  }
+  loadingRaf = requestAnimationFrame(draw)
+}
+
+function startLoadingStatus(statusEl, barEl) {
+  var messageIndex = 0
+  function nextMessage() {
+    scrambleReveal(statusEl, LOADING_MESSAGES[messageIndex % LOADING_MESSAGES.length])
+    messageIndex++
+  }
+  nextMessage()
+  loadingStatusTimer = setInterval(nextMessage, 1100)
+
+  var barFrame = 0
+  var barWidth = 16
+  loadingBarTimer = setInterval(function () {
+    var filled = barFrame % (barWidth + 1)
+    var bar = ''
+    for (var i = 0; i < barWidth; i++) bar += i < filled ? '█' : '▒'
+    barEl.textContent = '[' + bar + ']'
+    barFrame++
+  }, 80)
+}
+
+/** Resolves random glyphs into the target text, left to right — "decrypt" effect. */
+function scrambleReveal(element, text) {
+  var frame = 0
+  var totalFrames = 16
+  function step() {
+    if (!loadingOverlay) return
+    var revealed = Math.floor((frame / totalFrames) * text.length)
+    var output = ''
+    for (var i = 0; i < text.length; i++) {
+      if (i < revealed || text[i] === ' ') output += text[i]
+      else output += LOADING_GLYPHS[Math.floor(Math.random() * LOADING_GLYPHS.length)]
+    }
+    element.textContent = output
+    frame++
+    if (frame <= totalFrames) requestAnimationFrame(step)
+  }
+  step()
+}
+
+/** Fades and removes the boot loader, honouring a minimum on-screen time. */
+function hideLoadingOverlay() {
+  loadingDismissed = true
+  if (!loadingOverlay) return
+  var wait = Math.max(0, LOADING_MIN_MS - (Date.now() - loadingShownAt))
+  setTimeout(function () {
+    if (!loadingOverlay) return
+    var overlay = loadingOverlay
+    loadingOverlay = null
+    overlay.style.opacity = '0'
+    if (loadingRaf) cancelAnimationFrame(loadingRaf)
+    if (loadingStatusTimer) clearInterval(loadingStatusTimer)
+    if (loadingBarTimer) clearInterval(loadingBarTimer)
+    if (loadingResize) window.removeEventListener('resize', loadingResize)
+    loadingRaf = loadingStatusTimer = loadingBarTimer = loadingResize = null
+    setTimeout(function () {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
+    }, 550)
+  }, wait)
+}
+
+/**
+ * Returns a soft, CSS-animated Matrix shimmer for in-panel loading states
+ * (deep search, touched-file expansion). Pure markup — no timers to clean up,
+ * since the container's innerHTML is replaced once results arrive.
+ */
+function matrixSoftLoaderHtml(label, compact) {
+  var cells = ''
+  for (var i = 0; i < 11; i++) {
+    var glyph = LOADING_GLYPHS[Math.floor(Math.random() * LOADING_GLYPHS.length)]
+    cells += '<span style="animation-delay:' + i * 90 + 'ms">' + glyph + '</span>'
+  }
+  return (
+    '<div class="msoft' +
+    (compact ? ' msoft-compact' : '') +
+    '"><div class="msoft-rain">' +
+    cells +
+    '</div><div class="msoft-label">' +
+    escapeHtml(label || '') +
+    '<span class="msoft-cursor">▋</span></div></div>'
+  )
+}
+
+showLoadingOverlay()
 // ---------------------------------------------------------------------------
 // Shared presentation and request helpers
 // ---------------------------------------------------------------------------
@@ -1774,31 +1954,6 @@ function buildPreviewMarkdownBlockHtml(label, text, blockClass, icon) {
   )
 }
 
-/** Returns the "files touched" preview section. */
-function buildTouchedFilesHtml(preview, session) {
-  if (!preview.touchedFiles || preview.touchedFiles.length === 0) return ''
-  const rows = preview.touchedFiles
-    .map(function (file) {
-      return (
-        '<div class="preview-file" title="' +
-        escapeHtml(file) +
-        '">' +
-        escapeHtml(projectRelativePath(file, session.projectPath)) +
-        '</div>'
-      )
-    })
-    .join('')
-  return (
-    '<div class="preview-block">' +
-    buildPreviewLabelHtml(
-      fmt(STRINGS.previewFilesTouched, { count: preview.touchedFiles.length }),
-      '✎'
-    ) +
-    rows +
-    '</div>'
-  )
-}
-
 /**
  * Maps AutomaticFactSource values to reader-friendly labels.
  * Returns the raw value for any unknown source so new sources surface visibly.
@@ -2577,8 +2732,12 @@ function renderSessions() {
   renderFilterBar()
   renderInspector(visibleSessions)
 
-  const emptyHtml = buildEmptySessionListHtml(visibleSessions)
-  elements.sessionList.innerHTML = emptyHtml || listedSessions.map(buildSessionRowHtml).join('')
+  if (deepSearchActive && deepSearchLoading) {
+    elements.sessionList.innerHTML = matrixSoftLoaderHtml(STRINGS.sessionSearching)
+  } else {
+    const emptyHtml = buildEmptySessionListHtml(visibleSessions)
+    elements.sessionList.innerHTML = emptyHtml || listedSessions.map(buildSessionRowHtml).join('')
+  }
 
   if (renamingSessionId) {
     const input = elements.sessionList.querySelector('.s-rename-input')
@@ -3180,6 +3339,244 @@ elements.instructionsEditor.addEventListener('input', function () {
 })
 elements.instructionsSaveButton.addEventListener('click', function () {
   void saveClaudeInstructions()
+})
+// ---------------------------------------------------------------------------
+// Touched-file cross-session overlap
+//
+// The session inspector already lists the files a session edited. Here we make
+// each file that *other* sessions also edited clickable: it expands inline to
+// show those sessions, each a shortcut to jump there. The per-file session
+// counts come from one cached /api/touched/files scan (reused across inspector
+// opens); the expansion itself loads on demand. This stays separate from the
+// metadata search and deep-search paths.
+// ---------------------------------------------------------------------------
+
+// path-identity → number of sessions that edited it. null until first load.
+let touchedFileCounts = null
+let touchedCountsLoading = false
+
+// The file currently expanded inline: { projectId, sessionId, pathKey, state, sessions }.
+let touchedExpand = null
+
+function touchedIdentityKey(path) {
+  return String(path)
+    .replace(/[\\/]+/g, '/')
+    .toLowerCase()
+}
+
+/** Lazily loads the path→session-count map, then re-renders the open inspector. */
+function ensureTouchedFileCounts() {
+  if (touchedFileCounts || touchedCountsLoading) return
+  touchedCountsLoading = true
+  requestJson('/api/touched/files')
+    .then(function (data) {
+      const map = {}
+      const files = (data && data.files) || []
+      for (let i = 0; i < files.length; i++) {
+        map[touchedIdentityKey(files[i].path)] = files[i].sessionCount
+      }
+      touchedFileCounts = map
+    })
+    .catch(function () {
+      touchedFileCounts = {}
+    })
+    .finally(function () {
+      touchedCountsLoading = false
+      if (selectedProject && selectedSession) renderInspector(deriveVisibleSessions())
+    })
+}
+
+/** Number of sessions that edited the file (0 when unknown / not yet loaded). */
+function touchedSessionCountFor(path) {
+  if (!touchedFileCounts) return 0
+  return touchedFileCounts[touchedIdentityKey(path)] || 0
+}
+
+/** Returns the "files touched" preview section, decorating shared files. */
+function buildTouchedFilesHtml(preview, session) {
+  if (!preview.touchedFiles || preview.touchedFiles.length === 0) return ''
+  ensureTouchedFileCounts()
+
+  const rows = preview.touchedFiles.map(function (file) {
+    return buildTouchedFileRowHtml(file, session)
+  })
+  return (
+    '<div class="preview-block">' +
+    buildPreviewLabelHtml(
+      fmt(STRINGS.previewFilesTouched, { count: preview.touchedFiles.length }),
+      '✎'
+    ) +
+    rows.join('') +
+    '</div>'
+  )
+}
+
+function buildTouchedFileRowHtml(file, session) {
+  const relative = escapeHtml(projectRelativePath(file, session.projectPath))
+  const count = touchedSessionCountFor(file)
+  // A file only "links" when *other* sessions edited it too. Files touched by
+  // this session alone keep an empty caret slot so every path aligns.
+  const shared = count > 1
+  const pathKey = touchedIdentityKey(file)
+  // Session ids are globally unique UUIDs, so id + path identifies the row
+  // (web Session objects carry projectPath, not projectId).
+  const expanded =
+    shared &&
+    touchedExpand &&
+    touchedExpand.sessionId === session.id &&
+    touchedExpand.pathKey === pathKey
+
+  let cls = 'preview-file touched-row'
+  let extra = ''
+  let badge = ''
+  if (shared) {
+    const others = count - 1
+    const label =
+      others === 1 ? STRINGS.touchedOthersOne : fmt(STRINGS.touchedOthersMany, { n: others })
+    cls += ' touched-linked'
+    extra =
+      ' data-touched-path="' +
+      escapeHtml(file) +
+      '" data-touched-key="' +
+      escapeHtml(pathKey) +
+      '" role="button" tabindex="0"'
+    badge = '<span class="touched-count">⧉ ' + escapeHtml(label) + '</span>'
+  }
+
+  const row =
+    '<div class="' +
+    cls +
+    '" title="' +
+    escapeHtml(file) +
+    '"' +
+    extra +
+    '>' +
+    '<span class="touched-caret' +
+    (shared ? '' : ' touched-caret-empty') +
+    '">' +
+    (expanded ? '▾' : '▸') +
+    '</span>' +
+    '<span class="touched-path">' +
+    relative +
+    '</span>' +
+    badge +
+    '</div>'
+  return expanded ? row + buildTouchedExpandHtml(session) : row
+}
+
+function buildTouchedExpandHtml(session) {
+  if (!touchedExpand) return ''
+  if (touchedExpand.state === 'loading') {
+    return (
+      '<div class="touched-expand">' +
+      matrixSoftLoaderHtml(STRINGS.touchedExpandLoading, true) +
+      '</div>'
+    )
+  }
+  if (touchedExpand.state === 'error') {
+    return (
+      '<div class="touched-expand"><div class="touched-expand-note">' +
+      STRINGS.touchedExpandFailed +
+      '</div></div>'
+    )
+  }
+
+  // Hide the session you're already looking at — show only the others.
+  const others = (touchedExpand.sessions || []).filter(function (match) {
+    return match.sessionId !== session.id
+  })
+  if (others.length === 0) {
+    return (
+      '<div class="touched-expand"><div class="touched-expand-note">' +
+      STRINGS.touchedExpandEmpty +
+      '</div></div>'
+    )
+  }
+  return '<div class="touched-expand">' + others.map(buildTouchedOtherHtml).join('') + '</div>'
+}
+
+function buildTouchedOtherHtml(match) {
+  const dot = match.active ? '<span class="touched-other-active">●</span> ' : ''
+  const meta = [match.projectName, match.gitBranch || '', relativeTime(match.lastTouchedAt)]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    '<div class="touched-other" data-project-id="' +
+    escapeHtml(match.projectId) +
+    '" data-session-id="' +
+    escapeHtml(match.sessionId) +
+    '" role="button" tabindex="0">' +
+    dot +
+    escapeHtml(match.sessionName) +
+    ' · ' +
+    escapeHtml(meta) +
+    '</div>'
+  )
+}
+
+/** Toggles the inline expansion for a touched file, loading its sessions once. */
+function toggleTouchedExpansion(path, pathKey) {
+  if (!selectedProject || !selectedSession) return
+  const alreadyOpen =
+    touchedExpand &&
+    touchedExpand.sessionId === selectedSession.id &&
+    touchedExpand.pathKey === pathKey
+  if (alreadyOpen) {
+    touchedExpand = null
+    renderInspector(deriveVisibleSessions())
+    return
+  }
+
+  const request = {
+    projectId: selectedProject.id,
+    sessionId: selectedSession.id,
+    pathKey: pathKey,
+    state: 'loading',
+    sessions: [],
+  }
+  touchedExpand = request
+  renderInspector(deriveVisibleSessions())
+
+  requestJson('/api/touched/sessions?path=' + encodeURIComponent(path))
+    .then(function (data) {
+      if (touchedExpand !== request) return // a newer interaction superseded this one
+      touchedExpand = Object.assign({}, request, {
+        state: 'ready',
+        sessions: (data && data.matches) || [],
+      })
+      renderInspector(deriveVisibleSessions())
+    })
+    .catch(function () {
+      if (touchedExpand !== request) return
+      touchedExpand = Object.assign({}, request, { state: 'error' })
+      renderInspector(deriveVisibleSessions())
+    })
+}
+
+function jumpToTouchedSession(projectId, sessionId) {
+  const project = projects.find(function (candidate) {
+    return candidate.id === projectId
+  })
+  const session =
+    project &&
+    project.sessions.find(function (candidate) {
+      return candidate.id === sessionId
+    })
+  if (!project || !session) return
+  selectProject(project)
+  selectSession(session)
+}
+
+elements.sessionInspector.addEventListener('click', function (event) {
+  const other = event.target.closest('.touched-other')
+  if (other) {
+    jumpToTouchedSession(other.dataset.projectId, other.dataset.sessionId)
+    return
+  }
+  const file = event.target.closest('.touched-linked')
+  if (file) {
+    toggleTouchedExpansion(file.dataset.touchedPath, file.dataset.touchedKey)
+  }
 })
 // ---------------------------------------------------------------------------
 // Cross-device session storage drawer
@@ -3994,6 +4391,7 @@ async function refreshProjectData() {
     renderProjects()
     renderFocusBar()
     renderSessions()
+    hideLoadingOverlay()
 
     // Deep-link: on first load, auto-select session if URL has a session hash
     if (!deepLinkProcessed) {
@@ -4017,6 +4415,7 @@ async function refreshProjectData() {
     elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
     console.error('[reup] failed to refresh project data:', error)
+    hideLoadingOverlay()
   }
 }
 

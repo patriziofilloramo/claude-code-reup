@@ -78,6 +78,7 @@ async function refreshProjectData() {
     renderProjects()
     renderFocusBar()
     renderSessions()
+    hideLoadingOverlay()
 
     // Deep-link: on first load, auto-select session if URL has a session hash
     if (!deepLinkProcessed) {
@@ -101,6 +102,7 @@ async function refreshProjectData() {
     elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
     console.error('[reup] failed to refresh project data:', error)
+    hideLoadingOverlay()
   }
 }
 

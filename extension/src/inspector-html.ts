@@ -15,10 +15,18 @@ export type InspectorMessage =
   | { type: 'editAlias' }
   | { type: 'editTags' }
   | { path: string; type: 'openFile' }
+  | { path: string; type: 'touchedSessions' }
   | { type: 'resume' }
   | { type: 'revealProject' }
 
-export function renderInspectorHtml(session: ExtensionSession, preview: SessionPreview): string {
+/** Count of *other* sessions that edited each touched file, keyed by raw path. */
+export type TouchedOverlap = Record<string, number>
+
+export function renderInspectorHtml(
+  session: ExtensionSession,
+  preview: SessionPreview,
+  touchedOverlap: TouchedOverlap = {}
+): string {
   const nonce = randomBytes(18).toString('base64')
   const resumeDisabled =
     session.advice.code === 'path-missing' || session.advice.code === 'already-active'
@@ -70,6 +78,8 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
     .markdown th { background: var(--vscode-textBlockQuote-background); }
     ul { padding-left: 18px; }
     a { color: var(--vscode-textLink-foreground); cursor: pointer; }
+    .touched-link { color: var(--vscode-editorWarning-foreground); cursor: pointer; font-size: .85em; margin-left: 8px; opacity: .85; }
+    .touched-link:hover { opacity: 1; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -105,7 +115,7 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
   ${markdownSection('Where Claude Left Off', preview.lastResponse)}
   ${markdownSection('Plan', preview.automaticContext.plan?.text ?? null)}
   ${todoSection(preview)}
-  ${fileSection('Files Touched', preview.touchedFiles)}
+  ${touchedFileSection(preview.touchedFiles, touchedOverlap)}
   ${fileSection('Files Read', preview.automaticContext.readFiles)}
   ${preview.pendingToolName ? textSection('Pending Tool', preview.pendingToolName) : ''}
   <p class="muted">Local transcript-derived view. Reup never sends this content to a remote service.</p>
@@ -114,6 +124,8 @@ export function renderInspectorHtml(session: ExtensionSession, preview: SessionP
     document.addEventListener('click', (event) => {
       const action = event.target.closest('[data-action]');
       if (action && !action.disabled) vscode.postMessage({ type: action.dataset.action });
+      const touched = event.target.closest('[data-touched]');
+      if (touched) { vscode.postMessage({ type: 'touchedSessions', path: touched.dataset.touched }); return; }
       const file = event.target.closest('[data-file]');
       if (file) vscode.postMessage({ type: 'openFile', path: file.dataset.file });
     });
@@ -152,7 +164,10 @@ export function isInspectorMessage(value: unknown): value is InspectorMessage {
   ) {
     return true
   }
-  return candidate['type'] === 'openFile' && typeof candidate['path'] === 'string'
+  return (
+    (candidate['type'] === 'openFile' || candidate['type'] === 'touchedSessions') &&
+    typeof candidate['path'] === 'string'
+  )
 }
 
 function textSection(title: string, value: string | null): string {
@@ -314,6 +329,27 @@ function fileSection(title: string, values: string[]): string {
   return `<h2>${escapeHtml(title)}</h2><ul>${values
     .map((value) => `<li><a data-file="${escapeAttribute(value)}">${escapeHtml(value)}</a></li>`)
     .join('')}</ul>`
+}
+
+/**
+ * Like fileSection, but each file that other sessions also edited gets a
+ * clickable "↳ N other sessions" link that opens those sessions.
+ */
+function touchedFileSection(values: string[], overlap: TouchedOverlap): string {
+  if (values.length === 0) return ''
+  const items = values
+    .map((value) => {
+      const others = overlap[value] ?? 0
+      const link =
+        others > 0
+          ? ` <span class="touched-link" data-touched="${escapeAttribute(value)}">↳ ${others} other session${
+              others === 1 ? '' : 's'
+            }</span>`
+          : ''
+      return `<li><a data-file="${escapeAttribute(value)}">${escapeHtml(value)}</a>${link}</li>`
+    })
+    .join('')
+  return `<h2>Files Touched</h2><ul>${items}</ul>`
 }
 
 function escapeHtml(value: string): string {
