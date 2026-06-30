@@ -1,6 +1,6 @@
 ﻿import { readFile } from 'node:fs/promises'
 
-import type { Hono } from 'hono'
+import type { Context, Hono } from 'hono'
 
 import { APP } from '../../config/app.js'
 import { getActiveSessions, getLiveSessionRecords } from '../../core/session/active-sessions.js'
@@ -11,7 +11,7 @@ import type { Project, Session } from '../../core/session/session-model.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import { readSessionTailActivity } from '../../core/session/session-tail.js'
 import { isResumeVisibleSession } from '../../core/session/session-visibility.js'
-import { filterProjectsByOrg } from '../../core/org/org-filters.js'
+import { filterProjectsByOrg, type OrgProjectFilter } from '../../core/org/org-filters.js'
 import { readOrgData } from '../../core/org/org-prefs.js'
 import { log } from '../../utils/logger.js'
 import { projectDisplayName, serializeProject, serializeSession } from '../api-model.js'
@@ -28,18 +28,8 @@ export function registerProjectRoutes(app: Hono): void {
   app.get(
     '/api/projects',
     apiRoute(async (context) => {
-      const groupId = context.req.query('group')
-      const stackId = context.req.query('stack')
-      const tag = context.req.query('tag')
-
-      const projects = await loadProjects()
-
-      if (groupId || stackId || tag) {
-        const orgData = await readOrgData()
-        const filtered = filterProjectsByOrg(projects, orgData, { groupId, stackId, tag })
-        return context.json(filtered.map((project) => serializeProject(project)))
-      }
-
+      const orgFilter = orgProjectFilterFromQuery(context)
+      const projects = await loadProjectsMatchingOrgFilter(orgFilter)
       return context.json(projects.map((project) => serializeProject(project)))
     })
   )
@@ -48,19 +38,11 @@ export function registerProjectRoutes(app: Hono): void {
     '/api/search',
     apiRoute(async (context) => {
       const normalizedQuery = (context.req.query('q') ?? '').toLowerCase().trim()
-      const groupId = context.req.query('group')
-      const stackId = context.req.query('stack')
-      const tag = context.req.query('tag')
+      const orgFilter = orgProjectFilterFromQuery(context)
 
-      if (!normalizedQuery && !groupId && !stackId && !tag) return context.json([])
+      if (!normalizedQuery && !hasOrgProjectFilter(orgFilter)) return context.json([])
 
-      const allProjects = await loadProjects()
-      let projects = allProjects
-
-      if (groupId || stackId || tag) {
-        const orgData = await readOrgData()
-        projects = filterProjectsByOrg(projects, orgData, { groupId, stackId, tag })
-      }
+      const projects = await loadProjectsMatchingOrgFilter(orgFilter)
 
       const hits: Array<ApiSession & { projectName: string }> = []
 
@@ -202,6 +184,26 @@ export function registerProjectRoutes(app: Hono): void {
   )
 
   log.debug('project routes registered')
+}
+
+function orgProjectFilterFromQuery(context: Context): OrgProjectFilter {
+  return {
+    groupId: context.req.query('group'),
+    stackId: context.req.query('stack'),
+    tag: context.req.query('tag'),
+  }
+}
+
+function hasOrgProjectFilter(filter: OrgProjectFilter): boolean {
+  return Boolean(filter.groupId || filter.stackId || filter.tag)
+}
+
+async function loadProjectsMatchingOrgFilter(filter: OrgProjectFilter): Promise<Project[]> {
+  const projects = await loadProjects()
+  if (!hasOrgProjectFilter(filter)) return projects
+
+  const orgData = await readOrgData()
+  return filterProjectsByOrg(projects, orgData, filter)
 }
 
 function sessionMatchesQuery(
