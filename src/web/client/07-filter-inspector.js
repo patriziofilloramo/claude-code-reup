@@ -614,7 +614,7 @@ function renderInspector(visibleSessions) {
   const statusDescription = descriptions[session.primaryStatus]
   const status =
     buildStatusBadgeHtml(session) ||
-    '<span style="color:var(--muted2)">' + STRINGS.inspStatusOk + '</span>'
+    '<span class="insp-status-ok">' + STRINGS.inspStatusOk + '</span>'
   const statusValue =
     status +
     (statusDescription

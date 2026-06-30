@@ -64,7 +64,12 @@ describe('full-screen dashboard guardrails', () => {
   it('keeps project rail names primary and Project Memory status in a stable metadata column', () => {
     expect(source).toContain("import { projectMemoryDescription } from './formatting.js'")
     expect(source).toContain('const PROJECT_MEMORY_DESCRIPTIONS')
-    expect(source).toContain('.project{display:grid;grid-template-columns:minmax(0,1fr) 16px 3ch}')
+    expect(source).toContain('--project-memory-col:16px')
+    expect(source).toContain('--project-count-col:3ch')
+    expect(source).toContain(
+      '.project{display:grid;grid-template-columns:minmax(0,1fr) var(--project-memory-col) var(--project-count-col)}'
+    )
+    expect(source).toContain('.cloud{width:var(--project-memory-col)')
     expect(source).toContain(
       `<span class="name">'+esc(p.name)+'</span>'+projectCloud(p)+'<span class="count">`
     )
@@ -175,6 +180,9 @@ describe('full-screen dashboard guardrails', () => {
   it('keeps dashboard controls actionable and visibly responsive', () => {
     expect(source).toContain('<progress class="usage-bar"')
     expect(source).not.toContain('class="usage-fill" style=')
+    expect(source).toContain('.fact.active{color:var(--good)}')
+    expect(source).toContain('<span class="fact active">')
+    expect(source).not.toContain('style="color:var(--good)"')
     expect(source).toContain('display:flex;align-items:center;justify-content:center')
     expect(source).toContain("setRefreshState(true);post('refresh')")
     expect(source).toContain("type: 'refreshState'")

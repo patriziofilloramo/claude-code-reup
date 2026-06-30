@@ -3,6 +3,11 @@
 // ---------------------------------------------------------------------------
 
 const THEME_CYCLE = ['dark', 'light', 'terminal']
+const MATRIX_EASTER_TRAIL_FILL = 'rgba(5,10,5,0.06)'
+const MATRIX_EASTER_BRIGHT_COLUMN_INTERVAL = 5
+const MATRIX_EASTER_FADE_IN_DELAY_MS = 16
+const MATRIX_EASTER_REMOVE_DELAY_MS = 450
+const MATRIX_HOLD_TO_START_MS = 3000
 const THEME_ICONS = { dark: '◐', light: '○', terminal: '█' }
 
 function getActiveTheme() {
@@ -39,8 +44,7 @@ function startMatrixRain() {
   matrixActive = true
 
   matrixCanvas = document.createElement('canvas')
-  matrixCanvas.style.cssText =
-    'position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:0;transition:opacity 0.4s'
+  matrixCanvas.className = 'matrix-canvas'
   document.body.appendChild(matrixCanvas)
 
   var ctx = matrixCanvas.getContext('2d')
@@ -49,7 +53,7 @@ function startMatrixRain() {
   function resize() {
     W = matrixCanvas.width = window.innerWidth
     H = matrixCanvas.height = window.innerHeight
-    cols = Math.floor(W / 14)
+    cols = Math.floor(W / MATRIX_RAIN_COLUMN_WIDTH)
     drops = drops ? drops.slice(0, cols) : []
     while (drops.length < cols) drops.push(Math.random() * -H)
   }
@@ -58,22 +62,21 @@ function startMatrixRain() {
 
   setTimeout(function () {
     matrixCanvas.style.opacity = '1'
-  }, 16)
-
-  var chars = 'ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789'
+  }, MATRIX_EASTER_FADE_IN_DELAY_MS)
 
   function draw() {
-    ctx.fillStyle = 'rgba(5,10,5,0.06)'
+    ctx.fillStyle = MATRIX_EASTER_TRAIL_FILL
     ctx.fillRect(0, 0, W, H)
-    ctx.font = '14px monospace'
+    ctx.font = MATRIX_RAIN_FONT
     for (var i = 0; i < cols; i++) {
-      var ch = chars[Math.floor(Math.random() * chars.length)]
-      var x = i * 14
+      var ch = MATRIX_RAIN_GLYPHS[Math.floor(Math.random() * MATRIX_RAIN_GLYPHS.length)]
+      var x = i * MATRIX_RAIN_COLUMN_WIDTH
       var y = drops[i]
-      ctx.fillStyle = i % 5 === 0 ? '#c8ffc8' : '#00ff41'
+      ctx.fillStyle =
+        i % MATRIX_EASTER_BRIGHT_COLUMN_INTERVAL === 0 ? MATRIX_RAIN_BRIGHT : MATRIX_RAIN_PRIMARY
       ctx.fillText(ch, x, y)
-      if (y > H && Math.random() > 0.975) drops[i] = 0
-      drops[i] += 14
+      if (y > H && Math.random() > MATRIX_RAIN_RESET_THRESHOLD) drops[i] = 0
+      drops[i] += MATRIX_RAIN_COLUMN_WIDTH
     }
     matrixRaf = requestAnimationFrame(draw)
   }
@@ -92,7 +95,7 @@ function stopMatrixRain() {
     var c = matrixCanvas
     setTimeout(function () {
       if (c.parentNode) c.parentNode.removeChild(c)
-    }, 450)
+    }, MATRIX_EASTER_REMOVE_DELAY_MS)
     matrixCanvas = null
   }
 }
@@ -104,7 +107,7 @@ if (logoEl) {
     logoHoldTimer = setTimeout(function () {
       startMatrixRain()
       logoHoldTimer = null
-    }, 3000)
+    }, MATRIX_HOLD_TO_START_MS)
   })
   logoEl.addEventListener('mouseup', function () {
     if (logoHoldTimer) {

@@ -39,6 +39,23 @@ describe('web client session-row invariants', () => {
     expect(source).not.toContain('projects[+row.dataset.i]')
   })
 
+  it('keeps the Matrix boot loader configurable through CSS classes and named constants', () => {
+    const loader = sourceBetween('function showLoadingOverlay()', 'function startLoadingRain')
+
+    expect(loader).toContain("overlay.id = 'reup-loading'")
+    expect(loader).toContain("canvas.className = 'rl-canvas'")
+    expect(loader).toContain("panel.className = 'rl-panel'")
+    expect(loader).toContain('class="rl-title"')
+    expect(loader).not.toContain('style.cssText')
+    expect(loader).not.toContain('style="font-size:')
+
+    expect(source).toContain('var MATRIX_RAIN_COLUMN_WIDTH = 14')
+    expect(source).toContain('var LOADING_BAR_WIDTH = 16')
+    expect(stylesSource).toContain('--matrix-primary:')
+    expect(stylesSource).toContain('#reup-loading {')
+    expect(stylesSource).toContain('.rl-title {')
+  })
+
   it('sorts project rows without changing their stable project resolution', () => {
     const projectSorting = sourceBetween(
       'function deriveVisibleProjects()',

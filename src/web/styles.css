@@ -85,6 +85,23 @@
   --footer-optical-shift: 3px;
   --footer-pad-top: calc(var(--footer-pad-block) - var(--footer-optical-shift));
   --footer-pad-bottom: calc(var(--footer-pad-block) + var(--footer-optical-shift));
+
+  /* ── Shared status colours ──────────────────────────────────────────────── */
+  --bucket-active: #4caf50;
+  --bucket-attention: #f4a261;
+  --bucket-drift: #5fb3f7;
+  --bucket-missing: #e76f51;
+  --bucket-context: #a78bfa;
+  --bucket-expiring: #ffd166;
+
+  /* ── Matrix loader ──────────────────────────────────────────────────────── */
+  --matrix-bg: #050a05;
+  --matrix-primary: #00ff41;
+  --matrix-primary-bright: #c8ffc8;
+  --matrix-primary-soft: #8fffb0;
+  --matrix-glow: rgb(0 255 65 / 0.55);
+  --matrix-fade-duration: 0.5s;
+  --matrix-easter-fade-duration: 0.4s;
 }
 
 html,
@@ -488,22 +505,22 @@ body {
 }
 /* Bucket colour hints */
 .bucket--active .rail-item-icon {
-  color: #4caf50;
+  color: var(--bucket-active);
 }
 .bucket--attention .rail-item-icon {
-  color: #f4a261;
+  color: var(--bucket-attention);
 }
 .bucket--drift .rail-item-icon {
-  color: #5fb3f7;
+  color: var(--bucket-drift);
 }
 .bucket--missing .rail-item-icon {
-  color: #e76f51;
+  color: var(--bucket-missing);
 }
 .bucket--ctx .rail-item-icon {
-  color: #a78bfa;
+  color: var(--bucket-context);
 }
 .bucket--expiring .rail-item-icon {
-  color: #ffd166;
+  color: var(--bucket-expiring);
 }
 .bucket--recent .rail-item-icon {
   color: var(--muted2);
@@ -519,10 +536,10 @@ body {
 }
 .activity-dot.running {
   animation: activity-pulse 1.4s ease-in-out infinite;
-  background: #4caf50;
+  background: var(--bucket-active);
 }
 .activity-dot.waiting {
-  background: #f4a261;
+  background: var(--bucket-attention);
 }
 .rail-live-item {
   align-items: flex-start;
@@ -779,22 +796,22 @@ body {
   outline: none;
 }
 .review-signal.bucket--active {
-  color: #4caf50;
+  color: var(--bucket-active);
 }
 .review-signal.bucket--attention {
-  color: #f4a261;
+  color: var(--bucket-attention);
 }
 .review-signal.bucket--drift {
-  color: #5fb3f7;
+  color: var(--bucket-drift);
 }
 .review-signal.bucket--missing {
-  color: #e76f51;
+  color: var(--bucket-missing);
 }
 .review-signal.bucket--ctx {
-  color: #a78bfa;
+  color: var(--bucket-context);
 }
 .review-signal.bucket--expiring {
-  color: #ffd166;
+  color: var(--bucket-expiring);
 }
 .review-signal.bucket--recent {
   color: var(--muted2);
@@ -907,6 +924,9 @@ body {
   flex-shrink: 0;
   font-size: 0.85em;
   opacity: 0.8;
+}
+.s-sep {
+  color: var(--dim);
 }
 .s-msgs {
   color: var(--muted);
@@ -1384,6 +1404,9 @@ body {
   overflow: visible;
   white-space: normal;
 }
+.insp-status-ok {
+  color: var(--muted2);
+}
 .insp-copy {
   color: var(--muted2);
   cursor: pointer;
@@ -1564,6 +1587,55 @@ body {
 
 /* ── Soft Matrix loader (deep search, touched expansion) ────────────────── */
 
+#reup-loading {
+  align-items: center;
+  background: var(--matrix-bg);
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  transition: opacity var(--matrix-fade-duration) ease;
+  z-index: 9999;
+}
+.rl-canvas {
+  inset: 0;
+  opacity: 0.5;
+  position: absolute;
+}
+.rl-panel {
+  color: var(--matrix-primary);
+  position: relative;
+  text-align: center;
+  text-shadow: 0 0 10px var(--matrix-glow);
+}
+.rl-title {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 10px;
+  padding-left: 10px;
+}
+.rl-status {
+  color: var(--matrix-primary-soft);
+  font-size: 13px;
+  letter-spacing: 3px;
+  margin-top: 18px;
+  min-height: 1em;
+}
+.rl-bar {
+  font-size: 13px;
+  letter-spacing: 2px;
+  margin-top: 12px;
+}
+.matrix-canvas {
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  transition: opacity var(--matrix-easter-fade-duration);
+  z-index: 9998;
+}
+
 .msoft {
   align-items: center;
   display: flex;
@@ -1577,7 +1649,7 @@ body {
   padding: 10px 0;
 }
 .msoft-rain {
-  color: var(--green, #00ff41);
+  color: var(--matrix-primary);
   display: flex;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 16px;
@@ -1598,7 +1670,7 @@ body {
   }
   50% {
     opacity: 0.9;
-    text-shadow: 0 0 8px rgb(var(--green-rgb, 0 255 65) / 0.6);
+    text-shadow: 0 0 8px var(--matrix-glow);
   }
 }
 .msoft-label {
@@ -2570,7 +2642,7 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .s-line2 > span[style='color:var(--dim)'],
+  .s-sep,
   .s-msgs,
   .s-model,
   .s-context {

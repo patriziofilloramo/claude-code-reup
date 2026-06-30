@@ -76,7 +76,7 @@ function buildSessionRowHtml(session) {
         escapeHtml(branch) +
         '</span>' +
         buildBranchDriftHtml(session) +
-        '<span style="color:var(--dim)">·</span>'
+        '<span class="s-sep">·</span>'
       : '') +
     '<span class="s-msgs">' +
     session.messageCount +
