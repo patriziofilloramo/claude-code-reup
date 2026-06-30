@@ -127,7 +127,8 @@ export function registerProjectRoutes(app: Hono): void {
     apiRoute(async (context) => {
       const selection = await resolveProjectSession(
         context.req.query('project'),
-        context.req.param('id')
+        context.req.param('id'),
+        'project param required'
       )
       if ('response' in selection) return selection.response
 
@@ -228,10 +229,11 @@ function sessionMatchesQuery(
 
 async function resolveProjectSession(
   projectId: string | undefined,
-  sessionId: string | undefined
+  sessionId: string | undefined,
+  missingProjectMessage = 'projectId required'
 ): Promise<{ project: Project; session: Session } | { response: Response }> {
   if (!projectId)
-    return { response: Response.json({ error: 'projectId required' }, { status: 400 }) }
+    return { response: Response.json({ error: missingProjectMessage }, { status: 400 }) }
   if (!isValidSessionId(sessionId ?? '')) {
     return { response: Response.json({ error: 'invalid session id' }, { status: 400 }) }
   }

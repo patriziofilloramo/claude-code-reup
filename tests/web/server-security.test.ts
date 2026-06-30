@@ -1,25 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 
-const SERVER_PATH = join(process.cwd(), 'src', 'web', 'server.ts')
+import { browserOpenCommand, parseWebPort, WEB_BIND_HOST } from '../../src/web/server.js'
 
 describe('web server security and startup guardrails', () => {
-  it('opens the browser without shell interpolation and probes only loopback', async () => {
-    const source = await readFile(SERVER_PATH, 'utf8')
-
-    expect(source).toContain("import { execFile } from 'node:child_process'")
-    expect(source).not.toContain("import { exec } from 'node:child_process'")
-    expect(source).not.toContain('exec(command)')
-    expect(source).toContain("probeServer.listen(port, '127.0.0.1')")
-    expect(source).toContain("serve({ fetch: buildApp().fetch, hostname: '127.0.0.1', port })")
+  it('binds the web server to IPv4 loopback only', () => {
+    expect(WEB_BIND_HOST).toBe('127.0.0.1')
   })
 
-  it('validates configured web ports before binding', async () => {
-    const source = await readFile(SERVER_PATH, 'utf8')
+  it('opens the browser through argv-based platform commands', () => {
+    const url = 'http://localhost:3333'
 
-    expect(source).toContain('function parsePort(')
-    expect(source).toContain('Number.isInteger(parsed)')
-    expect(source).toContain('parsed > 0 && parsed <= 65_535')
+    expect(browserOpenCommand(url, 'win32')).toEqual({
+      args: ['-NoProfile', '-NonInteractive', '-Command', 'Start-Process', url],
+      command: 'powershell.exe',
+    })
+    expect(browserOpenCommand(url, 'darwin')).toEqual({ args: [url], command: 'open' })
+    expect(browserOpenCommand(url, 'linux')).toEqual({ args: [url], command: 'xdg-open' })
+  })
+
+  it('validates configured web ports before binding', () => {
+    expect(parseWebPort('3333', 4444)).toBe(3333)
+
+    for (const invalidPort of [undefined, '', '0', '-1', '65536', '12.5', 'not-a-port']) {
+      expect(parseWebPort(invalidPort, 4444)).toBe(4444)
+    }
   })
 })

@@ -263,6 +263,13 @@ describe('web routes', () => {
     expect(body.events).toEqual([expect.objectContaining({ type: 'user' })])
   })
 
+  it('preserves the raw transcript endpoint project query validation', async () => {
+    const response = await buildApp().request(`/api/session/${SESSION_ID}`)
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'project param required' })
+  })
+
   it('does not expose a transcript that is not part of the discovered session model', async () => {
     await createKnownSession()
     const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
