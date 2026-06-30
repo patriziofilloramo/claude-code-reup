@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { createServer } from 'node:net'
 
 import { serve } from '@hono/node-server'
@@ -18,7 +18,7 @@ function isPortAvailable(port: number): Promise<boolean> {
     probeServer.once('listening', () => {
       probeServer.close(() => resolve(true))
     })
-    probeServer.listen(port)
+    probeServer.listen(port, '127.0.0.1')
   })
 }
 
@@ -39,13 +39,15 @@ async function findAvailablePort(startingPort: number): Promise<number> {
 // -----------------------------------------------------------------------------
 
 function openBrowser(url: string): void {
-  const command =
+  const [command, args] =
     process.platform === 'win32'
-      ? `powershell -Command "Start-Process '${url}'"`
+      ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Start-Process', url]]
       : process.platform === 'darwin'
-        ? `open "${url}"`
-        : `xdg-open "${url}"`
-  exec(command)
+        ? ['open', [url]]
+        : ['xdg-open', [url]]
+  execFile(command, args, (error) => {
+    if (error) log.warn('browser open failed:', error.message)
+  })
 }
 
 // -----------------------------------------------------------------------------
@@ -58,7 +60,7 @@ export async function startWeb(commandArguments: string[]): Promise<void> {
   await initCloudSync()
   const requestedPort = parseRequestedPort(commandArguments)
   const configuredPort = process.env[APP.portEnvVar] ?? process.env[APP.legacyPortEnvVar]
-  const preferredPort = configuredPort ? parseInt(configuredPort, 10) : requestedPort
+  const preferredPort = configuredPort ? parsePort(configuredPort, requestedPort) : requestedPort
   const port = await findAvailablePort(preferredPort)
   const url = `http://localhost:${port}`
 
@@ -73,6 +75,12 @@ export async function startWeb(commandArguments: string[]): Promise<void> {
 function parseRequestedPort(commandArguments: string[]): number {
   const portFlagIndex = commandArguments.indexOf('--port')
   return portFlagIndex >= 0
-    ? parseInt(commandArguments[portFlagIndex + 1] ?? String(APP.defaultPort), 10)
+    ? parsePort(commandArguments[portFlagIndex + 1], APP.defaultPort)
     : APP.defaultPort
+}
+
+function parsePort(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65_535 ? parsed : fallback
 }

@@ -50,6 +50,35 @@ describe('web routes', () => {
     expect(response.status).toBe(403)
   })
 
+  it('rejects state-changing requests from a different localhost origin', async () => {
+    const response = await buildApp().request('/api/theme', {
+      body: JSON.stringify({ name: 'terminal' }),
+      headers: {
+        'Content-Type': 'application/json',
+        Host: 'localhost:4672',
+        Origin: 'http://localhost:9999',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  it('allows state-changing requests from the same localhost origin', async () => {
+    const response = await buildApp().request('/api/theme', {
+      body: JSON.stringify({ name: 'terminal' }),
+      headers: {
+        'Content-Type': 'application/json',
+        Host: 'localhost:4672',
+        Origin: 'http://localhost:4672',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ ok: true })
+  })
+
   it('protects theme persistence from non-local origins', async () => {
     const response = await buildApp().request('/api/theme', {
       body: JSON.stringify({ name: 'terminal' }),
@@ -222,6 +251,36 @@ describe('web routes', () => {
       pendingToolName: null,
       touchedFiles: [],
     })
+  })
+
+  it('returns transcript events only for a discovered session in the requested project', async () => {
+    await createKnownSession()
+
+    const response = await buildApp().request(`/api/session/${SESSION_ID}?project=${PROJECT_ID}`)
+    const body = (await response.json()) as { events: Array<{ type: string }> }
+
+    expect(response.status).toBe(200)
+    expect(body.events).toEqual([expect.objectContaining({ type: 'user' })])
+  })
+
+  it('does not expose a transcript that is not part of the discovered session model', async () => {
+    await createKnownSession()
+    const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
+    await writeFile(
+      join(projectDirectory, `${LOCK_ONLY_SESSION_ID}.jsonl`),
+      JSON.stringify({
+        summary: 'metadata only orphan',
+        timestamp: new Date().toISOString(),
+        type: 'summary',
+      })
+    )
+
+    const response = await buildApp().request(
+      `/api/session/${LOCK_ONLY_SESSION_ID}?project=${PROJECT_ID}`
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toEqual({ error: 'session not found' })
   })
 
   it('hides older lock-only live processes from projects and live activity', async () => {

@@ -8,17 +8,27 @@ const LOCAL_HOST_PATTERN = /^(localhost|127\.0\.0\.1)(:\d+)?$/
  */
 export function guardLocalRequest(context: Context): Response | null {
   const origin = context.req.header('Origin')
-  const host = context.req.header('Host') ?? ''
+  const host = normalizeHost(context.req.header('Host') ?? '')
+
+  if (!LOCAL_HOST_PATTERN.test(host)) return forbidden()
 
   if (origin) {
     try {
-      if (!LOCAL_HOST_PATTERN.test(new URL(origin).hostname)) {
-        return new Response('Forbidden', { status: 403 })
-      }
+      const parsedOrigin = new URL(origin)
+      const originHost = normalizeHost(parsedOrigin.host)
+      if (parsedOrigin.protocol !== 'http:' || originHost !== host) return forbidden()
     } catch {
-      return new Response('Forbidden', { status: 403 })
+      return forbidden()
     }
   }
 
-  return LOCAL_HOST_PATTERN.test(host) ? null : new Response('Forbidden', { status: 403 })
+  return null
+}
+
+function normalizeHost(host: string): string {
+  return host.trim().toLowerCase()
+}
+
+function forbidden(): Response {
+  return new Response('Forbidden', { status: 403 })
 }

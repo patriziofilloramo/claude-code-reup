@@ -1,11 +1,9 @@
 ﻿import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 
 import type { Hono } from 'hono'
 
 import { APP } from '../../config/app.js'
 import { getActiveSessions, getLiveSessionRecords } from '../../core/session/active-sessions.js'
-import { getClaudeDirectory } from '../../core/project/claude-paths.js'
 import { loadProjectById, loadProjects } from '../../core/project/project-discovery.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../../core/session/session-handoff.js'
 import { isValidSessionId } from '../../core/session/session-model.js'
@@ -127,16 +125,13 @@ export function registerProjectRoutes(app: Hono): void {
   app.get(
     '/api/session/:id',
     apiRoute(async (context) => {
-      const sessionId = context.req.param('id') ?? ''
-      const projectId = context.req.query('project')
+      const selection = await resolveProjectSession(
+        context.req.query('project'),
+        context.req.param('id')
+      )
+      if ('response' in selection) return selection.response
 
-      if (!projectId) return context.json({ error: 'project param required' }, 400)
-      if (!isValidSessionId(sessionId)) return context.json({ error: 'invalid session id' }, 400)
-      if (!(await loadProjectById(projectId))) {
-        return context.json({ error: 'project not found' }, 404)
-      }
-
-      const transcriptPath = join(getClaudeDirectory(), 'projects', projectId, `${sessionId}.jsonl`)
+      const transcriptPath = sessionTranscriptPath(selection.project.id, selection.session.id)
 
       try {
         const raw = await readFile(transcriptPath, 'utf8')

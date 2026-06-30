@@ -32,10 +32,22 @@ describe('event stream route', () => {
       source.indexOf('while (')
     )
 
+    expect(watcherCallback).toContain('APP.sseChangeDebounceMs')
+    expect(watcherCallback).toContain('setTimeout')
+    expect(watcherCallback).toContain('clearTimeout(changeTimer)')
     expect(watcherCallback.indexOf('invalidateProjectCache()')).toBeGreaterThanOrEqual(0)
     expect(watcherCallback.indexOf('invalidateProjectCache()')).toBeLessThan(
       watcherCallback.indexOf('stream.writeSSE')
     )
+  })
+
+  it('clears pending debounced filesystem notifications on disconnect', () => {
+    const disconnectCleanup = source.slice(
+      source.indexOf('while ('),
+      source.indexOf('watcher.close()')
+    )
+
+    expect(disconnectCleanup).toContain('if (changeTimer) clearTimeout(changeTimer)')
   })
 
   it('periodically invalidates and refreshes branch state outside Claude data', () => {

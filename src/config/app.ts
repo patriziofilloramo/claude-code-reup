@@ -64,6 +64,11 @@ export const APP = {
    * at the cost of more filesystem reads. 20 s is a reasonable default.
    */
   projectRefreshMs: 20_000,
+  /**
+   * How long (ms) the SSE event-stream waits for filesystem bursts to settle
+   * before invalidating and notifying clients.
+   */
+  sseChangeDebounceMs: 250,
 
   // ── Active-session detection ────────────────────────────────────────────────
 

@@ -13,12 +13,18 @@ export function registerEventStreamRoute(app: Hono): void {
   app.get('/events', (context) =>
     streamSSE(context, async (stream) => {
       const claudeDirectory = getClaudeDirectory()
+      let changeTimer: ReturnType<typeof setTimeout> | null = null
       log.debug('SSE: client connected, watching', claudeDirectory)
 
       const watcher = watch(claudeDirectory, { recursive: true }, (_event, fileName) => {
         if (!stream.closed && isRelevantClaudeFile(fileName)) {
-          invalidateProjectCache()
-          void stream.writeSSE({ data: 'update', event: 'change' })
+          if (changeTimer) clearTimeout(changeTimer)
+          changeTimer = setTimeout(() => {
+            changeTimer = null
+            if (stream.closed) return
+            invalidateProjectCache()
+            void stream.writeSSE({ data: 'update', event: 'change' })
+          }, APP.sseChangeDebounceMs)
         }
       })
 
@@ -31,6 +37,7 @@ export function registerEventStreamRoute(app: Hono): void {
         void stream.writeSSE({ data: 'periodic-refresh', event: 'change' })
       }
 
+      if (changeTimer) clearTimeout(changeTimer)
       watcher.close()
       log.debug('SSE: client disconnected')
     })
