@@ -10,6 +10,7 @@ import { relativeTime } from '../../utils/time.js'
 
 interface SessionListProps {
   activeSessionIds: Set<string>
+  attentionSessionIds: Set<string>
   bulkSelectedIds: Set<string>
   busySessionIds: Set<string>
   isFocused: boolean
@@ -36,16 +37,27 @@ interface LivenessGlyph {
   glyph: string
 }
 
+/** Attention pulse alternates so a waiting session visibly demands the user. */
+const ATTENTION_PULSE_FRAMES = ['!', '!', ' ', '!'] as const
+
 /**
- * Chooses the per-row liveness indicator. Busy sessions pulse so a working
+ * Chooses the per-row liveness indicator. A session waiting on the user
+ * outranks everything and pulses red; busy sessions pulse green so a working
  * agent is visibly different from a merely attached (idle) process.
  */
 export function sessionLivenessGlyph(
   isActive: boolean,
   isBusy: boolean,
   isRemotelyActive: boolean,
-  pulseFrame: number
+  pulseFrame: number,
+  needsAttention = false
 ): LivenessGlyph {
+  if (needsAttention) {
+    return {
+      color: COLORS.danger,
+      glyph: ATTENTION_PULSE_FRAMES[pulseFrame % ATTENTION_PULSE_FRAMES.length] as string,
+    }
+  }
   if (isBusy) {
     return {
       color: COLORS.ok,
@@ -96,6 +108,7 @@ function statusBadgeForSession(session: Session): StatusBadge | null {
 
 export default function SessionList({
   activeSessionIds,
+  attentionSessionIds,
   bulkSelectedIds,
   busySessionIds,
   isFocused,
@@ -106,7 +119,9 @@ export default function SessionList({
   totalCount,
 }: SessionListProps) {
   const [pulseFrame, setPulseFrame] = useState(0)
-  const hasVisibleBusySession = sessions.some((session) => busySessionIds.has(session.id))
+  const hasVisibleBusySession = sessions.some(
+    (session) => busySessionIds.has(session.id) || attentionSessionIds.has(session.id)
+  )
 
   useEffect(() => {
     if (!hasVisibleBusySession) return
@@ -198,7 +213,8 @@ export default function SessionList({
                   activeSessionIds.has(session.id),
                   busySessionIds.has(session.id),
                   remotelyActiveSessionIds.has(session.id),
-                  pulseFrame
+                  pulseFrame,
+                  attentionSessionIds.has(session.id)
                 )
                 return <Text color={liveness.color}>{liveness.glyph} </Text>
               })()}

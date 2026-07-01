@@ -30,6 +30,7 @@ The executable entry point is `src/index.ts`.
 | `reup handoff <session>`  | Prints a transcript-supported continuation packet                       |
 | `reup resume [session]`   | Opens a picker, or resumes a full ID/unique prefix                      |
 | `reup usage [action]`     | Reads observed usage or configures its local feed                       |
+| `reup attention [action]` | Manages needs-input alerts or captures Notification hooks               |
 | `reup config`             | Opens the configuration TUI or manages preferences                      |
 | `reup completion <shell>` | Prints opt-in shell completion registration                             |
 | `reup help [command]`     | Prints general or command-specific help                                 |
@@ -394,6 +395,24 @@ The SSE connection lifecycle has three invariants (2026-07-01):
   tick keeps the strip's relative ages honest between events. The shared model
   lives in `web/live-activity-model.ts`, used by both the REST route and the
   SSE push.
+
+### Attention System
+
+`reup attention setup` registers Reup's capture command as a Claude Code
+`Notification` hook. Hooks are additive lists, so setup only appends Reup's
+own entry and removal filters exactly that entry back out - hooks the user
+configured are never touched. The hook payload is validated at runtime and
+stored as one atomic marker per session under `reup/attention/`.
+
+A marker means "this session is waiting on the user" and resolves itself: any
+lock status transition or transcript event after the marker's timestamp, or
+the death of the session's process, deactivates it (and the live-activity
+model deletes it in the background). The watcher classifies marker writes as
+`activity`, so a needs-input state reaches connected browsers on the same
+~150 ms push path as busy/idle flips. Turn completion needs no hook at all:
+clients detect running-to-idle transitions from consecutive snapshots.
+Desktop notifications are browser-local and opt-in; the TUI pulses a red
+marker and rings the terminal bell once per new attention event.
 
 In the web client, `refreshLiveActivity()` gates on `activeSessionIds`, which
 only `refreshProjectData()` updates — both the bootstrap and SSE-triggered

@@ -39,6 +39,7 @@ const elements = {
   toast: elementById('toast'),
   usageSummary: elementById('usage-summary'),
   diagnosticsButton: elementById('ftr-diagnostics'),
+  notifyButton: elementById('ftr-notify-btn'),
   diagnosticsDrawer: elementById('lf-drawer'),
   diagnosticsBody: elementById('lf-body'),
   diagnosticsSubtitle: elementById('lf-subtitle'),

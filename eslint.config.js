@@ -43,6 +43,7 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         EventSource: 'readonly',
+        Notification: 'readonly',
         cancelAnimationFrame: 'readonly',
         clearInterval: 'readonly',
         clearTimeout: 'readonly',

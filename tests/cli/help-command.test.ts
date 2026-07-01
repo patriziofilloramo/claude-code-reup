@@ -4,6 +4,7 @@ import { renderMainHelp, runHelpCommand } from '../../src/cli/help-command.js'
 import { runCli } from '../../src/cli/run-cli.js'
 
 const PUBLIC_COMMANDS = [
+  'attention',
   'cleanup',
   'completion',
   'config',

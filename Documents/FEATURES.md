@@ -181,6 +181,7 @@ useful. Designed to be scriptable and composable with standard shell tools.
 | `reup doctor`                        | Non-destructive local health check                                                                                                                  |
 | `reup usage`                         | Show observed usage and data freshness                                                                                                              |
 | `reup usage setup / remove / toggle` | Manage usage capture integration                                                                                                                    |
+| `reup attention setup / remove`      | Reversible Notification-hook alerts when a session waits for user input                                                                             |
 | `reup config get/set/reset <key>`    | Read and write persistent user preferences                                                                                                          |
 | `reup completion <shell>`            | Print PowerShell, Bash, or Zsh completion setup                                                                                                     |
 | `reup help [command]`                | Show general or command-specific CLI help                                                                                                           |

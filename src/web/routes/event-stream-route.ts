@@ -189,6 +189,7 @@ export function watchClaudeDirectoryForRelevantChanges(
 export function classifyClaudeFile(fileName: string | null): ClaudeFileCategory | null {
   if (fileName === null) return null
   if (/^sessions[/\\].*\.json$/i.test(fileName)) return 'activity'
+  if (/^reup[/\\]attention[/\\].*\.json$/i.test(fileName)) return 'activity'
   if (
     /^reup[/\\](account-usage|statusline-integration|usage-capture-error)\.json$/i.test(fileName) ||
     /^reup[/\\]usage[/\\].*\.json$/i.test(fileName)

@@ -291,6 +291,7 @@ describe('event stream relevance filter', () => {
 
   it('classifies changes by what clients must refresh', () => {
     expect(classifyClaudeFile('sessions/process.json')).toBe('activity')
+    expect(classifyClaudeFile('reup/attention/abc123.json')).toBe('activity')
     expect(classifyClaudeFile('reup/usage/session.json')).toBe('usage')
     expect(classifyClaudeFile('reup/account-usage.json')).toBe('usage')
     expect(classifyClaudeFile('reup/statusline-integration.json')).toBe('usage')

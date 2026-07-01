@@ -33,3 +33,7 @@ let orgData = null
 let focusFilter = null
 // Which rail item is subject to a pending context menu action: null | { kind, id, name }
 let ctxRailItem = null
+// Desktop-alert bookkeeping: attention events already notified (sessionId:since)
+// and each session's last seen activity state for turn-completion detection.
+let notifiedAttentionKeys = new Set()
+let previousActivityStates = new Map()

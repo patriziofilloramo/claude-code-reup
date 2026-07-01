@@ -44,6 +44,13 @@ public surface lightweight, local-only, installer-first, and easy to support.
 Blocked items (M10 / Phase 4 / AI renaming) stay parked until the release is
 ready.
 
+- **Milestone 14 — Attention system**: ✓ shipped (2026-07-02). `reup attention`
+  registers a reversible Claude Code Notification hook; sessions waiting on a
+  permission decision or idle input are pinned red in the web live strip with
+  desktop notifications, and pulse with a terminal bell in the TUI. Turn
+  completion is detected from lock busy→idle transitions with no extra hook.
+  Deliberately local-only: no webhook/ntfy delivery in the first release.
+
 ---
 
 ## Milestone 2 — Session signals ✓ done

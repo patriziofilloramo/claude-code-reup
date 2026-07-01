@@ -332,6 +332,45 @@ describe('web routes', () => {
     expect(entries[0]?.activityState).toBe('idle')
   })
 
+  it('surfaces attention for a session waiting on the user and resolves it after a response', async () => {
+    await createKnownSession()
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'live.json'),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+    const { writeAttentionMarker } = await import('../../src/core/session/attention.js')
+    await writeAttentionMarker({
+      message: 'Claude needs your permission to use Bash',
+      occurredAt: new Date(Date.now() + 5_000).toISOString(),
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+    })
+
+    const waiting = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      attention: { message: string } | null
+    }>
+    expect(waiting).toHaveLength(1)
+    expect(waiting[0]?.attention?.message).toBe('Claude needs your permission to use Bash')
+
+    // The user answered: the lock transitions after the event, so the same
+    // marker must no longer alert (and is cleaned up server-side).
+    await writeFile(
+      join(sessionsDirectory, 'live.json'),
+      JSON.stringify({
+        pid: process.pid,
+        sessionId: SESSION_ID,
+        status: 'busy',
+        statusUpdatedAt: Date.now() + 10_000,
+      })
+    )
+    const resolved = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      attention: unknown
+    }>
+    expect(resolved[0]?.attention).toBeNull()
+  })
+
   it('returns a Markdown handoff packet for the web action bar', async () => {
     await createKnownSession()
 

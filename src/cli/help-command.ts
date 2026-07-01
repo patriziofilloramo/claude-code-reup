@@ -122,6 +122,19 @@ Options:
   --json           Emit machine-readable JSON
   --limit <count>  Limit the number of results`,
 
+  attention: `reup attention - alerts when a session waits for your input
+
+Usage:
+  reup attention [status]
+  reup attention setup
+  reup attention remove
+
+setup registers a reversible Claude Code Notification hook so Reup hears the
+moment a session needs a permission decision or sits waiting for input. The
+web live strip pins those sessions in red and can raise desktop notifications;
+the TUI marks them and rings the terminal bell. remove restores the previous
+hook configuration exactly and clears stored alerts.`,
+
   usage: `reup usage - monitor Claude usage limits
 
 Usage:
@@ -174,6 +187,7 @@ export function renderMainHelp(useColor = process.stdout.isTTY === true): string
     row('reup cleanup', 'Review stale or empty sessions'),
     row('reup doctor', 'Diagnose local session data'),
     row('reup usage [action]', 'Monitor Claude usage limits'),
+    row('reup attention [action]', 'Alerts when a session needs input'),
     '',
     bold('Configuration'),
     row('reup config', 'Open configuration panel'),

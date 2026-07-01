@@ -479,6 +479,30 @@ describe('web client session-row invariants', () => {
     expect(liveRefresh).toContain('applyLiveActivity(data)')
   })
 
+  it('pins attention sessions in the strip and renders their message', () => {
+    const activityRail = sourceBetween(
+      'function buildActivitySectionHtml()',
+      '/** Re-renders the org rail.'
+    )
+
+    expect(activityRail).toContain('STRINGS.activityNeedsInput')
+    expect(activityRail).toContain("if (state === 'idle' && !needsInput) continue")
+    expect(activityRail).toContain('activity-msg')
+    expect(activityRail).toContain('b.attention ? 1 : 0')
+  })
+
+  it('raises desktop alerts for needs-input and finished turns without duplicates', () => {
+    expect(source).toContain('function raiseDesktopAlerts(entries)')
+    expect(source).toContain('notifiedAttentionKeys')
+    expect(source).toContain("previousState === 'running'")
+    expect(source).toContain('document.hidden')
+    expect(source).toContain('Notification.requestPermission()')
+    expect(source).toContain('NOTIFY_PREFERENCE')
+    expect(source).toContain(
+      "addEventListener('click', function () {\n    void toggleDesktopAlerts()"
+    )
+  })
+
   it('applies pushed activity snapshots without a refetch and refreshes usage on its event', () => {
     const liveUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
 
@@ -514,7 +538,7 @@ describe('web client session-row invariants', () => {
     expect(activityRail).toContain('STRINGS.activityRunning')
     expect(activityRail).toContain('STRINGS.activityWaiting')
     expect(activityRail).toContain('STRINGS.activityIdle')
-    expect(activityRail).toContain("if (state === 'idle') continue")
+    expect(activityRail).toContain("if (state === 'idle' && !needsInput) continue")
     expect(activityRail).toContain('activity-state')
     expect(activityRail).toContain('rail-live-item')
     expect(activityRail).toContain('activity-title')

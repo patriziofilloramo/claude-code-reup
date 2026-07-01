@@ -57,6 +57,7 @@ reup
 | `reup inbox`              | Show active sessions and sessions needing attention |
 | `reup handoff [session]`  | Copy a compact continuation packet                  |
 | `reup usage`              | Show observed usage and collector freshness         |
+| `reup attention [action]` | Desktop/terminal alerts when a session needs input  |
 | `reup cleanup`            | Review stale or empty sessions for archiving        |
 | `reup doctor`             | Diagnose local Claude Code session data             |
 | `reup config`             | Open the configuration TUI                          |

@@ -107,6 +107,14 @@ const STRINGS = {
   activityRunning: 'Running',
   activityWaiting: 'Waiting',
   activityIdle: 'Idle',
+  activityNeedsInput: 'Needs input',
+  notifyEnabled: 'Desktop alerts on',
+  notifyDisabled: 'Desktop alerts off',
+  notifyDenied: 'The browser blocked notifications; allow them in site settings',
+  notifyNeedsInputTitle: '{name} needs your input',
+  notifyTurnCompleteTitle: '{name} finished',
+  footerNotifyTitle: 'Toggle desktop alerts for sessions that need input or finish a turn',
+  footerNotifyBtn: 'alerts',
   inspRowActivityTooltip: 'Live state from the running Claude Code process',
   inspRowLastActive: 'Last active',
   inspRowMessages: 'Messages',
@@ -404,6 +412,8 @@ const USAGE_POLL_INTERVAL_MS = 5000
 const LIVE_ACTIVITY_POLL_MS = 3000
 /** How often (ms) to re-render the live strip so relative ages stay current. */
 const LIVE_STRIP_TICK_MS = 1000
+/** localStorage key for the desktop-alerts (needs input / turn finished) preference. */
+const NOTIFY_PREFERENCE = 'reup:desktopAlerts'
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'reup:confirmResume'
 const LEGACY_CONFIRM_RESUME_PREFERENCE = 'swo' + 'op:confirmResume'
@@ -565,6 +575,10 @@ let orgData = null
 let focusFilter = null
 // Which rail item is subject to a pending context menu action: null | { kind, id, name }
 let ctxRailItem = null
+// Desktop-alert bookkeeping: attention events already notified (sessionId:since)
+// and each session's last seen activity state for turn-completion detection.
+let notifiedAttentionKeys = new Set()
+let previousActivityStates = new Map()
 function elementById(id) {
   return document.getElementById(id)
 }
@@ -606,6 +620,7 @@ const elements = {
   toast: elementById('toast'),
   usageSummary: elementById('usage-summary'),
   diagnosticsButton: elementById('ftr-diagnostics'),
+  notifyButton: elementById('ftr-notify-btn'),
   diagnosticsDrawer: elementById('lf-drawer'),
   diagnosticsBody: elementById('lf-body'),
   diagnosticsSubtitle: elementById('lf-subtitle'),
@@ -4155,9 +4170,115 @@ function connectLiveUpdates() {
 
 /** Applies a live-activity entry list and re-renders every consumer of it. */
 function applyLiveActivity(entries) {
+  raiseDesktopAlerts(entries)
   liveActivity = entries
   renderRail()
   if (selectedSession) renderInspector(deriveVisibleSessions())
+}
+
+// ---------------------------------------------------------------------------
+// Desktop alerts: "needs input" and "turn finished"
+// ---------------------------------------------------------------------------
+
+function desktopAlertsPreferred() {
+  try {
+    return localStorage.getItem(NOTIFY_PREFERENCE) === '1'
+  } catch {
+    return false
+  }
+}
+
+function desktopAlertsEnabled() {
+  return desktopAlertsPreferred() && Notification.permission === 'granted'
+}
+
+/**
+ * Compares the incoming snapshot with the previous one and raises at most one
+ * notification per event: a session newly waiting on the user (always), or a
+ * running session that finished its turn (only while the tab is hidden —
+ * a visible dashboard already shows it).
+ */
+function raiseDesktopAlerts(entries) {
+  var enabled = desktopAlertsEnabled()
+  var nextStates = new Map()
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i]
+    if (!entry.sessionId) continue
+    nextStates.set(entry.sessionId, entry.activityState || 'idle')
+    var name = entry.sessionName || entry.sessionId
+
+    if (entry.attention) {
+      var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
+      if (!notifiedAttentionKeys.has(attentionKey)) {
+        notifiedAttentionKeys.add(attentionKey)
+        if (enabled) {
+          raiseNotification(
+            fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
+            entry.attention.message || '',
+            entry
+          )
+        }
+      }
+      continue
+    }
+
+    var previousState = previousActivityStates.get(entry.sessionId)
+    var finishedTurn =
+      previousState === 'running' &&
+      (entry.activityState === 'waiting' || entry.activityState === 'idle')
+    if (finishedTurn && enabled && document.hidden) {
+      raiseNotification(fmt(STRINGS.notifyTurnCompleteTitle, { name: name }), '', entry)
+    }
+  }
+  previousActivityStates = nextStates
+}
+
+function raiseNotification(title, body, entry) {
+  try {
+    var notification = new Notification(title, {
+      body: body,
+      tag: 'reup:' + entry.sessionId,
+    })
+    notification.onclick = function () {
+      window.focus()
+      var project = projects.find(function (candidate) {
+        return candidate.id === entry.projectId
+      })
+      if (!project) return
+      var session = project.sessions.find(function (candidate) {
+        return candidate.id === entry.sessionId
+      })
+      selectProject(project)
+      if (session) selectSession(session)
+    }
+  } catch {
+    // Notifications are best-effort; never let them break data refresh.
+  }
+}
+
+function renderNotifyButton() {
+  if (!elements.notifyButton) return
+  var on = desktopAlertsPreferred()
+  elements.notifyButton.textContent = on ? '🔔 ' + STRINGS.footerNotifyBtn : STRINGS.footerNotifyBtn
+  elements.notifyButton.classList.toggle('active', on)
+}
+
+async function toggleDesktopAlerts() {
+  if (desktopAlertsPreferred()) {
+    localStorage.removeItem(NOTIFY_PREFERENCE)
+    renderNotifyButton()
+    showToast(STRINGS.notifyDisabled)
+    return
+  }
+  var permission = Notification.permission
+  if (permission !== 'granted') permission = await Notification.requestPermission()
+  if (permission !== 'granted') {
+    showToast(STRINGS.notifyDenied, 'err')
+    return
+  }
+  localStorage.setItem(NOTIFY_PREFERENCE, '1')
+  renderNotifyButton()
+  showToast(STRINGS.notifyEnabled)
 }
 
 /**
@@ -4215,6 +4336,14 @@ window.matchMedia('(max-width: 639px)').addEventListener('change', function (e) 
 // Theme toggle button in footer.
 var themeBtn = document.getElementById('ftr-theme-btn')
 if (themeBtn) themeBtn.addEventListener('click', cycleTheme)
+
+// Desktop-alerts toggle button in footer.
+if (elements.notifyButton) {
+  elements.notifyButton.addEventListener('click', function () {
+    void toggleDesktopAlerts()
+  })
+  renderNotifyButton()
+}
 // ---------------------------------------------------------------------------
 // Theme selection — cycle + API persistence + Matrix rain easter egg
 // ---------------------------------------------------------------------------
@@ -4701,15 +4830,23 @@ function shortRelativeTime(isoTimestamp) {
 /** Builds the live activity strip rows from the current liveActivity snapshot. */
 function buildActivitySectionHtml() {
   if (liveActivity.length === 0) return ''
+  // Sessions waiting on the user always render, first and in red — that is
+  // the strip's whole reason to exist.
+  var ordered = liveActivity.slice().sort(function (a, b) {
+    return (b.attention ? 1 : 0) - (a.attention ? 1 : 0)
+  })
   var rows = ''
   var count = 0
-  for (var i = 0; i < liveActivity.length; i++) {
-    var entry = liveActivity[i]
+  for (var i = 0; i < ordered.length; i++) {
+    var entry = ordered[i]
     if (!entry.projectId || !entry.sessionId) continue
     var state = entry.activityState || 'idle'
-    if (state === 'idle') continue
-    var stateLabel =
-      state === 'running'
+    var needsInput = !!entry.attention
+    if (state === 'idle' && !needsInput) continue
+    var stateClass = needsInput ? 'attention' : state
+    var stateLabel = needsInput
+      ? STRINGS.activityNeedsInput
+      : state === 'running'
         ? STRINGS.activityRunning
         : state === 'waiting'
           ? STRINGS.activityWaiting
@@ -4722,14 +4859,20 @@ function buildActivitySectionHtml() {
         escapeHtml(shortRelativeTime(entry.lastEventAt)) +
         '</span>'
       : ''
+    var message =
+      needsInput && entry.attention.message
+        ? '<span class="activity-msg">' + escapeHtml(entry.attention.message) + '</span>'
+        : ''
     rows +=
-      '<div class="rail-item rail-live-item" data-rail-action="select-session" data-project-id="' +
+      '<div class="rail-item rail-live-item' +
+      (needsInput ? ' attention' : '') +
+      '" data-rail-action="select-session" data-project-id="' +
       escapeHtml(entry.projectId) +
       '" data-session-id="' +
       escapeHtml(entry.sessionId) +
       '">' +
       '<span class="activity-dot ' +
-      escapeHtml(state) +
+      escapeHtml(stateClass) +
       '"></span>' +
       '<span class="activity-copy">' +
       '<span class="activity-title">' +
@@ -4737,7 +4880,7 @@ function buildActivitySectionHtml() {
       '</span>' +
       '<span class="activity-meta">' +
       '<span class="activity-state ' +
-      escapeHtml(state) +
+      escapeHtml(stateClass) +
       '">' +
       escapeHtml(stateLabel) +
       '</span>' +
@@ -4747,6 +4890,7 @@ function buildActivitySectionHtml() {
       tool +
       time +
       '</span>' +
+      message +
       '</span>' +
       '</div>'
     count++

@@ -47,6 +47,10 @@ export const FEATURE_SURFACES = {
     description: 'Show context and account usage state',
     surfaces: { tui: 'implemented', vscode: 'partial', web: 'implemented' },
   },
+  attentionAlerts: {
+    description: 'Alert when a session waits for user input or finishes a turn',
+    surfaces: { tui: 'implemented', vscode: 'planned', web: 'implemented' },
+  },
 } as const satisfies Record<string, FeatureSurfaceDefinition>
 
 export type FeatureId = keyof typeof FEATURE_SURFACES

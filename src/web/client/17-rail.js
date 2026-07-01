@@ -354,15 +354,23 @@ function shortRelativeTime(isoTimestamp) {
 /** Builds the live activity strip rows from the current liveActivity snapshot. */
 function buildActivitySectionHtml() {
   if (liveActivity.length === 0) return ''
+  // Sessions waiting on the user always render, first and in red — that is
+  // the strip's whole reason to exist.
+  var ordered = liveActivity.slice().sort(function (a, b) {
+    return (b.attention ? 1 : 0) - (a.attention ? 1 : 0)
+  })
   var rows = ''
   var count = 0
-  for (var i = 0; i < liveActivity.length; i++) {
-    var entry = liveActivity[i]
+  for (var i = 0; i < ordered.length; i++) {
+    var entry = ordered[i]
     if (!entry.projectId || !entry.sessionId) continue
     var state = entry.activityState || 'idle'
-    if (state === 'idle') continue
-    var stateLabel =
-      state === 'running'
+    var needsInput = !!entry.attention
+    if (state === 'idle' && !needsInput) continue
+    var stateClass = needsInput ? 'attention' : state
+    var stateLabel = needsInput
+      ? STRINGS.activityNeedsInput
+      : state === 'running'
         ? STRINGS.activityRunning
         : state === 'waiting'
           ? STRINGS.activityWaiting
@@ -375,14 +383,20 @@ function buildActivitySectionHtml() {
         escapeHtml(shortRelativeTime(entry.lastEventAt)) +
         '</span>'
       : ''
+    var message =
+      needsInput && entry.attention.message
+        ? '<span class="activity-msg">' + escapeHtml(entry.attention.message) + '</span>'
+        : ''
     rows +=
-      '<div class="rail-item rail-live-item" data-rail-action="select-session" data-project-id="' +
+      '<div class="rail-item rail-live-item' +
+      (needsInput ? ' attention' : '') +
+      '" data-rail-action="select-session" data-project-id="' +
       escapeHtml(entry.projectId) +
       '" data-session-id="' +
       escapeHtml(entry.sessionId) +
       '">' +
       '<span class="activity-dot ' +
-      escapeHtml(state) +
+      escapeHtml(stateClass) +
       '"></span>' +
       '<span class="activity-copy">' +
       '<span class="activity-title">' +
@@ -390,7 +404,7 @@ function buildActivitySectionHtml() {
       '</span>' +
       '<span class="activity-meta">' +
       '<span class="activity-state ' +
-      escapeHtml(state) +
+      escapeHtml(stateClass) +
       '">' +
       escapeHtml(stateLabel) +
       '</span>' +
@@ -400,6 +414,7 @@ function buildActivitySectionHtml() {
       tool +
       time +
       '</span>' +
+      message +
       '</span>' +
       '</div>'
     count++

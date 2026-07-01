@@ -541,6 +541,10 @@ body {
 .activity-dot.waiting {
   background: var(--bucket-attention);
 }
+.activity-dot.attention {
+  animation: activity-pulse 0.9s ease-in-out infinite;
+  background: var(--red);
+}
 .rail-live-item {
   align-items: flex-start;
   gap: 8px;
@@ -610,6 +614,21 @@ body {
 }
 .activity-state.waiting {
   color: var(--amber);
+}
+.activity-state.attention {
+  color: var(--red);
+  font-weight: 600;
+}
+.rail-live-item.attention {
+  background: rgb(var(--red-rgb) / 0.07);
+  border-left: 2px solid var(--red);
+}
+.activity-msg {
+  color: var(--muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .activity-time {
   color: var(--muted);

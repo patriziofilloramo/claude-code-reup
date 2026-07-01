@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
 import { join } from 'node:path'
@@ -13,6 +13,8 @@ import {
   mergeSessionLockStatuses,
 } from '../core/session/active-sessions.js'
 import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
+import { isAttentionActive, readAttentionMarkers } from '../core/session/attention.js'
+import type { AttentionMarker } from '../core/session/attention.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
 import { readLiveUsageSummary } from '../core/usage/live-usage.js'
@@ -85,6 +87,7 @@ function App({ onResume }: AppProps) {
   const [sessionLockStatuses, setSessionLockStatuses] = useState<
     Map<string, MergedSessionLockStatus>
   >(new Map())
+  const [attentionMarkers, setAttentionMarkers] = useState<AttentionMarker[]>([])
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -159,11 +162,15 @@ function App({ onResume }: AppProps) {
       if (refreshInProgress) return
       refreshInProgress = true
       try {
-        const liveRecords = await getLiveSessionRecords()
+        const [liveRecords, markers] = await Promise.all([
+          getLiveSessionRecords(),
+          readAttentionMarkers(),
+        ])
         if (disposed) return
         const lockStatuses = mergeSessionLockStatuses(liveRecords)
         setActiveSessionIds(new Set(lockStatuses.keys()))
         setSessionLockStatuses(lockStatuses)
+        setAttentionMarkers(markers)
       } finally {
         refreshInProgress = false
       }
@@ -258,6 +265,39 @@ function App({ onResume }: AppProps) {
     }
     return busyIds
   }, [projects, sessionLockStatuses])
+
+  // Sessions currently waiting on the user, resolved against the same
+  // evidence rules the web strip uses: a marker dies as soon as the session
+  // shows life after the event or its process disappears.
+  const attentionSessionIds = useMemo(() => {
+    const updatedMsBySessionId = new Map<string, number>()
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        const updatedMs = Date.parse(session.updated)
+        if (Number.isFinite(updatedMs)) updatedMsBySessionId.set(session.id, updatedMs)
+      }
+    }
+    const ids = new Set<string>()
+    for (const marker of attentionMarkers) {
+      const lockStatus = sessionLockStatuses.get(marker.sessionId)
+      const active = isAttentionActive(marker, {
+        isLive: lockStatus !== undefined,
+        lastActivityMs: updatedMsBySessionId.get(marker.sessionId) ?? null,
+        statusUpdatedAt: lockStatus?.statusUpdatedAt ?? null,
+      })
+      if (active) ids.add(marker.sessionId)
+    }
+    return ids
+  }, [attentionMarkers, projects, sessionLockStatuses])
+
+  // One terminal bell per new attention event; a re-render must never re-ring.
+  const previousAttentionIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const previous = previousAttentionIdsRef.current
+    const hasNewAttention = [...attentionSessionIds].some((id) => !previous.has(id))
+    previousAttentionIdsRef.current = new Set(attentionSessionIds)
+    if (hasNewAttention) process.stdout.write('\u0007')
+  }, [attentionSessionIds])
 
   const REMOTE_ACTIVE_THRESHOLD_MS = 5 * 60 * 1000
   const remotelyActiveSessionIds = useMemo(() => {
@@ -898,6 +938,7 @@ function App({ onResume }: AppProps) {
         ) : (
           <SessionList
             activeSessionIds={activeSessionIds}
+            attentionSessionIds={attentionSessionIds}
             bulkSelectedIds={bulkSelectedIds}
             busySessionIds={busySessionIds}
             isFocused={focusedPanel === 'sessions'}

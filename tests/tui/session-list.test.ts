@@ -34,6 +34,15 @@ describe('TUI session list', () => {
     expect(frames.size).toBeGreaterThan(1)
   })
 
+  it('lets a session waiting on the user outrank every other liveness state', () => {
+    const attention = sessionLivenessGlyph(true, true, false, 0, true)
+    expect(attention.glyph).toBe('!')
+    const frames = new Set(
+      [0, 1, 2, 3].map((frame) => sessionLivenessGlyph(true, true, false, frame, true).glyph)
+    )
+    expect(frames.size).toBeGreaterThan(1)
+  })
+
   it('keeps steady liveness glyphs for non-busy states', () => {
     expect(sessionLivenessGlyph(true, false, false, 0).glyph).toBe('●')
     expect(sessionLivenessGlyph(false, false, true, 0).glyph).toBe('◌')
