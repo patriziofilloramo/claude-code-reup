@@ -28,24 +28,37 @@ import { launchWindows } from '../../src/core/terminal/terminal-windows.js'
 
 // Helpers -----------------------------------------------------------------
 
+// The launcher calls execFile both as (cmd, args, cb) and (cmd, args, opts, cb),
+// so the promisified callback is always the last argument.
+function lastArg(args: unknown[]): (err: Error | null) => void {
+  return args[args.length - 1] as (err: Error | null) => void
+}
+
 /** Makes execFile invoke its callback with null (success). */
 function execFileSucceeds(): void {
-  mockExecFile.mockImplementation(
-    (_cmd: string, _args: string[], callback: (err: Error | null) => void) => {
-      callback(null)
-    }
-  )
+  mockExecFile.mockImplementation((...args: unknown[]) => lastArg(args)(null))
 }
 
 /** Makes the Nth execFile call fail with an error, all others succeed. */
 function execFileFailsOnCall(n: number): void {
   let calls = 0
-  mockExecFile.mockImplementation(
-    (_cmd: string, _args: string[], callback: (err: Error | null) => void) => {
-      calls++
-      callback(calls === n ? new Error('spawn failed') : null)
-    }
-  )
+  mockExecFile.mockImplementation((...args: unknown[]) => {
+    calls++
+    lastArg(args)(calls === n ? new Error('spawn failed') : null)
+  })
+}
+
+/** Makes every execFile call fail. */
+function execFileAlwaysFails(): void {
+  mockExecFile.mockImplementation((...args: unknown[]) => lastArg(args)(new Error('spawn failed')))
+}
+
+/** Returns the options object ({ env, … }) from the Nth execFile call, if any. */
+function execCallOptions(n: number): { env?: Record<string, string | undefined> } | undefined {
+  const candidate = mockExecFile.mock.calls[n][2]
+  return candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+    ? (candidate as { env?: Record<string, string | undefined> })
+    : undefined
 }
 
 function spawnSucceeds(): void {
@@ -146,27 +159,39 @@ describe('PowerShell path', () => {
     expect(execCallArgs(0)).toContain('-Command')
   })
 
-  it('-Command arg contains the claude command', async () => {
+  it('keeps the -Command script static and carries the command via an env var', async () => {
     await launchWindows('claude --resume abc-123', undefined)
 
     const cmdIdx = execCallArgs(0).indexOf('-Command')
-    expect(execCallArgs(0)[cmdIdx + 1]).toContain('claude --resume abc-123')
+    const script = execCallArgs(0)[cmdIdx + 1]
+    // No user data interpolated into the script — only an $env reference.
+    expect(script).toContain('$env:REUP_LAUNCH_CMD')
+    expect(script).not.toContain('claude')
+    expect(execCallOptions(0)?.env?.REUP_LAUNCH_CMD).toBe('claude --resume abc-123')
   })
 
-  it('includes -WorkingDirectory in the PS command string when provided', async () => {
+  it('references -WorkingDirectory via $env and carries the raw path in the env var', async () => {
     await launchWindows('claude', 'C:\\Projects\\App')
 
     const cmdIdx = execCallArgs(0).indexOf('-Command')
-    expect(execCallArgs(0)[cmdIdx + 1]).toContain('-WorkingDirectory')
-    expect(execCallArgs(0)[cmdIdx + 1]).toContain('C:\\Projects\\App')
+    expect(execCallArgs(0)[cmdIdx + 1]).toContain('-WorkingDirectory $env:REUP_LAUNCH_CWD')
+    expect(execCallOptions(0)?.env?.REUP_LAUNCH_CWD).toBe('C:\\Projects\\App')
   })
 
-  it('escapes single quotes in workingDirectory for PowerShell', async () => {
+  it('passes the working directory unescaped (no manual quote-doubling)', async () => {
     await launchWindows('claude', "C:\\John's Projects")
 
     const cmdIdx = execCallArgs(0).indexOf('-Command')
-    // Single quote in PS strings must be doubled: ' → ''
-    expect(execCallArgs(0)[cmdIdx + 1]).toContain("John''s Projects")
+    // The path never touches the script string, so it is never escaped there.
+    expect(execCallArgs(0)[cmdIdx + 1]).not.toContain("John's")
+    expect(execCallOptions(0)?.env?.REUP_LAUNCH_CWD).toBe("C:\\John's Projects")
+  })
+
+  it('omits -WorkingDirectory from the script when no directory is given', async () => {
+    await launchWindows('claude', undefined)
+
+    const cmdIdx = execCallArgs(0).indexOf('-Command')
+    expect(execCallArgs(0)[cmdIdx + 1]).not.toContain('-WorkingDirectory')
   })
 })
 
@@ -207,11 +232,7 @@ describe('detached cmd path', () => {
 
 describe('fallback chain', () => {
   it('returns clipboard fallback when all launchers fail', async () => {
-    mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], callback: (err: Error | null) => void) => {
-        callback(new Error('spawn failed'))
-      }
-    )
+    execFileAlwaysFails()
     spawnFails()
 
     const result = await launchWindows('claude --resume abc-123', undefined)
@@ -221,11 +242,7 @@ describe('fallback chain', () => {
   })
 
   it('includes workingDirectory in the clipboard fallback command', async () => {
-    mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], callback: (err: Error | null) => void) => {
-        callback(new Error('spawn failed'))
-      }
-    )
+    execFileAlwaysFails()
     spawnFails()
 
     await launchWindows('claude', 'C:\\Projects\\App')
@@ -234,11 +251,7 @@ describe('fallback chain', () => {
   })
 
   it('records error messages from each failed attempt', async () => {
-    mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], callback: (err: Error | null) => void) => {
-        callback(new Error('spawn failed'))
-      }
-    )
+    execFileAlwaysFails()
     spawnFails()
 
     const result = await launchWindows('claude', undefined)
