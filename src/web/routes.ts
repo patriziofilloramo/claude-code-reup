@@ -10,7 +10,6 @@ import { registerResumeRoute } from './routes/resume-route.js'
 import { registerSearchRoute } from './routes/search-route.js'
 import { registerSessionMetadataRoutes } from './routes/session-metadata-routes.js'
 import { registerTouchedRoute } from './routes/touched-route.js'
-import { registerSyncRoute } from './routes/sync-route.js'
 import { registerThemeRoute } from './routes/theme-route.js'
 import { registerUsageRoute } from './routes/usage-route.js'
 import { buildHtml } from './ui.js'
@@ -34,7 +33,6 @@ export function buildApp(): Hono {
   registerClaudeInstructionRoutes(app)
   registerDiagnosticsRoute(app)
   registerUsageRoute(app)
-  registerSyncRoute(app)
   registerThemeRoute(app)
   registerEventStreamRoute(app)
 

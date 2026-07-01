@@ -30,7 +30,7 @@ describe('openConfigInterface', () => {
   it('opens the requested tab after releasing terminal input', async () => {
     setTTYState(true, true)
 
-    await openConfigInterface({ commandName: 'reup sync', initialTab: 'Features' })
+    await openConfigInterface({ commandName: 'reup config', initialTab: 'Features' })
 
     expect(releaseTerminalInput).toHaveBeenCalledOnce()
     expect(runConfigApp).toHaveBeenCalledWith({ initialTab: 'Features' })

@@ -47,37 +47,6 @@ export interface Project {
   groupName?: string
   /** Reup tags applied to the project itself (all its sessions inherit them). */
   projectTags?: string[]
-  /**
-   * True when the project's storage directory is linked to a cloud location
-   * (either via a .reup-link file or a legacy NTFS junction / symlink).
-   * Used to show the cloud shared-storage indicator in the UI.
-   */
-  isShared: boolean
-  /**
-   * Absolute path to the cloud directory that sessions are synced with.
-   * Set for linked projects and for cloud-linked projects discovered before
-   * this device has created its local Claude storage link.
-   */
-  cloudPath?: string
-  /**
-   * True when the cloud junction target is temporarily unreachable and reup
-   * has switched the project to a local backup directory. Sessions written
-   * while offline will be merged back to the cloud when it comes online.
-   * Shown as grey cloud in the UI so the user knows sync is paused.
-   */
-  cloudOffline?: boolean
-  /**
-   * Device names with an active marker under {cloudDir}/linked/.
-   * This is evidence that those devices intentionally linked the project.
-   */
-  linkedDevices?: string[]
-  /**
-   * Device names that wrote a presence file to the cloud directory while not
-   * linked (i.e. they opened the project without running `reup sync link`).
-   * Populated from {cloudDir}/device-presence/ on each discovery pass.
-   * Shown as orange cloud in the UI to prompt the user to link that device.
-   */
-  unlinkedDevices?: string[]
 }
 
 export interface Session {

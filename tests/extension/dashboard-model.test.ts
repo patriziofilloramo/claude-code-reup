@@ -25,7 +25,7 @@ describe('dashboard model', () => {
     })
   })
 
-  it('filters metadata, projects, focus buckets, and cross-device workspace identity', () => {
+  it('filters metadata, projects, focus buckets, and workspace project identity', () => {
     const sessions = [
       session('local', { projectId: 'shared', tags: ['important'] }),
       session('remote', {
@@ -61,7 +61,6 @@ describe('dashboard model', () => {
 function project(): ExtensionProject {
   return {
     id: 'shared',
-    memoryStatus: 'green',
     name: 'demo',
     path: 'P:\\Projects\\demo',
     sessionCount: 3,
@@ -85,7 +84,6 @@ function session(id: string, overrides: Partial<ExtensionSession> = {}): Extensi
     currentBranch: null,
     id,
     isActive: false,
-    memoryStatus: 'green',
     messageCount: 1,
     needsAttention: false,
     planSummary: null,

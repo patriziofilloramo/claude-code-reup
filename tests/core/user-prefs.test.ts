@@ -31,21 +31,24 @@ describe('user preferences', () => {
     )
 
     expect(readUserPrefsSync()).toEqual({
-      advancedDiscovery: 'off',
       autoCleanupOnStart: 'off',
-      crossDeviceSessionStorage: 'off',
-      projectSearchPaths: [],
       theme: 'dark',
     })
   })
 
-  it('migrates the old experimental sync flag to the cross-device storage preference', async () => {
+  it('ignores removed sync preferences instead of keeping them dormant', async () => {
     await writeFile(
       join(temporaryClaudeDirectory, 'reup', 'prefs.json'),
-      JSON.stringify({ experimentalSharedSync: 'on', theme: 'dark' })
+      JSON.stringify({
+        advancedDiscovery: 'on',
+        crossDeviceSessionStorage: 'on',
+        experimentalSharedSync: 'on',
+        projectSearchPaths: ['/tmp/projects'],
+        theme: 'dark',
+      })
     )
 
-    expect(readUserPrefsSync().crossDeviceSessionStorage).toBe('on')
+    expect(readUserPrefsSync()).toEqual({ autoCleanupOnStart: 'off', theme: 'dark' })
   })
 
   it('copies legacy private app data into the Reup directory on first read', async () => {

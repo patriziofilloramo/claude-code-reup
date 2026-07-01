@@ -68,8 +68,6 @@ export function browserOpenCommand(
 
 /** Starts the loopback-only web server and opens its browser client. */
 export async function startWeb(commandArguments: string[]): Promise<void> {
-  const { initCloudSync } = await import('../core/sync/cloud-sync.js')
-  await initCloudSync()
   const requestedPort = parseRequestedPort(commandArguments)
   const configuredPort = process.env[APP.portEnvVar] ?? process.env[APP.legacyPortEnvVar]
   const preferredPort = configuredPort ? parseWebPort(configuredPort, requestedPort) : requestedPort

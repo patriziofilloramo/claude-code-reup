@@ -122,20 +122,6 @@ Options:
   --json           Emit machine-readable JSON
   --limit <count>  Limit the number of results`,
 
-  sync: `reup sync - manage cross-device session storage (Alpha)
-
-Usage:
-  reup sync
-  reup sync link [project-path]
-  reup sync link --all-cloud
-  reup sync unlink [project-path]
-  reup sync unlink --all
-  reup sync status
-
-Moves session storage into the project and links Claude Code to it, allowing an
-existing file-sync provider to carry sessions across your own devices. It does
-not share sessions with other users.`,
-
   usage: `reup usage - monitor Claude usage limits
 
 Usage:
@@ -192,9 +178,6 @@ export function renderMainHelp(useColor = process.stdout.isTTY === true): string
     bold('Configuration'),
     row('reup config', 'Open configuration panel'),
     row('reup completion <shell>', 'Print shell completion setup'),
-    '',
-    bold('Features'),
-    row('reup sync [link|unlink|status] [path]', 'Manage cross-device session storage', 'Alpha'),
     '',
     bold('Options'),
     row('-h, --help', 'Show help'),

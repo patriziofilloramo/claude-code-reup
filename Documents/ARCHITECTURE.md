@@ -29,7 +29,6 @@ The executable entry point is `src/index.ts`.
 | `reup usage [action]`     | Reads observed usage or configures its local feed     |
 | `reup config`             | Opens the configuration TUI or manages preferences    |
 | `reup completion <shell>` | Prints opt-in shell completion registration           |
-| `reup sync [action]`      | Manages experimental shared session storage           |
 | `reup help [command]`     | Prints general or command-specific help               |
 | `reup --help`             | Prints supported commands                             |
 | `reup --version`          | Prints the current version                            |
@@ -266,7 +265,8 @@ Implemented API routes include:
 - Session transcript event loading
 - Server-resolved CLAUDE.md read/write
 - SSE change notifications
-- Shared Lost & Found diagnostics, including broken indices and stale locks
+- Shared Lost & Found diagnostics, including broken indices, stale locks, and
+  read-only legacy Project Memory artifact warnings
 
 State-changing routes validate localhost Origin/Host values. Project and session
 identifiers are resolved against known server-side data before filesystem or
@@ -277,8 +277,7 @@ launch operations.
 The optional extension bundles selected `src/core` modules directly; it does
 not require the Reup CLI binary or web server. Its adapter builds one
 workspace-first cockpit model from shared project discovery, active-session
-state, health signals, Resume Advice, previews, metadata, and Project Memory
-status.
+state, health signals, Resume Advice, previews, and metadata.
 
 The full-screen dashboard is the primary discovery and resume surface. It loads
 metadata first, requests previews only for the selected session, uses the shared
@@ -319,6 +318,45 @@ SSE invalidates the short-lived metadata cache before notifying clients about
 relevant transcript, index, active-session, and Reup sidecar changes. A slow
 periodic refresh also keeps external git branch changes and missed filesystem
 events eventually consistent. The TUI uses the same slow project refresh.
+
+The SSE connection lifecycle has three invariants (2026-07-01):
+
+- Client disconnects surface as `stream.aborted`/`onAbort` in Hono, never as
+  `stream.closed`; the event loop must observe both or it leaks one recursive
+  filesystem watcher per disconnected client.
+- Filesystem watchers always carry an `error` listener. Watcher failure closes
+  the watcher and degrades to the periodic refresh instead of crashing the
+  server.
+- Change notifications are debounced with an upper bound
+  (`APP.sseChangeMaxWaitMs`) so sustained transcript writes cannot postpone
+  updates indefinitely.
+- Live "working" state comes primarily from Claude Code's own lock-file
+  `status` field (`busy`/`idle`, v2.1.197+), merged across a session's multiple
+  locks (CLI + editor peers) with busy winning. Transcript tail parsing is the
+  fallback for older versions and still supplies the last tool name; it is not
+  trusted over the lock because transcript appends can pause beyond any
+  freshness threshold while a long tool call or response is in flight.
+  Conversely, `busy` is only trusted with fresh evidence (a recent status
+  transition or recent transcript activity, `BUSY_STATUS_TRUST_WINDOW_MS`):
+  Claude Code rewrites the lock only on transitions, so a session that died or
+  was interrupted mid-turn leaves a zombie `busy` flag behind. A stale flag
+  falls back to transcript-derived state, which still reports genuinely
+  long-running tools via their pending tool_use blocks.
+- SSE events are typed by what changed: session-lock flips push a
+  server-computed `activity` snapshot (entries plus active session IDs, no
+  client refetch, no project-cache invalidation), usage-file writes emit a
+  targeted `usage` event, and only transcript/metadata changes emit the generic
+  `change` event that triggers a full project refetch. Transcript writes also
+  ride the activity push so tool state reaches the strip within
+  `APP.sseActivityPushDebounceMs`. The client's 3-second poll remains solely as
+  reconciliation (missed pushes, waiting→idle age-outs), and a 1-second client
+  tick keeps the strip's relative ages honest between events. The shared model
+  lives in `web/live-activity-model.ts`, used by both the REST route and the
+  SSE push.
+
+In the web client, `refreshLiveActivity()` gates on `activeSessionIds`, which
+only `refreshProjectData()` updates — both the bootstrap and SSE-triggered
+refresh run project data first and chain the activity fetch after it.
 
 ## Terminal Launching
 

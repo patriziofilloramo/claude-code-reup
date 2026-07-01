@@ -1,7 +1,84 @@
-# Cross-Device Project Memory
+# Deferred Project Memory Sync
 
-This document is the implementation reference for Reup's cross-device Claude
-session storage. It describes the current behavior, the filesystem protocol,
+Status: deferred and not shipped in the first public release.
+
+Project Memory / shared session storage was removed from `main` before public
+release to keep Reup's first public surface smaller, safer, and easier to
+support. The shipped codebase must not keep dormant sync modules, hidden feature
+flags, API routes, UI entrypoints, startup hooks, or tests that validate removed
+behavior.
+
+This document preserves the product and implementation knowledge only. Future
+work must recover code from git history on a separate explicit milestone branch;
+do not keep inactive sync code in `main`.
+
+## Why It Was Removed
+
+- It can move or redirect Claude Code transcript storage, so a bug has higher
+  data-loss impact than read-only discovery.
+- Cloud-provider behavior differs across pCloud, OneDrive, Dropbox, iCloud,
+  Google Drive, offline mounts, conflict copies, symlinks, and junctions.
+- `.claude-memory` can contain full Claude transcripts and therefore secrets,
+  customer data, credentials, or private project context.
+- Recovery from broken symlinks, NTFS junctions, partial copies, and offline
+  folders raises support expectations that are too high for the first release.
+- A clear open-source first release is easier to reason about when the feature
+  is absent from code rather than hidden behind a toggle.
+
+## Former File Inventory
+
+The removed implementation previously lived mainly in:
+
+- `src/cli/sync-command.ts`
+- `src/core/sync/cloud-project-discovery.ts`
+- `src/core/sync/cloud-sync.ts`
+- `src/core/sync/device-id.ts`
+- `src/core/sync/project-sync-status.ts`
+- `src/core/sync/sync-actions.ts`
+- `src/core/sync/sync-registry.ts`
+- `src/web/routes/sync-route.ts`
+- `src/web/client/12-sync-drawer.js`
+- TUI config/project-list/action surfaces
+- VS Code memory-status presentation
+- sync-specific tests under `tests/cli`, `tests/core`, `tests/tui`, and web
+  client regression guards
+
+Additional technical notes from the old `SYNC_SYSTEM_FIX.md`:
+
+- The source was Claude Code's local project directory under
+  `~/.claude/projects/<project-id>`.
+- The target was `<project-root>/.claude-memory/`.
+- A `.reup-link` marker identified a linked local project directory.
+- Advanced discovery was intentionally off by default because scanning for
+  `.claude-memory` across broad paths is slow and surprising.
+- Any future UI indicator must be derived from explicit reachable state, not
+  merely from old marker files.
+
+## Reactivation Checklist
+
+Before considering a future reactivation branch:
+
+1. Write a new threat model and data-loss recovery model.
+2. Define exact supported cloud providers/filesystems and unsupported cases.
+3. Prove Windows junction, macOS symlink, and Linux symlink behavior on clean
+   machines.
+4. Design manual backup/restore before any automatic redirect is attempted.
+5. Require explicit opt-in per project and per device.
+6. Add dry-run output for every filesystem change.
+7. Add disaster-recovery documentation before code lands.
+8. Add tests for offline mounts, partial copies, conflict files, permissions,
+   path casing, and interrupted operations.
+9. Re-review legal, privacy, and support language before shipping.
+10. Do not assume old preference keys survived the removal:
+    `writeUserPrefsSync` serializes only known keys, so
+    `crossDeviceSessionStorage` and `projectSearchPaths` are dropped from
+    `prefs.json` on the first preference write after this release. Reactivation
+    must treat these as fresh opt-ins.
+
+## Historical Reference
+
+The historical content below was the implementation reference for Reup's
+cross-device Claude session storage. It describes the former behavior, the filesystem protocol,
 the discovery and UI models, safety rules, known limitations, and the design
 decisions behind them.
 

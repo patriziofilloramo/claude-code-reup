@@ -8,10 +8,6 @@ const STRINGS = {
   projectLastActive: 'last active: {time}',
   projectNewSession: 'New session',
   projectMoreActions: 'More actions',
-  projectCloudOk: 'Shared storage — writes directly to cloud',
-  projectCloudOffline:
-    'Cloud offline — sessions saved locally, new sessions paused until sync resumes',
-  projectCloudUnlinked: 'Device(s) not linked: {devices} — run reup sync link on those devices',
   projectCtxNewSession: '+ new session',
   projectCtxCopyPath: 'copy path',
   projectPathCopied: 'Path copied',
@@ -170,8 +166,11 @@ const STRINGS = {
   diagnosticsSectionOrphaned: 'Orphaned transcripts ({n})',
   diagnosticsSectionBrokenIndices: 'Broken indices ({n})',
   diagnosticsSectionStaleLocks: 'Stale locks ({n})',
+  diagnosticsSectionLegacyMemory: 'Legacy Project Memory artifacts ({n})',
   diagnosticsExpiresSoon: 'Expires soon · {path}',
   diagnosticsPathMissing: 'Path missing · {path}',
+  diagnosticsLegacyMemoryNote:
+    'Read-only warning. This release no longer manages Project Memory; review manually before deleting or moving anything.',
 
   // ── App chrome ────────────────────────────────────────────────────────────
   usageLoading: 'usage loading…',
@@ -216,8 +215,6 @@ const STRINGS = {
   footerTitleR: 'Rename the selected session (r)',
   footerTitleH: 'Copy a handoff packet for the selected session (H)',
   footerTitleD: 'Delete the selected session permanently (D)',
-  footerSyncBtn: 'sync',
-  footerSyncTitle: 'Project Memory Sync (Alpha)',
   footerThemeBtn: 'theme',
   footerThemeTitle: 'Switch theme',
   footerStatusLoading: 'loading…',
@@ -242,8 +239,6 @@ const STRINGS = {
   claudeMdSaveBtn: 'Save',
   claudeMdCloseBtn: 'Close',
   lfTitle: 'Lost & Found',
-  syncTitle: 'Project Memory Sync',
-  syncAlphaLabel: 'Alpha',
 
   // ── Org manager dialog ────────────────────────────────────────────────────
   orgManagerStackTitle: 'Stack: {name}',
@@ -260,36 +255,6 @@ const STRINGS = {
   claudeMdSaved: 'saved',
   claudeMdUnsaved: 'unsaved',
   claudeMdSaveError: 'error: {message}',
-  syncLoading: 'Loading sync status...',
-  syncLoadFailed: 'Failed to load sync status.',
-  syncWarning:
-    'Alpha. Syncs Claude project memory between your own devices through a cloud-synced project folder. It does not share data with other users. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/.',
-  syncEnabled: 'Project Memory Sync is on',
-  syncDisabled: 'Project Memory Sync is off',
-  syncEnable: 'Enable Project Memory Sync',
-  syncDisable: 'Disable Project Memory Sync',
-  syncLink: 'Link',
-  syncUnlink: 'Unlink',
-  syncForget: 'Forget',
-  syncForgetConfirm:
-    'Forget this local project copy? Project Memory remains available and local data is archived for recovery.',
-  syncLinkAllCloud: 'Link all cloud projects',
-  syncUnlinkAll: 'Unlink all synced projects',
-  syncNoProjects: 'No projects found.',
-  syncNoCloudProjects: 'No cloud projects found under detected cloud folders.',
-  syncConfirmManaged: 'Reup will patch managed sync files for this project. Continue?',
-  syncConfirmBulk: 'Run this bulk sync operation sequentially?',
-  syncOperationDone: 'Sync operation complete',
-  syncOperationFailed: 'Sync failed: {error}',
-  syncAdvancedDiscoveryLabel: 'Advanced Discovery',
-  syncAdvancedDiscoveryOn: 'on',
-  syncAdvancedDiscoveryOff: 'off',
-  syncAdvancedDiscoveryDesc:
-    'Scan specific folders for projects linked on other devices. Slower than auto-detection; useful when projects live outside detected cloud roots.',
-  syncSearchPathsLabel: 'Search paths',
-  syncSearchPathsPlaceholder: 'One path per line, e.g. ~/Documents/Projects',
-  syncSearchPathsSave: 'Save paths',
-  syncSearchPathsSaved: 'Paths saved',
 
   // ── New session ────────────────────────────────────────────────────────────
   newSessionStarted: 'New session started in terminal',

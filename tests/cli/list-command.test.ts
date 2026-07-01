@@ -347,19 +347,16 @@ describe('CLI org filter pipeline (3c integration)', () => {
     id: 'proj-a',
     path: '/work/app-a',
     sessions: [deploySession, plainSession],
-    isShared: false,
   }
   const projectB: Project = {
     id: 'proj-b',
     path: '/work/app-b',
     sessions: [prodSession],
-    isShared: false,
   }
   const projectC: Project = {
     id: 'proj-c',
     path: '/work/app-c',
     sessions: [makeSession('s4')],
-    isShared: false,
   }
 
   const orgData: OrgData = {

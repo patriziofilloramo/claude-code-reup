@@ -43,7 +43,6 @@ function createProject(sessions: Session[]): Project {
     group: 'group-1',
     groupName: 'Launch',
     id: 'project-1',
-    isShared: false,
     path: '/workspace/project',
     projectTags: ['important'],
     sessions,

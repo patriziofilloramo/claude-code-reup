@@ -70,12 +70,6 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
       await createHandoff(commandArguments)
       return
 
-    case 'sync': {
-      const { runSyncCommand } = await import('./sync-command.js')
-      await runSyncCommand(commandArguments)
-      return
-    }
-
     case 'resume':
       await resumeSession(commandArguments)
       return
@@ -196,9 +190,6 @@ function acceptsNoArguments(command: string, commandArguments: string[]): boolea
 // -----------------------------------------------------------------------------
 
 async function runTerminalInterface(): Promise<void> {
-  const { initCloudSync, stopSyncLoop } = await import('../core/sync/cloud-sync.js')
-  await runWithSyncSpinner(initCloudSync)
-
   const { readUserPrefsSync } = await import('../core/user-prefs.js')
   const { autoCleanupOnStart } = readUserPrefsSync()
   if (autoCleanupOnStart !== 'off') {
@@ -236,42 +227,11 @@ async function runTerminalInterface(): Promise<void> {
 
   const { runTUI } = await import('../tui/App.js')
   const resumeTarget = await runTUI()
-  stopSyncLoop()
   if (!resumeTarget) return
 
   process.chdir(resumeTarget.projectPath)
   releaseTerminalInput()
   await launchClaudeInCurrentTerminal(resumeTarget)
-}
-
-/**
- * Runs the initial cloud sync while showing a terminal spinner.
- * The spinner only appears if sync takes longer than 120 ms — fast or
- * empty syncs complete silently with no visual noise.
- */
-async function runWithSyncSpinner(fn: () => Promise<number>): Promise<void> {
-  const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-  let frame = 0
-  let visible = false
-
-  const showTimer = setTimeout(() => {
-    visible = true
-    process.stderr.write(`${FRAMES[0]} syncing linked projects...`)
-  }, 120)
-
-  const spinTimer = setInterval(() => {
-    if (!visible) return
-    frame = (frame + 1) % FRAMES.length
-    process.stderr.write(`\r${FRAMES[frame]} syncing linked projects...`)
-  }, 80)
-
-  await fn()
-
-  clearTimeout(showTimer)
-  clearInterval(spinTimer)
-  if (visible) {
-    process.stderr.write(`\r\x1b[K`) // erase the spinner line
-  }
 }
 
 function launchClaudeInCurrentTerminal(resumeTarget: ResumeTarget): Promise<void> {

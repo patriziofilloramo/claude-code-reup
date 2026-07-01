@@ -29,7 +29,7 @@ describe('cleanup candidate selection', () => {
 })
 
 function createProject(sessions: Session[]): Project {
-  return { id: 'project', isShared: false, path: '/project', sessions }
+  return { id: 'project', path: '/project', sessions }
 }
 
 function createSession(

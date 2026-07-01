@@ -152,12 +152,43 @@ async function renderDiagnosticsPanel() {
     )
   }
 
+  if (report.legacyProjectMemoryArtifacts && report.legacyProjectMemoryArtifacts.length > 0) {
+    const rows = report.legacyProjectMemoryArtifacts
+      .map(function (item) {
+        return (
+          '<div class="lf-item">' +
+          '<div class="lf-item-name">' +
+          escapeHtml(item.projectId) +
+          '</div>' +
+          '<div class="lf-item-meta lf-item-warn">' +
+          escapeHtml(item.path) +
+          '</div>' +
+          '</div>'
+        )
+      })
+      .join('')
+    sections.push(
+      '<div class="lf-section">' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionLegacyMemory, {
+          n: report.legacyProjectMemoryArtifacts.length,
+        }) +
+        '</div>' +
+        '<div class="lf-item-meta lf-item-warn">' +
+        STRINGS.diagnosticsLegacyMemoryNote +
+        '</div>' +
+        rows +
+        '</div>'
+    )
+  }
+
   const total =
     (report.expiring ? report.expiring.length : 0) +
     (report.pathMissing ? report.pathMissing.length : 0) +
     (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0) +
     (report.brokenIndices ? report.brokenIndices.length : 0) +
-    (report.staleLocks ? report.staleLocks.length : 0)
+    (report.staleLocks ? report.staleLocks.length : 0) +
+    (report.legacyProjectMemoryArtifacts ? report.legacyProjectMemoryArtifacts.length : 0)
 
   elements.diagnosticsSubtitle.textContent =
     total === 1

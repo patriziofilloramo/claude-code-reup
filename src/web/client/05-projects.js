@@ -40,7 +40,6 @@ function buildProjectRowHtml(project) {
     escapeHtml(compactPath(project.path)) +
     '</span>' +
     buildProjectOrgChipsHtml(project) +
-    buildProjectCloudHtml(project) +
     '<span class="p-last">' +
     lastLabel +
     '</span>' +
@@ -53,37 +52,6 @@ function buildProjectRowHtml(project) {
     '">⋯</button>' +
     '</div>' +
     '</div>'
-  )
-}
-
-/** Returns the fixed-width Project Memory cell, including an empty placeholder. */
-function buildProjectCloudHtml(project) {
-  if (!project.syncStatus || project.syncStatus === 'none') {
-    return '<span class="p-cloud p-cloud--empty" aria-hidden="true"></span>'
-  }
-
-  if (project.syncStatus === 'grey') {
-    return (
-      '<span class="p-cloud p-cloud--stale" title="' +
-      escapeHtml(STRINGS.projectCloudOffline) +
-      '">☁</span>'
-    )
-  }
-
-  if (project.syncStatus === 'orange') {
-    return (
-      '<span class="p-cloud p-cloud--unlinked" title="' +
-      escapeHtml(
-        fmt(STRINGS.projectCloudUnlinked, {
-          devices: (project.unlinkedDevices ?? []).join(', '),
-        })
-      ) +
-      '">☁</span>'
-    )
-  }
-
-  return (
-    '<span class="p-cloud p-cloud--ok" title="' + escapeHtml(STRINGS.projectCloudOk) + '">☁</span>'
   )
 }
 

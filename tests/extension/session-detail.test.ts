@@ -5,7 +5,7 @@ import type { ExtensionSession } from '../../extension/src/reup-data.js'
 import { extractSessionPreview } from '../../src/core/session/session-preview.js'
 
 describe('VS Code Session Inspector', () => {
-  it('renders strict CSP, escaped content, advice, actions, and passive memory state', () => {
+  it('renders strict CSP, escaped content, advice, actions, and local metadata', () => {
     const preview = extractSessionPreview([
       JSON.stringify({ message: { content: '<script>alert(1)</script>' }, type: 'user' }),
       JSON.stringify({
@@ -24,9 +24,6 @@ describe('VS Code Session Inspector', () => {
     expect(html).toContain('data-action="copyHandoff"')
     expect(html).toContain('data-action="editAlias"')
     expect(html).toContain('data-action="editTags"')
-    expect(html).toContain('memory-orange')
-    expect(html).toContain('Project Memory needs linking on one or more devices')
-    expect(html).not.toContain('Project Memory: orange')
     expect(html).toContain('● active')
     expect(html).toContain('#important')
   })
@@ -39,21 +36,11 @@ describe('VS Code Session Inspector', () => {
     expect(isInspectorMessage('resume')).toBe(false)
   })
 
-  it('hides healthy status text and renders each Project Memory state semantically', () => {
+  it('hides healthy status text when the session has no warning state', () => {
     const preview = extractSessionPreview([])
-    const none = renderInspectorHtml(
-      session({ isActive: false, memoryStatus: 'none', primaryStatus: 'ok' }),
-      preview
-    )
+    const none = renderInspectorHtml(session({ isActive: false, primaryStatus: 'ok' }), preview)
     expect(none).not.toContain('>ok<')
-    expect(none).not.toContain('class="pill memory')
-
-    const green = renderInspectorHtml(session({ memoryStatus: 'green' }), preview)
-    expect(green).toContain('Project Memory is synced through shared storage')
-    expect(green).not.toContain('Project Memory: green')
-
-    const grey = renderInspectorHtml(session({ memoryStatus: 'grey' }), preview)
-    expect(grey).toContain('Project Memory shared storage is currently unavailable')
+    expect(none).not.toContain('Project Memory')
   })
 
   it('renders structured plan markdown instead of flattening it into one paragraph', () => {
@@ -119,7 +106,6 @@ function session(overrides: Partial<ExtensionSession> = {}): ExtensionSession {
     currentBranch: 'main',
     id: '00000000-0000-0000-0000-000000000001',
     isActive: true,
-    memoryStatus: 'orange',
     messageCount: 42,
     needsAttention: true,
     planSummary: null,

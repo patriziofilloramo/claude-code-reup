@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { access, readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getClaudeProjectsDirectory, resolveProjectPath } from '../project/claude-paths.js'
@@ -34,9 +34,16 @@ export interface StaleSidecarLock {
   reason: string
 }
 
+export interface LegacyProjectMemoryArtifact {
+  kind: 'link-marker' | 'project-memory-directory'
+  path: string
+  projectId: string
+}
+
 export interface DiagnosticsReport {
   brokenIndices: BrokenSessionIndex[]
   expiring: DiagnosticsSession[]
+  legacyProjectMemoryArtifacts: LegacyProjectMemoryArtifact[]
   orphanedTranscripts: OrphanedTranscript[]
   pathMissing: DiagnosticsSession[]
   staleLocks: StaleSidecarLock[]
@@ -53,6 +60,7 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
   const report: DiagnosticsReport = {
     brokenIndices: [],
     expiring: [],
+    legacyProjectMemoryArtifacts: [],
     orphanedTranscripts: [],
     pathMissing: [],
     staleLocks: [],
@@ -95,6 +103,7 @@ async function inspectProjectDirectory(
   ])
 
   if (indexResult.broken) report.brokenIndices.push(indexResult.broken)
+  await collectLegacyProjectMemoryArtifacts(projectDirectory, projectId, fileNames, project, report)
   if (indexResult.sessionIds) {
     const projectPath = project?.path ?? (await resolveProjectPath(projectId))
     for (const fileName of fileNames) {
@@ -118,6 +127,44 @@ async function inspectProjectDirectory(
         reason: lockInspection.reason,
       })
     }
+  }
+}
+
+async function collectLegacyProjectMemoryArtifacts(
+  projectDirectory: string,
+  projectId: string,
+  fileNames: string[],
+  project: Project | undefined,
+  report: DiagnosticsReport
+): Promise<void> {
+  const memoryPaths = new Set<string>()
+  for (const marker of [PROJECT_MEMORY_LINK_FILE, LEGACY_PROJECT_MEMORY_LINK_FILE]) {
+    if (!fileNames.includes(marker)) continue
+    const markerPath = join(projectDirectory, marker)
+    report.legacyProjectMemoryArtifacts.push({
+      kind: 'link-marker',
+      path: markerPath,
+      projectId,
+    })
+    const markerTarget = await readOptionalText(markerPath)
+    if (markerTarget) {
+      if (markerTarget.replace(/[\\/]+$/, '').endsWith(PROJECT_MEMORY_DIRECTORY)) {
+        memoryPaths.add(markerTarget)
+      }
+      memoryPaths.add(join(markerTarget, PROJECT_MEMORY_DIRECTORY))
+    }
+  }
+
+  const projectPath = project?.path ?? (await resolveProjectPath(projectId))
+  memoryPaths.add(join(projectPath, PROJECT_MEMORY_DIRECTORY))
+
+  for (const memoryPath of memoryPaths) {
+    if (!(await pathExists(memoryPath))) continue
+    report.legacyProjectMemoryArtifacts.push({
+      kind: 'project-memory-directory',
+      path: memoryPath,
+      projectId,
+    })
   }
 }
 
@@ -161,6 +208,9 @@ async function inspectSessionIndex(
 
 const PROJECT_SIDECAR_LOCK = 'reup.json.lock'
 const LEGACY_PROJECT_SIDECAR_LOCK = `${'swo'}${'op'}.json.lock`
+const PROJECT_MEMORY_DIRECTORY = '.claude-memory'
+const PROJECT_MEMORY_LINK_FILE = '.reup-link'
+const LEGACY_PROJECT_MEMORY_LINK_FILE = `.${'swo'}${'op'}-link`
 
 function serializeDiagnosticsSession(projectId: string, session: Session): DiagnosticsSession {
   return { ...session, primaryStatus: primaryStatus(session.signals), projectId }
@@ -184,9 +234,28 @@ async function listFileNames(directory: string): Promise<string[]> {
   }
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readOptionalText(path: string): Promise<string | null> {
+  try {
+    const value = (await readFile(path, 'utf8')).trim()
+    return value.length > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
 function sortDiagnosticsReport(report: DiagnosticsReport): void {
   report.brokenIndices.sort((left, right) => left.projectId.localeCompare(right.projectId))
   report.expiring.sort((left, right) => left.updated.localeCompare(right.updated))
+  report.legacyProjectMemoryArtifacts.sort((left, right) => left.path.localeCompare(right.path))
   report.orphanedTranscripts.sort((left, right) => left.sessionId.localeCompare(right.sessionId))
   report.pathMissing.sort((left, right) => right.updated.localeCompare(left.updated))
   report.staleLocks.sort((left, right) => left.projectId.localeCompare(right.projectId))

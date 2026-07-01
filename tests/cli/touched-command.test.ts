@@ -96,7 +96,7 @@ describe('orderCandidatesByMatch', () => {
     }
   }
 
-  const project = { id: 'workspace-repo', path: '/workspace/repo', sessions: [], isShared: false }
+  const project = { id: 'workspace-repo', path: '/workspace/repo', sessions: [] }
 
   function candidate(id: string): RankedSession {
     return { active: false, inCurrentDirectory: true, project, session: session(id) }

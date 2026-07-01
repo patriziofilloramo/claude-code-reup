@@ -3,14 +3,13 @@ import * as vscode from 'vscode'
 import {
   formatContextTokens,
   formatRelativeTime,
-  projectMemoryDescription,
   statusThemeColorId,
   statusThemeIconId,
 } from './formatting.js'
 import type { CockpitProjectGroup, ExtensionCockpitModel } from './cockpit-model.js'
 import { getReupConfigurationValue } from './configuration.js'
 import type { ReupLogger } from './logger.js'
-import type { ExtensionProject, ExtensionSession, ReupDataSource } from './reup-data.js'
+import type { ExtensionSession, ReupDataSource } from './reup-data.js'
 
 type SectionId = 'workspace' | 'attention' | 'recent'
 
@@ -327,14 +326,10 @@ function projectTreeItem(node: ProjectTreeNode): vscode.TreeItem {
   item.contextValue = 'reupProject'
   const visibleSessionCount = group.sessions.length
   item.description = `${visibleSessionCount} session${visibleSessionCount === 1 ? '' : 's'}`
-  item.tooltip = [
-    project.path,
-    `Updated: ${formatRelativeTime(project.updated)}`,
-    projectMemoryDescription(project.memoryStatus),
-  ]
+  item.tooltip = [project.path, `Updated: ${formatRelativeTime(project.updated)}`]
     .filter(Boolean)
     .join('\n')
-  item.iconPath = projectMemoryIcon(project.memoryStatus)
+  item.iconPath = new vscode.ThemeIcon('folder')
   return item
 }
 
@@ -370,17 +365,6 @@ function sessionTreeItem(node: SessionTreeNode): vscode.TreeItem {
 
 function themeColor(id: string | undefined): vscode.ThemeColor | undefined {
   return id ? new vscode.ThemeColor(id) : undefined
-}
-
-function projectMemoryIcon(status: ExtensionProject['memoryStatus']): vscode.ThemeIcon {
-  if (!status || status === 'none') return new vscode.ThemeIcon('folder')
-  const color =
-    status === 'green'
-      ? new vscode.ThemeColor('testing.iconPassed')
-      : status === 'orange'
-        ? new vscode.ThemeColor('problemsWarningIcon.foreground')
-        : new vscode.ThemeColor('disabledForeground')
-  return new vscode.ThemeIcon('cloud', color)
 }
 
 function sessionNode(session: ExtensionSession, section: SectionId): SessionTreeNode {

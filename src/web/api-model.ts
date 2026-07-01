@@ -12,11 +12,6 @@ import type { TranscriptHandoffContext } from '../core/session/session-handoff.j
 import type { SessionPreview } from '../core/session/session-preview.js'
 import { primaryStatus } from '../core/session/session-signals.js'
 import { isResumeVisibleSession } from '../core/session/session-visibility.js'
-import {
-  getProjectSyncStatus,
-  isProjectMemorySyncEnabled,
-  type ProjectSyncStatus,
-} from '../core/sync/project-sync-status.js'
 
 // ---------------------------------------------------------------------------
 // Core entity types
@@ -34,7 +29,6 @@ export type ApiSession = Session & { primaryStatus: SessionStatus }
  */
 export type ApiProject = Omit<Project, 'sessions'> & {
   sessions: ApiSession[]
-  syncStatus: ProjectSyncStatus | null
 }
 
 // ---------------------------------------------------------------------------
@@ -217,14 +211,10 @@ export function serializeSession(session: Session): ApiSession {
  * Serialises a {@link Project} and all its sessions for API responses.
  * Use for the `/api/projects` endpoint and any response that embeds project data.
  */
-export function serializeProject(
-  project: Project,
-  projectMemorySyncEnabled = isProjectMemorySyncEnabled()
-): ApiProject {
+export function serializeProject(project: Project): ApiProject {
   return {
     ...project,
     sessions: project.sessions.filter(isResumeVisibleSession).map(serializeSession),
-    syncStatus: getProjectSyncStatus(project, projectMemorySyncEnabled),
   }
 }
 

@@ -39,10 +39,10 @@ Core milestones are closed:
   meters shipped and unit-tested; config toggle + attention feed archived to protect zero-config.
 - **Milestone 11 — VS Code Workspace Cockpit**: shipped (smoke on clean Windows/macOS pending).
 
-**On hold (do not start yet):** pre-release hardening — Windows terminal launcher (open High bug),
-M11/M12 manual smokes on clean Windows and macOS, then Milestone 9 (installers). Resume when the
-release window opens. Blocked items (M10 / Phase 4 / AI renaming) stay parked until the end.
-Throughout: keep the bar high — lightweight, zero-config, fast, easy.
+**Current release focus:** Milestone 9 public-release hardening. Keep the first
+public surface lightweight, local-only, installer-first, and easy to support.
+Blocked items (M10 / Phase 4 / AI renaming) stay parked until the release is
+ready.
 
 ---
 
@@ -180,56 +180,22 @@ milestones faster to implement. No visible behaviour changes — this is purely 
       client parsing both reference it, eliminating the duplication
 - [x] **Route consolidation** — `apiRoute` / `guardedRoute` wrappers in `src/web/routes/` unify
       error handling and response envelopes across all route files
-- [x] **CSS cleanup** — removed dead `.p-cloud--offline` rule (amber `⚠` icon from an earlier
-      branch, superseded by the `☁` coloured via `p-cloud--stale`); `styles.css` is now 1209 lines
+- [x] **CSS cleanup** — removed dead and duplicated web styles; project/session
+      rows keep fixed metadata columns
 - [x] **Core module boundary cleanup** — renamed terminal platform modules to kebab-case
-      (`terminal-{shared,unix,windows}.ts`); resolved post-merge duplicate `initCloudSync` /
-      `guardOfflineLinks` calls in `server.ts`; `syncRegistry` breaks the project-discovery →
-      cloud-sync circular dependency
-- [x] **Test coverage gaps** — added `tests/core/cloud-sync.test.ts` covering `stopSyncLoop`
-      idempotency, bidirectional copy, append-only propagation, conflict detection, recursive descent,
-      skip `.reup-link`); added `tests/core/device-id.test.ts` (4 cases: create, persist, read
-      existing); also fixed a `syncBidirectional` bug where A-only subdirectories were silently
-      skipped instead of being created in B; total test count: 194 (was 180)
+      (`terminal-{shared,unix,windows}.ts`); clarified route and discovery boundaries
+- [x] **Test coverage gaps** — broadened core and browser-client regression
+      coverage around discovery, metadata, and UI invariants
 
 ---
 
-## Milestone 7.5 — Cross-device sync (local-first) ✓ done
+## Milestone 7.5 — Deferred Project Memory Sync
 
-Share Claude Code sessions and memory across multiple machines without a server.
-Uses NTFS junctions / symlinks to redirect Claude Code's per-project directory into
-a shared cloud folder (pCloud, Dropbox, OneDrive, etc.) managed entirely by the OS.
-No server, no auth — the cloud provider handles transfer.
-
-> ⚠ Experimental: see `CHANGELOG.md` for known risks and the backup procedure.
-
-- [x] `reup sync link [path]` — creates a per-project NTFS junction pointing the Claude Code
-      project directory at a shared cloud folder; backs up existing local sessions first
-- [x] `reup sync unlink [path]` — restores the local directory; sessions written while linked
-      remain accessible through the shared folder
-- [x] **Sync registry** (`syncRegistry`) — in-memory `Map` of junction paths to cloud state;
-      avoids circular imports between discovery, sync, and memory modules
-- [x] `initCloudSync()` / `stopSyncLoop()` — startup guard that verifies junction targets
-      on launch; replaces offline junctions with a local backup so sessions remain writable
-      while the cloud drive is unmounted; restores on reconnect
-- [x] **Cloud indicator in TUI and web** — `☁` icon coloured green (online), grey (cloud
-      offline / sync paused), or orange (one or more devices used the project without
-      running `reup sync link`)
-- [x] **Offline guard** — new sessions are blocked when a project's cloud storage is
-      unreachable; flash message informs the user and resumes automatically on reconnect
-- [x] `reup sync link [path]` / `reup sync unlink [path]` — inject / remove a
-      `<!-- reup:sync:start/end -->` section in the project's `CLAUDE.md` that instructs
-      Claude Code on any device to: detect whether the device is linked, write a presence
-      file when it is not, warn once, and silently skip after the user dismisses the warning
-- [x] **Cross-device CLAUDE.md protocol** — all check files live inside the shared cloud
-      folder so Claude Code needs only `hostname` (via Bash) and file access inside the
-      project to run the protocol; no extra permissions required
-- [x] **Unlinked-device detection** — linked devices scan `{cloudDir}/device-presence/` on
-      each discovery pass and surface device names as `unlinkedDevices[]` on the `Project`
-      object; orange cloud indicator prompts the user to run `reup sync link` on that device
-- [x] **Append-only shared memory** — unlinked devices append context to
-      `{cloudDir}/memory/shared.md` under a `## HOSTNAME — date` header; avoids pCloud
-      conflict copies that would arise from concurrent rewrites
+The experimental Project Memory work was removed before the first public
+release. The design and implementation notes are preserved in
+[`Documents/DEFERRED_PROJECT_MEMORY_SYNC.md`](Documents/DEFERRED_PROJECT_MEMORY_SYNC.md).
+It may return only as a separate explicit milestone with a fresh safety,
+privacy, recovery, and support review.
 
 ---
 
@@ -266,12 +232,6 @@ Improvements shipped after M8:
 - [x] **Command registry** (`src/tui/commands.ts`) — single `COMMANDS` array with `visibleWhen`
       named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
       HelpOverlay and CommandPalette both derive from the same source of truth
-- [x] **`reup sync`** — renamed from the earlier memory-command prototype throughout: file,
-      exports, CLI dispatch, help
-      text, documentation, and all user-facing strings; `memory` kept as a backwards-compat alias
-- [x] **Sync tab in `reup config`** — interactive cursor navigation over unsynced and synced
-      projects; Enter to link/unlink inline without leaving the TUI; uses `linkProjectForTUI` /
-      `unlinkProjectForTUI` wrappers that suppress console output during TUI operation
 - [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
       archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
 - [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
@@ -287,10 +247,18 @@ Improvements shipped after M8:
 ## Milestone 9 — Distribution and installers
 
 Make installation feel native and require no repository clone, build step, or
-manual shell setup. Detailed behavior is defined in
-[`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
+manual shell setup. First public release hardening also removes the deferred
+Project Memory implementation from shipped code and adds explicit legal,
+privacy, security, and support documentation. Detailed installer behavior is
+defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
 
 - [x] Resolve the public product/package name before producing signed artifacts
+- [ ] Remove deferred Project Memory code paths, routes, UI, tests, and startup
+      hooks from the public release branch
+- [ ] Preserve Project Memory knowledge in a deferred architecture document only
+- [ ] Add disclaimer, privacy, security, and support docs
+- [ ] Make the README install-first and explicit about local-only/no telemetry/no
+      account/no warranty/no SLA
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
 - [ ] Add the installed `reup` launcher to the current user's `PATH`
 - [ ] Windows installer: offer pre-selected PowerShell completion integration
@@ -299,7 +267,7 @@ manual shell setup. Detailed behavior is defined in
       back up profiles before first modification and remove only Reup-owned blocks
 - [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments
-- [ ] Publish checksums and document artifact provenance/signing
+- [ ] Publish checksums, signatures, SBOM, and provenance attestations
 
 ---
 
@@ -339,7 +307,7 @@ required. All go/no-go criteria were met.
 - [x] `Reup: Search Sessions` — structured query search via shared core query
       parser (`session-query.ts`)
 - [x] CSP-restricted Session Inspector webview: goal, progress, plan, TODOs,
-      context, branches, file links, tags, and passive Project Memory state
+      context, branches, file links, and tags
 - [x] Deterministic Resume Advice for missing paths, active sessions, branch
       drift, interrupted work, expiry, compaction, and safe resume
 - [x] Compact active/attention status bar; live usage via shared usage cache
@@ -574,10 +542,10 @@ Promoted to [Milestone 13](#milestone-13--live-web-control-panel).
 
 ## What is explicitly out of scope
 
-| Item                             | Reason                                               |
-| -------------------------------- | ---------------------------------------------------- |
-| npm publish                      | Local stable version first; package name selected    |
-| Server-based cloud sync / auth   | Local-first only; OS-level junctions via pCloud etc. |
-| Required/free-form config files  | Zero-config remains a design constraint              |
-| Support for non-Claude-Code CLIs | Claude Code only                                     |
-| Backup / restore of transcripts  | Out of scope; archive = hide only                    |
+| Item                             | Reason                                            |
+| -------------------------------- | ------------------------------------------------- |
+| npm publish                      | Local stable version first; package name selected |
+| Reup-hosted cloud sync / auth    | Local-first, no account, no hosted sync service   |
+| Required/free-form config files  | Zero-config remains a design constraint           |
+| Support for non-Claude-Code CLIs | Claude Code only                                  |
+| Backup / restore of transcripts  | Out of scope; archive = hide only                 |

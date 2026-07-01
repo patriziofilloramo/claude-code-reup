@@ -5,11 +5,14 @@ import { dirname, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 
 const ZERO_SHA = /^0+$/
-const base = process.argv[2] || process.env.EXTENSION_VERSION_BASE
+const base =
+  process.argv[2] || process.env.PRODUCT_VERSION_BASE || process.env.EXTENSION_VERSION_BASE
 const sourceMapPath = process.argv[3] || 'extension/dist/extension.cjs.map'
 
+execFileSync(process.execPath, ['scripts/check-version-sync.mjs'], { stdio: 'inherit' })
+
 if (!base || ZERO_SHA.test(base)) {
-  console.log('Extension version check skipped: no comparable base commit.')
+  console.log('Product version check skipped: no comparable base commit.')
   process.exit(0)
 }
 
@@ -23,7 +26,7 @@ function normalizePath(path) {
 
 function parseVersion(value, label) {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(value)
-  if (!match) throw new Error(`${label} extension version is not valid SemVer: ${value}`)
+  if (!match) throw new Error(`${label} product version is not valid SemVer: ${value}`)
   return match.slice(1, 4).map(Number)
 }
 
@@ -41,19 +44,19 @@ function isGreaterVersion(current, previous) {
 try {
   git(['cat-file', '-e', `${base}^{commit}`])
 } catch {
-  console.log(`Extension version check skipped: base commit ${base} is unavailable.`)
+  console.log(`Product version check skipped: base commit ${base} is unavailable.`)
   process.exit(0)
 }
 
-let baseManifest
+let basePackage
 try {
-  baseManifest = JSON.parse(git(['show', `${base}:extension/package.json`]))
+  basePackage = JSON.parse(git(['show', `${base}:package.json`]))
 } catch {
-  console.log('Extension version check skipped: the base commit has no extension manifest.')
+  console.log('Product version check skipped: the base commit has no root package manifest.')
   process.exit(0)
 }
 
-const currentManifest = JSON.parse(readFileSync('extension/package.json', 'utf8'))
+const currentPackage = JSON.parse(readFileSync('package.json', 'utf8'))
 const changedPaths = git(['diff', '--name-only', `${base}...HEAD`])
   .split(/\r?\n/)
   .filter(Boolean)
@@ -72,24 +75,32 @@ const packagedPaths = new Set([
   'extension/README.md',
   'extension/esbuild.mjs',
   'extension/package.json',
+  'extension/package-lock.json',
+  'package.json',
+  'package-lock.json',
+  'README.md',
+  'src/config/version.ts',
 ])
 
 const releaseChanges = changedPaths.filter(
   (path) =>
-    bundledInputs.has(path) || packagedPaths.has(path) || path.startsWith('extension/media/')
+    path.startsWith('src/') ||
+    bundledInputs.has(path) ||
+    packagedPaths.has(path) ||
+    path.startsWith('extension/media/')
 )
 
 if (releaseChanges.length === 0) {
-  console.log('Extension version check passed: no installable extension changes.')
+  console.log('Product version check passed: no installable product changes.')
   process.exit(0)
 }
 
-if (!isGreaterVersion(currentManifest.version, baseManifest.version)) {
+if (!isGreaterVersion(currentPackage.version, basePackage.version)) {
   console.error(
     [
-      `Installable extension files changed without a version bump (${baseManifest.version}).`,
-      'Increment extension/package.json before merging, for example:',
-      '  npm version patch --prefix extension --no-git-tag-version',
+      `Installable product files changed without a root version bump (${basePackage.version}).`,
+      'Increment the canonical Reup version before merging, for example:',
+      '  npm run version:patch',
       'Release-affecting files:',
       ...releaseChanges.map((path) => `  - ${path}`),
     ].join('\n')
@@ -97,6 +108,4 @@ if (!isGreaterVersion(currentManifest.version, baseManifest.version)) {
   process.exit(1)
 }
 
-console.log(
-  `Extension version check passed: ${baseManifest.version} -> ${currentManifest.version}.`
-)
+console.log(`Product version check passed: ${basePackage.version} -> ${currentPackage.version}.`)

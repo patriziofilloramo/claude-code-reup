@@ -43,10 +43,6 @@ export const FEATURE_SURFACES = {
     description: 'Organize work with groups, stacks, and tags',
     surfaces: { tui: 'partial', vscode: 'partial', web: 'implemented' },
   },
-  projectMemory: {
-    description: 'Inspect and manage cross-device Project Memory',
-    surfaces: { tui: 'implemented', vscode: 'partial', web: 'implemented' },
-  },
   liveUsage: {
     description: 'Show context and account usage state',
     surfaces: { tui: 'implemented', vscode: 'partial', web: 'implemented' },

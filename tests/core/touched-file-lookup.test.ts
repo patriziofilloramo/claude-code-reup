@@ -148,7 +148,7 @@ describe('touched-file lookups', () => {
   }
 
   function projectsWith(sessions: Session[]): Project[] {
-    return [{ id: projectId, path: '/workspace/repo', sessions, isShared: false }]
+    return [{ id: projectId, path: '/workspace/repo', sessions }]
   }
 
   beforeEach(async () => {

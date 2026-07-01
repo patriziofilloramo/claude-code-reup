@@ -47,6 +47,8 @@ describe('diagnostics', () => {
         ],
       })
     )
+    await mkdir(join(temporaryClaudeDirectory, '.claude-memory'), { recursive: true })
+    await writeFile(join(indexedProjectDirectory, '.reup-link'), temporaryClaudeDirectory)
     await writeFile(join(indexedProjectDirectory, `${ORPHANED_SESSION_ID}.jsonl`), '{}')
     await writeFile(join(indexedProjectDirectory, 'reup.json.lock'), '2147483647')
     await writeFile(join(brokenProjectDirectory, 'sessions-index.json'), '{broken')
@@ -62,6 +64,20 @@ describe('diagnostics', () => {
     expect(report.staleLocks).toMatchObject([
       { projectId: 'indexed-project', reason: 'owner process 2147483647 is not running' },
     ])
+    expect(report.legacyProjectMemoryArtifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'link-marker',
+          path: join(indexedProjectDirectory, '.reup-link'),
+          projectId: 'indexed-project',
+        }),
+        expect.objectContaining({
+          kind: 'project-memory-directory',
+          path: join(temporaryClaudeDirectory, '.claude-memory'),
+          projectId: 'indexed-project',
+        }),
+      ])
+    )
   })
 
   it('does not report fresh invalid locks as abandoned', async () => {

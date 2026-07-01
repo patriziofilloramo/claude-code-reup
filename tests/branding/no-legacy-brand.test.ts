@@ -50,7 +50,6 @@ describe('Reup branding', () => {
 
   it('uses Reup identifiers for persistent data and environment variables', () => {
     expect(getReupDirectory()).toMatch(/[\\/]reup$/)
-    expect(APP.cloudLinkFile).toBe('.reup-link')
     expect(APP.debugEnvVar).toBe('REUP_DEBUG')
     expect(APP.legacyDebugEnvVar).toBe(`${LEGACY_ENV_PREFIX}_DEBUG`)
     expect(APP.noOpenEnvVar).toBe('REUP_NO_OPEN')

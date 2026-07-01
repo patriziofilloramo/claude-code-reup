@@ -48,7 +48,6 @@ const project: Project = {
   id: 'workspace-repo',
   path: '/workspace/repo',
   sessions: [],
-  isShared: false,
 }
 
 function match(overrides: Partial<TouchedFileMatch> = {}): TouchedFileMatch {

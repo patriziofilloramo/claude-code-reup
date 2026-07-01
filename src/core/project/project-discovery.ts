@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process'
-import { access, lstat, readdir, readFile, readlink } from 'node:fs/promises'
-import { dirname, isAbsolute, join, normalize, resolve } from 'node:path'
+import { access, readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 
-import { APP } from '../../config/app.js'
 import { log } from '../../utils/logger.js'
 import {
   encodeProjectPath,
@@ -23,8 +22,6 @@ import { isValidSessionId } from '../session/session-model.js'
 import { mergeProjectSidecarMetadata } from '../session/session-metadata.js'
 import { calculateExpiryDays } from '../session/session-signals.js'
 import { parseSessionTranscript } from '../session/session-transcript.js'
-import { syncRegistry } from '../sync/sync-registry.js'
-import { readUserPrefsSync } from '../user-prefs.js'
 import { readOrgData } from '../org/org-prefs.js'
 import { applyOrgMetadata } from '../org/org-filters.js'
 
@@ -47,9 +44,7 @@ const LOCK_FILE_GRACE_PERIOD_MS = 2 * 60 * 1000
 /** Loads every project containing sessions, newest project activity first. */
 export async function loadProjects(): Promise<Project[]> {
   const projectsDirectory = getClaudeProjectsDirectory()
-  const prefs = readUserPrefsSync()
-  const syncEnabled = APP.enableProjectMemorySync && prefs.crossDeviceSessionStorage === 'on'
-  const cacheKey = `${projectsDirectory}\0sync:${syncEnabled ? 'on' : 'off'}`
+  const cacheKey = projectsDirectory
   const cached = getCachedProjects(cacheKey)
   if (cached) return cached
 
@@ -63,16 +58,12 @@ export async function loadProjects(): Promise<Project[]> {
 
   const discoveredProjects = await Promise.all(
     projectDirectoryNames.map((directoryName) =>
-      loadProjectDirectory(directoryName, projectsDirectory, liveSessions, syncEnabled)
+      loadProjectDirectory(directoryName, projectsDirectory, liveSessions)
     )
   )
 
   const projects = discoveredProjects
-    .filter(
-      (project): project is Project =>
-        project !== null &&
-        (project.sessions.length > 0 || project.cloudOffline === true || project.isShared)
-    )
+    .filter((project): project is Project => project !== null && project.sessions.length > 0)
     .sort(compareProjectsByRecentActivity)
 
   // Handle very fresh lock records whose cwd doesn't match any scanned project.
@@ -111,11 +102,7 @@ export async function loadProjectById(projectId: string): Promise<Project | null
 async function listProjectDirectoryNames(projectsDirectory: string): Promise<string[]> {
   try {
     const entries = await readdir(projectsDirectory, { withFileTypes: true })
-    // Include both real directories and junctions/symlinks (shared storage).
-    // On Windows, junctions report isDirectory()=true; on Unix, symlinks report isSymbolicLink()=true.
-    return entries
-      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-      .map((entry) => entry.name)
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
   } catch {
     // A fresh Claude Code installation may not have created `projects/` yet.
     return []
@@ -125,29 +112,11 @@ async function listProjectDirectoryNames(projectsDirectory: string): Promise<str
 async function loadProjectDirectory(
   directoryName: string,
   projectsDirectory: string,
-  liveSessions: SessionLockRecord[],
-  syncEnabled: boolean
+  liveSessions: SessionLockRecord[]
 ): Promise<Project | null> {
   try {
     const projectDirectory = join(projectsDirectory, directoryName)
-    const decodedProjectPath = await resolveProjectPath(directoryName)
-    const linkState = await readLinkState(projectDirectory)
-    const fallbackProjectPath =
-      resolveLinkedProjectPath(projectDirectory, linkState.cloudPath) ?? decodedProjectPath
-
-    // Detect offline cloud storage before attempting to read sessions.
-    // An inaccessible junction target means the drive is unmounted; surfacing
-    // the project with cloudOffline=true lets the UI warn the user rather
-    // than silently hiding the project.
-    if (linkState.isShared && !(await isAccessible(projectDirectory))) {
-      return {
-        id: directoryName,
-        isShared: true,
-        cloudOffline: true,
-        path: fallbackProjectPath,
-        sessions: [],
-      }
-    }
+    const fallbackProjectPath = await resolveProjectPath(directoryName)
 
     const sessions =
       (await loadIndexedSessions(projectDirectory)) ??
@@ -162,141 +131,15 @@ async function loadProjectDirectory(
     const sessionsWithPathStatus = await annotatePathExistence(sessionsWithGhosts)
     const sessionsWithCurrentBranches = await annotateCurrentGitBranches(sessionsWithPathStatus)
     const canonicalProjectPath = sessionsWithCurrentBranches[0]?.projectPath ?? fallbackProjectPath
-    const sharedMemoryState = syncEnabled
-      ? await readProjectMemoryState(canonicalProjectPath, linkState.cloudPath)
-      : null
 
     return mergeProjectSidecarMetadata(projectDirectory, {
       id: directoryName,
-      isShared: linkState.isShared,
-      cloudPath: linkState.cloudPath ?? sharedMemoryState?.cloudPath,
-      cloudOffline: linkState.cloudOffline,
-      linkedDevices: sharedMemoryState?.linkedDevices,
-      unlinkedDevices: sharedMemoryState?.unlinkedDevices,
       path: canonicalProjectPath,
       sessions: sessionsWithCurrentBranches,
     })
   } catch {
     // One unreadable or malformed project must not hide the remaining projects.
     return null
-  }
-}
-
-/**
- * Linked project directories point at `<project-root>/.claude-memory`.
- * Recover the project root from that authoritative target instead of decoding
- * Claude's directory name, whose hyphen encoding is inherently ambiguous.
- */
-function resolveLinkedProjectPath(
-  projectDirectory: string,
-  linkedCloudPath?: string
-): string | undefined {
-  if (!linkedCloudPath) return undefined
-  const absoluteCloudPath = isAbsolute(linkedCloudPath)
-    ? normalize(linkedCloudPath)
-    : resolve(dirname(projectDirectory), linkedCloudPath)
-  return dirname(absoluteCloudPath)
-}
-
-/**
- * Returns the link state for a project directory.
- *
- * Priority:
- *   1. syncRegistry (populated by initCloudSync): authoritative after startup,
- *      covers the offline case where the junction is temporarily replaced by a
- *      real local directory.
- *   2. NTFS junction / symlink detection via lstat: pre-startup state and
- *      fresh installs.
- *   3. Legacy link file: projects not yet migrated to junction model.
- */
-async function readLinkState(
-  projectDirectory: string
-): Promise<{ isShared: boolean; cloudPath?: string; cloudOffline?: boolean }> {
-  // 1. Registry — always wins when populated (reup is running)
-  const regEntry = syncRegistry.get(projectDirectory)
-  if (regEntry) {
-    return {
-      isShared: true,
-      cloudPath: regEntry.cloudDir,
-      cloudOffline: !regEntry.isOnline,
-    }
-  }
-
-  // 2. Junction / symlink
-  try {
-    const fileStat = await lstat(projectDirectory)
-    if (fileStat.isSymbolicLink()) {
-      let cloudPath = await readlink(projectDirectory)
-      if (cloudPath.startsWith('\\\\?\\')) cloudPath = cloudPath.slice(4)
-      return { isShared: true, cloudPath }
-    }
-  } catch {
-    /* not a junction */
-  }
-
-  // 3. Link marker file (new name first, legacy name for migration).
-  for (const markerFileName of [APP.cloudLinkFile, APP.legacyCloudLinkFile]) {
-    try {
-      const cloudPath = (await readFile(join(projectDirectory, markerFileName), 'utf8')).trim()
-      if (cloudPath) return { isShared: true, cloudPath }
-    } catch {
-      /* no marker file */
-    }
-  }
-
-  return { isShared: false }
-}
-
-/**
- * Reads device names from {cloudDir}/device-presence/.
- * Files are written by unlinked devices following CLAUDE.md instructions.
- * Returns undefined (not an empty array) when the directory is absent or empty.
- */
-async function readProjectMemoryState(
-  projectPath: string,
-  linkedCloudPath?: string
-): Promise<{
-  cloudPath: string
-  linkedDevices?: string[]
-  unlinkedDevices?: string[]
-} | null> {
-  const cloudPath = linkedCloudPath ?? join(projectPath, APP.sharedMemoryDir)
-  if (!(await isAccessible(cloudPath))) return null
-
-  try {
-    const [presenceEntries, linkedEntries] = await Promise.all([
-      readdir(join(cloudPath, 'device-presence')),
-      readdir(join(cloudPath, 'linked')).catch(() => []),
-    ])
-    const linkedDevices = new Set(linkedEntries)
-    const unlinkedDevices = presenceEntries
-      .filter((fileName) => fileName.endsWith('.json'))
-      .map((fileName) => fileName.slice(0, -5))
-      .filter((device) => !linkedDevices.has(device))
-    return {
-      cloudPath,
-      linkedDevices: linkedEntries.length > 0 ? linkedEntries.sort() : undefined,
-      unlinkedDevices: unlinkedDevices.length > 0 ? unlinkedDevices.sort() : undefined,
-    }
-  } catch {
-    const linkedEntries = await readdir(join(cloudPath, 'linked')).catch(() => [])
-    return {
-      cloudPath,
-      linkedDevices: linkedEntries.length > 0 ? linkedEntries.sort() : undefined,
-    }
-  }
-}
-
-/**
- * Returns true when a path is accessible (following junctions/symlinks).
- * Used to detect offline cloud drives whose junction target can't be reached.
- */
-async function isAccessible(path: string): Promise<boolean> {
-  try {
-    await access(path)
-    return true
-  } catch {
-    return false
   }
 }
 
@@ -554,7 +397,6 @@ function buildOrphanProjects(records: Array<SessionLockRecord & { cwd: string }>
     id: encodeProjectPath(recs[0].cwd),
     path: recs[0].cwd,
     sessions: recs.map(buildGhostSession).sort(compareSessionsByRecentActivity),
-    isShared: false,
   }))
 }
 

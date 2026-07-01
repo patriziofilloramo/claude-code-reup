@@ -7,6 +7,7 @@ function emptyReport(): DiagnosticsReport {
   return {
     brokenIndices: [],
     expiring: [],
+    legacyProjectMemoryArtifacts: [],
     orphanedTranscripts: [],
     pathMissing: [],
     staleLocks: [],
@@ -35,13 +36,20 @@ describe('formatDoctorReport', () => {
       projectPath: '/workspace',
       sessionId: '00000000-0000-0000-0000-000000000001',
     })
+    report.legacyProjectMemoryArtifacts.push({
+      kind: 'link-marker',
+      path: '/claude/projects/project/.reup-link',
+      projectId: 'project',
+    })
 
     const output = formatDoctorReport(report)
 
-    expect(output).toContain('Reup Doctor · 3 issues')
+    expect(output).toContain('Reup Doctor · 4 issues')
     expect(output).toContain('Broken session indices (1)')
     expect(output).toContain('Stale sidecar locks (1)')
     expect(output).toContain('Orphaned transcripts (1)')
+    expect(output).toContain('Legacy Project Memory artifacts (1)')
+    expect(output).toContain('no longer manages Project Memory')
     expect(output).toContain('Reup falls back to readable transcripts')
   })
 })

@@ -1,12 +1,7 @@
 import { randomBytes } from 'node:crypto'
 
 import type { SessionPreview } from '../../src/core/session/session-preview.js'
-import {
-  formatContextTokens,
-  formatRelativeTime,
-  projectMemoryDescription,
-  statusLabel,
-} from './formatting.js'
+import { formatContextTokens, formatRelativeTime, statusLabel } from './formatting.js'
 import type { ExtensionSession } from './reup-data.js'
 
 export type InspectorMessage =
@@ -30,7 +25,6 @@ export function renderInspectorHtml(
   const nonce = randomBytes(18).toString('base64')
   const resumeDisabled =
     session.advice.code === 'path-missing' || session.advice.code === 'already-active'
-  const memoryStatus = renderMemoryStatus(session.memoryStatus)
   const healthStatus = statusLabel(session.primaryStatus)
 
   return `<!doctype html>
@@ -62,10 +56,6 @@ export function renderInspectorHtml(
     .pill-error { color: var(--vscode-editorError-foreground); border-color: var(--vscode-editorError-foreground); }
     .pill-muted { color: var(--vscode-descriptionForeground); }
     .tag { color: var(--vscode-textLink-foreground); border-color: var(--vscode-textLink-foreground); background: var(--vscode-textBlockQuote-background); font-weight: 600; }
-    .memory { font-size: 1em; padding: 0 5px; }
-    .memory-green { color: var(--vscode-testing-iconPassed); }
-    .memory-orange { color: var(--vscode-editorWarning-foreground); }
-    .memory-grey { color: var(--vscode-disabledForeground); }
     .muted { color: var(--vscode-descriptionForeground); }
     .markdown { overflow-wrap: anywhere; }
     .markdown h3, .markdown h4 { margin: 12px 0 5px; }
@@ -99,7 +89,6 @@ export function renderInspectorHtml(
   <div class="pills">
     ${healthStatus ? `<span class="pill ${statusPillClass(session.primaryStatus)}">${escapeHtml(healthStatus)}</span>` : ''}
     ${session.isActive ? '<span class="pill pill-active">● active</span>' : ''}
-    ${memoryStatus}
     ${session.tags.map((tag) => `<span class="pill tag">#${escapeHtml(tag)}</span>`).join('')}
   </div>
   <div class="facts">
@@ -132,12 +121,6 @@ export function renderInspectorHtml(
   </script>
 </body>
 </html>`
-}
-
-function renderMemoryStatus(status: ExtensionSession['memoryStatus']): string {
-  const description = projectMemoryDescription(status)
-  if (!description || !status || status === 'none') return ''
-  return `<span class="pill memory memory-${status}" title="${escapeAttribute(description)}" aria-label="${escapeAttribute(description)}">☁</span>`
 }
 
 function statusPillClass(status: ExtensionSession['primaryStatus']): string {

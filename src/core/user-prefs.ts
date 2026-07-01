@@ -5,35 +5,21 @@ import type { ThemeName } from '../config/theme-tokens.js'
 import { getReupDirectory } from './project/claude-paths.js'
 
 export type AutoCleanup = 'off' | 'on' | 'auto'
-export type CrossDeviceSessionStorage = 'off' | 'on'
-export type AdvancedDiscovery = 'off' | 'on'
 
 export interface UserPrefs {
-  advancedDiscovery: AdvancedDiscovery
   autoCleanupOnStart: AutoCleanup
-  crossDeviceSessionStorage: CrossDeviceSessionStorage
-  projectSearchPaths: string[]
   theme: ThemeName
 }
 
 const DEFAULT_PREFS: UserPrefs = {
-  advancedDiscovery: 'off',
   autoCleanupOnStart: 'off',
-  crossDeviceSessionStorage: 'off',
-  projectSearchPaths: [],
   theme: 'dark',
 }
 
 const VALID_AUTO_CLEANUP_VALUES = new Set<AutoCleanup>(['off', 'on', 'auto'])
-const VALID_CROSS_DEVICE_STORAGE_VALUES = new Set<CrossDeviceSessionStorage>(['off', 'on'])
-const VALID_ADVANCED_DISCOVERY_VALUES = new Set<AdvancedDiscovery>(['off', 'on'])
 const VALID_THEME_NAMES = new Set<ThemeName>(['dark', 'light', 'terminal'])
 
 export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: string[] }> = {
-  advancedDiscovery: {
-    description: 'Scan projectSearchPaths for .claude-memory folders on other devices',
-    values: ['off', 'on'],
-  },
   theme: {
     description: 'Color theme for TUI and web UI',
     values: ['dark', 'light', 'terminal'],
@@ -41,14 +27,6 @@ export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: 
   autoCleanupOnStart: {
     description: 'Cleanup mode on startup: off=disabled, on=show picker, auto=silent archive',
     values: ['off', 'on', 'auto'],
-  },
-  crossDeviceSessionStorage: {
-    description: 'Alpha cross-device Claude project memory sync',
-    values: ['off', 'on'],
-  },
-  projectSearchPaths: {
-    description: 'Directories scanned for linked projects when advancedDiscovery is on',
-    values: [],
   },
 }
 
@@ -65,18 +43,9 @@ export function readUserPrefsSync(): UserPrefs {
       parsed['autoCleanupOnStart'] = parsed['autoCleanupOnStart'] ? 'on' : 'off'
     }
     return {
-      advancedDiscovery: isAdvancedDiscovery(parsed['advancedDiscovery'])
-        ? parsed['advancedDiscovery']
-        : DEFAULT_PREFS.advancedDiscovery,
       autoCleanupOnStart: isAutoCleanup(parsed['autoCleanupOnStart'])
         ? parsed['autoCleanupOnStart']
         : DEFAULT_PREFS.autoCleanupOnStart,
-      crossDeviceSessionStorage: isCrossDeviceSessionStorage(parsed['crossDeviceSessionStorage'])
-        ? parsed['crossDeviceSessionStorage']
-        : isCrossDeviceSessionStorage(parsed['experimentalSharedSync'])
-          ? parsed['experimentalSharedSync']
-          : DEFAULT_PREFS.crossDeviceSessionStorage,
-      projectSearchPaths: parseProjectSearchPaths(parsed['projectSearchPaths']),
       theme: isThemeName(parsed['theme']) ? parsed['theme'] : DEFAULT_PREFS.theme,
     }
   } catch {
@@ -84,30 +53,12 @@ export function readUserPrefsSync(): UserPrefs {
   }
 }
 
-function isAdvancedDiscovery(value: unknown): value is AdvancedDiscovery {
-  return (
-    typeof value === 'string' && VALID_ADVANCED_DISCOVERY_VALUES.has(value as AdvancedDiscovery)
-  )
-}
-
 function isAutoCleanup(value: unknown): value is AutoCleanup {
   return typeof value === 'string' && VALID_AUTO_CLEANUP_VALUES.has(value as AutoCleanup)
 }
 
-function isCrossDeviceSessionStorage(value: unknown): value is CrossDeviceSessionStorage {
-  return (
-    typeof value === 'string' &&
-    VALID_CROSS_DEVICE_STORAGE_VALUES.has(value as CrossDeviceSessionStorage)
-  )
-}
-
 function isThemeName(value: unknown): value is ThemeName {
   return typeof value === 'string' && VALID_THEME_NAMES.has(value as ThemeName)
-}
-
-function parseProjectSearchPaths(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
 }
 
 export async function readUserPrefs(): Promise<UserPrefs> {

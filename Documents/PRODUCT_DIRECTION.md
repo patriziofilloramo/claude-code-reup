@@ -288,7 +288,6 @@ It provides:
 - A TUI (terminal UI) and a web UI to browse, inspect, and resume Claude Code sessions
 - Health signals for each session (interrupted, expiring, context drift)
 - Usage / rate-limit visibility before you commit to resuming
-- Cross-device sync via OS junctions / symlinks (no cloud account required)
 - A composable CLI for scripting (`reup inbox`, `reup doctor`, `reup list`, etc.)
 
 Target users: individual developers who use Claude Code daily and manage multiple

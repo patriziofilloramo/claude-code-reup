@@ -1,5 +1,4 @@
 import type { SessionStatus } from '../../src/core/session/session-model.js'
-import type { ProjectSyncStatus } from '../../src/core/sync/project-sync-status.js'
 import { relativeTime } from '../../src/utils/time.js'
 
 export function compactProjectName(projectPath: string): string {
@@ -64,11 +63,4 @@ export function statusThemeColorId(status: SessionStatus, isActive: boolean): st
   if (status === 'expiring' || status === 'path-missing') return 'problemsErrorIcon.foreground'
   if (status === 'heavily-compacted') return 'descriptionForeground'
   return undefined
-}
-
-export function projectMemoryDescription(status: ProjectSyncStatus | null): string | null {
-  if (!status || status === 'none') return null
-  if (status === 'green') return 'Project Memory is synced through shared storage'
-  if (status === 'orange') return 'Project Memory needs linking on one or more devices'
-  return 'Project Memory shared storage is currently unavailable'
 }

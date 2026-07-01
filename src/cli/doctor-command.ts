@@ -10,6 +10,7 @@ export async function runDoctor(): Promise<void> {
 export function formatDoctorReport(report: DiagnosticsReport): string {
   const issueCount =
     report.brokenIndices.length +
+    report.legacyProjectMemoryArtifacts.length +
     report.orphanedTranscripts.length +
     report.pathMissing.length +
     report.staleLocks.length
@@ -28,6 +29,12 @@ export function formatDoctorReport(report: DiagnosticsReport): string {
     'Stale sidecar locks',
     report.staleLocks.map((item) => `${item.path}: ${item.reason}`),
     'No live owner was detected; Reup can recover abandoned locks on its next metadata write.'
+  )
+  appendSection(
+    lines,
+    'Legacy Project Memory artifacts',
+    report.legacyProjectMemoryArtifacts.map((item) => `${item.projectId}: ${item.path}`),
+    'This release no longer manages Project Memory. Review these paths manually before deleting or moving anything.'
   )
   appendSection(
     lines,

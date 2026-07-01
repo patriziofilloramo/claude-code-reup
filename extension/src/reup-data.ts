@@ -25,10 +25,6 @@ import {
   type ResumeListSessionInput,
 } from '../../src/core/session/session-visibility.js'
 import {
-  getProjectSyncStatus,
-  type ProjectSyncStatus,
-} from '../../src/core/sync/project-sync-status.js'
-import {
   buildCockpitModel,
   type CockpitContext,
   type ExtensionCockpitModel,
@@ -40,7 +36,6 @@ const PREVIEW_HINT_LIMIT = 80
 
 export interface ExtensionProject {
   id: string
-  memoryStatus: ProjectSyncStatus | null
   name: string
   path: string
   sessionCount: number
@@ -57,7 +52,6 @@ export interface ExtensionSession {
   id: string
   isActive: boolean
   messageCount: number
-  memoryStatus: ProjectSyncStatus | null
   needsAttention: boolean
   planSummary: string | null
   primaryStatus: SessionStatus
@@ -311,7 +305,6 @@ async function createExtensionSession(
     id: session.id,
     isActive: activeSessionIds.has(session.id),
     messageCount: session.messageCount,
-    memoryStatus: getProjectSyncStatus(project),
     needsAttention: isAttentionStatus(status),
     planSummary: previewHints.planSummary,
     primaryStatus: status,
@@ -333,7 +326,6 @@ function createExtensionProject(project: Project, sessions: ExtensionSession[]):
   const projectSessions = sessions.filter((session) => session.projectId === project.id)
   return {
     id: project.id,
-    memoryStatus: getProjectSyncStatus(project),
     name: compactProjectName(project.path),
     path: project.path,
     sessionCount: projectSessions.length,

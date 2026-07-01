@@ -42,10 +42,10 @@ jobs:
       - name: Build VS Code extension
         run: npm run build:extension
 
-      - name: Check VS Code extension version policy
+      - name: Check product version policy
         if: runner.os == 'Linux'
         env:
-          EXTENSION_VERSION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PRODUCT_VERSION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: node scripts/check-extension-version.mjs
 
       - name: Test

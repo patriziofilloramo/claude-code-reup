@@ -45,7 +45,6 @@ function makeProject(id: string, sessions: Session[], projectTags?: string[]): P
     id,
     path: `/projects/${id}`,
     sessions,
-    isShared: false,
     projectTags,
   }
 }

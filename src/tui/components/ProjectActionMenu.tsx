@@ -10,7 +10,6 @@ export type ProjectActionCommand =
   | 'browse-sessions'
   | 'open-directory'
   | 'copy-path'
-  | 'forget-project'
 
 interface Action {
   /** Single character pressed to trigger directly, or null for key-only actions. */
@@ -28,13 +27,6 @@ const ACTIONS: Action[] = [
   { directKey: 'c', keyLabel: 'c', description: 'Copy path', command: 'copy-path' },
 ]
 
-const FORGET_ACTION: Action = {
-  command: 'forget-project',
-  description: 'Forget local copy (recoverable)',
-  directKey: 'f',
-  keyLabel: 'f',
-}
-
 interface ProjectActionMenuProps {
   project: Project
   onExecute: (command: ProjectActionCommand) => void
@@ -43,7 +35,7 @@ interface ProjectActionMenuProps {
 
 export default function ProjectActionMenu({ project, onExecute, onClose }: ProjectActionMenuProps) {
   const [focusedIndex, setFocusedIndex] = useState(0)
-  const actions = project.cloudPath && !project.isShared ? [...ACTIONS, FORGET_ACTION] : ACTIONS
+  const actions = ACTIONS
 
   const projectLabel = project.path.split(/[/\\]/).filter(Boolean).slice(-2).join('/')
 

@@ -3,10 +3,6 @@ import { Box, Text, useStdout } from 'ink'
 import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { Project } from '../../core/session/session-model.js'
-import {
-  getProjectSyncStatus,
-  isProjectMemorySyncEnabled,
-} from '../../core/sync/project-sync-status.js'
 import { compactProjectLabel, projectPanelLayoutForTerminal } from '../layout.js'
 
 interface ProjectListProps {
@@ -25,7 +21,6 @@ export default function ProjectList({
   const { stdout } = useStdout()
   const terminalWidth = stdout?.columns ?? 80
   const labelColor = isFocused ? COLORS.accent : COLORS.dim
-  const projectMemorySyncEnabled = isProjectMemorySyncEnabled()
   const projectPanelLayout = projectPanelLayoutForTerminal(terminalWidth, projects)
 
   return (
@@ -51,10 +46,6 @@ export default function ProjectList({
         const isSelected = index === selectedIndex
         const isFocusedSelected = isSelected && isFocused
         const projectLabel = compactProjectLabel(project.path)
-        const syncStatus = getProjectSyncStatus(project, projectMemorySyncEnabled)
-        const cloudColor =
-          syncStatus === 'grey' ? COLORS.muted : syncStatus === 'orange' ? COLORS.orange : COLORS.ok
-
         return (
           <Box key={project.id} paddingX={1}>
             <Box flexShrink={0}>
@@ -72,13 +63,6 @@ export default function ProjectList({
                 </Text>
               </Box>
             ) : null}
-            <Box flexShrink={0} paddingLeft={1} width={4}>
-              {syncStatus && syncStatus !== 'none' ? (
-                <Text color={cloudColor}>{'☁'}</Text>
-              ) : (
-                <Text> </Text>
-              )}
-            </Box>
             <Box flexShrink={0} width={7}>
               <Text color={isFocusedSelected ? COLORS.accent : COLORS.dim}>
                 {' (' + project.sessions.length + ')'}

@@ -61,29 +61,23 @@ describe('full-screen dashboard guardrails', () => {
     expect(source).toContain('openProject')
   })
 
-  it('keeps project rail names primary and Project Memory status in a stable metadata column', () => {
-    expect(source).toContain("import { projectMemoryDescription } from './formatting.js'")
-    expect(source).toContain('const PROJECT_MEMORY_DESCRIPTIONS')
-    expect(source).toContain('--project-memory-col:16px')
+  it('keeps project rail names primary with a stable count column and no sync badge', () => {
+    expect(source).not.toContain("import { projectMemoryDescription } from './formatting.js'")
+    expect(source).not.toContain('const PROJECT_MEMORY_DESCRIPTIONS')
+    expect(source).not.toContain('--project-memory-col:16px')
     expect(source).toContain('--project-count-col:3ch')
     expect(source).toContain(
-      '.project{display:grid;grid-template-columns:minmax(0,1fr) var(--project-memory-col) var(--project-count-col)}'
+      '.project{display:grid;grid-template-columns:minmax(0,1fr) var(--project-count-col)}'
     )
-    expect(source).toContain('.cloud{width:var(--project-memory-col)')
-    expect(source).toContain(
-      `<span class="name">'+esc(p.name)+'</span>'+projectCloud(p)+'<span class="count">`
-    )
-    expect(source).toContain('function projectCloud(p)')
-    expect(source).toContain('class="cloud empty" aria-hidden="true">☁</span>')
-    expect(source).toContain("PROJECT_MEMORY_DESCRIPTIONS[status]||''")
+    expect(source).toContain(`<span class="name">'+esc(p.name)+'</span><span class="count">`)
+    expect(source).not.toContain('function projectCloud(p)')
+    expect(source).not.toContain('class="cloud empty"')
+    expect(source).not.toContain("PROJECT_MEMORY_DESCRIPTIONS[status]||''")
     expect(source).not.toContain("?'☁':'□'")
   })
 
   it('keeps projects primary and focus controls secondary in the extension rail', () => {
-    const rail = source.slice(
-      source.indexOf('function rail()'),
-      source.indexOf('function projectCloud')
-    )
+    const rail = source.slice(source.indexOf('function rail()'), source.indexOf('function hero()'))
 
     expect(rail).toContain(
       'return \'<aside class="rail"><div class="section-title">Projects</div>\'+projectRows+focusBlock+\'</aside>\''
@@ -96,10 +90,7 @@ describe('full-screen dashboard guardrails', () => {
   })
 
   it('omits zero-count focus rows and hides the focus group when empty', () => {
-    const rail = source.slice(
-      source.indexOf('function rail()'),
-      source.indexOf('function projectCloud')
-    )
+    const rail = source.slice(source.indexOf('function rail()'), source.indexOf('function hero()'))
 
     expect(rail).toContain('secondaryFocusRows=[')
     expect(rail).toContain("focusNav('workspace','Current workspace',workspaceCount)")
@@ -113,10 +104,7 @@ describe('full-screen dashboard guardrails', () => {
   })
 
   it('keeps the All sessions reset stable while any focus row is visible', () => {
-    const rail = source.slice(
-      source.indexOf('function rail()'),
-      source.indexOf('function projectCloud')
-    )
+    const rail = source.slice(source.indexOf('function rail()'), source.indexOf('function hero()'))
 
     expect(rail).toContain("showAll=allCount>0&&(secondaryFocusRows||project||filter!=='all')")
     expect(rail).toContain(

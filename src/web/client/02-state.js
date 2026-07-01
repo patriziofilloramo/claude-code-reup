@@ -23,7 +23,6 @@ let deepSearchLoading = false
 let deepSearchQueryTerm = ''
 let sessionInspectorExpanded = false
 let sessionPreviewCache = new Map()
-let syncOverview = null
 // Org data fetched from /api/org; null before first load.
 let orgData = null
 // Active focus filter — narrows both the project list and session list.

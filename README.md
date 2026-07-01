@@ -1,15 +1,38 @@
 # Reup
 
-Reup is local state and resume control for Claude Code work.
+Local state and resume control for Claude Code work.
 
-It gives terminal-heavy developers one fast way to see which Claude Code
-sessions are active, risky, stale, archived, or ready to resume. Everything
-runs locally against Claude Code's existing files. There is no Reup account,
-backend, telemetry, or transcript upload.
+Reup shows what is active, stale, risky, archived, or ready to resume across
+your local Claude Code sessions. It runs against Claude Code files on your
+machine: no Reup account, no hosted backend, no telemetry, and no transcript
+upload.
 
-## Install From Source
+## Install
 
-Reup requires Node.js 20 or newer, Git, and the `claude` command on `PATH`.
+The first public release is distributed from GitHub Releases. Pick the artifact
+for your platform, verify it, install it, then run `reup`.
+
+| Platform | Artifact                      | Notes                                                          |
+| -------- | ----------------------------- | -------------------------------------------------------------- |
+| Windows  | `reup-setup-windows-x64.exe`  | Signed installer, per-user install, adds `reup` to PATH        |
+| macOS    | `reup-macos-universal.tar.gz` | Signed and notarized archive                                   |
+| Linux    | `.deb`, `.rpm`, `.tar.gz`     | Package install where possible; tarball for portable use       |
+| VS Code  | `reup-vscode-<version>.vsix`  | Install from the Extensions view or `code --install-extension` |
+
+Each release should include:
+
+- SHA-256 checksums for every artifact.
+- Detached signatures for release assets.
+- SBOM and provenance attestations.
+- Release notes with upgrade and rollback notes.
+
+Verify a download before installing:
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
+Power users and contributors can still build from source:
 
 ```bash
 git clone <repository-url> reup
@@ -19,16 +42,6 @@ npm run build
 npm link
 reup
 ```
-
-On Windows, `npm link` also creates `reup.cmd`. Use it when PowerShell blocks
-the npm-generated `reup.ps1` shim:
-
-```powershell
-reup.cmd
-```
-
-The npm package identity for publishing is `@patriziofilloramo/reup`. The only
-public executable is `reup`.
 
 ## Daily Commands
 
@@ -46,7 +59,6 @@ public executable is `reup`.
 | `reup doctor`             | Diagnose local Claude Code session data             |
 | `reup config`             | Open the configuration TUI                          |
 | `reup completion <shell>` | Print shell completion setup                        |
-| `reup sync`               | Manage shared session storage                       |
 | `reup help [command]`     | Show CLI help                                       |
 
 `reup list`, `reup resume`, and `reup handoff` accept globally unambiguous
@@ -83,11 +95,7 @@ reup web --port 4000
 
 The VS Code extension adds a Reup Activity Bar view, full dashboard, session
 inspector, workspace-first resume picker, and resume through either the Claude
-Code extension or the integrated terminal:
-
-```bash
-npm run install:extension
-```
+Code extension or the integrated terminal.
 
 ## Shell Completion
 
@@ -96,7 +104,7 @@ Completion is opt-in and prints exact session IDs only.
 PowerShell:
 
 ```powershell
-reup.cmd completion powershell | Out-String | Invoke-Expression
+reup completion powershell | Out-String | Invoke-Expression
 ```
 
 Bash:
@@ -113,19 +121,6 @@ source <(reup completion zsh)
 
 Append the generated output to your shell profile if you want completion in new
 terminals.
-
-## Configuration
-
-| Variable            | Default     | Description                           |
-| ------------------- | ----------- | ------------------------------------- |
-| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code data directory            |
-| `REUP_PORT`         | `3333`      | Preferred local web port              |
-| `REUP_NO_OPEN`      | unset       | Do not open the browser automatically |
-| `REUP_DEBUG`        | unset       | Enable debug logging                  |
-| `REUP_THEME`        | stored pref | Override the active theme             |
-
-Old pre-production environment variables are read only as silent migration
-fallbacks. New writes and documentation use `REUP_*`.
 
 ## Local Data
 
@@ -147,46 +142,22 @@ Per-project Reup metadata lives beside Claude Code transcripts as:
 ~/.claude/projects/<project-id>/reup.json
 ```
 
-Existing pre-production Reup users are migrated automatically:
-
-- `~/.claude/reup/` is created from the old private app directory when needed.
-- `reup.json` is copied from the old sidecar file if the new file is absent.
-- `.reup-link`, `.reup-conflicts`, and `<!-- reup:sync:start/end -->` are the
-  current sync artifacts, with old artifact names recognized during migration.
-- Browser storage and VS Code settings are rewritten under `reup:*` and
-  `reup.*` keys.
-
-Legacy files are left in place for rollback. Reup writes new state to the new
-paths.
-
-## Shared Session Storage
-
-`reup sync` can link a project so Claude Code sessions travel with that
-project through your existing cloud provider.
-
-```bash
-reup sync
-reup sync link
-reup sync link ~/projects/my-app
-reup sync unlink
-```
-
-The linked project stores session data in `<project>/.claude-memory/`. Reup
-uses a junction or symlink from Claude Code's local project directory to that
-folder, maintains a local backup under `~/.claude/reup/sync/`, and restores
-local writeability when the cloud folder goes offline.
-
-`.claude-memory/` contains session transcripts. Keep it out of Git unless you
-explicitly want that data versioned.
+Reup reads local Claude Code data and writes Reup-owned metadata only. It does
+not manage cloud folders, move transcript storage, or synchronize sessions
+between machines in this release.
 
 ## Safety
 
-- Reup reads local Claude Code data and writes only Reup-owned metadata.
 - The web server binds to `127.0.0.1`.
 - Resume launches the local `claude` command or the Claude Code VS Code
   extension.
 - Usage refresh keeps credentials in memory and stores only aggregate results.
-- No telemetry, hosted service, or remote sync backend is included.
+- No telemetry, hosted service, remote sync backend, or account is included.
+- Keep your own backups of important projects and transcripts.
+- Do not put secrets in handoff packets or shared logs without review.
+
+See also [`DISCLAIMER.md`](DISCLAIMER.md), [`PRIVACY.md`](PRIVACY.md),
+[`SECURITY.md`](SECURITY.md), and [`SUPPORT.md`](SUPPORT.md).
 
 ## Development
 
@@ -205,7 +176,7 @@ Useful documents:
 - [Architecture](Documents/ARCHITECTURE.md)
 - [Features](Documents/FEATURES.md)
 - [Installation and distribution](Documents/INSTALLATION.md)
-- [Cross-device Project Memory](Documents/CROSS_DEVICE_PROJECT_MEMORY.md)
+- [Deferred Project Memory Sync](Documents/DEFERRED_PROJECT_MEMORY_SYNC.md)
 - [Usage visibility](Documents/USAGE_VISIBILITY.md)
 - [Product direction](Documents/PRODUCT_DIRECTION.md)
 - [VS Code extension](extension/README.md)
@@ -216,9 +187,9 @@ Useful documents:
 Reup is an independent open-source project. It is not affiliated with,
 endorsed by, or maintained by Anthropic.
 
-Claude and Claude Code are trademarks of Anthropic. Claude Code's local storage
-format is not a stable public API and may change between releases. Keep backups
-of important work and review release notes before upgrading.
+Reup is provided as-is, without warranty or SLA. Claude and Claude Code are
+trademarks of Anthropic. Claude Code's local storage format is not a stable
+public API and may change between releases.
 
 ## License
 

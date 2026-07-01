@@ -12,7 +12,8 @@ describe('config integrations layout', () => {
       source.indexOf('function FeaturesTab(')
     )
 
-    expect(integrations).toContain('<FeatureCard focused={cursor === 0}>')
+    expect(integrations).toContain('const usageFocused = cursor === 0')
+    expect(integrations).toContain('<FeatureCard focused={usageFocused}>')
     expect(integrations).toContain('<FeatureCard focused={cursor >= 1}>')
   })
 
@@ -23,9 +24,9 @@ describe('config integrations layout', () => {
       source.indexOf('function FeaturesTab(')
     )
 
-    expect(integrations).toContain('<Box paddingLeft={2}>')
     expect(integrations).toContain('<Box flexDirection="column" paddingLeft={2}>')
-    expect(integrations).toContain('marginBottom={1}')
+    expect(source).toContain('<Box paddingLeft={3}>')
+    expect(source).toContain('marginBottom={noBottomMargin ? 0 : 1}')
   })
 
   it('puts the detected shell first and renders a prominent badge', async () => {

@@ -60,7 +60,7 @@ describe('buildCockpitModel', () => {
     ])
   })
 
-  it('keeps cross-device sessions with their canonical local workspace project', () => {
+  it('keeps same-project sessions with their canonical local workspace project', () => {
     const local = session('local', 'P:\\Projects\\demo', {
       projectId: 'demo-project',
     })
@@ -69,7 +69,6 @@ describe('buildCockpitModel', () => {
     })
     const project: ExtensionProject = {
       id: 'demo-project',
-      memoryStatus: 'green',
       name: 'demo',
       path: 'P:\\Projects\\demo',
       sessionCount: 2,
@@ -131,7 +130,6 @@ function session(
     id,
     isActive: false,
     messageCount: 1,
-    memoryStatus: null,
     needsAttention: false,
     planSummary: null,
     primaryStatus: 'ok',
@@ -149,7 +147,6 @@ function session(
 function projectFor(session: ExtensionSession): ExtensionProject {
   return {
     id: session.projectId,
-    memoryStatus: null,
     name: session.projectName,
     path: session.projectPath,
     sessionCount: 1,

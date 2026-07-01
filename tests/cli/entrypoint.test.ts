@@ -48,6 +48,15 @@ describe('CLI entrypoint', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('does not recognize the removed sync command', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await runCli(['sync'])
+
+    expect(error).toHaveBeenCalledWith('reup: unknown command: sync')
+    expect(process.exitCode).toBe(1)
+  })
+
   it('rejects invalid command arguments before performing work', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 

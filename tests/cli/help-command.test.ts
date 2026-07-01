@@ -13,7 +13,6 @@ const PUBLIC_COMMANDS = [
   'list',
   'resume',
   'search',
-  'sync',
   'touched',
   'usage',
   'web',
@@ -30,8 +29,8 @@ describe('CLI help', () => {
 
     expect(help).toContain('Configuration')
     expect(help).toContain('reup completion <shell>')
-    expect(help).toContain('Features')
-    expect(help).toContain('reup sync [link|unlink|status] [path]')
+    expect(help).toContain('Maintenance')
+    expect(help).not.toContain('reup sync')
     expect(help).not.toContain('reup --theme')
   })
 
@@ -48,14 +47,22 @@ describe('CLI help', () => {
   it('supports the help command and both conventional help flags', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await runCli(['help', 'sync'])
     await runCli(['help'])
     await runCli(['help', '--help'])
     await runCli(['-h'])
 
-    expect(String(log.mock.calls[0][0])).toContain('cross-device session storage (Alpha)')
-    expect(log).toHaveBeenCalledTimes(4)
+    expect(String(log.mock.calls[0][0])).toContain('session manager for Claude Code')
+    expect(log).toHaveBeenCalledTimes(3)
     expect(process.exitCode).toBeUndefined()
+  })
+
+  it('does not expose a sync help topic', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    runHelpCommand(['sync'])
+
+    expect(error).toHaveBeenCalledWith('reup: no help topic for: sync')
+    expect(process.exitCode).toBe(1)
   })
 
   it('keeps the theme shortcut out of the main help but documents it under config', async () => {

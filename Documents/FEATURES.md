@@ -104,7 +104,6 @@ session intelligence.
 | **Deep search picker**            | While searching, `tab` switches to full-content transcript search and shows results as a navigable picker.                                                              |
 | **Expiry glyph**                  | Sessions approaching the Claude Code cleanup window show `⚠Nd` (days remaining) inline in the session row.                                                              |
 | **Archive toggle**                | `a` toggles archive state for the selected session. Archived sessions are hidden by default in both TUI and web.                                                        |
-| **Cloud indicator**               | Projects with linked shared storage show `☁` in the project row.                                                                                                        |
 | **Search qualifiers**             | All qualifiers available in `reup list` work in the TUI search bar.                                                                                                     |
 
 ---
@@ -132,7 +131,6 @@ the reviewed landscape that ships both a web UI and session intelligence.
 | **Start new session from project** | `+ new` button launches a new Claude Code session in the project directory.                                                                                                                  |
 | **Branch drift badge**             | Shown inline on session rows when the recorded branch differs from current git HEAD.                                                                                                         |
 | **Status badges**                  | Each session row shows its derived `primaryStatus` badge.                                                                                                                                    |
-| **Cloud indicator**                | Projects with linked shared storage show a cloud icon in the project list.                                                                                                                   |
 
 ---
 
@@ -150,7 +148,7 @@ dashboard with workspace-native companion views:
 - Live refresh only while the Reup view is visible, including Claude locks,
   multi-root workspaces, active editor affinity, and Git worktrees.
 - A CSP-restricted Session Inspector with goal, progress, plan, TODOs, context,
-  branches, file links, tags, and passive Project Memory state.
+  branches, file links, and tags.
 - Safe local actions: resume, handoff, alias, archive/undo, tags, and reveal.
 - Compact active/attention status bar and global/workspace Quick Picks.
 - One centralized resume policy across all surfaces, choosing the Claude Code
@@ -181,8 +179,6 @@ useful. Designed to be scriptable and composable with standard shell tools.
 | `reup doctor`                        | Non-destructive local health check                                                                                                                  |
 | `reup usage`                         | Show observed usage and data freshness                                                                                                              |
 | `reup usage setup / remove / toggle` | Manage usage capture integration                                                                                                                    |
-| `reup sync`                          | Open the interactive shared-session-storage panel _(experimental)_                                                                                  |
-| `reup sync link / unlink`            | Manage experimental shared session storage for a project, with an optional explicit path for scripts                                                |
 | `reup config get/set/reset <key>`    | Read and write persistent user preferences                                                                                                          |
 | `reup completion <shell>`            | Print PowerShell, Bash, or Zsh completion setup                                                                                                     |
 | `reup help [command]`                | Show general or command-specific CLI help                                                                                                           |
@@ -198,18 +194,12 @@ and adaptive ID prefixes are also absent from all competitors.
 
 ---
 
-### Shared session storage
+### Deferred project memory sync
 
-| Feature                   | Detail                                                                                                                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **reup sync link**        | Moves a project's session transcripts from `~/.claude/projects/` into `.claude-memory/` inside the project directory, then redirects Claude Code's storage there via a filesystem junction (Windows) or symlink (macOS/Linux). |
-| **Cloud sync compatible** | Any cloud folder syncing the project (OneDrive, pCloud, Dropbox, Google Drive) carries the sessions along automatically. No cloud account required in Reup itself.                                                             |
-| **Second-machine setup**  | `reup sync link <path>` on a new machine computes the expected project ID from the path and creates the redirect automatically if no local entry exists.                                                                       |
-| **Reversible**            | `reup sync unlink` restores local-only storage.                                                                                                                                                                                |
-| **Cloud indicator**       | Linked projects show `☁` in TUI and web project rows.                                                                                                                                                                          |
-
-**Unique to Reup:** no other reviewed tool ships a session portability mechanism
-of any kind.
+Project Memory / shared session storage was removed before the first public
+release. The design knowledge is preserved in
+[`DEFERRED_PROJECT_MEMORY_SYNC.md`](DEFERRED_PROJECT_MEMORY_SYNC.md), but the
+feature is not shipped, advertised, or kept dormant in the codebase.
 
 ---
 
@@ -262,7 +252,6 @@ Assessed against the four tools reviewed in the mid-2026 article
 | Handoff / continuation packet                       |       ✓        |   —    |    —    |       —        |    —     |
 | Inbox (attention-sorted summary)                    |       ✓        |   —    |    —    |       —        |    —     |
 | Ranked shell completion                             |       ✓        |   —    |    —    |       —        |    —     |
-| Shared session storage (cloud-sync portable)        |       ✓        |   —    |    —    |       —        |    —     |
 | CLAUDE.md editor                                    |       ✓        |   —    |    —    |       —        |    —     |
 | TUI interface                                       |       ✓        |   —    |    —    |       ✓        |    ✓     |
 | Web interface                                       |       ✓        |   —    |    ✓    |       —        |    —     |
@@ -299,5 +288,5 @@ competitive positioning:
   requires a dedicated desktop install.
 
 - **Reup-hosted cloud sync / accounts / team features** — Local-first is a
-  design constraint, not a gap. Shared session storage (`reup sync link`) lets
-  sessions travel with a project via any cloud folder the user already syncs.
+  design constraint, not a gap. Project Memory sync is deferred until it can be
+  supported as a separate explicit milestone.
