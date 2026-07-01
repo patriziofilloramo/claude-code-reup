@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import { Box, Text, useStdout } from 'ink'
 
 import { LABELS } from '../../config/labels.js'
@@ -9,6 +11,7 @@ import { relativeTime } from '../../utils/time.js'
 interface SessionListProps {
   activeSessionIds: Set<string>
   bulkSelectedIds: Set<string>
+  busySessionIds: Set<string>
   isFocused: boolean
   project: Project | null
   remotelyActiveSessionIds: Set<string>
@@ -23,6 +26,36 @@ interface StatusBadge {
 }
 
 const TAG_CHIPS_MAX = 2
+
+/** Pulse cycle for sessions whose Claude Code process reports busy work. */
+const BUSY_PULSE_FRAMES = ['●', '◉', '○', '◉'] as const
+const BUSY_PULSE_INTERVAL_MS = 250
+
+interface LivenessGlyph {
+  color: string
+  glyph: string
+}
+
+/**
+ * Chooses the per-row liveness indicator. Busy sessions pulse so a working
+ * agent is visibly different from a merely attached (idle) process.
+ */
+export function sessionLivenessGlyph(
+  isActive: boolean,
+  isBusy: boolean,
+  isRemotelyActive: boolean,
+  pulseFrame: number
+): LivenessGlyph {
+  if (isBusy) {
+    return {
+      color: COLORS.ok,
+      glyph: BUSY_PULSE_FRAMES[pulseFrame % BUSY_PULSE_FRAMES.length] as string,
+    }
+  }
+  if (isActive) return { color: COLORS.ok, glyph: '●' }
+  if (isRemotelyActive) return { color: COLORS.muted, glyph: '◌' }
+  return { color: COLORS.border, glyph: '●' }
+}
 
 export function formatTagChips(tags: string[]): string {
   const shown = tags.slice(0, TAG_CHIPS_MAX)
@@ -64,6 +97,7 @@ function statusBadgeForSession(session: Session): StatusBadge | null {
 export default function SessionList({
   activeSessionIds,
   bulkSelectedIds,
+  busySessionIds,
   isFocused,
   project,
   remotelyActiveSessionIds,
@@ -71,6 +105,18 @@ export default function SessionList({
   sessions,
   totalCount,
 }: SessionListProps) {
+  const [pulseFrame, setPulseFrame] = useState(0)
+  const hasVisibleBusySession = sessions.some((session) => busySessionIds.has(session.id))
+
+  useEffect(() => {
+    if (!hasVisibleBusySession) return
+    const intervalId = setInterval(
+      () => setPulseFrame((frame) => (frame + 1) % BUSY_PULSE_FRAMES.length),
+      BUSY_PULSE_INTERVAL_MS
+    )
+    return () => clearInterval(intervalId)
+  }, [hasVisibleBusySession])
+
   const { stdout } = useStdout()
   const terminalWidth = stdout?.columns ?? 80
   // ≥100: full summary (time · msgs · ctx · branch)
@@ -147,21 +193,15 @@ export default function SessionList({
             <Box flexShrink={0}>
               {showArrow ? <Text color={arrowColor}>▶ </Text> : null}
               <Text color={badge?.color ?? COLORS.dim}>{badge?.text ?? ' '} </Text>
-              <Text
-                color={
-                  activeSessionIds.has(session.id)
-                    ? COLORS.ok
-                    : remotelyActiveSessionIds.has(session.id)
-                      ? COLORS.muted
-                      : COLORS.border
-                }
-              >
-                {activeSessionIds.has(session.id)
-                  ? '● '
-                  : remotelyActiveSessionIds.has(session.id)
-                    ? '◌ '
-                    : '● '}
-              </Text>
+              {(() => {
+                const liveness = sessionLivenessGlyph(
+                  activeSessionIds.has(session.id),
+                  busySessionIds.has(session.id),
+                  remotelyActiveSessionIds.has(session.id),
+                  pulseFrame
+                )
+                return <Text color={liveness.color}>{liveness.glyph} </Text>
+              })()}
             </Box>
             <Box flexGrow={1} flexShrink={1} overflow="hidden">
               <Text color={nameColor} wrap="truncate">

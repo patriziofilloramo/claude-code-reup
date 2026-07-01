@@ -17,10 +17,6 @@ const STRINGS = {
   projectLastActive: 'last active: {time}',
   projectNewSession: 'New session',
   projectMoreActions: 'More actions',
-  projectCloudOk: 'Shared storage — writes directly to cloud',
-  projectCloudOffline:
-    'Cloud offline — sessions saved locally, new sessions paused until sync resumes',
-  projectCloudUnlinked: 'Device(s) not linked: {devices} — run reup sync link on those devices',
   projectCtxNewSession: '+ new session',
   projectCtxCopyPath: 'copy path',
   projectPathCopied: 'Path copied',
@@ -179,8 +175,11 @@ const STRINGS = {
   diagnosticsSectionOrphaned: 'Orphaned transcripts ({n})',
   diagnosticsSectionBrokenIndices: 'Broken indices ({n})',
   diagnosticsSectionStaleLocks: 'Stale locks ({n})',
+  diagnosticsSectionLegacyMemory: 'Legacy Project Memory artifacts ({n})',
   diagnosticsExpiresSoon: 'Expires soon · {path}',
   diagnosticsPathMissing: 'Path missing · {path}',
+  diagnosticsLegacyMemoryNote:
+    'Read-only warning. This release no longer manages Project Memory; review manually before deleting or moving anything.',
 
   // ── App chrome ────────────────────────────────────────────────────────────
   usageLoading: 'usage loading…',
@@ -225,8 +224,6 @@ const STRINGS = {
   footerTitleR: 'Rename the selected session (r)',
   footerTitleH: 'Copy a handoff packet for the selected session (H)',
   footerTitleD: 'Delete the selected session permanently (D)',
-  footerSyncBtn: 'sync',
-  footerSyncTitle: 'Project Memory Sync (Alpha)',
   footerThemeBtn: 'theme',
   footerThemeTitle: 'Switch theme',
   footerStatusLoading: 'loading…',
@@ -251,8 +248,6 @@ const STRINGS = {
   claudeMdSaveBtn: 'Save',
   claudeMdCloseBtn: 'Close',
   lfTitle: 'Lost & Found',
-  syncTitle: 'Project Memory Sync',
-  syncAlphaLabel: 'Alpha',
 
   // ── Org manager dialog ────────────────────────────────────────────────────
   orgManagerStackTitle: 'Stack: {name}',
@@ -269,36 +264,6 @@ const STRINGS = {
   claudeMdSaved: 'saved',
   claudeMdUnsaved: 'unsaved',
   claudeMdSaveError: 'error: {message}',
-  syncLoading: 'Loading sync status...',
-  syncLoadFailed: 'Failed to load sync status.',
-  syncWarning:
-    'Alpha. Syncs Claude project memory between your own devices through a cloud-synced project folder. It does not share data with other users. Link actions may manage CLAUDE.md, .gitignore, .claude/settings.local.json, and .claude-memory/.',
-  syncEnabled: 'Project Memory Sync is on',
-  syncDisabled: 'Project Memory Sync is off',
-  syncEnable: 'Enable Project Memory Sync',
-  syncDisable: 'Disable Project Memory Sync',
-  syncLink: 'Link',
-  syncUnlink: 'Unlink',
-  syncForget: 'Forget',
-  syncForgetConfirm:
-    'Forget this local project copy? Project Memory remains available and local data is archived for recovery.',
-  syncLinkAllCloud: 'Link all cloud projects',
-  syncUnlinkAll: 'Unlink all synced projects',
-  syncNoProjects: 'No projects found.',
-  syncNoCloudProjects: 'No cloud projects found under detected cloud folders.',
-  syncConfirmManaged: 'Reup will patch managed sync files for this project. Continue?',
-  syncConfirmBulk: 'Run this bulk sync operation sequentially?',
-  syncOperationDone: 'Sync operation complete',
-  syncOperationFailed: 'Sync failed: {error}',
-  syncAdvancedDiscoveryLabel: 'Advanced Discovery',
-  syncAdvancedDiscoveryOn: 'on',
-  syncAdvancedDiscoveryOff: 'off',
-  syncAdvancedDiscoveryDesc:
-    'Scan specific folders for projects linked on other devices. Slower than auto-detection; useful when projects live outside detected cloud roots.',
-  syncSearchPathsLabel: 'Search paths',
-  syncSearchPathsPlaceholder: 'One path per line, e.g. ~/Documents/Projects',
-  syncSearchPathsSave: 'Save paths',
-  syncSearchPathsSaved: 'Paths saved',
 
   // ── New session ────────────────────────────────────────────────────────────
   newSessionStarted: 'New session started in terminal',
@@ -437,6 +402,8 @@ const TOAST_DURATION_MS = 2400
 const USAGE_POLL_INTERVAL_MS = 5000
 /** How often (ms) to refresh /api/live-activity when active sessions exist. */
 const LIVE_ACTIVITY_POLL_MS = 3000
+/** How often (ms) to re-render the live strip so relative ages stay current. */
+const LIVE_STRIP_TICK_MS = 1000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'reup:confirmResume'
 const LEGACY_CONFIRM_RESUME_PREFERENCE = 'swo' + 'op:confirmResume'
@@ -588,7 +555,6 @@ let deepSearchLoading = false
 let deepSearchQueryTerm = ''
 let sessionInspectorExpanded = false
 let sessionPreviewCache = new Map()
-let syncOverview = null
 // Org data fetched from /api/org; null before first load.
 let orgData = null
 // Active focus filter — narrows both the project list and session list.
@@ -646,11 +612,6 @@ const elements = {
   diagnosticsCloseButton: elementById('lf-close'),
   searchDeepBtn: elementById('search-deep-btn'),
   searchModeLabel: elementById('search-mode-label'),
-  syncButton: elementById('ftr-sync'),
-  syncDrawer: elementById('sync-drawer'),
-  syncBody: elementById('sync-body'),
-  syncSubtitle: elementById('sync-subtitle'),
-  syncCloseButton: elementById('sync-close'),
   rail: elementById('rail'),
   focusBar: elementById('focus-bar'),
   focusBarLabel: elementById('focus-bar-label'),
@@ -1271,7 +1232,6 @@ function buildProjectRowHtml(project) {
     escapeHtml(compactPath(project.path)) +
     '</span>' +
     buildProjectOrgChipsHtml(project) +
-    buildProjectCloudHtml(project) +
     '<span class="p-last">' +
     lastLabel +
     '</span>' +
@@ -1284,37 +1244,6 @@ function buildProjectRowHtml(project) {
     '">⋯</button>' +
     '</div>' +
     '</div>'
-  )
-}
-
-/** Returns the fixed-width Project Memory cell, including an empty placeholder. */
-function buildProjectCloudHtml(project) {
-  if (!project.syncStatus || project.syncStatus === 'none') {
-    return '<span class="p-cloud p-cloud--empty" aria-hidden="true"></span>'
-  }
-
-  if (project.syncStatus === 'grey') {
-    return (
-      '<span class="p-cloud p-cloud--stale" title="' +
-      escapeHtml(STRINGS.projectCloudOffline) +
-      '">☁</span>'
-    )
-  }
-
-  if (project.syncStatus === 'orange') {
-    return (
-      '<span class="p-cloud p-cloud--unlinked" title="' +
-      escapeHtml(
-        fmt(STRINGS.projectCloudUnlinked, {
-          devices: (project.unlinkedDevices ?? []).join(', '),
-        })
-      ) +
-      '">☁</span>'
-    )
-  }
-
-  return (
-    '<span class="p-cloud p-cloud--ok" title="' + escapeHtml(STRINGS.projectCloudOk) + '">☁</span>'
   )
 }
 
@@ -3285,12 +3214,43 @@ async function renderDiagnosticsPanel() {
     )
   }
 
+  if (report.legacyProjectMemoryArtifacts && report.legacyProjectMemoryArtifacts.length > 0) {
+    const rows = report.legacyProjectMemoryArtifacts
+      .map(function (item) {
+        return (
+          '<div class="lf-item">' +
+          '<div class="lf-item-name">' +
+          escapeHtml(item.projectId) +
+          '</div>' +
+          '<div class="lf-item-meta lf-item-warn">' +
+          escapeHtml(item.path) +
+          '</div>' +
+          '</div>'
+        )
+      })
+      .join('')
+    sections.push(
+      '<div class="lf-section">' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionLegacyMemory, {
+          n: report.legacyProjectMemoryArtifacts.length,
+        }) +
+        '</div>' +
+        '<div class="lf-item-meta lf-item-warn">' +
+        STRINGS.diagnosticsLegacyMemoryNote +
+        '</div>' +
+        rows +
+        '</div>'
+    )
+  }
+
   const total =
     (report.expiring ? report.expiring.length : 0) +
     (report.pathMissing ? report.pathMissing.length : 0) +
     (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0) +
     (report.brokenIndices ? report.brokenIndices.length : 0) +
-    (report.staleLocks ? report.staleLocks.length : 0)
+    (report.staleLocks ? report.staleLocks.length : 0) +
+    (report.legacyProjectMemoryArtifacts ? report.legacyProjectMemoryArtifacts.length : 0)
 
   elements.diagnosticsSubtitle.textContent =
     total === 1
@@ -3593,303 +3553,6 @@ elements.sessionInspector.addEventListener('click', function (event) {
   const file = event.target.closest('.touched-linked')
   if (file) {
     toggleTouchedExpansion(file.dataset.touchedPath, file.dataset.touchedKey)
-  }
-})
-// ---------------------------------------------------------------------------
-// Cross-device session storage drawer
-// ---------------------------------------------------------------------------
-
-function openSyncDrawer() {
-  elements.syncDrawer.classList.add('open')
-  elements.syncBody.innerHTML = '<div class="lf-loading">' + STRINGS.syncLoading + '</div>'
-  void renderSyncPanel()
-}
-
-function closeSyncDrawer() {
-  elements.syncDrawer.classList.remove('open')
-}
-
-async function renderSyncPanel() {
-  try {
-    syncOverview = await requestJson('/api/sync')
-  } catch {
-    elements.syncBody.innerHTML = '<div class="lf-loading">' + STRINGS.syncLoadFailed + '</div>'
-    return
-  }
-
-  elements.syncSubtitle.textContent = syncOverview.enabled
-    ? STRINGS.syncEnabled
-    : STRINGS.syncDisabled
-
-  elements.syncBody.innerHTML =
-    '<div class="sync-warning">' +
-    escapeHtml(STRINGS.syncWarning) +
-    '</div>' +
-    '<div class="sync-actions">' +
-    syncButtonHtml(
-      'sync-toggle',
-      syncOverview.enabled ? STRINGS.syncDisable : STRINGS.syncEnable,
-      false
-    ) +
-    syncButtonHtml('sync-link-all-cloud', STRINGS.syncLinkAllCloud, !syncOverview.enabled) +
-    syncButtonHtml('sync-unlink-all', STRINGS.syncUnlinkAll, !syncOverview.enabled) +
-    '</div>' +
-    '<div class="sync-summary">' +
-    '<span>' +
-    syncOverview.linkedProjects.length +
-    ' linked</span><span>' +
-    syncOverview.cloudProjectCandidates.length +
-    ' cloud candidates</span><span>' +
-    syncOverview.skippedActiveProjects.length +
-    ' active disabled</span></div>' +
-    renderAdvancedDiscoveryPanel(syncOverview) +
-    renderSyncProjectList(syncOverview.projects, syncOverview.enabled)
-}
-
-function renderAdvancedDiscoveryPanel(overview) {
-  const isOn = overview.advancedDiscovery
-  const pathsValue = (overview.projectSearchPaths ?? []).join('\n')
-  return (
-    '<div class="sync-advanced-discovery">' +
-    '<div class="sync-advanced-discovery-header">' +
-    '<span class="sync-advanced-discovery-label">' +
-    escapeHtml(STRINGS.syncAdvancedDiscoveryLabel) +
-    '</span>' +
-    '<button class="btn btn-secondary sync-action" data-sync-action="sync-advanced-discovery-toggle">' +
-    escapeHtml(isOn ? STRINGS.syncAdvancedDiscoveryOn : STRINGS.syncAdvancedDiscoveryOff) +
-    '</button>' +
-    '</div>' +
-    '<p class="sync-advanced-discovery-desc">' +
-    escapeHtml(STRINGS.syncAdvancedDiscoveryDesc) +
-    '</p>' +
-    (isOn
-      ? '<div class="sync-search-paths">' +
-        '<label class="sync-search-paths-label">' +
-        escapeHtml(STRINGS.syncSearchPathsLabel) +
-        '</label>' +
-        '<textarea id="sync-search-paths-input" class="sync-search-paths-input" rows="4" placeholder="' +
-        escapeHtml(STRINGS.syncSearchPathsPlaceholder) +
-        '">' +
-        escapeHtml(pathsValue) +
-        '</textarea>' +
-        '<button class="btn btn-secondary" id="sync-search-paths-save">' +
-        escapeHtml(STRINGS.syncSearchPathsSave) +
-        '</button>' +
-        '</div>'
-      : '') +
-    '</div>'
-  )
-}
-
-function syncButtonHtml(action, label, disabled) {
-  return (
-    '<button class="btn btn-secondary sync-action" data-sync-action="' +
-    escapeHtml(action) +
-    '"' +
-    (disabled ? ' disabled' : '') +
-    '>' +
-    escapeHtml(label) +
-    '</button>'
-  )
-}
-
-function renderSyncProjectList(items, syncEnabled) {
-  if (!items || items.length === 0) {
-    return '<div class="lf-empty">' + STRINGS.syncNoProjects + '</div>'
-  }
-
-  const sections = [
-    {
-      key: 'linked',
-      label: 'Linked',
-      projects: items.filter(function (p) {
-        return p.isShared
-      }),
-    },
-    {
-      key: 'local',
-      label: 'Local (unlinked)',
-      projects: items.filter(function (p) {
-        return !p.isShared && !p.isRemoteProject
-      }),
-    },
-    {
-      key: 'remote',
-      label: 'Remote (other device)',
-      projects: items.filter(function (p) {
-        return p.isRemoteProject
-      }),
-    },
-  ]
-
-  return sections
-    .filter(function (s) {
-      return s.projects.length > 0
-    })
-    .map(function (section) {
-      return (
-        '<div class="sync-section">' +
-        '<div class="sync-section-title">' +
-        escapeHtml(section.label) +
-        ' (' +
-        section.projects.length +
-        ')</div>' +
-        section.projects
-          .map(function (project) {
-            const isForgettable =
-              syncEnabled &&
-              !project.isShared &&
-              !project.isRemoteProject &&
-              project.cloudPath &&
-              !project.isActive
-            const canLink = syncEnabled && !project.isShared && !project.isActive
-            const canUnlink = syncEnabled && project.isShared && !project.isActive
-
-            return (
-              '<div class="sync-project' +
-              (project.isActive ? ' sync-project--active' : '') +
-              '">' +
-              '<span class="sync-project-path" title="' +
-              escapeHtml(project.path) +
-              '">' +
-              escapeHtml(project.path) +
-              '</span>' +
-              (project.isActive
-                ? '<span class="sync-project-badge sync-project-badge--active">active</span>'
-                : '') +
-              '<span class="sync-project-actions">' +
-              (canLink
-                ? '<button class="btn btn-secondary sync-row-action" data-sync-row-action="link" data-sync-row-path="' +
-                  escapeHtml(project.path) +
-                  '">' +
-                  escapeHtml(STRINGS.syncLink) +
-                  '</button>'
-                : '') +
-              (canUnlink
-                ? '<button class="btn btn-secondary sync-row-action" data-sync-row-action="unlink" data-sync-row-path="' +
-                  escapeHtml(project.path) +
-                  '">' +
-                  escapeHtml(STRINGS.syncUnlink) +
-                  '</button>'
-                : '') +
-              (isForgettable
-                ? '<button class="btn btn-secondary sync-row-action sync-row-action--danger" data-sync-row-action="forget" data-sync-row-path="' +
-                  escapeHtml(project.path) +
-                  '">' +
-                  escapeHtml(STRINGS.syncForget) +
-                  '</button>'
-                : '') +
-              '</span>' +
-              '</div>'
-            )
-          })
-          .join('') +
-        '</div>'
-      )
-    })
-    .join('')
-}
-
-async function runSyncDrawerAction(action) {
-  try {
-    if (action === 'sync-toggle') {
-      await requestJson('/api/sync/feature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !syncOverview.enabled }),
-      })
-    } else if (action === 'sync-link-all-cloud') {
-      if (!window.confirm(STRINGS.syncConfirmBulk)) return
-      const result = await requestJson('/api/sync/link-all-cloud', { method: 'POST' })
-      showToast(result.message || STRINGS.syncOperationDone)
-    } else if (action === 'sync-unlink-all') {
-      if (!window.confirm(STRINGS.syncConfirmBulk)) return
-      const result = await requestJson('/api/sync/unlink-all', { method: 'POST' })
-      showToast(result.message || STRINGS.syncOperationDone)
-    } else if (action === 'sync-advanced-discovery-toggle') {
-      await requestJson('/api/sync/advanced-discovery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !syncOverview.advancedDiscovery }),
-      })
-      await renderSyncPanel()
-      return
-    }
-
-    await renderSyncPanel()
-    await refreshProjectData()
-    showToast(STRINGS.syncOperationDone)
-  } catch (error) {
-    showToast(fmt(STRINGS.syncOperationFailed, { error: error.message }), 'err')
-  }
-}
-
-async function runSyncRowAction(action, path) {
-  try {
-    if (action === 'link') {
-      if (!window.confirm(STRINGS.syncConfirmManaged)) return
-      await requestJson('/api/sync/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-    } else if (action === 'unlink') {
-      await requestJson('/api/sync/unlink', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-    } else if (action === 'forget') {
-      if (!window.confirm(STRINGS.syncForgetConfirm)) return
-      await requestJson('/api/sync/forget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-    }
-    await renderSyncPanel()
-    await refreshProjectData()
-    showToast(STRINGS.syncOperationDone)
-  } catch (error) {
-    showToast(fmt(STRINGS.syncOperationFailed, { error: error.message }), 'err')
-  }
-}
-
-elements.syncButton.addEventListener('click', openSyncDrawer)
-elements.syncCloseButton.addEventListener('click', closeSyncDrawer)
-elements.syncDrawer.addEventListener('click', function (event) {
-  if (event.target === elements.syncDrawer) closeSyncDrawer()
-})
-elements.syncBody.addEventListener('click', function (event) {
-  const button = event.target.closest('[data-sync-action]')
-  if (button && !button.disabled) {
-    void runSyncDrawerAction(button.dataset.syncAction)
-    return
-  }
-
-  const rowButton = event.target.closest('[data-sync-row-action]')
-  if (rowButton && !rowButton.disabled) {
-    const rowAction = rowButton.dataset.syncRowAction
-    const rowPath = rowButton.dataset.syncRowPath
-    void runSyncRowAction(rowAction, rowPath)
-    return
-  }
-
-  if (event.target.id === 'sync-search-paths-save') {
-    const textarea = document.getElementById('sync-search-paths-input')
-    if (!textarea) return
-    const paths = textarea.value
-      .split('\n')
-      .map((p) => p.trim())
-      .filter(Boolean)
-    void requestJson('/api/sync/advanced-discovery', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths }),
-    })
-      .then(() => renderSyncPanel())
-      .then(() => showToast(STRINGS.syncSearchPathsSaved))
-      .catch((err) => showToast(fmt(STRINGS.syncOperationFailed, { error: err.message }), 'err'))
   }
 })
 // ---------------------------------------------------------------------------
@@ -4449,15 +4112,39 @@ function connectLiveUpdates() {
     if (liveUpdatesRefreshTimer) clearTimeout(liveUpdatesRefreshTimer)
     liveUpdatesRefreshTimer = setTimeout(function () {
       liveUpdatesRefreshTimer = null
-      void refreshProjectData()
+      // The activity fetch gates on activeSessionIds, which only
+      // refreshProjectData updates — it must complete first or a session that
+      // just became active is skipped until the next poll.
+      void refreshProjectData().then(function () {
+        return refreshLiveActivity()
+      })
       void refreshUsageSummary()
-      void refreshLiveActivity()
     }, SSE_REFRESH_DEBOUNCE_MS)
   }
 
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
     scheduleLiveDataRefresh()
+  })
+  // Server-computed activity snapshots: liveness flips render without any
+  // refetch, and the active badges follow the pushed session-id set.
+  liveUpdatesSource.addEventListener('activity', function (event) {
+    var snapshot
+    try {
+      snapshot = JSON.parse(event.data)
+    } catch {
+      return
+    }
+    if (!snapshot || !Array.isArray(snapshot.entries)) return
+    if (Array.isArray(snapshot.activeSessionIds)) {
+      activeSessionIds = new Set(snapshot.activeSessionIds)
+      renderProjects()
+      renderSessions()
+    }
+    applyLiveActivity(snapshot.entries)
+  })
+  liveUpdatesSource.addEventListener('usage', function () {
+    void refreshUsageSummary()
   })
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
@@ -4466,42 +4153,49 @@ function connectLiveUpdates() {
   })
 }
 
+/** Applies a live-activity entry list and re-renders every consumer of it. */
+function applyLiveActivity(entries) {
+  liveActivity = entries
+  renderRail()
+  if (selectedSession) renderInspector(deriveVisibleSessions())
+}
+
 /**
  * Refreshes the live activity strip from /api/live-activity.
+ * SSE `activity` pushes carry the same model in near real time; this poll is
+ * the reconciliation fallback (missed pushes, waiting→idle age-outs).
  * No-op (and clears the strip) when no sessions are currently active.
  */
 async function refreshLiveActivity() {
-  function renderLiveActivityConsumers() {
-    renderRail()
-    if (selectedSession) renderInspector(deriveVisibleSessions())
-  }
-
   if (activeSessionIds.size === 0) {
-    if (liveActivity.length > 0) {
-      liveActivity = []
-      renderLiveActivityConsumers()
-    }
+    if (liveActivity.length > 0) applyLiveActivity([])
     return
   }
   try {
     var data = await requestJson('/api/live-activity')
     if (!Array.isArray(data)) return
-    liveActivity = data
-    renderLiveActivityConsumers()
+    applyLiveActivity(data)
   } catch {
     // non-fatal: the strip keeps its last known data until the next poll
   }
 }
 
 void refreshUsageSummary()
-void refreshProjectData()
-void refreshLiveActivity()
+// Same ordering constraint as scheduleLiveDataRefresh: the activity fetch
+// gates on activeSessionIds, which only refreshProjectData populates.
+void refreshProjectData().then(function () {
+  return refreshLiveActivity()
+})
 setInterval(function () {
   void refreshUsageSummary()
 }, USAGE_POLL_INTERVAL_MS)
 setInterval(function () {
   void refreshLiveActivity()
 }, LIVE_ACTIVITY_POLL_MS)
+// Keeps the strip's relative ages ("3s", "now") honest between data updates.
+setInterval(function () {
+  if (liveActivity.length > 0) renderRail()
+}, LIVE_STRIP_TICK_MS)
 connectLiveUpdates()
 
 // Narrow-mode back button: return to the project panel without clearing selection.

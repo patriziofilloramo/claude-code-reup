@@ -93,53 +93,10 @@ describe('web routes', () => {
     expect(response.status).toBe(403)
   })
 
-  it('returns experimental sync status without mutating state', async () => {
+  it('does not expose removed sync routes', async () => {
     const response = await buildApp().request('/api/sync')
-    const body = (await response.json()) as { enabled: boolean; projects: unknown[] }
 
-    expect(response.status).toBe(200)
-    expect(body.enabled).toBe(false)
-    expect(body.projects).toEqual([])
-  })
-
-  it('protects experimental sync feature toggles from non-local origins', async () => {
-    const response = await buildApp().request('/api/sync/feature', {
-      body: JSON.stringify({ enabled: true }),
-      headers: {
-        'Content-Type': 'application/json',
-        Host: 'localhost',
-        Origin: 'https://example.com',
-      },
-      method: 'POST',
-    })
-
-    expect(response.status).toBe(403)
-  })
-
-  it('rejects sync mutations while the experimental feature is disabled', async () => {
-    const response = await buildApp().request('/api/sync/link', {
-      body: JSON.stringify({ path: claudeDirectory }),
-      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
-      method: 'POST',
-    })
-
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({
-      error: 'cross-device session storage is disabled',
-    })
-  })
-
-  it('enables sync globally without linking projects automatically', async () => {
-    const response = await buildApp().request('/api/sync/feature', {
-      body: JSON.stringify({ enabled: true }),
-      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
-      method: 'POST',
-    })
-    const body = (await response.json()) as { enabled: boolean; linkedProjects: unknown[] }
-
-    expect(response.status).toBe(200)
-    expect(body.enabled).toBe(true)
-    expect(body.linkedProjects).toEqual([])
+    expect(response.status).toBe(404)
   })
 
   it('rejects inherited object properties as theme names', async () => {
@@ -188,6 +145,7 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual({
       brokenIndices: [],
       expiring: [],
+      legacyProjectMemoryArtifacts: [],
       orphanedTranscripts: [],
       pathMissing: [],
       staleLocks: [],
@@ -312,6 +270,66 @@ describe('web routes', () => {
 
     expect(await projectsResponse.json()).toEqual([])
     expect(await liveResponse.json()).toEqual([])
+  })
+
+  it('reports one running strip entry when any lock says busy, despite a quiet transcript', async () => {
+    await createKnownSession()
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    // Two locks for the same session (CLI process + editor peer): the busy one
+    // must win and the strip must not show the session twice.
+    await writeFile(
+      join(sessionsDirectory, 'cli.json'),
+      JSON.stringify({
+        pid: process.pid,
+        sessionId: SESSION_ID,
+        status: 'busy',
+        statusUpdatedAt: Date.now(),
+      })
+    )
+    await writeFile(
+      join(sessionsDirectory, 'editor-peer.json'),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+
+    const response = await buildApp().request('/api/live-activity')
+    const entries = (await response.json()) as Array<{ activityState: string; sessionId: string }>
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.sessionId).toBe(SESSION_ID)
+    expect(entries[0]?.activityState).toBe('running')
+  })
+
+  it('does not report running for a zombie busy lock left by an interrupted session', async () => {
+    const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
+    await mkdir(projectDirectory, { recursive: true })
+    const staleMs = 60 * 60 * 1000
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      JSON.stringify({
+        cwd: claudeDirectory,
+        message: { content: 'hello' },
+        timestamp: new Date(Date.now() - staleMs).toISOString(),
+        type: 'user',
+      })
+    )
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'zombie.json'),
+      JSON.stringify({
+        pid: process.pid,
+        sessionId: SESSION_ID,
+        status: 'busy',
+        statusUpdatedAt: Date.now() - staleMs,
+      })
+    )
+
+    const response = await buildApp().request('/api/live-activity')
+    const entries = (await response.json()) as Array<{ activityState: string }>
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.activityState).toBe('idle')
   })
 
   it('returns a Markdown handoff packet for the web action bar', async () => {

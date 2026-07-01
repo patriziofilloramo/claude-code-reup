@@ -6,7 +6,13 @@ import { join } from 'node:path'
 import { APP } from '../config/app.js'
 import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
-import { getActiveSessions } from '../core/session/active-sessions.js'
+import {
+  getActiveSessions,
+  getLiveSessionRecords,
+  isBusyEvidenceFresh,
+  mergeSessionLockStatuses,
+} from '../core/session/active-sessions.js'
+import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
 import { readLiveUsageSummary } from '../core/usage/live-usage.js'
@@ -20,7 +26,6 @@ import {
   type SessionSmartViewId,
 } from '../core/session/session-smart-view.js'
 import { deleteSession, setSessionArchived } from '../core/session/session-metadata.js'
-import { forgetProjectForSync } from '../core/sync/sync-actions.js'
 import { copyToClipboard, openDirectory } from '../utils/system.js'
 import { ConfigApp } from './ConfigApp.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
@@ -77,6 +82,9 @@ function App({ onResume }: AppProps) {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [activeSessionIds, setActiveSessionIds] = useState<Set<string>>(new Set())
+  const [sessionLockStatuses, setSessionLockStatuses] = useState<
+    Map<string, MergedSessionLockStatus>
+  >(new Map())
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -151,8 +159,11 @@ function App({ onResume }: AppProps) {
       if (refreshInProgress) return
       refreshInProgress = true
       try {
-        const activeIds = await getActiveSessions()
-        if (!disposed) setActiveSessionIds(activeIds)
+        const liveRecords = await getLiveSessionRecords()
+        if (disposed) return
+        const lockStatuses = mergeSessionLockStatuses(liveRecords)
+        setActiveSessionIds(new Set(lockStatuses.keys()))
+        setSessionLockStatuses(lockStatuses)
       } finally {
         refreshInProgress = false
       }
@@ -224,6 +235,29 @@ function App({ onResume }: AppProps) {
   // ---------------------------------------------------------------------------
   // Derived view model
   // ---------------------------------------------------------------------------
+
+  // A stale busy flag (session died or was interrupted mid-turn) must not
+  // pulse forever: busy is trusted only with a fresh transition or recent
+  // transcript activity backing it.
+  const busySessionIds = useMemo(() => {
+    const updatedMsBySessionId = new Map<string, number>()
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        const updatedMs = Date.parse(session.updated)
+        if (Number.isFinite(updatedMs)) updatedMsBySessionId.set(session.id, updatedMs)
+      }
+    }
+    const busyIds = new Set<string>()
+    for (const [sessionId, lockStatus] of sessionLockStatuses) {
+      if (lockStatus.status !== 'busy') continue
+      if (
+        isBusyEvidenceFresh(lockStatus.statusUpdatedAt, updatedMsBySessionId.get(sessionId) ?? null)
+      ) {
+        busyIds.add(sessionId)
+      }
+    }
+    return busyIds
+  }, [projects, sessionLockStatuses])
 
   const REMOTE_ACTIVE_THRESHOLD_MS = 5 * 60 * 1000
   const remotelyActiveSessionIds = useMemo(() => {
@@ -342,11 +376,7 @@ function App({ onResume }: AppProps) {
     if (!selectedProject) return
     switch (command) {
       case 'new-session':
-        if (selectedProject.cloudOffline) {
-          flashMessage('cloud offline — new session paused until sync resumes')
-        } else {
-          newSession(selectedProject)
-        }
+        newSession(selectedProject)
         break
       case 'browse-sessions':
         setFocusedPanel('sessions')
@@ -360,17 +390,6 @@ function App({ onResume }: AppProps) {
         copyToClipboard(selectedProject.path)
           .then(() => flashMessage('path copied'))
           .catch(() => flashMessage('clipboard unavailable'))
-        break
-      case 'forget-project':
-        forgetProjectForSync(selectedProject.path, { projects })
-          .then((result) => loadProjects().then((loaded) => ({ loaded, result })))
-          .then(({ loaded, result }) => {
-            setProjects(loaded)
-            flashMessage(result.message)
-          })
-          .catch((error: unknown) =>
-            flashMessage(error instanceof Error ? error.message : 'forget project failed')
-          )
         break
     }
   }
@@ -483,13 +502,7 @@ function App({ onResume }: AppProps) {
         if (focusedSession) setResumeCardSession(focusedSession)
         break
       case 'new-session':
-        if (selectedProject) {
-          if (selectedProject.cloudOffline) {
-            flashMessage('cloud offline — new session paused until sync resumes')
-          } else {
-            newSession(selectedProject)
-          }
-        }
+        if (selectedProject) newSession(selectedProject)
         break
       case 'archive':
         archiveSelectedSession()
@@ -633,11 +646,7 @@ function App({ onResume }: AppProps) {
       return
     }
     if (!isLoading && input === 'n' && selectedProject) {
-      if (selectedProject.cloudOffline) {
-        flashMessage('cloud offline — new session paused until sync resumes')
-      } else {
-        newSession(selectedProject)
-      }
+      newSession(selectedProject)
       return
     }
     if (!isLoading && input === '/') {
@@ -773,7 +782,7 @@ function App({ onResume }: AppProps) {
   }
 
   if (isConfigOpen) {
-    return <ConfigApp onClose={() => setIsConfigOpen(false)} onProjectsChanged={setProjects} />
+    return <ConfigApp onClose={() => setIsConfigOpen(false)} />
   }
 
   if (isHelpOpen) {
@@ -890,6 +899,7 @@ function App({ onResume }: AppProps) {
           <SessionList
             activeSessionIds={activeSessionIds}
             bulkSelectedIds={bulkSelectedIds}
+            busySessionIds={busySessionIds}
             isFocused={focusedPanel === 'sessions'}
             project={selectedProject}
             remotelyActiveSessionIds={remotelyActiveSessionIds}

@@ -224,7 +224,7 @@ describe('web client session-row invariants', () => {
     expect(uiSource).toContain('ftr-item ftr-item-context')
     expect(narrowStyles).toContain('.ftr-item {')
     expect(narrowStyles).toContain('display: none;')
-    expect(narrowStyles).toContain('.ftr-sync-btn {')
+    expect(narrowStyles).not.toContain('.ftr-sync-btn {')
     expect(narrowStyles).toContain('.rail-info,')
     expect(narrowStyles).toContain('.rail-toggle {')
     expect(narrowStyles).not.toContain('.ftr-item-context {\n    display: flex;')
@@ -462,17 +462,32 @@ describe('web client session-row invariants', () => {
   })
 
   it('refreshes both the live rail and selected inspector heartbeat', () => {
+    const applyActivity = sourceBetween(
+      'function applyLiveActivity(entries)',
+      'async function refreshLiveActivity()'
+    )
     const liveRefreshStart = source.indexOf('async function refreshLiveActivity()')
     const liveRefresh = source.slice(
       liveRefreshStart,
       source.indexOf('void refreshProjectData()', liveRefreshStart)
     )
 
-    expect(liveRefresh).toContain('function renderLiveActivityConsumers()')
-    expect(liveRefresh).toContain('renderRail()')
-    expect(liveRefresh).toContain('if (selectedSession) renderInspector(deriveVisibleSessions())')
-    expect(liveRefresh).toContain('liveActivity = []')
-    expect(liveRefresh).toContain('liveActivity = data')
+    expect(applyActivity).toContain('liveActivity = entries')
+    expect(applyActivity).toContain('renderRail()')
+    expect(applyActivity).toContain('if (selectedSession) renderInspector(deriveVisibleSessions())')
+    expect(liveRefresh).toContain('applyLiveActivity([])')
+    expect(liveRefresh).toContain('applyLiveActivity(data)')
+  })
+
+  it('applies pushed activity snapshots without a refetch and refreshes usage on its event', () => {
+    const liveUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
+
+    expect(liveUpdates).toContain("liveUpdatesSource.addEventListener('activity'")
+    expect(liveUpdates).toContain('JSON.parse(event.data)')
+    expect(liveUpdates).toContain('activeSessionIds = new Set(snapshot.activeSessionIds)')
+    expect(liveUpdates).toContain('applyLiveActivity(snapshot.entries)')
+    expect(liveUpdates).toContain("liveUpdatesSource.addEventListener('usage'")
+    expect(source).toContain('LIVE_STRIP_TICK_MS')
   })
 
   it('keeps live activity rail copy explicit and in STRINGS', () => {
@@ -520,6 +535,16 @@ describe('web client session-row invariants', () => {
     expect(liveUpdates).toContain('setTimeout(function ()')
     expect(liveUpdates).toContain('void refreshProjectData()')
     expect(liveUpdates).toContain('void refreshLiveActivity()')
+  })
+
+  it('refreshes live activity only after project data updated activeSessionIds', () => {
+    const scheduleRefresh = sourceBetween(
+      'function scheduleLiveDataRefresh()',
+      'liveUpdatesSource = new EventSource'
+    )
+
+    expect(scheduleRefresh).toContain('void refreshProjectData().then(function () {')
+    expect(scheduleRefresh).toContain('return refreshLiveActivity()')
   })
 })
 
@@ -724,14 +749,6 @@ describe('web client org layer invariants', () => {
       stylesSource.indexOf('.proj-row {'),
       stylesSource.indexOf('.proj-row:hover')
     )
-    const projectCloud = sourceBetween(
-      'function buildProjectCloudHtml(project)',
-      '/** Looks up the deep-search match record'
-    )
-    const cloudStyles = stylesSource.slice(
-      stylesSource.indexOf('.p-cloud {'),
-      stylesSource.indexOf('.p-cloud--ok')
-    )
     const countStyles = stylesSource.slice(
       stylesSource.indexOf('.p-cnt {'),
       stylesSource.indexOf('/* ── Right panel')
@@ -740,13 +757,12 @@ describe('web client org layer invariants', () => {
     expect(projectRow).toContain('display: grid;')
     expect(projectRow).toContain('grid-template-columns:')
     expect(projectRow).toContain('var(--project-row-gap)')
-    expect(projectRow).toContain('var(--project-cloud-col)')
+    expect(projectRow).not.toContain('var(--project-cloud-col)')
     expect(projectRow).toContain('var(--project-last-col)')
     expect(projectRow).toContain('var(--project-count-col)')
     expect(projectRow).not.toContain('var(--project-action-col)')
-    expect(projectCloud).toContain('p-cloud--empty')
-    expect(projectCloud).toContain('aria-hidden="true"')
-    expect(cloudStyles).toContain('text-align: center;')
+    expect(source).not.toContain('function buildProjectCloudHtml(project)')
+    expect(stylesSource).not.toContain('.p-cloud {')
     expect(countStyles).toContain('font-variant-numeric: tabular-nums;')
     expect(countStyles).toContain('text-align: right;')
     expect(
@@ -770,7 +786,7 @@ describe('web client org layer invariants', () => {
       narrowStyles.indexOf('.p-actions {')
     )
 
-    expect(stylesSource).toContain('--project-cloud-col: 16px;')
+    expect(stylesSource).not.toContain('--project-cloud-col: 16px;')
     expect(stylesSource).toContain('--project-last-col: 4ch;')
     expect(stylesSource).toContain('--project-count-col: 3ch;')
     expect(narrowStyles).toContain('--project-row-gap: var(--space-2xs);')

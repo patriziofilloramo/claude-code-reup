@@ -3,13 +3,13 @@
 import type { Context, Hono } from 'hono'
 
 import { APP } from '../../config/app.js'
-import { getActiveSessions, getLiveSessionRecords } from '../../core/session/active-sessions.js'
+import { getActiveSessions } from '../../core/session/active-sessions.js'
 import { loadProjectById, loadProjects } from '../../core/project/project-discovery.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../../core/session/session-handoff.js'
 import { isValidSessionId } from '../../core/session/session-model.js'
 import type { Project, Session } from '../../core/session/session-model.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
-import { readSessionTailActivity } from '../../core/session/session-tail.js'
+import { buildLiveActivitySnapshot } from '../live-activity-model.js'
 import { isResumeVisibleSession } from '../../core/session/session-visibility.js'
 import { filterProjectsByOrg, type OrgProjectFilter } from '../../core/org/org-filters.js'
 import { readOrgData } from '../../core/org/org-prefs.js'
@@ -140,47 +140,10 @@ export function registerProjectRoutes(app: Hono): void {
   )
 
   // Per-active-session last tool and activity state for the activity strip.
+  // The same model is pushed over SSE; this route remains the poll fallback.
   app.get(
     '/api/live-activity',
-    apiRoute(async (context) => {
-      const [liveRecords, allProjects] = await Promise.all([
-        getLiveSessionRecords(),
-        loadProjects(),
-      ])
-
-      if (liveRecords.length === 0) return context.json([])
-
-      const sessionIndex = new Map<string, { project: Project; session: Session }>()
-      for (const project of allProjects) {
-        for (const session of project.sessions) {
-          if (!isResumeVisibleSession(session)) continue
-          sessionIndex.set(session.id, { project, session })
-        }
-      }
-
-      const entries = await Promise.all(
-        liveRecords.map(async (record) => {
-          const found = sessionIndex.get(record.sessionId)
-          if (!found) return null
-
-          const { project, session } = found
-          const transcriptPath = sessionTranscriptPath(project.id, record.sessionId)
-          const tail = await readSessionTailActivity(transcriptPath)
-
-          return {
-            sessionId: record.sessionId,
-            projectId: project.id,
-            projectName: projectDisplayName(project),
-            sessionName: session.alias ?? session.name,
-            lastToolName: tail?.lastToolName ?? null,
-            activityState: tail?.state ?? 'idle',
-            lastEventAt: tail?.lastEventAt ?? null,
-          }
-        })
-      )
-
-      return context.json(entries.filter((entry) => entry !== null))
-    })
+    apiRoute(async (context) => context.json((await buildLiveActivitySnapshot()).entries))
   )
 
   log.debug('project routes registered')

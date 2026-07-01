@@ -3,7 +3,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { getActiveSessions } from '../../src/core/session/active-sessions.js'
+import {
+  BUSY_STATUS_TRUST_WINDOW_MS,
+  getActiveSessions,
+  getLiveSessionRecords,
+  isBusyEvidenceFresh,
+  mergeSessionLockStatuses,
+} from '../../src/core/session/active-sessions.js'
+import type { SessionLockRecord } from '../../src/core/session/active-sessions.js'
 
 const LIVE_SESSION_ID = '11111111-1111-4111-8111-111111111111'
 const DEAD_SESSION_ID = '22222222-2222-4222-8222-222222222222'
@@ -84,5 +91,111 @@ describe('getActiveSessions', () => {
     const activeSessionIds = await getActiveSessions()
 
     expect(activeSessionIds.size).toBe(0)
+  })
+
+  it('reads the lock status fields and rejects unexpected status values', async () => {
+    await mkdir(activeSessionsDirectory, { recursive: true })
+    await writeFile(
+      join(activeSessionsDirectory, 'busy.json'),
+      JSON.stringify({
+        sessionId: LIVE_SESSION_ID,
+        pid: process.pid,
+        status: 'busy',
+        statusUpdatedAt: 1_700_000_000_000,
+      })
+    )
+    await writeFile(
+      join(activeSessionsDirectory, 'weird-status.json'),
+      JSON.stringify({ sessionId: DEAD_SESSION_ID, pid: process.pid, status: 'exploding' })
+    )
+
+    const records = await getLiveSessionRecords()
+    const busyRecord = records.find((record) => record.sessionId === LIVE_SESSION_ID)
+    const weirdRecord = records.find((record) => record.sessionId === DEAD_SESSION_ID)
+
+    expect(busyRecord?.status).toBe('busy')
+    expect(busyRecord?.statusUpdatedAt).toBe(1_700_000_000_000)
+    expect(weirdRecord?.status).toBeNull()
+  })
+
+  it('marks a session busy when any of its lock files says busy', async () => {
+    await mkdir(activeSessionsDirectory, { recursive: true })
+    await writeFile(
+      join(activeSessionsDirectory, 'cli.json'),
+      JSON.stringify({ sessionId: LIVE_SESSION_ID, pid: process.pid, status: 'busy' })
+    )
+    await writeFile(
+      join(activeSessionsDirectory, 'editor-peer.json'),
+      JSON.stringify({ sessionId: LIVE_SESSION_ID, pid: process.pid })
+    )
+
+    const merged = mergeSessionLockStatuses(await getLiveSessionRecords())
+
+    expect(merged.get(LIVE_SESSION_ID)?.status).toBe('busy')
+  })
+})
+
+describe('mergeSessionLockStatuses', () => {
+  const record = (overrides: Partial<SessionLockRecord>): SessionLockRecord => ({
+    sessionId: LIVE_SESSION_ID,
+    pid: 1,
+    cwd: null,
+    startedAt: null,
+    status: null,
+    statusUpdatedAt: null,
+    ...overrides,
+  })
+
+  it('keeps busy even when a later status-less lock arrives', () => {
+    const merged = mergeSessionLockStatuses([
+      record({ status: 'busy', statusUpdatedAt: 1_000 }),
+      record({ status: null }),
+    ])
+    expect(merged.get(LIVE_SESSION_ID)).toEqual({ status: 'busy', statusUpdatedAt: 1_000 })
+  })
+
+  it('lets a busy lock override an earlier idle lock and keeps its own timestamp', () => {
+    const merged = mergeSessionLockStatuses([
+      record({ status: 'idle', statusUpdatedAt: 9_000 }),
+      record({ status: 'busy', statusUpdatedAt: 2_000 }),
+    ])
+    expect(merged.get(LIVE_SESSION_ID)).toEqual({ status: 'busy', statusUpdatedAt: 2_000 })
+  })
+
+  it('keeps the freshest transition timestamp among same-status locks', () => {
+    const merged = mergeSessionLockStatuses([
+      record({ status: 'busy', statusUpdatedAt: 1_000 }),
+      record({ status: 'busy', statusUpdatedAt: 5_000 }),
+    ])
+    expect(merged.get(LIVE_SESSION_ID)).toEqual({ status: 'busy', statusUpdatedAt: 5_000 })
+  })
+
+  it('collapses duplicate locks to a single session entry', () => {
+    const merged = mergeSessionLockStatuses([record({}), record({}), record({})])
+    expect(merged.size).toBe(1)
+    expect(merged.get(LIVE_SESSION_ID)).toEqual({ status: null, statusUpdatedAt: null })
+  })
+})
+
+describe('isBusyEvidenceFresh', () => {
+  const NOW = 10_000_000
+
+  it('trusts a fresh status transition or fresh transcript activity', () => {
+    expect(isBusyEvidenceFresh(NOW - 1_000, null, NOW)).toBe(true)
+    expect(isBusyEvidenceFresh(null, NOW - 1_000, NOW)).toBe(true)
+    // The freshest of the two signals wins.
+    expect(isBusyEvidenceFresh(NOW - BUSY_STATUS_TRUST_WINDOW_MS - 1, NOW - 1_000, NOW)).toBe(true)
+  })
+
+  it('rejects a zombie busy flag with no recent evidence', () => {
+    expect(isBusyEvidenceFresh(NOW - BUSY_STATUS_TRUST_WINDOW_MS - 1, null, NOW)).toBe(false)
+    expect(
+      isBusyEvidenceFresh(
+        NOW - BUSY_STATUS_TRUST_WINDOW_MS - 1,
+        NOW - BUSY_STATUS_TRUST_WINDOW_MS - 1,
+        NOW
+      )
+    ).toBe(false)
+    expect(isBusyEvidenceFresh(null, null, NOW)).toBe(false)
   })
 })

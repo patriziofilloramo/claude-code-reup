@@ -1,7 +1,11 @@
 ﻿import { open } from 'node:fs/promises'
 
+import { isBusyEvidenceFresh } from './active-sessions.js'
+
 /** Maximum bytes read from the end of a transcript to find recent tool activity. */
 const TAIL_BYTES = 12_000
+/** An event within this window (ms) marks a session as waiting rather than idle. */
+const WAITING_WINDOW_MS = 30_000
 
 export type ActivityState = 'running' | 'waiting' | 'idle'
 
@@ -37,18 +41,63 @@ export async function readSessionTailActivity(
 
     const readSize = Math.min(fileSize, TAIL_BYTES)
     const buffer = Buffer.allocUnsafe(readSize)
-    await fd.read(buffer, 0, readSize, fileSize - readSize)
-    const text = buffer.toString('utf8')
+    // A short read must not expose the uninitialized remainder of the buffer,
+    // so only the bytes actually read are decoded.
+    const { bytesRead } = await fd.read(buffer, 0, readSize, fileSize - readSize)
+    const text = buffer.subarray(0, bytesRead).toString('utf8')
 
     // When the file is larger than the tail window we started mid-stream, so
     // the first line is probably truncated and must be dropped.
     const isPartialRead = fileSize > readSize
-    return parseTailActivity(text, isPartialRead)
+    const activity = parseTailActivity(text, isPartialRead)
+    if (activity.lastEventAt === null && fileSize > 0) {
+      // A single event larger than the tail window leaves no parseable line,
+      // which must not read as a dead session: the file's own modification
+      // time still proves how recently the transcript was appended.
+      return applyLastEventFallback(activity, stat.mtime.toISOString())
+    }
+    return activity
   } catch {
     return null
   } finally {
     await fd?.close().catch(() => undefined)
   }
+}
+
+/**
+ * Combines Claude Code's own lock-file activity flag with transcript-derived
+ * state. A corroborated busy lock wins: transcript appends can pause well
+ * beyond any freshness threshold while a long tool call or response is in
+ * flight, so tail data alone misreads busy sessions as idle. But the lock is
+ * only rewritten on transitions, so a session that died or was interrupted
+ * mid-turn leaves `busy` behind forever — a stale flag falls back to the
+ * transcript, which still reports genuinely running tools via pending
+ * tool_use blocks. Tail state is also the only signal for Claude Code
+ * versions without lock status.
+ */
+export function resolveActivityState(
+  lockStatus: 'busy' | 'idle' | null,
+  tail: SessionTailActivity | null,
+  statusUpdatedAt: number | null = null,
+  now = Date.now()
+): ActivityState {
+  const tailState = tail?.state ?? 'idle'
+  if (lockStatus === 'busy') {
+    const lastTranscriptMs = tail?.lastEventAt ? Date.parse(tail.lastEventAt) : null
+    if (isBusyEvidenceFresh(statusUpdatedAt, lastTranscriptMs, now)) return 'running'
+    return tailState
+  }
+  if (lockStatus === 'idle') return tailState === 'running' ? 'waiting' : tailState
+  return tailState
+}
+
+function applyLastEventFallback(
+  activity: SessionTailActivity,
+  lastEventAt: string
+): SessionTailActivity {
+  if (activity.state !== 'idle') return { ...activity, lastEventAt }
+  const ageMs = Date.now() - new Date(lastEventAt).getTime()
+  return { ...activity, lastEventAt, state: ageMs < WAITING_WINDOW_MS ? 'waiting' : 'idle' }
 }
 
 function parseTailActivity(text: string, isPartialRead: boolean): SessionTailActivity {
@@ -91,9 +140,21 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
 
     if (event['type'] === 'user') {
       const content = (event['message'] as Record<string, unknown> | undefined)?.['content']
-      if (!Array.isArray(content)) continue
-      for (const block of content as Record<string, unknown>[]) {
-        if (block['type'] !== 'tool_result') continue
+      // A user turn that is not purely tool results (an interrupt marker or a
+      // new prompt) means no tool is running any more — pending tool uses must
+      // not keep reporting "running". Mirrors computeSignalsFromLines.
+      if (!Array.isArray(content)) {
+        toolUses.length = 0
+        continue
+      }
+      const blocks = content as Record<string, unknown>[]
+      const containsOnlyToolResults =
+        blocks.length > 0 && blocks.every((block) => block['type'] === 'tool_result')
+      if (!containsOnlyToolResults) {
+        toolUses.length = 0
+        continue
+      }
+      for (const block of blocks) {
         const id = typeof block['tool_use_id'] === 'string' ? block['tool_use_id'] : null
         if (id) resolvedToolIds.add(id)
       }
@@ -112,7 +173,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     state = 'running'
   } else if (lastEventAt) {
     const ageMs = Date.now() - new Date(lastEventAt).getTime()
-    state = ageMs < 30_000 ? 'waiting' : 'idle'
+    state = ageMs < WAITING_WINDOW_MS ? 'waiting' : 'idle'
   } else {
     state = 'idle'
   }

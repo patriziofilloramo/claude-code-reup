@@ -119,15 +119,39 @@ function connectLiveUpdates() {
     if (liveUpdatesRefreshTimer) clearTimeout(liveUpdatesRefreshTimer)
     liveUpdatesRefreshTimer = setTimeout(function () {
       liveUpdatesRefreshTimer = null
-      void refreshProjectData()
+      // The activity fetch gates on activeSessionIds, which only
+      // refreshProjectData updates — it must complete first or a session that
+      // just became active is skipped until the next poll.
+      void refreshProjectData().then(function () {
+        return refreshLiveActivity()
+      })
       void refreshUsageSummary()
-      void refreshLiveActivity()
     }, SSE_REFRESH_DEBOUNCE_MS)
   }
 
   liveUpdatesSource = new EventSource('/events')
   liveUpdatesSource.addEventListener('change', function () {
     scheduleLiveDataRefresh()
+  })
+  // Server-computed activity snapshots: liveness flips render without any
+  // refetch, and the active badges follow the pushed session-id set.
+  liveUpdatesSource.addEventListener('activity', function (event) {
+    var snapshot
+    try {
+      snapshot = JSON.parse(event.data)
+    } catch {
+      return
+    }
+    if (!snapshot || !Array.isArray(snapshot.entries)) return
+    if (Array.isArray(snapshot.activeSessionIds)) {
+      activeSessionIds = new Set(snapshot.activeSessionIds)
+      renderProjects()
+      renderSessions()
+    }
+    applyLiveActivity(snapshot.entries)
+  })
+  liveUpdatesSource.addEventListener('usage', function () {
+    void refreshUsageSummary()
   })
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
@@ -136,42 +160,49 @@ function connectLiveUpdates() {
   })
 }
 
+/** Applies a live-activity entry list and re-renders every consumer of it. */
+function applyLiveActivity(entries) {
+  liveActivity = entries
+  renderRail()
+  if (selectedSession) renderInspector(deriveVisibleSessions())
+}
+
 /**
  * Refreshes the live activity strip from /api/live-activity.
+ * SSE `activity` pushes carry the same model in near real time; this poll is
+ * the reconciliation fallback (missed pushes, waiting→idle age-outs).
  * No-op (and clears the strip) when no sessions are currently active.
  */
 async function refreshLiveActivity() {
-  function renderLiveActivityConsumers() {
-    renderRail()
-    if (selectedSession) renderInspector(deriveVisibleSessions())
-  }
-
   if (activeSessionIds.size === 0) {
-    if (liveActivity.length > 0) {
-      liveActivity = []
-      renderLiveActivityConsumers()
-    }
+    if (liveActivity.length > 0) applyLiveActivity([])
     return
   }
   try {
     var data = await requestJson('/api/live-activity')
     if (!Array.isArray(data)) return
-    liveActivity = data
-    renderLiveActivityConsumers()
+    applyLiveActivity(data)
   } catch {
     // non-fatal: the strip keeps its last known data until the next poll
   }
 }
 
 void refreshUsageSummary()
-void refreshProjectData()
-void refreshLiveActivity()
+// Same ordering constraint as scheduleLiveDataRefresh: the activity fetch
+// gates on activeSessionIds, which only refreshProjectData populates.
+void refreshProjectData().then(function () {
+  return refreshLiveActivity()
+})
 setInterval(function () {
   void refreshUsageSummary()
 }, USAGE_POLL_INTERVAL_MS)
 setInterval(function () {
   void refreshLiveActivity()
 }, LIVE_ACTIVITY_POLL_MS)
+// Keeps the strip's relative ages ("3s", "now") honest between data updates.
+setInterval(function () {
+  if (liveActivity.length > 0) renderRail()
+}, LIVE_STRIP_TICK_MS)
 connectLiveUpdates()
 
 // Narrow-mode back button: return to the project panel without clearing selection.

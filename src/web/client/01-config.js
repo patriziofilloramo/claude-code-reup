@@ -17,6 +17,8 @@ const TOAST_DURATION_MS = 2400
 const USAGE_POLL_INTERVAL_MS = 5000
 /** How often (ms) to refresh /api/live-activity when active sessions exist. */
 const LIVE_ACTIVITY_POLL_MS = 3000
+/** How often (ms) to re-render the live strip so relative ages stay current. */
+const LIVE_STRIP_TICK_MS = 1000
 /** localStorage key for the "always show confirm dialog before resuming" preference. */
 const CONFIRM_RESUME_PREFERENCE = 'reup:confirmResume'
 const LEGACY_CONFIRM_RESUME_PREFERENCE = 'swo' + 'op:confirmResume'

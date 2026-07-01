@@ -1,3 +1,5 @@
+import { APP_VERSION } from './version.js'
+
 /**
  * Central runtime configuration for reup.
  *
@@ -13,7 +15,7 @@
  */
 export const APP = {
   // ── Application identity ────────────────────────────────────────────────────
-  version: '0.1.0',
+  version: APP_VERSION,
 
   // ── Environment variable names ──────────────────────────────────────────────
   // Override these env vars to customise behaviour without changing source code.
@@ -69,6 +71,19 @@ export const APP = {
    * before invalidating and notifying clients.
    */
   sseChangeDebounceMs: 250,
+  /**
+   * Upper bound (ms) on how long sustained filesystem activity can postpone a
+   * change notification. Without it, events arriving faster than the debounce
+   * window would starve clients of updates exactly when the most is happening.
+   */
+  sseChangeMaxWaitMs: 2_000,
+  /**
+   * Coalescing window (ms) for pushed live-activity snapshots. Lock-status and
+   * transcript events within this window produce one SSE `activity` push, so
+   * busy/idle flips reach the browser in near real time without recomputing
+   * the snapshot for every single filesystem event.
+   */
+  sseActivityPushDebounceMs: 150,
 
   // ── Active-session detection ────────────────────────────────────────────────
 
@@ -112,50 +127,4 @@ export const APP = {
    * responsive if the local Claude API is slow to respond.
    */
   accountUsageRequestTimeoutMs: 5_000,
-
-  // ── Cloud sync ──────────────────────────────────────────────────────────────
-
-  /**
-   * Master switch for the Project Memory Sync feature. When false, no cloud
-   * icons are shown in the UI and cloud-linked project discovery is skipped
-   * entirely, regardless of other sync settings.
-   */
-  enableProjectMemorySync: true,
-  /**
-   * When false, reup performs a focused scan of common workspace folders
-   * inside detected cloud roots. When true, it recursively scans only
-   * `projectSearchPaths`, allowing uncommon layouts without crawling disks.
-   */
-  enableAdvancedDiscovery: false,
-  /**
-   * Directories to search recursively when `enableAdvancedDiscovery` is true.
-   * Ignored in the default focused-discovery mode.
-   */
-  projectSearchPaths: [] as string[],
-  /**
-   * Subdirectory name created inside the project root by `reup sync link` to hold
-   * the cross-device session files that are kept in sync with local storage.
-   */
-  sharedMemoryDir: '.claude-memory',
-  /**
-   * Marker file written inside ~/.claude/projects/<id>/ to record which cloud
-   * directory the project is linked to. Its presence means local-first sync
-   * is active; its absence means local-only storage.
-   */
-  cloudLinkFile: '.reup-link',
-  legacyCloudLinkFile: `.${'swo'}${'op'}-link`,
-  /**
-   * How often (ms) the background offline-guard loop checks whether the cloud
-   * junction target is reachable and transitions between online/offline modes.
-   * Also the interval at which the local backup is refreshed from the cloud.
-   */
-  cloudSyncIntervalMs: 30_000,
-  /**
-   * Path segment appended to getReupDirectory() (~/.claude/reup/) to locate the
-   * local backup root. Each linked project gets its own subdirectory here:
-   *   ~/.claude/reup/<cloudSyncBackupDir>/<projectId>/
-   * The backup is kept in sync with the cloud dir and used as an offline
-   * fallback when the junction target (pCloud, etc.) becomes unreachable.
-   */
-  cloudSyncBackupDir: 'sync',
 } as const

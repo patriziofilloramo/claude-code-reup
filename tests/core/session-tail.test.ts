@@ -3,7 +3,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { readSessionTailActivity } from '../../src/core/session/session-tail.js'
+import {
+  readSessionTailActivity,
+  resolveActivityState,
+} from '../../src/core/session/session-tail.js'
+import type { SessionTailActivity } from '../../src/core/session/session-tail.js'
 
 function toolUseEvent(toolName: string, toolId: string, timestamp: string): string {
   return JSON.stringify({
@@ -171,6 +175,58 @@ describe('readSessionTailActivity', () => {
     expect(result!.state).toBe('running')
   })
 
+  it('clears pending tool state when the user interrupts with a text message', async () => {
+    const path = join(tmpDir, 'interrupted.jsonl')
+    const interruptEvent = JSON.stringify({
+      type: 'user',
+      timestamp: isoAgo(4_000),
+      message: { content: [{ type: 'text', text: '[Request interrupted by user]' }] },
+    })
+    await writeFile(
+      path,
+      [toolUseEvent('Bash', 'id-orphaned', isoAgo(5_000)), interruptEvent].join('\n')
+    )
+    const result = await readSessionTailActivity(path)
+    expect(result!.toolPending).toBe(false)
+    expect(result!.state).toBe('waiting')
+  })
+
+  it('clears pending tool state when a new user prompt arrives as a plain string', async () => {
+    const path = join(tmpDir, 'new-prompt.jsonl')
+    const promptEvent = JSON.stringify({
+      type: 'user',
+      timestamp: isoAgo(4_000),
+      message: { content: 'please continue' },
+    })
+    await writeFile(
+      path,
+      [toolUseEvent('Edit', 'id-orphaned', isoAgo(5_000)), promptEvent].join('\n')
+    )
+    const result = await readSessionTailActivity(path)
+    expect(result!.toolPending).toBe(false)
+    expect(result!.state).toBe('waiting')
+  })
+
+  it('keeps running state when the user turn contains only tool results for other tools', async () => {
+    const path = join(tmpDir, 'partial-results.jsonl')
+    await writeFile(
+      path,
+      [
+        parallelToolUseEvent(
+          [
+            { id: 'still-pending', name: 'Bash' },
+            { id: 'resolved', name: 'Read' },
+          ],
+          isoAgo(5_000)
+        ),
+        toolResultEvent('resolved', isoAgo(4_000)),
+      ].join('\n')
+    )
+    const result = await readSessionTailActivity(path)
+    expect(result!.toolPending).toBe(true)
+    expect(result!.state).toBe('running')
+  })
+
   it('returns the ISO timestamp of the most recent event', async () => {
     const path = join(tmpDir, 'ts.jsonl')
     const ts = isoAgo(8_000)
@@ -186,5 +242,68 @@ describe('readSessionTailActivity', () => {
     await writeFile(path, [paddingLine, toolLine].join('\n'))
     const result = await readSessionTailActivity(path)
     expect(result!.lastToolName).toBe('WebSearch')
+  })
+
+  it('falls back to file modification time when one giant event fills the tail window', async () => {
+    const path = join(tmpDir, 'giant-line.jsonl')
+    // A single event bigger than the tail window leaves no parseable line;
+    // the fresh mtime must still classify the session as waiting, not idle.
+    const giantEvent = JSON.stringify({
+      type: 'assistant',
+      timestamp: isoAgo(2_000),
+      message: { content: [{ type: 'text', text: 'y'.repeat(20_000) }] },
+    })
+    await writeFile(path, giantEvent)
+    const result = await readSessionTailActivity(path)
+    expect(result!.lastEventAt).not.toBeNull()
+    expect(result!.state).toBe('waiting')
+  })
+})
+
+describe('resolveActivityState', () => {
+  const NOW = Date.parse('2026-07-01T12:00:00.000Z')
+  const tail = (
+    state: SessionTailActivity['state'],
+    lastEventAt: string | null = null
+  ): SessionTailActivity => ({
+    lastToolName: 'Bash',
+    toolPending: state === 'running',
+    lastEventAt,
+    state,
+  })
+
+  it('trusts a corroborated busy lock over a quiet transcript', () => {
+    expect(resolveActivityState('busy', tail('idle'), NOW - 1_000, NOW)).toBe('running')
+    expect(resolveActivityState('busy', null, NOW - 1_000, NOW)).toBe('running')
+    // Fresh transcript activity corroborates busy even with an old transition.
+    expect(
+      resolveActivityState(
+        'busy',
+        tail('waiting', new Date(NOW - 2_000).toISOString()),
+        NOW - 60 * 60_000,
+        NOW
+      )
+    ).toBe('running')
+  })
+
+  it('demotes a zombie busy flag to transcript-derived state', () => {
+    const staleTransition = NOW - 60 * 60_000
+    // Interrupted session left busy behind: transcript says idle → idle.
+    expect(resolveActivityState('busy', tail('idle'), staleTransition, NOW)).toBe('idle')
+    expect(resolveActivityState('busy', null, staleTransition, NOW)).toBe('idle')
+    // A genuinely long-running tool still shows via its pending tool_use.
+    expect(resolveActivityState('busy', tail('running'), staleTransition, NOW)).toBe('running')
+  })
+
+  it('never reports running for a lock that says idle', () => {
+    expect(resolveActivityState('idle', tail('running'), null, NOW)).toBe('waiting')
+    expect(resolveActivityState('idle', tail('waiting'), null, NOW)).toBe('waiting')
+    expect(resolveActivityState('idle', tail('idle'), null, NOW)).toBe('idle')
+  })
+
+  it('falls back to transcript state for locks without status support', () => {
+    expect(resolveActivityState(null, tail('running'), null, NOW)).toBe('running')
+    expect(resolveActivityState(null, tail('waiting'), null, NOW)).toBe('waiting')
+    expect(resolveActivityState(null, null, null, NOW)).toBe('idle')
   })
 })
