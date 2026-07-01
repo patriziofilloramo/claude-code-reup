@@ -52,10 +52,12 @@ reup
 | `reup resume [session]`   | Resume by ID/prefix, or pick interactively          |
 | `reup search <query>`     | Search session metadata                             |
 | `reup search --deep <q>`  | Search transcript content on demand                 |
+| `reup touched [path]`     | Find sessions that edited a file                    |
 | `reup list [query]`       | Print a scriptable session list                     |
 | `reup inbox`              | Show active sessions and sessions needing attention |
 | `reup handoff [session]`  | Copy a compact continuation packet                  |
 | `reup usage`              | Show observed usage and collector freshness         |
+| `reup cleanup`            | Review stale or empty sessions for archiving        |
 | `reup doctor`             | Diagnose local Claude Code session data             |
 | `reup config`             | Open the configuration TUI                          |
 | `reup completion <shell>` | Print shell completion setup                        |

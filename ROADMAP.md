@@ -253,11 +253,13 @@ privacy, security, and support documentation. Detailed installer behavior is
 defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
 
 - [x] Resolve the public product/package name before producing signed artifacts
-- [ ] Remove deferred Project Memory code paths, routes, UI, tests, and startup
+- [x] Remove deferred Project Memory code paths, routes, UI, tests, and startup
       hooks from the public release branch
-- [ ] Preserve Project Memory knowledge in a deferred architecture document only
-- [ ] Add disclaimer, privacy, security, and support docs
-- [ ] Make the README install-first and explicit about local-only/no telemetry/no
+- [x] Preserve Project Memory knowledge in a deferred architecture document only
+      ([`Documents/DEFERRED_PROJECT_MEMORY_SYNC.md`](Documents/DEFERRED_PROJECT_MEMORY_SYNC.md))
+- [x] Add disclaimer, privacy, security, and support docs (`DISCLAIMER.md`,
+      `PRIVACY.md`, `SECURITY.md`, `SUPPORT.md`)
+- [x] Make the README install-first and explicit about local-only/no telemetry/no
       account/no warranty/no SLA
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
 - [ ] Add the installed `reup` launcher to the current user's `PATH`

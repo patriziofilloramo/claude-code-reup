@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Removed
+
+- The experimental `reup sync` cross-device Project Memory feature (the `sync`
+  command, sync API routes, web sync drawer, TUI sync surfaces, and the
+  background sync guard) was removed before the first public release. The
+  design knowledge and a reactivation checklist are preserved in
+  `Documents/DEFERRED_PROJECT_MEMORY_SYNC.md`.
+
 ### Changed
 
 - Renamed the product and public CLI to **Reup** with the single binary `reup`.
@@ -16,6 +24,15 @@
   Code `reup.*` settings where applicable.
 - Legacy files are left in place for rollback; Reup writes new state to the new
   names.
+- Reup no longer manages junctions/symlinks created by the removed
+  `reup sync link`. Existing links keep working at the filesystem level, but
+  there is no `reup sync unlink`: to restore local-only storage, copy the
+  contents of `<project>/.claude-memory/` back into
+  `~/.claude/projects/<project-id>/` and remove the junction/symlink manually
+  while no Claude session is running in that project.
+- The `crossDeviceSessionStorage` and `projectSearchPaths` preference keys are
+  no longer read and are dropped from `prefs.json` on the next preference
+  write. Any future sync reactivation treats them as fresh opt-ins.
 
 ## v0.1.0 — 2026-06-14
 

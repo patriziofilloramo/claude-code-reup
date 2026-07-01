@@ -173,9 +173,11 @@ useful. Designed to be scriptable and composable with standard shell tools.
 | `reup resume [id]`                   | Interactive global picker, or resume by ID or unambiguous prefix                                                                                    |
 | `reup search <query>`                | Interactive picker with pre-filled search                                                                                                           |
 | `reup search --deep <q>`             | Full-content transcript search with interactive picker                                                                                              |
+| `reup touched [path]`                | Reverse lookup: which sessions edited a file. Interactive picker without a path; `--json` for scripts                                               |
 | `reup list [query]`                  | Compact human table, globally filtered. `--json` for machine-readable output                                                                        |
 | `reup inbox`                         | Attention-sorted summary of active and at-risk sessions                                                                                             |
 | `reup handoff [session]`             | Compact Markdown continuation packet: last goal, transcript summary, edited files, open todos. Unavailable facts marked explicitly, never inferred. |
+| `reup cleanup`                       | Review stale, empty, orphaned, or expired sessions and archive them reversibly                                                                      |
 | `reup doctor`                        | Non-destructive local health check                                                                                                                  |
 | `reup usage`                         | Show observed usage and data freshness                                                                                                              |
 | `reup usage setup / remove / toggle` | Manage usage capture integration                                                                                                                    |
@@ -205,14 +207,14 @@ feature is not shipped, advertised, or kept dormant in the codebase.
 
 ### Configuration
 
-| Feature                         | Detail                                                                                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Zero-config defaults**        | Works out of the box with `reup`. No config file required.                                                                                                  |
-| **reup config CLI**             | `reup config get/set/reset <key>` reads and writes `~/.claude/reup/prefs.json`.                                                                             |
-| **reup config TUI**             | Keyboard-navigable Interface, Integrations, and Features tabs. Integrations show their exact effect and are reversible from within the UI.                  |
-| **Persistent preferences**      | Density mode, integration state, and (roadmap) theme are persisted across invocations.                                                                      |
-| **Theme system** _(roadmap)_    | Dark (current default), Light, and Terminal (phosphor) themes. Single design-token layer — switching themes requires no code changes, only a new token set. |
-| **i18n groundwork** _(roadmap)_ | All user-facing strings centralised to `src/config/labels.ts`. Adding a language becomes a data file, not a code change.                                    |
+| Feature                    | Detail                                                                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Zero-config defaults**   | Works out of the box with `reup`. No config file required.                                                                                          |
+| **reup config CLI**        | `reup config get/set/reset <key>` reads and writes `~/.claude/reup/prefs.json`.                                                                     |
+| **reup config TUI**        | Keyboard-navigable Interface, Integrations, and Features tabs. Integrations show their exact effect and are reversible from within the UI.          |
+| **Persistent preferences** | Theme, integration state, and startup-cleanup mode are persisted across invocations.                                                                |
+| **Theme system**           | Dark (default), Light, and Terminal (phosphor) themes. Single design-token layer — switching themes requires no code changes, only a new token set. |
+| **i18n groundwork**        | TUI user-facing strings centralised to `src/config/labels.ts` and guarded by a lint rule. Adding a language becomes a data file, not a code change. |
 
 ---
 

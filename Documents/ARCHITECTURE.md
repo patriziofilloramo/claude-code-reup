@@ -17,21 +17,24 @@ in [`README.md`](../README.md). Native installer behavior is specified in
 
 The executable entry point is `src/index.ts`.
 
-| Command                   | Behavior                                              |
-| ------------------------- | ----------------------------------------------------- |
-| `reup`                    | Starts the Ink terminal UI                            |
-| `reup web`                | Starts the local Hono server and opens the browser UI |
-| `reup list [query]`       | Prints a filtered table; `--json` emits full records  |
-| `reup inbox`              | Prints active and actionable sessions                 |
-| `reup doctor`             | Runs non-destructive local-data diagnostics           |
-| `reup handoff <session>`  | Prints a transcript-supported continuation packet     |
-| `reup resume [session]`   | Opens a picker, or resumes a full ID/unique prefix    |
-| `reup usage [action]`     | Reads observed usage or configures its local feed     |
-| `reup config`             | Opens the configuration TUI or manages preferences    |
-| `reup completion <shell>` | Prints opt-in shell completion registration           |
-| `reup help [command]`     | Prints general or command-specific help               |
-| `reup --help`             | Prints supported commands                             |
-| `reup --version`          | Prints the current version                            |
+| Command                   | Behavior                                                                |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `reup`                    | Starts the Ink terminal UI                                              |
+| `reup web`                | Starts the local Hono server and opens the browser UI                   |
+| `reup list [query]`       | Prints a filtered table; `--json` emits full records                    |
+| `reup search <query>`     | Opens the ranked picker pre-filtered; `--deep` scans transcript content |
+| `reup touched [path]`     | Lists sessions that edited a matching file, or opens a file picker      |
+| `reup inbox`              | Prints active and actionable sessions                                   |
+| `reup cleanup`            | Reviews stale or empty sessions for reversible archiving                |
+| `reup doctor`             | Runs non-destructive local-data diagnostics                             |
+| `reup handoff <session>`  | Prints a transcript-supported continuation packet                       |
+| `reup resume [session]`   | Opens a picker, or resumes a full ID/unique prefix                      |
+| `reup usage [action]`     | Reads observed usage or configures its local feed                       |
+| `reup config`             | Opens the configuration TUI or manages preferences                      |
+| `reup completion <shell>` | Prints opt-in shell completion registration                             |
+| `reup help [command]`     | Prints general or command-specific help                                 |
+| `reup --help`             | Prints supported commands                                               |
+| `reup --version`          | Prints the current version                                              |
 
 The `repair` command is reserved but not implemented.
 
@@ -58,44 +61,67 @@ profiles automatically; its internal completion endpoint returns IDs only.
 
 ```text
 src/
-  cli/           Script-friendly command implementations and output schemas
-  config/        Shared application and theme constants
-  core/          Claude paths, session model, discovery, parsing, metadata, launchers
-  tui/           Ink controller, pure view helpers, and presentation components
-  web/           Hono API helpers, grouped routes, server, and browser application
-  utils/         Small logging and time-formatting utilities
+  cli/             Script-friendly command implementations and output schemas
+  config/          Shared application constants, labels, and theme tokens
+  core/
+    health/        Non-destructive data-health diagnostics
+    org/           Organization layer: groups, stacks, tags, org.json persistence
+    project/       Claude paths, project discovery, caching, and the sidecar lock
+    session/       Session model, transcripts, signals, search, previews, handoff
+    terminal/      Platform-specific terminal launchers
+    usage/         Live usage, account limits, and status-line integration
+  tui/             Ink controller, pure view helpers, and presentation components
+  web/             Hono server, grouped routes, API model, and browser client segments
+  utils/           Small logging and time-formatting utilities
 tests/
-  cli/           Pure command output and schema tests
-  core/          Loading, signal, active-session, and lock tests
-  tui/           Pure terminal view-model tests
-  utils/         Shared utility tests
-  web/           Route smoke tests and browser-client regression guards
+  branding/        Public naming and identity guards
+  cli/             Pure command output and schema tests
+  core/            Loading, signal, active-session, org, and lock tests
+  extension/       VS Code cockpit model and adapter tests
+  tui/             Pure terminal view-model tests
+  utils/           Shared utility tests
+  web/             Route smoke tests and browser-client regression guards
 scripts/
-  copy-assets.mjs
+  build-client.mjs           Concatenates src/web/client/ segments into client.js
+  check-extension-version.mjs
+  check-version-sync.mjs
+  copy-assets.mjs            Copies browser assets into dist/web/
+  install-hooks.mjs
+  sync-version.mjs
 ```
 
-The build uses `tsc`. `scripts/copy-assets.mjs` copies the three browser source
-assets into `dist/web/` after compilation.
+The build uses `tsc`. The `postbuild` hook regenerates `client.js` from the
+client segments and copies the browser assets into `dist/web/`.
 
 ## Session Data
 
 Core responsibilities are intentionally separated:
 
-| Module                            | Responsibility                                            |
-| --------------------------------- | --------------------------------------------------------- |
-| `session-model.ts`                | Shared session types and session-ID validation            |
-| `claude-paths.ts`                 | Claude data locations and encoded project-path resolution |
-| `project-discovery.ts`            | Project/session discovery and filesystem annotations      |
-| `session-transcript.ts`           | JSONL metadata extraction                                 |
-| `session-signals.ts`              | Transcript-derived signals and display status             |
-| `session-metadata.ts`             | Reup sidecar reads, merges, and queued writes             |
-| `project-sidecar-lock.ts`         | Cross-process sidecar lock protocol                       |
-| `active-sessions.ts`              | Live Claude process detection                             |
-| `diagnostics.ts`                  | Shared non-destructive data-health checks                 |
-| `session-handoff.ts`              | Conservative transcript continuation-fact extraction      |
-| `live-usage.ts`                   | Aggregate status-line snapshot parsing and persistence    |
-| `usage-statusline-integration.ts` | Reversible Claude settings integration                    |
-| `sessions.ts`                     | Compatibility re-exports only                             |
+| Module                                    | Responsibility                                            |
+| ----------------------------------------- | --------------------------------------------------------- |
+| `session/session-model.ts`                | Shared session types and session-ID validation            |
+| `project/claude-paths.ts`                 | Claude data locations and encoded project-path resolution |
+| `project/project-discovery.ts`            | Project/session discovery and filesystem annotations      |
+| `project/project-cache.ts`                | Short-lived in-process discovery cache and invalidation   |
+| `project/project-sidecar-lock.ts`         | Cross-process sidecar lock protocol                       |
+| `session/session-transcript.ts`           | JSONL metadata extraction                                 |
+| `session/session-signals.ts`              | Transcript-derived signals and display status             |
+| `session/session-tail.ts`                 | Transcript-tail live-activity state and latest tool name  |
+| `session/session-metadata.ts`             | Reup sidecar reads, merges, and queued writes             |
+| `session/session-query.ts`                | Structured search-query parsing shared by all surfaces    |
+| `session/session-search.ts`               | Metadata and deep transcript search                       |
+| `session/session-file-search.ts`          | Reverse touched-file → session lookup                     |
+| `session/session-smart-view.ts`           | Exclusive priority-ordered Inbox bucket assignment        |
+| `session/resume-advice.ts`                | Deterministic pre-resume recommendation from signals      |
+| `session/cleanup.ts`                      | Heuristic stale/empty-session scoring for `reup cleanup`  |
+| `session/session-handoff.ts`              | Conservative transcript continuation-fact extraction      |
+| `session/active-sessions.ts`              | Live Claude process and lock-file detection               |
+| `health/diagnostics.ts`                   | Shared non-destructive data-health checks                 |
+| `org/org-model.ts` + `org/org-filters.ts` | Groups, stacks, tags schema and shared org filtering      |
+| `usage/live-usage.ts`                     | Aggregate status-line snapshot parsing and persistence    |
+| `usage/account-usage.ts`                  | Opt-in account-limit refresh and freshness states         |
+| `usage/usage-statusline-integration.ts`   | Reversible Claude settings integration                    |
+| `sessions.ts`                             | Compatibility re-exports only                             |
 
 Internal consumers import the module that owns a responsibility. `sessions.ts`
 also re-exports the original public surface so existing callers remain
@@ -219,6 +245,22 @@ Archiving only hides a session in Reup. It is not a transcript backup.
 client requests it independently. This allows separate Reup processes to observe
 the same active Claude sessions.
 
+## Organization Layer
+
+`src/core/org/` owns the optional organization metadata: named project groups,
+work stacks (projects and sessions grouped by intent), and a recency-ordered
+tag palette. That state persists to `~/.claude/reup/org.json` behind a
+schema version, an advisory lock, and atomic writes; per-session and
+per-project tags live in each project's `reup.json` sidecar instead. Shared
+filtering (`org-filters.ts`) applies group, stack, and tag selection
+identically across web, TUI, and CLI, and `session-smart-view.ts` assigns each
+session to exactly one priority-ordered Inbox bucket.
+
+Surfaces build on the same core: the web UI adds `/api/org/**` CRUD routes, a
+collapsible organization rail (Inbox, Stacks, Groups), and tag/group pickers;
+the TUI shows chips and cycles focus; `reup list` exposes `--tag`, `--group`,
+and `--stack` filters without requiring the web server.
+
 ## Terminal UI
 
 `src/tui/App.tsx` owns application state and keyboard input. Presentation is
@@ -240,28 +282,25 @@ and launches `claude --resume <id>` with inherited stdio.
 `src/web/server.ts` binds Hono explicitly to `127.0.0.1`. It searches for an
 available port and optionally opens the browser.
 
-The browser application is maintained as:
-
-```text
-src/web/ui.html
-src/web/styles.css
-src/web/client.js
-```
-
-`src/web/ui.ts` assembles those files into one response at startup. There is no
-browser framework or frontend build step.
-
-`client.js` deliberately remains one standalone script. Splitting it without a
-browser build step would replace local scope with order-dependent shared
-globals. Responsibility-oriented names and section dividers keep that tradeoff
-explicit and navigable.
+The browser application is maintained as `src/web/ui.html`,
+`src/web/styles.css`, and numbered responsibility segments under
+`src/web/client/`. `scripts/build-client.mjs` concatenates the segments into
+the committed `src/web/client.js` — a single IIFE with no bundler — and the
+`postbuild` and `pretest` hooks keep that output in sync. `src/web/ui.ts`
+assembles HTML, styles, and script into one response at startup. There is no
+browser framework and no frontend build step beyond that concatenation.
 
 Implemented API routes include:
 
 - Project/session discovery and metadata search
 - Active-session IDs
 - Validated resume launch
-- Alias and local archive updates
+- Alias, tag, and local archive updates
+- Organization CRUD (groups, stacks, stack items, project-group assignments)
+  and org-filtered project queries
+- Touched-file reverse lookup
+- Usage summary and live refresh
+- Theme persistence
 - Session transcript event loading
 - Server-resolved CLAUDE.md read/write
 - SSE change notifications
@@ -308,6 +347,8 @@ and Quick Picks, with an optional remembered choice between Anthropic's Claude
 Code extension and the integrated terminal. The status bar uses
 transcript-backed context and active/attention counts; the dashboard separately
 shows the shared live-usage cache with freshness handling.
+
+## Web Server and Live Updates
 
 Web server responsibilities are split between route registration, grouped route
 modules under `web/routes/`, API serialization, local-request security, and

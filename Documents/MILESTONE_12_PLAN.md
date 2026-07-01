@@ -1,5 +1,9 @@
 # Milestone 12 — Organization Layer: Plan
 
+**Status:** closed — Phases 1–3 shipped and unit-tested (see
+[`ROADMAP.md`](../ROADMAP.md)). Retained as the design reference for the
+organization layer and as the backlog for the deferred Phase 4 ideas.
+
 **Goal:** Make Reup genuinely useful when Claude Code work becomes many parallel threads.
 Triage in seconds, not minutes. Group by intent, not by filesystem path.
 

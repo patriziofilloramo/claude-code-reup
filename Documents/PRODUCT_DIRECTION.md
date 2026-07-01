@@ -62,8 +62,8 @@ The product should answer:
 Reup's moat is **operational intelligence plus surface choice**. Intelligence
 means session health, context drift, rate-limit state, recovery paths, and
 pre-resume summaries. Surface choice means the same local facts are useful from
-the terminal, web, scripts, and eventually VS Code. A prettier picker alone is
-not defensible; a reliable local operations console is.
+the terminal, web, scripts, and VS Code. A prettier picker alone is not
+defensible; a reliable local operations console is.
 
 ## Strategic Bets
 
@@ -246,7 +246,7 @@ When choosing what to build next, apply this filter in order:
 The next shared capabilities should strengthen the three strategic bets:
 organization metadata, live state/freshness, and editor-ready JSON contracts.
 Nothing in the UI layer should block the shared core needed by web, TUI, CLI,
-and a future VS Code extension.
+and the VS Code extension.
 
 ## Delivery Guidance
 
@@ -254,11 +254,11 @@ Prefer small features that improve confidence before resume. Avoid forcing
 feature parity between TUI and web when a capability naturally belongs in one
 surface.
 
-For VS Code work, investigate before building. The first milestone should prove
-whether a native extension can offer something better than both Claude Code's
-native picker and the existing TUI/web UI. A simple dashboard clone is not
-enough; the extension should expose attention, usage, health, and resume actions
-inside the editor workflow.
+For VS Code work, the Milestone 11 investigation proved that a native extension
+can beat both Claude Code's native picker and the TUI/web UI for workspace
+resume. Future extension work should keep exposing attention, usage, health,
+and resume actions inside the editor workflow rather than duplicating the
+browser administration UI.
 
 Keep completed work and near-term tasks in [`ROADMAP.md`](../ROADMAP.md). This
 document should change only when the product's direction changes.
