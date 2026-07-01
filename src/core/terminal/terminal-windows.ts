@@ -35,11 +35,13 @@ export async function launchWindows(
     }
   }
 
-  // Windows PowerShell 5.1 is present on all supported Windows versions.
-  // The command and working directory are passed as environment variables and
-  // referenced as $env:… inside a fully static -Command script. PowerShell
-  // expands the variable values as data, never as code, so there is no string
-  // interpolation, no manual quote-escaping, and no injection surface.
+  // Windows PowerShell 5.1 is present on all supported Windows versions. The
+  // command and working directory are passed as environment variables and read
+  // as $env:… inside a fully static -Command script, so nothing is interpolated
+  // into PowerShell and no quote-escaping is needed. The command is still handed
+  // to cmd /k, so end-to-end safety also rests on the caller's invariant (the
+  // command is only ever `claude` / `claude --resume <validated-UUID>`; see the
+  // function doc above), not on this layer alone.
   try {
     const psScript = workingDirectory
       ? "Start-Process cmd.exe -ArgumentList ('/k ' + $env:REUP_LAUNCH_CMD) -WorkingDirectory $env:REUP_LAUNCH_CWD"
