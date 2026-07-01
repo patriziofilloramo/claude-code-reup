@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { decodeProjectDirectoryName } from '../../src/core/project/claude-paths.js'
+import {
+  decodeProjectDirectoryName,
+  encodeProjectPath,
+  resolveProjectPath,
+} from '../../src/core/project/claude-paths.js'
 
 describe('decodeProjectDirectoryName', () => {
   if (process.platform === 'win32') {
@@ -20,6 +27,19 @@ describe('decodeProjectDirectoryName', () => {
   } else {
     it('converts Unix encoded directory names to absolute paths', () => {
       expect(decodeProjectDirectoryName('home-user-projects')).toBe('/home/user/projects')
+    })
+
+    it('resolves existing Unix paths with hyphenated directory names', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'reup-path-test-'))
+      const projectPath = join(root, 'hyphen-name', 'nested-project')
+
+      try {
+        await mkdir(projectPath, { recursive: true })
+
+        await expect(resolveProjectPath(encodeProjectPath(projectPath))).resolves.toBe(projectPath)
+      } finally {
+        await rm(root, { force: true, recursive: true })
+      }
     })
   }
 })

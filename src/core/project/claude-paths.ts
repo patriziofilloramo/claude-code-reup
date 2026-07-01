@@ -89,20 +89,27 @@ export function decodeProjectDirectoryName(directoryName: string): string {
 
 /** Resolves an encoded project directory name to the most likely filesystem path. */
 export async function resolveProjectPath(directoryName: string): Promise<string> {
-  if (process.platform !== 'win32') return decodeProjectDirectoryName(directoryName)
+  if (process.platform !== 'win32') return resolveEncodedPath('/', directoryName, '/')
 
   const match = directoryName.match(/^([a-zA-Z])--(.*)$/)
   if (!match) return decodeProjectDirectoryName(directoryName)
 
-  let resolvedPath = `${match[1].toUpperCase()}:\\`
-  let encodedPathRemainder = match[2]
+  return resolveEncodedPath(`${match[1].toUpperCase()}:\\`, match[2], '\\')
+}
 
+async function resolveEncodedPath(
+  rootPath: string,
+  encodedRemainder: string,
+  pathSeparator: '/' | '\\'
+): Promise<string> {
+  let resolvedPath = rootPath
+  let encodedPathRemainder = encodedRemainder
   while (encodedPathRemainder.length > 0) {
     let directoryEntries: string[]
     try {
       directoryEntries = await readdir(resolvedPath)
     } catch {
-      return join(resolvedPath, encodedPathRemainder.replace(/-/g, '\\'))
+      return join(resolvedPath, encodedPathRemainder.replace(/-/g, pathSeparator))
     }
 
     // Claude's encoding makes literal hyphens ambiguous. Prefer the longest
@@ -115,7 +122,9 @@ export async function resolveProjectPath(directoryName: string): Promise<string>
       )
       .sort((left, right) => right.length - left.length)[0]
 
-    if (!matchingEntry) return join(resolvedPath, encodedPathRemainder.replace(/-/g, '\\'))
+    if (!matchingEntry) {
+      return join(resolvedPath, encodedPathRemainder.replace(/-/g, pathSeparator))
+    }
 
     resolvedPath = join(resolvedPath, matchingEntry)
     encodedPathRemainder =
