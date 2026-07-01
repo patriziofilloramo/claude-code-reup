@@ -733,8 +733,19 @@ function showLoadingOverlay() {
   setTimeout(hideLoadingOverlay, LOADING_SAFETY_MS)
 }
 
+/** Reads a matrix CSS token from the active theme, falling back to a default. */
+function matrixToken(name, fallback) {
+  var value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
+}
+
 function startLoadingRain(canvas) {
   var ctx = canvas.getContext('2d')
+  // Read the palette from the active theme's tokens so the rain matches
+  // light/dark/terminal instead of forcing a dark field on every theme.
+  var trailFill = matrixToken('--matrix-trail', LOADING_TRAIL_FILL)
+  var brightColor = matrixToken('--matrix-primary-bright', MATRIX_RAIN_BRIGHT)
+  var primaryColor = matrixToken('--matrix-primary', MATRIX_RAIN_PRIMARY)
   var width = 0
   var height = 0
   var columns = 0
@@ -751,12 +762,11 @@ function startLoadingRain(canvas) {
   window.addEventListener('resize', loadingResize)
 
   function draw() {
-    ctx.fillStyle = LOADING_TRAIL_FILL
+    ctx.fillStyle = trailFill
     ctx.fillRect(0, 0, width, height)
     ctx.font = MATRIX_RAIN_FONT
     for (var i = 0; i < columns; i++) {
-      ctx.fillStyle =
-        i % LOADING_BRIGHT_COLUMN_INTERVAL === 0 ? MATRIX_RAIN_BRIGHT : MATRIX_RAIN_PRIMARY
+      ctx.fillStyle = i % LOADING_BRIGHT_COLUMN_INTERVAL === 0 ? brightColor : primaryColor
       ctx.fillText(
         MATRIX_RAIN_GLYPHS[Math.floor(Math.random() * MATRIX_RAIN_GLYPHS.length)],
         i * MATRIX_RAIN_COLUMN_WIDTH,

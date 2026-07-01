@@ -100,6 +100,7 @@
   --matrix-primary-bright: #c8ffc8;
   --matrix-primary-soft: #8fffb0;
   --matrix-glow: rgb(0 255 65 / 0.55);
+  --matrix-trail: rgb(5 10 5 / 0.08);
   --matrix-fade-duration: 0.5s;
   --matrix-easter-fade-duration: 0.4s;
 }
@@ -2770,6 +2771,13 @@ body {
   --dim-rgb: 224 224 224;
   --accent-hi: #06b6d4;
   --accent-fg: #ffffff;
+  /* Matrix loader — light variant: dark-green rain on a soft light field, no black flash. */
+  --matrix-bg: #edf4ee;
+  --matrix-primary: #059669;
+  --matrix-primary-bright: #065f46;
+  --matrix-primary-soft: #047857;
+  --matrix-glow: rgb(5 150 105 / 0.2);
+  --matrix-trail: rgb(237 244 238 / 0.1);
 }
 
 /* ── Terminal / phosphor theme overrides ─────────────────────────────────── */
