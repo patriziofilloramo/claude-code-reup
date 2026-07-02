@@ -13,9 +13,9 @@ interface InboxSession {
 }
 
 const STATUS_PRIORITY: Record<SessionStatus, number> = {
-  interrupted: 0,
+  'path-missing': 0,
   expiring: 1,
-  'path-missing': 2,
+  interrupted: 2, // Triage-only, not actionable as live signal
   'heavily-compacted': 3,
   ok: 4,
 }

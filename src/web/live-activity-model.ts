@@ -12,7 +12,7 @@ import type { AttentionMarker } from '../core/session/attention.js'
 import type { Project, Session } from '../core/session/session-model.js'
 import { sessionTranscriptPath } from '../core/session/session-preview.js'
 import { readSessionTailActivity, resolveActivityState } from '../core/session/session-tail.js'
-import type { ActivityState } from '../core/session/session-tail.js'
+import type { ActivityState, SessionTailActivity } from '../core/session/session-tail.js'
 import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import { projectDisplayName } from './api-model.js'
 
@@ -99,7 +99,8 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
         const attention = resolveSessionAttention(
           attentionBySession.get(sessionId),
           evidence.statusUpdatedAt,
-          null
+          null,
+          evidence.status
         )
         if (!attention) return null
         const cwd = cwdBySession.get(sessionId)
@@ -120,7 +121,8 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
       const attention = resolveSessionAttention(
         attentionBySession.get(sessionId),
         evidence.statusUpdatedAt,
-        tail?.lastEventAt ?? null
+        tail,
+        evidence.status
       )
 
       return {
@@ -143,24 +145,42 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
 }
 
 /**
- * Returns the still-active attention for a session, or null. A resolved or
- * orphaned marker is deleted in the background so it can never alert again.
+ * Returns the still-active attention for a session, or null. Checks both
+ * Notification-hook markers (Case 1 & 2) and waiting state from transcript
+ * (Case 3). A resolved or orphaned marker is deleted in the background.
  */
 function resolveSessionAttention(
   marker: AttentionMarker | undefined,
   statusUpdatedAt: number | null,
-  lastEventAt: string | null
+  tail: SessionTailActivity | null,
+  lockStatus: 'busy' | 'idle' | null
 ): LiveActivityAttention | null {
-  if (!marker) return null
-  const lastActivityMs = lastEventAt !== null ? Date.parse(lastEventAt) : null
-  const active = isAttentionActive(marker, {
-    isLive: true,
-    lastActivityMs: Number.isFinite(lastActivityMs) ? lastActivityMs : null,
-    statusUpdatedAt,
-  })
-  if (!active) {
-    void clearAttentionMarker(marker.sessionId)
-    return null
+  // Case 1 & 2: Notification-hook marker (permission prompt, options prompt)
+  if (marker) {
+    const lastActivityMs = tail?.lastEventAt ? Date.parse(tail.lastEventAt) : null
+    const active = isAttentionActive(marker, {
+      isLive: true,
+      lastActivityMs: Number.isFinite(lastActivityMs!) ? lastActivityMs : null,
+      statusUpdatedAt,
+    })
+    if (!active) {
+      void clearAttentionMarker(marker.sessionId)
+      return null
+    }
+    return { message: marker.message, since: marker.occurredAt }
   }
-  return { message: marker.message, since: marker.occurredAt }
+
+  // Case 3: Waiting state (pending tool call, no UI prompt)
+  // Detect when tail shows a pending tool but lock reports idle — Claude is blocked mid-turn.
+  if (tail && lockStatus === 'idle') {
+    const activityState = resolveActivityState(lockStatus, tail, statusUpdatedAt)
+    if (activityState === 'waiting') {
+      return {
+        message: 'Waiting on you — no response after a tool call',
+        since: tail.lastEventAt ?? new Date().toISOString(),
+      }
+    }
+  }
+
+  return null
 }

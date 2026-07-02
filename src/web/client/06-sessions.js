@@ -10,10 +10,10 @@ function sessionsMatchingFilter(project, filter) {
   if (filter === 'attention') {
     return sessions.filter(function (session) {
       const status = session.primaryStatus
-      return (
-        !session.signals.archived &&
-        (status === 'interrupted' || status === 'expiring' || status === 'path-missing')
-      )
+      // Interrupted (pending tool calls from transcript analysis) is triage-only,
+      // not actionable as a live "needs your input" signal. Live attention is now
+      // detected via the session's liveActivity.attention field or waiting state.
+      return !session.signals.archived && (status === 'expiring' || status === 'path-missing')
     })
   }
   if (filter === 'active') {

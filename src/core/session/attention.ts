@@ -1,9 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  unlink,
+  writeFile,
+  appendFile,
+} from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getReupDirectory } from '../project/claude-paths.js'
 import { isValidSessionId } from './session-model.js'
+import { log } from '../../utils/logger.js'
 
 /** Bump when the marker JSON shape changes in a backwards-incompatible way. */
 const ATTENTION_SCHEMA_VERSION = 1
@@ -268,4 +278,58 @@ function getAttentionDirectory(): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+// =============================================================================
+// Hook capture logging (always-on diagnostics)
+// =============================================================================
+
+export type HookCaptureOutcome =
+  | 'work-marker-written'
+  | 'attention-marker-written'
+  | 'attention-marker-cleared'
+  | 'ignored-tty'
+  | 'parse-failed'
+  | 'unrecognized-payload'
+
+export interface HookCaptureLogEntry {
+  at: string
+  hookEvent: string | null
+  sessionId: string | null
+  outcome: HookCaptureOutcome
+}
+
+/** Append one log entry per hook invocation for diagnostics (always-on, not gated by REUP_DEBUG). */
+export async function logHookCapture(entry: HookCaptureLogEntry): Promise<void> {
+  try {
+    const logPath = join(getReupDirectory(), 'attention-capture.log')
+    await appendFile(logPath, JSON.stringify(entry) + '\n', 'utf8')
+    // Truncate log if it grows too large (cap at ~10MB, keep last ~100k lines)
+    await truncateLogIfNeeded(logPath, 10 * 1024 * 1024)
+  } catch (error) {
+    // Log failure must never disrupt Claude Code; keep it inspectable if needed.
+    log.debug('hook capture log failed:', error)
+  }
+}
+
+async function truncateLogIfNeeded(filePath: string, maxSizeBytes: number): Promise<void> {
+  try {
+    const stat = await readFile(filePath, { flag: 'r' })
+      .then(() => ({ size: 0 }))
+      .catch(() => null)
+    if (!stat) return
+
+    // Get file size via a different approach since fs.stat is not imported
+    const content = await readFile(filePath, 'utf8')
+    if (Buffer.byteLength(content, 'utf8') > maxSizeBytes) {
+      const lines = content.split('\n')
+      const keepLines = Math.max(1000, Math.floor(lines.length / 10))
+      const trimmed = lines.slice(-keepLines).join('\n')
+      const tmpPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+      await writeFile(tmpPath, trimmed, 'utf8')
+      await rename(tmpPath, filePath)
+    }
+  } catch {
+    // Truncation is best-effort; don't fail the hook if it fails
+  }
 }

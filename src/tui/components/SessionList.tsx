@@ -92,15 +92,20 @@ export function formatSessionSummary(session: Session): string {
 
 /**
  * Returns a single-character ASCII status badge for sessions that need attention.
- * Heavily-compacted sessions are intentionally omitted — it is not actionable.
+ * Heavily-compacted and interrupted sessions are omitted — interrupted (pending tool
+ * calls from historical transcript analysis) is not actionable in the live list and
+ * belongs only to `reup doctor`/cleanup. Interrupted state is now detected via
+ * live attention signals in the activity feed instead.
  */
 function statusBadgeForSession(session: Session): StatusBadge | null {
-  switch (primaryStatus(session.signals)) {
-    case 'interrupted':
-      return { text: '!', color: COLORS.warn }
+  const status = primaryStatus(session.signals)
+  switch (status) {
     case 'expiring':
     case 'path-missing':
       return { text: '!', color: COLORS.danger }
+    case 'interrupted':
+    case 'heavily-compacted':
+    case 'ok':
     default:
       return null
   }
