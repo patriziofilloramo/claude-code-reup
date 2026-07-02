@@ -6,12 +6,16 @@ import { tmpdir } from 'node:os'
 import {
   clearAllAttentionMarkers,
   clearAttentionMarker,
+  combineWorkEvidence,
   isAttentionActive,
   parseNotificationHookPayload,
+  parseWorkSignalHookPayload,
   readAttentionMarkers,
+  readWorkSignalMarkers,
   writeAttentionMarker,
+  writeWorkSignalMarker,
 } from '../../src/core/session/attention.js'
-import type { AttentionMarker } from '../../src/core/session/attention.js'
+import type { AttentionMarker, WorkSignalMarker } from '../../src/core/session/attention.js'
 
 const SESSION_ID = '33333333-3333-4333-8333-333333333333'
 const NOW = Date.parse('2026-07-02T12:00:00.000Z')
@@ -92,6 +96,89 @@ describe('attention markers on disk', () => {
   })
 })
 
+describe('work signal markers', () => {
+  let claudeDirectory: string
+  let previousConfigDir: string | undefined
+
+  beforeEach(async () => {
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'reup-worksignal-test-'))
+    previousConfigDir = process.env['CLAUDE_CONFIG_DIR']
+    process.env['CLAUDE_CONFIG_DIR'] = claudeDirectory
+  })
+
+  afterEach(async () => {
+    if (previousConfigDir === undefined) delete process.env['CLAUDE_CONFIG_DIR']
+    else process.env['CLAUDE_CONFIG_DIR'] = previousConfigDir
+    await rm(claudeDirectory, { force: true, recursive: true })
+  })
+
+  it('maps turn-boundary hooks to busy and idle markers', () => {
+    const busy = parseWorkSignalHookPayload(
+      { hook_event_name: 'UserPromptSubmit', session_id: SESSION_ID },
+      '2026-07-02T12:00:00.000Z'
+    )
+    expect(busy).toEqual({
+      occurredAt: '2026-07-02T12:00:00.000Z',
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+      state: 'busy',
+    })
+    expect(
+      parseWorkSignalHookPayload({ hook_event_name: 'Stop', session_id: SESSION_ID })?.state
+    ).toBe('idle')
+  })
+
+  it('rejects payloads for other hook events or invalid session ids', () => {
+    expect(
+      parseWorkSignalHookPayload({ hook_event_name: 'Notification', session_id: SESSION_ID })
+    ).toBeNull()
+    expect(
+      parseWorkSignalHookPayload({ hook_event_name: 'Stop', session_id: '../nope' })
+    ).toBeNull()
+    expect(parseWorkSignalHookPayload(null)).toBeNull()
+  })
+
+  it('round-trips one marker per session, newest turn winning', async () => {
+    await writeWorkSignalMarker(workMarker('busy', '2026-07-02T12:00:00.000Z'))
+    await writeWorkSignalMarker(workMarker('idle', '2026-07-02T12:05:00.000Z'))
+
+    const markers = await readWorkSignalMarkers()
+    expect(markers).toHaveLength(1)
+    expect(markers[0]?.state).toBe('idle')
+  })
+})
+
+describe('combineWorkEvidence', () => {
+  const T1 = Date.parse('2026-07-02T12:00:00.000Z')
+  const T2 = Date.parse('2026-07-02T12:05:00.000Z')
+
+  it('uses the work marker when the lock has no status field', () => {
+    expect(combineWorkEvidence(null, null, workMarker('busy', new Date(T1).toISOString()))).toEqual(
+      { status: 'busy', statusUpdatedAt: T1 }
+    )
+  })
+
+  it('lets the newer transition win between lock and marker', () => {
+    expect(combineWorkEvidence('idle', T1, workMarker('busy', new Date(T2).toISOString()))).toEqual(
+      { status: 'busy', statusUpdatedAt: T2 }
+    )
+    expect(combineWorkEvidence('busy', T2, workMarker('idle', new Date(T1).toISOString()))).toEqual(
+      { status: 'busy', statusUpdatedAt: T2 }
+    )
+  })
+
+  it('keeps the lock evidence when no marker exists', () => {
+    expect(combineWorkEvidence('busy', T1, undefined)).toEqual({
+      status: 'busy',
+      statusUpdatedAt: T1,
+    })
+    expect(combineWorkEvidence(null, null, undefined)).toEqual({
+      status: null,
+      statusUpdatedAt: null,
+    })
+  })
+})
+
 describe('isAttentionActive', () => {
   const marker = markerAt(new Date(NOW).toISOString())
 
@@ -132,4 +219,8 @@ function markerAt(occurredAt: string): AttentionMarker {
 
 function nowIso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString()
+}
+
+function workMarker(state: WorkSignalMarker['state'], occurredAt: string): WorkSignalMarker {
+  return { occurredAt, schemaVersion: 1, sessionId: SESSION_ID, state }
 }

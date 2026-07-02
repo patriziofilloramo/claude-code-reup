@@ -129,11 +129,13 @@ Usage:
   reup attention setup
   reup attention remove
 
-setup registers a reversible Claude Code Notification hook so Reup hears the
-moment a session needs a permission decision or sits waiting for input. The
-web live strip pins those sessions in red and can raise desktop notifications;
-the TUI marks them and rings the terminal bell. remove restores the previous
-hook configuration exactly and clears stored alerts.`,
+setup registers reversible Claude Code hooks (Notification, UserPromptSubmit,
+Stop) so Reup hears the moment a session needs a permission decision or sits
+waiting for input, and knows exactly when turns start and finish - including
+for VS Code sessions whose lock files carry no status. The web live strip pins
+waiting sessions in red and can raise desktop notifications; the TUI marks
+them and rings the terminal bell. remove restores the previous hook
+configuration exactly and clears stored alerts.`,
 
   usage: `reup usage - monitor Claude usage limits
 

@@ -112,6 +112,123 @@ export function isAttentionActive(marker: AttentionMarker, evidence: AttentionEv
   return true
 }
 
+// -----------------------------------------------------------------------------
+// Work-signal markers (UserPromptSubmit / Stop hooks)
+// -----------------------------------------------------------------------------
+
+export type SessionWorkState = 'busy' | 'idle'
+
+/**
+ * A turn boundary captured from Claude Code's UserPromptSubmit / Stop hooks.
+ * These fire for every session regardless of entrypoint, so they provide the
+ * busy/idle signal that lock files omit for VS Code peers and fresh processes.
+ */
+export interface WorkSignalMarker {
+  occurredAt: string
+  schemaVersion: typeof ATTENTION_SCHEMA_VERSION
+  sessionId: string
+  state: SessionWorkState
+}
+
+const WORK_SIGNAL_HOOK_STATES: Record<string, SessionWorkState> = {
+  Stop: 'idle',
+  UserPromptSubmit: 'busy',
+}
+
+/** Maps a UserPromptSubmit/Stop hook payload to a work marker, or null. */
+export function parseWorkSignalHookPayload(
+  payload: unknown,
+  occurredAt = new Date().toISOString()
+): WorkSignalMarker | null {
+  if (!isRecord(payload)) return null
+  const state = WORK_SIGNAL_HOOK_STATES[String(payload['hook_event_name'])]
+  if (!state) return null
+  const sessionId = payload['session_id']
+  if (typeof sessionId !== 'string' || !isValidSessionId(sessionId)) return null
+  return { occurredAt, schemaVersion: ATTENTION_SCHEMA_VERSION, sessionId, state }
+}
+
+/** Atomically stores one work marker per session; newer turns replace older ones. */
+export async function writeWorkSignalMarker(marker: WorkSignalMarker): Promise<void> {
+  const directory = getWorkSignalDirectory()
+  await mkdir(directory, { recursive: true })
+  const markerPath = join(directory, `${stableSessionKey(marker.sessionId)}.json`)
+  const temporaryPath = `${markerPath}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporaryPath, JSON.stringify(marker), { encoding: 'utf8', mode: 0o600 })
+    await rename(temporaryPath, markerPath)
+  } finally {
+    await unlink(temporaryPath).catch(() => {})
+  }
+}
+
+/** Reads every stored work marker; malformed files are skipped, never fatal. */
+export async function readWorkSignalMarkers(): Promise<WorkSignalMarker[]> {
+  let fileNames: string[]
+  try {
+    fileNames = await readdir(getWorkSignalDirectory())
+  } catch {
+    return []
+  }
+
+  const markers = await Promise.all(
+    fileNames
+      .filter((fileName) => fileName.endsWith('.json'))
+      .map(async (fileName) => {
+        try {
+          const parsed = JSON.parse(
+            await readFile(join(getWorkSignalDirectory(), fileName), 'utf8')
+          )
+          return isWorkSignalMarker(parsed) ? parsed : null
+        } catch {
+          return null
+        }
+      })
+  )
+  return markers.filter((marker): marker is WorkSignalMarker => marker !== null)
+}
+
+/** Removes every stored work marker (used by `reup attention remove`). */
+export async function clearAllWorkSignalMarkers(): Promise<void> {
+  await rm(getWorkSignalDirectory(), { force: true, recursive: true })
+}
+
+/**
+ * Merges the lock-file status with the hook-captured work marker: whichever
+ * carries the newer transition wins. Locks and markers cover each other's
+ * blind spots — locks exist without hooks installed, markers exist for
+ * sessions whose locks omit the status field entirely.
+ */
+export function combineWorkEvidence(
+  lockStatus: SessionWorkState | null,
+  lockStatusUpdatedAt: number | null,
+  marker: WorkSignalMarker | undefined
+): { status: SessionWorkState | null; statusUpdatedAt: number | null } {
+  const markerMs = marker ? Date.parse(marker.occurredAt) : Number.NaN
+  const hasMarker = marker !== undefined && Number.isFinite(markerMs)
+  if (!hasMarker) return { status: lockStatus, statusUpdatedAt: lockStatusUpdatedAt }
+  if (lockStatus === null || (lockStatusUpdatedAt ?? 0) <= markerMs) {
+    return { status: marker.state, statusUpdatedAt: markerMs }
+  }
+  return { status: lockStatus, statusUpdatedAt: lockStatusUpdatedAt }
+}
+
+function isWorkSignalMarker(value: unknown): value is WorkSignalMarker {
+  return (
+    isRecord(value) &&
+    value['schemaVersion'] === ATTENTION_SCHEMA_VERSION &&
+    typeof value['sessionId'] === 'string' &&
+    isValidSessionId(value['sessionId']) &&
+    (value['state'] === 'busy' || value['state'] === 'idle') &&
+    typeof value['occurredAt'] === 'string' &&
+    Number.isFinite(Date.parse(value['occurredAt']))
+  )
+}
+
+function getWorkSignalDirectory(): string {
+  return join(getReupDirectory(), 'activity')
+}
+
 /** Removes one session's marker after it resolved. Best-effort by design. */
 export async function clearAttentionMarker(sessionId: string): Promise<void> {
   await unlink(join(getAttentionDirectory(), `${stableSessionKey(sessionId)}.json`)).catch(() => {})

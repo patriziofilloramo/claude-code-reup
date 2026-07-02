@@ -371,6 +371,53 @@ describe('web routes', () => {
     expect(resolved[0]?.attention).toBeNull()
   })
 
+  it('reports running from a turn-boundary marker when the lock has no status field', async () => {
+    // The VS Code scenario: claude-vscode locks omit status entirely, and the
+    // transcript pauses while Claude thinks. The UserPromptSubmit work marker
+    // must carry the busy state through the quiet stretch.
+    const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
+    await mkdir(projectDirectory, { recursive: true })
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      JSON.stringify({
+        cwd: claudeDirectory,
+        message: { content: 'hello' },
+        timestamp: new Date(Date.now() - 60_000).toISOString(),
+        type: 'user',
+      })
+    )
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'vscode-peer.json'),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+    const { writeWorkSignalMarker } = await import('../../src/core/session/attention.js')
+    await writeWorkSignalMarker({
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+      state: 'busy',
+    })
+
+    const busy = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      activityState: string
+    }>
+    expect(busy[0]?.activityState).toBe('running')
+
+    // The Stop hook ends the turn: the same session must stop reading busy.
+    await writeWorkSignalMarker({
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+      state: 'idle',
+    })
+    const done = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      activityState: string
+    }>
+    expect(done[0]?.activityState).toBe('idle')
+  })
+
   it('returns a Markdown handoff packet for the web action bar', async () => {
     await createKnownSession()
 

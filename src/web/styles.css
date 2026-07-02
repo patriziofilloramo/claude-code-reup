@@ -623,6 +623,9 @@ body {
   background: rgb(var(--red-rgb) / 0.07);
   border-left: 2px solid var(--red);
 }
+.rail-live-item.idle {
+  opacity: 0.55;
+}
 .activity-msg {
   color: var(--muted);
   font-size: 10px;

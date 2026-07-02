@@ -481,14 +481,26 @@ describe('web client session-row invariants', () => {
 
   it('pins attention sessions in the strip and renders their message', () => {
     const activityRail = sourceBetween(
-      'function buildActivitySectionHtml()',
+      'function activityDisplayRank(entry)',
       '/** Re-renders the org rail.'
     )
 
     expect(activityRail).toContain('STRINGS.activityNeedsInput')
-    expect(activityRail).toContain("if (state === 'idle' && !needsInput) continue")
     expect(activityRail).toContain('activity-msg')
-    expect(activityRail).toContain('b.attention ? 1 : 0')
+    expect(activityRail).toContain('activityDisplayRank(a) - activityDisplayRank(b)')
+  })
+
+  it('keeps attached-but-quiet sessions visible in the strip instead of flickering out', () => {
+    const activityRail = sourceBetween(
+      'function activityDisplayRank(entry)',
+      '/** Re-renders the org rail.'
+    )
+
+    // The idle filter caused sessions to vanish mid-turn whenever transcript
+    // events paused; attached sessions now render dimmed at the bottom.
+    expect(activityRail).not.toContain("if (state === 'idle' && !needsInput) continue")
+    expect(activityRail).toContain("state === 'idle' ? ' idle' : ''")
+    expect(stylesSource).toContain('.rail-live-item.idle')
   })
 
   it('raises desktop alerts for needs-input and finished turns without duplicates', () => {
@@ -538,7 +550,6 @@ describe('web client session-row invariants', () => {
     expect(activityRail).toContain('STRINGS.activityRunning')
     expect(activityRail).toContain('STRINGS.activityWaiting')
     expect(activityRail).toContain('STRINGS.activityIdle')
-    expect(activityRail).toContain("if (state === 'idle' && !needsInput) continue")
     expect(activityRail).toContain('activity-state')
     expect(activityRail).toContain('rail-live-item')
     expect(activityRail).toContain('activity-title')

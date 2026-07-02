@@ -3,11 +3,17 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { getClaudeDirectory, getReupDirectory } from '../project/claude-paths.js'
-import { clearAllAttentionMarkers } from './attention.js'
+import { clearAllAttentionMarkers, clearAllWorkSignalMarkers } from './attention.js'
 
 const INTEGRATION_SCHEMA_VERSION = 1
 /** Generous bound so a slow disk never stalls Claude Code's notification path. */
 const HOOK_TIMEOUT_SECONDS = 10
+/**
+ * Every hook event Reup listens to, all pointing at the same capture command:
+ * Notification carries needs-input alerts; UserPromptSubmit and Stop carry the
+ * turn boundaries that give busy/idle state independent of lock-file fields.
+ */
+const HOOK_EVENTS = ['Notification', 'Stop', 'UserPromptSubmit'] as const
 
 interface AttentionHookIntegration {
   installedCommand: string
@@ -30,26 +36,26 @@ type RemoveResult = { changed: true } | { changed: false; reason: 'not-configure
 export async function setupAttentionHook(): Promise<SetupResult> {
   const settings = await readJsonObject(getSettingsPath())
   const installedCommand = captureCommand()
+  const previousIntegration = await readIntegration()
 
-  const notificationHooks = readNotificationHooks(settings)
-  if (findReupEntryIndex(notificationHooks, installedCommand) !== -1) {
-    await writeIntegration(installedCommand)
-    return { changed: false, reason: 'already-configured' }
+  let changed = false
+  for (const hookEvent of HOOK_EVENTS) {
+    const eventHooks = readEventHooks(settings, hookEvent)
+    if (findReupEntryIndex(eventHooks, installedCommand) !== -1) continue
+
+    // A stale entry from a previous install location is replaced, not stacked.
+    const withoutStaleEntries = previousIntegration
+      ? eventHooks.filter((entry) => !isReupHookEntry(entry, previousIntegration.installedCommand))
+      : eventHooks
+
+    const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
+    hooks[hookEvent] = [...withoutStaleEntries, createReupHookEntry(installedCommand)]
+    settings['hooks'] = hooks
+    changed = true
   }
 
-  // A stale entry from a previous install location is replaced, not stacked.
-  const previousIntegration = await readIntegration()
-  const withoutStaleEntries = previousIntegration
-    ? notificationHooks.filter(
-        (entry) => !isReupHookEntry(entry, previousIntegration.installedCommand)
-      )
-    : notificationHooks
-
-  const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
-  hooks['Notification'] = [...withoutStaleEntries, createReupHookEntry(installedCommand)]
-  settings['hooks'] = hooks
-
   await writeIntegration(installedCommand)
+  if (!changed) return { changed: false, reason: 'already-configured' }
   try {
     await writeJsonAtomically(getSettingsPath(), settings)
   } catch (error) {
@@ -59,36 +65,43 @@ export async function setupAttentionHook(): Promise<SetupResult> {
   return { changed: true, command: installedCommand }
 }
 
-/** True when Reup's capture command is currently registered as a Notification hook. */
+/** True when Reup's capture command is registered for every hook event it needs. */
 export async function isAttentionHookConfigured(): Promise<boolean> {
   const integration = await readIntegration()
   if (!integration) return false
   const settings = await readJsonObject(getSettingsPath())
-  return findReupEntryIndex(readNotificationHooks(settings), integration.installedCommand) !== -1
+  return HOOK_EVENTS.every(
+    (hookEvent) =>
+      findReupEntryIndex(readEventHooks(settings, hookEvent), integration.installedCommand) !== -1
+  )
 }
 
-/** Removes exactly Reup's hook entry and clears captured markers. */
+/** Removes exactly Reup's hook entries and clears captured markers. */
 export async function removeAttentionHook(): Promise<RemoveResult> {
   const integration = await readIntegration()
   if (!integration) return { changed: false, reason: 'not-configured' }
 
   const settings = await readJsonObject(getSettingsPath())
-  const notificationHooks = readNotificationHooks(settings)
-  const remaining = notificationHooks.filter(
-    (entry) => !isReupHookEntry(entry, integration.installedCommand)
-  )
+  let settingsChanged = false
+  for (const hookEvent of HOOK_EVENTS) {
+    const eventHooks = readEventHooks(settings, hookEvent)
+    const remaining = eventHooks.filter(
+      (entry) => !isReupHookEntry(entry, integration.installedCommand)
+    )
+    if (remaining.length === eventHooks.length) continue
 
-  if (remaining.length !== notificationHooks.length) {
     const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
-    if (remaining.length > 0) hooks['Notification'] = remaining
-    else delete hooks['Notification']
+    if (remaining.length > 0) hooks[hookEvent] = remaining
+    else delete hooks[hookEvent]
     if (Object.keys(hooks).length > 0) settings['hooks'] = hooks
     else delete settings['hooks']
-    await writeJsonAtomically(getSettingsPath(), settings)
+    settingsChanged = true
   }
+  if (settingsChanged) await writeJsonAtomically(getSettingsPath(), settings)
 
   await unlink(getIntegrationPath()).catch(() => {})
   await clearAllAttentionMarkers()
+  await clearAllWorkSignalMarkers()
   return { changed: true }
 }
 
@@ -103,12 +116,15 @@ function createReupHookEntry(command: string): Record<string, unknown> {
   return { hooks: [{ command, timeout: HOOK_TIMEOUT_SECONDS, type: 'command' }] }
 }
 
-function readNotificationHooks(settings: Record<string, unknown>): Record<string, unknown>[] {
+function readEventHooks(
+  settings: Record<string, unknown>,
+  hookEvent: string
+): Record<string, unknown>[] {
   const hooks = settings['hooks']
   if (!isRecord(hooks)) return []
-  const notification = hooks['Notification']
-  if (!Array.isArray(notification)) return []
-  return notification.filter(isRecord)
+  const entries = hooks[hookEvent]
+  if (!Array.isArray(entries)) return []
+  return entries.filter(isRecord)
 }
 
 function findReupEntryIndex(entries: Record<string, unknown>[], command: string): number {

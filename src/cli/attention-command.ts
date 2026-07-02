@@ -1,9 +1,12 @@
 import { getLiveSessionRecords, mergeSessionLockStatuses } from '../core/session/active-sessions.js'
 import {
+  clearAttentionMarker,
   isAttentionActive,
   parseNotificationHookPayload,
+  parseWorkSignalHookPayload,
   readAttentionMarkers,
   writeAttentionMarker,
+  writeWorkSignalMarker,
 } from '../core/session/attention.js'
 import {
   isAttentionHookConfigured,
@@ -99,12 +102,33 @@ async function remove(): Promise<void> {
 async function captureFromNotificationHook(): Promise<void> {
   try {
     if (process.stdin.isTTY) return
-    const marker = parseNotificationHookPayload(await readStdin())
-    if (!marker) return
-    await writeAttentionMarker(marker)
+    const payload = parsePayload(await readStdin())
+    if (!payload) return
+
+    // One capture endpoint serves every registered hook event: turn
+    // boundaries (UserPromptSubmit/Stop) become work markers, everything
+    // else is treated as a needs-input notification.
+    const workSignal = parseWorkSignalHookPayload(payload)
+    if (workSignal) {
+      await writeWorkSignalMarker(workSignal)
+      // A submitted prompt means the user responded; the alert is over.
+      if (workSignal.state === 'busy') await clearAttentionMarker(workSignal.sessionId)
+      return
+    }
+
+    const attention = parseNotificationHookPayload(payload)
+    if (attention) await writeAttentionMarker(attention)
   } catch (error) {
     // A hook failure must never disrupt Claude Code; keep it inspectable.
     log.debug('attention capture failed:', error)
+  }
+}
+
+function parsePayload(raw: string): unknown {
+  try {
+    return JSON.parse(raw.replace(/^\uFEFF/, ''))
+  } catch {
+    return null
   }
 }
 

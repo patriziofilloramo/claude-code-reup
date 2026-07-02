@@ -14,6 +14,12 @@
 - Near real-time working-state detection: session busy/idle state now comes
   from Claude Code's own lock files, merged per session and corroborated for
   freshness, pushed to the browser over typed SSE events within ~150 ms.
+- Exact turn boundaries for every session: `reup attention setup` also
+  registers UserPromptSubmit/Stop hooks, giving Reup its own busy/idle signal
+  for sessions whose lock files omit the status field (VS Code peers). A
+  transcript written within the last seconds also reads as running, and
+  attached-but-quiet sessions stay visible in the live strip (dimmed as Idle)
+  instead of flickering out.
 
 ### Removed
 

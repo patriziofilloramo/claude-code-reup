@@ -14,8 +14,13 @@ import {
   mergeSessionLockStatuses,
 } from '../core/session/active-sessions.js'
 import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
-import { isAttentionActive, readAttentionMarkers } from '../core/session/attention.js'
-import type { AttentionMarker } from '../core/session/attention.js'
+import {
+  combineWorkEvidence,
+  isAttentionActive,
+  readAttentionMarkers,
+  readWorkSignalMarkers,
+} from '../core/session/attention.js'
+import type { AttentionMarker, WorkSignalMarker } from '../core/session/attention.js'
 import { sessionTranscriptPath } from '../core/session/session-preview.js'
 import { TRANSCRIPT_RUNNING_WINDOW_MS } from '../core/session/session-tail.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
@@ -91,6 +96,7 @@ function App({ onResume }: AppProps) {
     Map<string, MergedSessionLockStatus>
   >(new Map())
   const [attentionMarkers, setAttentionMarkers] = useState<AttentionMarker[]>([])
+  const [workMarkers, setWorkMarkers] = useState<Map<string, WorkSignalMarker>>(new Map())
   const [transcriptActivityMs, setTranscriptActivityMs] = useState<Map<string, number>>(new Map())
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -173,9 +179,10 @@ function App({ onResume }: AppProps) {
       if (refreshInProgress) return
       refreshInProgress = true
       try {
-        const [liveRecords, markers] = await Promise.all([
+        const [liveRecords, markers, workSignals] = await Promise.all([
           getLiveSessionRecords(),
           readAttentionMarkers(),
+          readWorkSignalMarkers(),
         ])
         if (disposed) return
         const lockStatuses = mergeSessionLockStatuses(liveRecords)
@@ -203,6 +210,7 @@ function App({ onResume }: AppProps) {
         setActiveSessionIds(new Set(lockStatuses.keys()))
         setSessionLockStatuses(lockStatuses)
         setAttentionMarkers(markers)
+        setWorkMarkers(new Map(workSignals.map((marker) => [marker.sessionId, marker])))
         setTranscriptActivityMs(activityBySession)
       } finally {
         refreshInProgress = false
@@ -286,14 +294,20 @@ function App({ onResume }: AppProps) {
     const now = Date.now()
     for (const [sessionId, lockStatus] of sessionLockStatuses) {
       const activityMs = transcriptActivityMs.get(sessionId) ?? null
-      if (lockStatus.status === 'busy') {
-        if (isBusyEvidenceFresh(lockStatus.statusUpdatedAt, activityMs, now)) {
+      // Turn-boundary hooks cover locks that omit the status field entirely.
+      const evidence = combineWorkEvidence(
+        lockStatus.status,
+        lockStatus.statusUpdatedAt,
+        workMarkers.get(sessionId)
+      )
+      if (evidence.status === 'busy') {
+        if (isBusyEvidenceFresh(evidence.statusUpdatedAt, activityMs, now)) {
           busyIds.add(sessionId)
         }
         continue
       }
       if (
-        lockStatus.status === null &&
+        evidence.status === null &&
         activityMs !== null &&
         now - activityMs < TRANSCRIPT_RUNNING_WINDOW_MS
       ) {
@@ -301,7 +315,7 @@ function App({ onResume }: AppProps) {
       }
     }
     return busyIds
-  }, [sessionLockStatuses, transcriptActivityMs])
+  }, [sessionLockStatuses, transcriptActivityMs, workMarkers])
 
   // Sessions currently waiting on the user, resolved against the same
   // evidence rules the web strip uses: a marker dies as soon as the session

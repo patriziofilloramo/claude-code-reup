@@ -2,8 +2,10 @@ import { loadProjects } from '../core/project/project-discovery.js'
 import { getLiveSessionRecords, mergeSessionLockStatuses } from '../core/session/active-sessions.js'
 import {
   clearAttentionMarker,
+  combineWorkEvidence,
   isAttentionActive,
   readAttentionMarkers,
+  readWorkSignalMarkers,
 } from '../core/session/attention.js'
 import type { AttentionMarker } from '../core/session/attention.js'
 import type { Project, Session } from '../core/session/session-model.js'
@@ -42,15 +44,19 @@ export interface LiveActivitySnapshot {
  * session with several attached processes yields exactly one entry.
  */
 export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot> {
-  const [liveRecords, allProjects, attentionMarkers] = await Promise.all([
+  const [liveRecords, allProjects, attentionMarkers, workMarkers] = await Promise.all([
     getLiveSessionRecords(),
     loadProjects(),
     readAttentionMarkers(),
+    readWorkSignalMarkers(),
   ])
   const lockStatuses = mergeSessionLockStatuses(liveRecords)
   const activeSessionIds = [...lockStatuses.keys()]
   const attentionBySession = new Map(
     attentionMarkers.map((marker) => [marker.sessionId, marker] as const)
+  )
+  const workMarkerBySession = new Map(
+    workMarkers.map((marker) => [marker.sessionId, marker] as const)
   )
   if (activeSessionIds.length === 0) return { activeSessionIds, entries: [] }
 
@@ -69,9 +75,16 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
 
       const { project, session } = found
       const tail = await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
+      // Turn-boundary hooks cover the sessions whose locks omit the status
+      // field entirely (VS Code peers); the newer transition wins.
+      const evidence = combineWorkEvidence(
+        lockStatus.status,
+        lockStatus.statusUpdatedAt,
+        workMarkerBySession.get(sessionId)
+      )
       const attention = resolveSessionAttention(
         attentionBySession.get(sessionId),
-        lockStatus.statusUpdatedAt,
+        evidence.statusUpdatedAt,
         tail?.lastEventAt ?? null
       )
 
@@ -81,7 +94,7 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
         projectName: projectDisplayName(project),
         sessionName: session.alias ?? session.name,
         lastToolName: tail?.lastToolName ?? null,
-        activityState: resolveActivityState(lockStatus.status, tail, lockStatus.statusUpdatedAt),
+        activityState: resolveActivityState(evidence.status, tail, evidence.statusUpdatedAt),
         attention,
         lastEventAt: tail?.lastEventAt ?? null,
       }

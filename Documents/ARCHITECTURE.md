@@ -414,6 +414,18 @@ clients detect running-to-idle transitions from consecutive snapshots.
 Desktop notifications are browser-local and opt-in; the TUI pulses a red
 marker and rings the terminal bell once per new attention event.
 
+The same setup also registers `UserPromptSubmit` and `Stop` hooks pointing at
+the same capture command. These provide Reup-owned turn boundaries
+(busy from prompt submit until Stop) stored as one work marker per session
+under `reup/activity/`. Detection combines lock status and work marker by
+newest transition (`combineWorkEvidence`), which covers the sessions whose
+locks omit the status field entirely - every observed VS Code entrypoint
+lock. A busy marker is corroborated by the same evidence-freshness rule as
+lock status, so a crashed turn cannot pulse forever. A submitted prompt also
+clears the session's attention marker. In the web live strip, attached
+sessions never vanish: quiet ones render dimmed as Idle instead of being
+filtered out.
+
 In the web client, `refreshLiveActivity()` gates on `activeSessionIds`, which
 only `refreshProjectData()` updates — both the bootstrap and SSE-triggered
 refresh run project data first and chain the activity fetch after it.

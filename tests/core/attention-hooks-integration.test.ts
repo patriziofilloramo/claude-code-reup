@@ -25,7 +25,7 @@ describe('attention hook integration', () => {
     await rm(claudeDirectory, { force: true, recursive: true })
   })
 
-  it('registers exactly one Notification hook entry and is idempotent', async () => {
+  it('registers one entry per hook event and is idempotent', async () => {
     const first = await setupAttentionHook()
     expect(first.changed).toBe(true)
     expect(await isAttentionHookConfigured()).toBe(true)
@@ -34,34 +34,54 @@ describe('attention hook integration', () => {
     expect(second).toEqual({ changed: false, reason: 'already-configured' })
 
     const settings = await readSettings()
-    const notification = hooksOf(settings)
-    expect(notification).toHaveLength(1)
-    expect(JSON.stringify(notification[0])).toContain('attention capture')
+    for (const hookEvent of ['Notification', 'Stop', 'UserPromptSubmit']) {
+      const entries = hooksOf(settings, hookEvent)
+      expect(entries).toHaveLength(1)
+      expect(JSON.stringify(entries[0])).toContain('attention capture')
+    }
+  })
+
+  it('repairs a partially registered integration without duplicating entries', async () => {
+    await setupAttentionHook()
+    // Simulate the user (or an older Reup) removing one of the three events.
+    const settings = await readSettings()
+    delete (settings['hooks'] as Record<string, unknown>)['Stop']
+    await writeSettings(settings)
+    expect(await isAttentionHookConfigured()).toBe(false)
+
+    const repair = await setupAttentionHook()
+    expect(repair.changed).toBe(true)
+    expect(await isAttentionHookConfigured()).toBe(true)
+    expect(hooksOf(await readSettings(), 'Notification')).toHaveLength(1)
   })
 
   it('preserves hooks the user configured themselves', async () => {
     const userHook = { hooks: [{ command: 'notify-send done', type: 'command' }] }
+    const userStopHook = { hooks: [{ command: 'echo done', type: 'command' }] }
     await writeSettings({
-      hooks: { Notification: [userHook], Stop: [{ hooks: [] }] },
+      hooks: { Notification: [userHook], Stop: [userStopHook] },
       statusLine: { command: 'existing', type: 'command' },
     })
 
     await setupAttentionHook()
     let settings = await readSettings()
-    expect(hooksOf(settings)).toHaveLength(2)
-    expect(hooksOf(settings)[0]).toEqual(userHook)
+    expect(hooksOf(settings, 'Notification')).toHaveLength(2)
+    expect(hooksOf(settings, 'Notification')[0]).toEqual(userHook)
+    expect(hooksOf(settings, 'Stop')).toHaveLength(2)
+    expect(hooksOf(settings, 'Stop')[0]).toEqual(userStopHook)
 
     const removal = await removeAttentionHook()
     expect(removal.changed).toBe(true)
 
     settings = await readSettings()
-    expect(hooksOf(settings)).toEqual([userHook])
-    expect((settings['hooks'] as Record<string, unknown>)['Stop']).toEqual([{ hooks: [] }])
+    expect(hooksOf(settings, 'Notification')).toEqual([userHook])
+    expect(hooksOf(settings, 'Stop')).toEqual([userStopHook])
+    expect((settings['hooks'] as Record<string, unknown>)['UserPromptSubmit']).toBeUndefined()
     expect(settings['statusLine']).toEqual({ command: 'existing', type: 'command' })
     expect(await isAttentionHookConfigured()).toBe(false)
   })
 
-  it('removes the Notification list entirely when Reup owned its only entry', async () => {
+  it('removes the hooks object entirely when Reup owned every entry', async () => {
     await setupAttentionHook()
     await removeAttentionHook()
 
@@ -83,8 +103,8 @@ describe('attention hook integration', () => {
     await writeFile(join(claudeDirectory, 'settings.json'), JSON.stringify(value))
   }
 
-  function hooksOf(settings: Record<string, unknown>): unknown[] {
+  function hooksOf(settings: Record<string, unknown>, hookEvent = 'Notification'): unknown[] {
     const hooks = settings['hooks'] as Record<string, unknown> | undefined
-    return (hooks?.['Notification'] as unknown[]) ?? []
+    return (hooks?.[hookEvent] as unknown[]) ?? []
   }
 })

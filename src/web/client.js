@@ -4828,12 +4828,20 @@ function shortRelativeTime(isoTimestamp) {
 }
 
 /** Builds the live activity strip rows from the current liveActivity snapshot. */
+function activityDisplayRank(entry) {
+  if (entry.attention) return 0
+  if (entry.activityState === 'running') return 1
+  if (entry.activityState === 'waiting') return 2
+  return 3
+}
+
 function buildActivitySectionHtml() {
   if (liveActivity.length === 0) return ''
-  // Sessions waiting on the user always render, first and in red — that is
-  // the strip's whole reason to exist.
+  // An attached session never vanishes from the strip: quiet ones render
+  // dimmed as Idle at the bottom instead of flickering in and out. Sessions
+  // waiting on the user always come first, in red.
   var ordered = liveActivity.slice().sort(function (a, b) {
-    return (b.attention ? 1 : 0) - (a.attention ? 1 : 0)
+    return activityDisplayRank(a) - activityDisplayRank(b)
   })
   var rows = ''
   var count = 0
@@ -4842,7 +4850,6 @@ function buildActivitySectionHtml() {
     if (!entry.projectId || !entry.sessionId) continue
     var state = entry.activityState || 'idle'
     var needsInput = !!entry.attention
-    if (state === 'idle' && !needsInput) continue
     var stateClass = needsInput ? 'attention' : state
     var stateLabel = needsInput
       ? STRINGS.activityNeedsInput
@@ -4865,7 +4872,7 @@ function buildActivitySectionHtml() {
         : ''
     rows +=
       '<div class="rail-item rail-live-item' +
-      (needsInput ? ' attention' : '') +
+      (needsInput ? ' attention' : state === 'idle' ? ' idle' : '') +
       '" data-rail-action="select-session" data-project-id="' +
       escapeHtml(entry.projectId) +
       '" data-session-id="' +
