@@ -98,13 +98,30 @@ describe('readSessionTailActivity', () => {
     const path = join(tmpDir, 'waiting.jsonl')
     await writeFile(
       path,
-      [toolUseEvent('Read', 'id-2', isoAgo(15_000)), toolResultEvent('id-2', isoAgo(10_000))].join(
+      [toolUseEvent('Read', 'id-2', isoAgo(20_000)), toolResultEvent('id-2', isoAgo(15_000))].join(
         '\n'
       )
     )
     const result = await readSessionTailActivity(path)
     expect(result!.toolPending).toBe(false)
     expect(result!.state).toBe('waiting')
+  })
+
+  it('reports running while the transcript is being written, even with no tool pending', async () => {
+    const path = join(tmpDir, 'generating.jsonl')
+    // Claude flushes events continuously while generating; a fresh event is
+    // proof of work even when the last tool already resolved and the lock
+    // carries no status field.
+    await writeFile(
+      path,
+      [
+        toolUseEvent('Bash', 'id-gen', isoAgo(6_000)),
+        toolResultEvent('id-gen', isoAgo(3_000)),
+      ].join('\n')
+    )
+    const result = await readSessionTailActivity(path)
+    expect(result!.toolPending).toBe(false)
+    expect(result!.state).toBe('running')
   })
 
   it('reports idle state when the last event is older than 30 seconds', async () => {
@@ -179,12 +196,12 @@ describe('readSessionTailActivity', () => {
     const path = join(tmpDir, 'interrupted.jsonl')
     const interruptEvent = JSON.stringify({
       type: 'user',
-      timestamp: isoAgo(4_000),
+      timestamp: isoAgo(15_000),
       message: { content: [{ type: 'text', text: '[Request interrupted by user]' }] },
     })
     await writeFile(
       path,
-      [toolUseEvent('Bash', 'id-orphaned', isoAgo(5_000)), interruptEvent].join('\n')
+      [toolUseEvent('Bash', 'id-orphaned', isoAgo(20_000)), interruptEvent].join('\n')
     )
     const result = await readSessionTailActivity(path)
     expect(result!.toolPending).toBe(false)
@@ -195,12 +212,12 @@ describe('readSessionTailActivity', () => {
     const path = join(tmpDir, 'new-prompt.jsonl')
     const promptEvent = JSON.stringify({
       type: 'user',
-      timestamp: isoAgo(4_000),
+      timestamp: isoAgo(15_000),
       message: { content: 'please continue' },
     })
     await writeFile(
       path,
-      [toolUseEvent('Edit', 'id-orphaned', isoAgo(5_000)), promptEvent].join('\n')
+      [toolUseEvent('Edit', 'id-orphaned', isoAgo(20_000)), promptEvent].join('\n')
     )
     const result = await readSessionTailActivity(path)
     expect(result!.toolPending).toBe(false)
@@ -256,7 +273,7 @@ describe('readSessionTailActivity', () => {
     await writeFile(path, giantEvent)
     const result = await readSessionTailActivity(path)
     expect(result!.lastEventAt).not.toBeNull()
-    expect(result!.state).toBe('waiting')
+    expect(result!.state).toBe('running')
   })
 })
 

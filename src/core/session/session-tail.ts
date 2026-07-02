@@ -4,6 +4,13 @@ import { isBusyEvidenceFresh } from './active-sessions.js'
 
 /** Maximum bytes read from the end of a transcript to find recent tool activity. */
 const TAIL_BYTES = 12_000
+/**
+ * A transcript written within this window (ms) is proof of work in itself:
+ * Claude Code flushes events continuously while generating, so a very fresh
+ * event means the session is running even with no tool pending and no lock
+ * status (lock files do not always carry the status field).
+ */
+export const TRANSCRIPT_RUNNING_WINDOW_MS = 10_000
 /** An event within this window (ms) marks a session as waiting rather than idle. */
 const WAITING_WINDOW_MS = 30_000
 
@@ -95,9 +102,14 @@ function applyLastEventFallback(
   activity: SessionTailActivity,
   lastEventAt: string
 ): SessionTailActivity {
-  if (activity.state !== 'idle') return { ...activity, lastEventAt }
-  const ageMs = Date.now() - new Date(lastEventAt).getTime()
-  return { ...activity, lastEventAt, state: ageMs < WAITING_WINDOW_MS ? 'waiting' : 'idle' }
+  if (activity.state === 'running') return { ...activity, lastEventAt }
+  return { ...activity, lastEventAt, state: stateFromLastEventAge(lastEventAt) }
+}
+
+function stateFromLastEventAge(lastEventAt: string, now = Date.now()): ActivityState {
+  const ageMs = now - new Date(lastEventAt).getTime()
+  if (ageMs < TRANSCRIPT_RUNNING_WINDOW_MS) return 'running'
+  return ageMs < WAITING_WINDOW_MS ? 'waiting' : 'idle'
 }
 
 function parseTailActivity(text: string, isPartialRead: boolean): SessionTailActivity {
@@ -172,8 +184,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
   if (toolPending) {
     state = 'running'
   } else if (lastEventAt) {
-    const ageMs = Date.now() - new Date(lastEventAt).getTime()
-    state = ageMs < WAITING_WINDOW_MS ? 'waiting' : 'idle'
+    state = stateFromLastEventAge(lastEventAt)
   } else {
     state = 'idle'
   }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP } from '../config/app.js'
@@ -15,6 +16,8 @@ import {
 import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
 import { isAttentionActive, readAttentionMarkers } from '../core/session/attention.js'
 import type { AttentionMarker } from '../core/session/attention.js'
+import { sessionTranscriptPath } from '../core/session/session-preview.js'
+import { TRANSCRIPT_RUNNING_WINDOW_MS } from '../core/session/session-tail.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
 import { readLiveUsageSummary } from '../core/usage/live-usage.js'
@@ -88,6 +91,7 @@ function App({ onResume }: AppProps) {
     Map<string, MergedSessionLockStatus>
   >(new Map())
   const [attentionMarkers, setAttentionMarkers] = useState<AttentionMarker[]>([])
+  const [transcriptActivityMs, setTranscriptActivityMs] = useState<Map<string, number>>(new Map())
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -108,6 +112,13 @@ function App({ onResume }: AppProps) {
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set())
+
+  // The 1 s liveness poll needs the latest project mapping without
+  // re-creating its interval on every project refresh.
+  const projectsRef = useRef<Project[]>([])
+  useEffect(() => {
+    projectsRef.current = projects
+  }, [projects])
 
   const [launching, setLaunching] = useState<LaunchState | null>(null)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
@@ -168,9 +179,31 @@ function App({ onResume }: AppProps) {
         ])
         if (disposed) return
         const lockStatuses = mergeSessionLockStatuses(liveRecords)
+
+        // Transcript modification times are the freshest work evidence the
+        // TUI can get: lock files do not always carry a status field, and the
+        // slow project refresh leaves session.updated too stale for liveness.
+        const activityBySession = new Map<string, number>()
+        await Promise.all(
+          [...lockStatuses.keys()].map(async (sessionId) => {
+            const project = projectsRef.current.find((candidate) =>
+              candidate.sessions.some((session) => session.id === sessionId)
+            )
+            if (!project) return
+            try {
+              const stats = await stat(sessionTranscriptPath(project.id, sessionId))
+              activityBySession.set(sessionId, stats.mtimeMs)
+            } catch {
+              // A brand-new session may not have a transcript yet.
+            }
+          })
+        )
+        if (disposed) return
+
         setActiveSessionIds(new Set(lockStatuses.keys()))
         setSessionLockStatuses(lockStatuses)
         setAttentionMarkers(markers)
+        setTranscriptActivityMs(activityBySession)
       } finally {
         refreshInProgress = false
       }
@@ -245,50 +278,47 @@ function App({ onResume }: AppProps) {
 
   // A stale busy flag (session died or was interrupted mid-turn) must not
   // pulse forever: busy is trusted only with a fresh transition or recent
-  // transcript activity backing it.
+  // transcript activity backing it. Lock files do not always carry a status
+  // field at all (VS Code peers, freshly spawned processes) - for those, a
+  // transcript written seconds ago is proof of work in itself.
   const busySessionIds = useMemo(() => {
-    const updatedMsBySessionId = new Map<string, number>()
-    for (const project of projects) {
-      for (const session of project.sessions) {
-        const updatedMs = Date.parse(session.updated)
-        if (Number.isFinite(updatedMs)) updatedMsBySessionId.set(session.id, updatedMs)
-      }
-    }
     const busyIds = new Set<string>()
+    const now = Date.now()
     for (const [sessionId, lockStatus] of sessionLockStatuses) {
-      if (lockStatus.status !== 'busy') continue
+      const activityMs = transcriptActivityMs.get(sessionId) ?? null
+      if (lockStatus.status === 'busy') {
+        if (isBusyEvidenceFresh(lockStatus.statusUpdatedAt, activityMs, now)) {
+          busyIds.add(sessionId)
+        }
+        continue
+      }
       if (
-        isBusyEvidenceFresh(lockStatus.statusUpdatedAt, updatedMsBySessionId.get(sessionId) ?? null)
+        lockStatus.status === null &&
+        activityMs !== null &&
+        now - activityMs < TRANSCRIPT_RUNNING_WINDOW_MS
       ) {
         busyIds.add(sessionId)
       }
     }
     return busyIds
-  }, [projects, sessionLockStatuses])
+  }, [sessionLockStatuses, transcriptActivityMs])
 
   // Sessions currently waiting on the user, resolved against the same
   // evidence rules the web strip uses: a marker dies as soon as the session
   // shows life after the event or its process disappears.
   const attentionSessionIds = useMemo(() => {
-    const updatedMsBySessionId = new Map<string, number>()
-    for (const project of projects) {
-      for (const session of project.sessions) {
-        const updatedMs = Date.parse(session.updated)
-        if (Number.isFinite(updatedMs)) updatedMsBySessionId.set(session.id, updatedMs)
-      }
-    }
     const ids = new Set<string>()
     for (const marker of attentionMarkers) {
       const lockStatus = sessionLockStatuses.get(marker.sessionId)
       const active = isAttentionActive(marker, {
         isLive: lockStatus !== undefined,
-        lastActivityMs: updatedMsBySessionId.get(marker.sessionId) ?? null,
+        lastActivityMs: transcriptActivityMs.get(marker.sessionId) ?? null,
         statusUpdatedAt: lockStatus?.statusUpdatedAt ?? null,
       })
       if (active) ids.add(marker.sessionId)
     }
     return ids
-  }, [attentionMarkers, projects, sessionLockStatuses])
+  }, [attentionMarkers, sessionLockStatuses, transcriptActivityMs])
 
   // One terminal bell per new attention event; a re-render must never re-ring.
   const previousAttentionIdsRef = useRef<Set<string>>(new Set())

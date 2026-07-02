@@ -12,6 +12,11 @@ import {
   removeUsageStatusLine,
   setupUsageStatusLine,
 } from '../core/usage/usage-statusline-integration.js'
+import {
+  isAttentionHookConfigured,
+  removeAttentionHook,
+  setupAttentionHook,
+} from '../core/session/attention-hooks-integration.js'
 import { copyToClipboard } from '../utils/system.js'
 
 const TABS = ['Interface', 'Integrations', 'Features'] as const
@@ -19,9 +24,13 @@ type Tab = (typeof TABS)[number]
 
 const TAB_CURSOR_MAX: Record<Tab, number> = {
   Interface: 2,
-  Integrations: 3,
+  Integrations: 4,
   Features: 0,
 }
+
+/** Integrations tab rows: 0 = usage capture, 1 = attention alerts, 2+ = shells. */
+const INTEGRATION_ATTENTION_CURSOR = 1
+const INTEGRATION_FIRST_SHELL_CURSOR = 2
 
 const SHELLS = [
   {
@@ -69,6 +78,7 @@ export function ConfigApp({
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
+  const [attentionConfigured, setAttentionConfigured] = useState<boolean | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [copiedShellIndex, setCopiedShellIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -79,6 +89,7 @@ export function ConfigApp({
       setAutoCleanupOnStart(prefs.autoCleanupOnStart)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
+    void isAttentionHookConfigured().then(setAttentionConfigured)
   }, [])
 
   const currentTab = TABS[tabIndex]!
@@ -165,8 +176,39 @@ export function ConfigApp({
       return
     }
 
-    if (cursor >= 1 && cursor <= 3) {
-      const shell = DISPLAY_SHELLS[cursor - 1]!
+    if (cursor === INTEGRATION_ATTENTION_CURSOR) {
+      if (attentionConfigured === null) return
+      setBusy(true)
+      try {
+        if (attentionConfigured) {
+          const result = await removeAttentionHook()
+          setAttentionConfigured(false)
+          setStatusMsg({
+            ok: true,
+            text: result.changed ? 'Attention alerts removed' : 'Was not configured',
+          })
+        } else {
+          await setupAttentionHook()
+          setAttentionConfigured(true)
+          setStatusMsg({
+            ok: true,
+            text: 'Attention alerts set up; restart Claude Code sessions to activate',
+          })
+        }
+      } catch (error) {
+        setStatusMsg({
+          ok: false,
+          text: error instanceof Error ? error.message : 'attention setup failed',
+        })
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
+    if (cursor >= INTEGRATION_FIRST_SHELL_CURSOR) {
+      const shell = DISPLAY_SHELLS[cursor - INTEGRATION_FIRST_SHELL_CURSOR]
+      if (!shell) return
       const copiedIndex = cursor
       copyToClipboard(shell.cmd)
         .then(() => {
@@ -211,6 +253,7 @@ export function ConfigApp({
         {currentTab === 'Interface' && <InterfaceTab cursor={cursor} theme={theme} />}
         {currentTab === 'Integrations' && (
           <IntegrationsTab
+            attentionConfigured={attentionConfigured}
             busy={busy}
             copiedShellIndex={copiedShellIndex}
             cursor={cursor}
@@ -290,17 +333,20 @@ function InterfaceTab({ cursor, theme }: { cursor: number; theme: ThemeName }) {
 }
 
 function IntegrationsTab({
+  attentionConfigured,
   busy,
   copiedShellIndex,
   cursor,
   usageConfigured,
 }: {
+  attentionConfigured: boolean | null
   busy: boolean
   copiedShellIndex: number | null
   cursor: number
   usageConfigured: boolean | null
 }) {
   const usageFocused = cursor === 0
+  const attentionFocused = cursor === INTEGRATION_ATTENTION_CURSOR
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -314,14 +360,24 @@ function IntegrationsTab({
         />
       </FeatureCard>
 
-      <FeatureCard focused={cursor >= 1}>
+      <FeatureCard focused={attentionFocused}>
+        <SelectableRow
+          active={attentionConfigured === true}
+          description={LABELS.configAttentionDesc}
+          focused={attentionFocused}
+          label={LABELS.configAttentionTitle}
+          status={busy ? LABELS.configWorking : attentionConfigured ? 'on' : 'off'}
+        />
+      </FeatureCard>
+
+      <FeatureCard focused={cursor >= INTEGRATION_FIRST_SHELL_CURSOR}>
         <Box flexDirection="column">
           <Text bold color={COLORS.text}>
             {LABELS.configShellCompletionTitle}
           </Text>
           <Text color={COLORS.dim}>{LABELS.configShellCompletionDesc}</Text>
           {DISPLAY_SHELLS.map((shell, index) => {
-            const shellCursor = index + 1
+            const shellCursor = index + INTEGRATION_FIRST_SHELL_CURSOR
             const focused = cursor === shellCursor
             return (
               <Box flexDirection="column" key={shell.label} marginTop={1}>

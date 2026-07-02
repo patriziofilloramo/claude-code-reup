@@ -3,3 +3,4 @@ dist/
 *.log
 .claude/
 .claude-memory/
+.claude-memory-legacy-backup*/

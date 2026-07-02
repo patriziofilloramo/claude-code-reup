@@ -93,6 +93,8 @@ export const LABELS = {
   configColorThemeDesc: 'Takes effect when reup is restarted. The web UI switches live.',
   configLiveUsageTitle: 'Live usage status line',
   configLiveUsageDesc: "Captures rate-limit data from Claude Code's status line",
+  configAttentionTitle: 'Attention alerts',
+  configAttentionDesc: 'Alerts when a session waits for a permission decision or your input',
   configShellCompletionTitle: 'Shell completion',
   configShellCompletionDesc: 'Tab-complete session IDs for resume and handoff',
   configWorking: 'working...',
