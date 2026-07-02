@@ -25,6 +25,13 @@ export interface SessionTailActivity {
    * false → tool completed (waiting or idle).
    */
   toolPending: boolean
+  /**
+   * True when the tail's last conversational event is a text-only assistant
+   * message ending in a question mark — Claude asked something in plain prose
+   * with no tool call or UI prompt to detect it by. Cleared by any later user
+   * turn or assistant tool activity.
+   */
+  trailingQuestion: boolean
   /** ISO timestamp of the most recent assistant or user event in the tail. */
   lastEventAt: string | null
   /** Inferred activity state derived from tool and timestamp data. */
@@ -107,21 +114,25 @@ const USER_REPLY_TOOL_NAMES = new Set(['AskUserQuestion', 'ExitPlanMode'])
 
 /**
  * True when a live session is blocked on the user with no Notification hook
- * to say so. Two shapes qualify: the turn ended (`idle` evidence) while the
- * transcript tail still holds an unanswered tool call, or the pending call is
- * to a tool that exists to ask the user something (`AskUserQuestion`,
+ * to say so. Three shapes qualify: the turn ended (`idle` evidence) while the
+ * transcript tail still holds an unanswered tool call; the pending call is to
+ * a tool that exists to ask the user something (`AskUserQuestion`,
  * `ExitPlanMode`), which keeps the lock busy for as long as the user is
- * silent. The tail parser clears pending tool uses on any later user prompt
- * or interrupt marker, so a pending call here is genuinely unanswered — not
- * merely a turn resting between prompts.
+ * silent; or the turn ended on a text-only question with no tool at all. The
+ * tail parser clears pending tool uses and trailing questions on any later
+ * user turn, so a hit here is genuinely unanswered — not merely a turn
+ * resting between prompts.
  */
 export function isAwaitingUserReply(
   workStatus: 'busy' | 'idle' | null,
   tail: SessionTailActivity | null
 ): boolean {
-  if (tail?.toolPending !== true || tail.lastEventAt === null) return false
-  if (workStatus === 'idle') return true
-  return tail.lastToolName !== null && USER_REPLY_TOOL_NAMES.has(tail.lastToolName)
+  if (!tail || tail.lastEventAt === null) return false
+  if (tail.toolPending) {
+    if (workStatus === 'idle') return true
+    return tail.lastToolName !== null && USER_REPLY_TOOL_NAMES.has(tail.lastToolName)
+  }
+  return workStatus === 'idle' && tail.trailingQuestion
 }
 
 function applyLastEventFallback(
@@ -148,6 +159,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
   const toolUses: Array<{ id: string; name: string | null }> = []
   const resolvedToolIds = new Set<string>()
   let lastEventAt: string | null = null
+  let trailingQuestion = false
 
   for (const line of lines) {
     const trimmed = line.trim()
@@ -166,8 +178,12 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     if (event['type'] === 'assistant') {
       const content = (event['message'] as Record<string, unknown> | undefined)?.['content']
       if (!Array.isArray(content)) continue
-      for (const block of content as Record<string, unknown>[]) {
-        if (block['type'] !== 'tool_use') continue
+      const blocks = content as Record<string, unknown>[]
+      const toolUseBlocks = blocks.filter((block) => block['type'] === 'tool_use')
+      // A text-only assistant message ending in "?" is a question asked in
+      // prose; any tool activity instead means Claude kept working.
+      trailingQuestion = toolUseBlocks.length === 0 && endsWithQuestion(blocks)
+      for (const block of toolUseBlocks) {
         const name = typeof block['name'] === 'string' ? block['name'] : null
         const id = typeof block['id'] === 'string' ? block['id'] : null
         if (name) lastToolName = name
@@ -177,6 +193,8 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     }
 
     if (event['type'] === 'user') {
+      // Any user turn answers a trailing question, whatever its shape.
+      trailingQuestion = false
       const content = (event['message'] as Record<string, unknown> | undefined)?.['content']
       // A user turn that is not purely tool results (an interrupt marker or a
       // new prompt) means no tool is running any more — pending tool uses must
@@ -215,5 +233,18 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     state = 'idle'
   }
 
-  return { lastToolName, toolPending, lastEventAt, state }
+  return { lastToolName, toolPending, trailingQuestion, lastEventAt, state }
+}
+
+/** True when the last text block of an assistant message ends with a question mark. */
+function endsWithQuestion(blocks: Record<string, unknown>[]): boolean {
+  for (let index = blocks.length - 1; index >= 0; index--) {
+    const block = blocks[index]!
+    if (block['type'] !== 'text' || typeof block['text'] !== 'string') continue
+    // Trailing markdown decoration or closing punctuation must not hide the
+    // question mark (e.g. "…right?**" or "…ok?)").
+    const stripped = block['text'].replace(/[\s*_`"')\]]+$/u, '')
+    return stripped.endsWith('?')
+  }
+  return false
 }

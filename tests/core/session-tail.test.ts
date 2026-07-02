@@ -285,6 +285,7 @@ describe('resolveActivityState', () => {
   ): SessionTailActivity => ({
     lastToolName: 'Bash',
     toolPending: state === 'running',
+    trailingQuestion: false,
     lastEventAt,
     state,
   })

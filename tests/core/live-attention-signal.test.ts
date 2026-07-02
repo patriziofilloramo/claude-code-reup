@@ -161,6 +161,56 @@ describe('live-attention-signal', () => {
       expect(isAwaitingUserReply('idle', tail)).toBe(false)
     })
 
+    it('is true when the turn ended on a plain-text question', async () => {
+      const transcriptPath = await writeTranscript(transcriptWithTextMessage('Should I proceed?'))
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.trailingQuestion).toBe(true)
+      expect(isAwaitingUserReply('idle', tail)).toBe(true)
+      // Still generating (busy) or unknown evidence must not alert on text.
+      expect(isAwaitingUserReply('busy', tail)).toBe(false)
+      expect(isAwaitingUserReply(null, tail)).toBe(false)
+    })
+
+    it('is true for a question wrapped in trailing markdown decoration', async () => {
+      const transcriptPath = await writeTranscript(
+        transcriptWithTextMessage('All done. **Want me to commit?**')
+      )
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(isAwaitingUserReply('idle', tail)).toBe(true)
+    })
+
+    it('is false when the turn ended on a plain statement', async () => {
+      const transcriptPath = await writeTranscript(
+        transcriptWithTextMessage('Done! All tests pass.')
+      )
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.trailingQuestion).toBe(false)
+      expect(isAwaitingUserReply('idle', tail)).toBe(false)
+    })
+
+    it('is false once the user answers the text question', async () => {
+      const transcriptPath = await writeTranscript(
+        transcriptWithTextMessage('Should I proceed?') +
+          '\n' +
+          JSON.stringify({
+            type: 'user',
+            timestamp: isoAgo(1_000),
+            message: { content: [{ type: 'text', text: 'yes' }] },
+          })
+      )
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.trailingQuestion).toBe(false)
+      expect(isAwaitingUserReply('idle', tail)).toBe(false)
+    })
+
+    it('is false when a question was followed by more tool work', async () => {
+      const transcriptPath = await writeTranscript(
+        transcriptWithTextMessage('Should I proceed?') + '\n' + transcriptWithPendingTool('Bash')
+      )
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.trailingQuestion).toBe(false)
+    })
+
     it('is false after the user interrupts or sends a new prompt', async () => {
       const transcriptPath = await writeTranscript(
         transcriptWithPendingTool('AskUserQuestion') +
@@ -256,6 +306,14 @@ describe('live-attention-signal', () => {
 
   function isoAgo(milliseconds: number): string {
     return new Date(Date.now() - milliseconds).toISOString()
+  }
+
+  function transcriptWithTextMessage(text: string): string {
+    return JSON.stringify({
+      type: 'assistant',
+      timestamp: isoAgo(40_000),
+      message: { content: [{ type: 'text', text }] },
+    })
   }
 
   function transcriptWithPendingTool(toolName: string): string {
