@@ -35,6 +35,18 @@ describe('CLI help', () => {
     expect(help).not.toContain('reup --theme')
   })
 
+  it('uses command-only main help when terminal width is narrow', () => {
+    const help = renderMainHelp(false, 34)
+
+    expect(help).toContain('Maintenance')
+    expect(help).toContain('  reup cleanup')
+    expect(help).toContain('  reup attention [action]')
+    expect(help).not.toContain('Review stale or empty sessions')
+    expect(help).not.toContain('Alerts when a session needs input')
+    expect(help).not.toContain('reup <command> --help')
+    expect(help).toContain('Run `reup help <command>` for details.')
+  })
+
   it.each(PUBLIC_COMMANDS)('provides help for the public %s command', async (command) => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 

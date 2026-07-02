@@ -16,8 +16,8 @@ describe('VS Code refresh controller guardrails', () => {
     expect(source).toContain('watcherDisposables')
     expect(source).toContain('this.watchers.splice(0)')
     expect(source).toContain('pendingRefreshReason')
-    expect(source).toContain('setVisible(visible: boolean)')
-    expect(source).toContain('if (this.disposed || !this.visible) return')
+    expect(source).toContain('setScope(scope: RefreshScope)')
+    expect(source).toContain("if (this.disposed || this.scope === 'off') return")
     expect(extensionSource).toContain('new ReupRefreshController')
     expect(extensionSource).toContain('refreshController,')
   })
@@ -49,5 +49,14 @@ describe('VS Code refresh controller guardrails', () => {
     expect(source).toContain("'Reup attention marker', true")
     expect(source).toContain("'Reup work marker', true")
     expect(source).toContain('!this.pendingUrgent && readRefreshMode()')
+  })
+
+  it('keeps signal watchers alive for the sidebar tree without dashboard churn', () => {
+    // With only the tree visible, lock/marker watchers must still run so
+    // needs-input flips reach the sidebar; transcript watching stays
+    // dashboard-only to avoid a perpetually busy shared sidebar.
+    expect(source).toContain('this.startSignalWatchers()')
+    expect(source).toContain("if (this.scope === 'full')")
+    expect(extensionSource).toContain("dashboardVisible ? 'full' : treeVisible ? 'signals' : 'off'")
   })
 })

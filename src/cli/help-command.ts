@@ -5,6 +5,67 @@ const CONFIG_KEYS = Object.entries(PREF_SPECS)
   .map(([key, spec]) => `  ${key.padEnd(20)} ${spec.description} (${spec.values.join(', ')})`)
   .join('\n')
 
+const MAIN_HELP_FULL_MIN_WIDTH = 64
+
+interface MainHelpRow {
+  command: string
+  description: string
+  note?: string
+}
+
+interface MainHelpSection {
+  title: string
+  rows: MainHelpRow[]
+}
+
+const MAIN_HELP_SECTIONS: MainHelpSection[] = [
+  {
+    title: 'Interfaces',
+    rows: [
+      { command: 'reup', description: 'Open terminal UI', note: 'default' },
+      { command: 'reup web', description: 'Open browser UI' },
+    ],
+  },
+  {
+    title: 'Sessions',
+    rows: [
+      { command: 'reup resume [id]', description: 'Resume a session' },
+      {
+        command: 'reup list [query]',
+        description: 'List sessions',
+        note: '--json for machine-readable',
+      },
+      { command: 'reup search <query>', description: 'Search session metadata or content' },
+      { command: 'reup touched [path]', description: 'Find sessions that edited a file' },
+      { command: 'reup inbox', description: 'Show sessions needing attention' },
+      { command: 'reup handoff [id]', description: 'Create a continuation packet' },
+    ],
+  },
+  {
+    title: 'Maintenance',
+    rows: [
+      { command: 'reup cleanup', description: 'Review stale or empty sessions' },
+      { command: 'reup doctor', description: 'Diagnose local session data' },
+      { command: 'reup usage [action]', description: 'Monitor Claude usage limits' },
+      { command: 'reup attention [action]', description: 'Alerts when a session needs input' },
+    ],
+  },
+  {
+    title: 'Configuration',
+    rows: [
+      { command: 'reup config', description: 'Open configuration panel' },
+      { command: 'reup completion <shell>', description: 'Print shell completion setup' },
+    ],
+  },
+  {
+    title: 'Options',
+    rows: [
+      { command: '-h, --help', description: 'Show help' },
+      { command: '-v, --version', description: 'Show version' },
+    ],
+  },
+]
+
 const COMMAND_HELP: Readonly<Record<string, string>> = {
   cleanup: `reup cleanup - review and archive stale sessions
 
@@ -162,42 +223,43 @@ export function isHelpRequest(commandArguments: string[]): boolean {
 }
 
 /** Builds the concise product-level command map shown by `reup --help`. */
-export function renderMainHelp(useColor = process.stdout.isTTY === true): string {
+export function renderMainHelp(
+  useColor = process.stdout.isTTY === true,
+  terminalWidth = process.stdout.columns || 80
+): string {
   const bold = (text: string) => (useColor ? `\x1b[1m${text}\x1b[0m` : text)
   const dim = (text: string) => (useColor ? `\x1b[2m${text}\x1b[0m` : text)
+  const compact = terminalWidth < MAIN_HELP_FULL_MIN_WIDTH
 
-  function row(command: string, description: string, note?: string): string {
-    return `  ${command.padEnd(28)}  ${description}${note ? dim(`  (${note})`) : ''}`
+  function fullRow(row: MainHelpRow): string {
+    return `  ${row.command.padEnd(28)}  ${row.description}${row.note ? dim(`  (${row.note})`) : ''}`
+  }
+
+  function compactRows(section: MainHelpSection): string[] {
+    return [bold(section.title), ...section.rows.map((row) => `  ${row.command}`)]
+  }
+
+  if (compact) {
+    return [
+      bold('reup'),
+      '',
+      ...MAIN_HELP_SECTIONS.flatMap((section, index) => [
+        ...(index === 0 ? [] : ['']),
+        ...compactRows(section),
+      ]),
+      '',
+      dim('Run `reup help <command>` for details.'),
+    ].join('\n')
   }
 
   return [
     `${bold('reup')} - session manager for Claude Code`,
     '',
-    bold('Interfaces'),
-    row('reup', 'Open terminal UI', 'default'),
-    row('reup web', 'Open browser UI'),
-    '',
-    bold('Sessions'),
-    row('reup resume [id]', 'Resume a session'),
-    row('reup list [query]', 'List sessions', '--json for machine-readable'),
-    row('reup search <query>', 'Search session metadata or content'),
-    row('reup touched [path]', 'Find sessions that edited a file'),
-    row('reup inbox', 'Show sessions needing attention'),
-    row('reup handoff [id]', 'Create a continuation packet'),
-    '',
-    bold('Maintenance'),
-    row('reup cleanup', 'Review stale or empty sessions'),
-    row('reup doctor', 'Diagnose local session data'),
-    row('reup usage [action]', 'Monitor Claude usage limits'),
-    row('reup attention [action]', 'Alerts when a session needs input'),
-    '',
-    bold('Configuration'),
-    row('reup config', 'Open configuration panel'),
-    row('reup completion <shell>', 'Print shell completion setup'),
-    '',
-    bold('Options'),
-    row('-h, --help', 'Show help'),
-    row('-v, --version', 'Show version'),
+    ...MAIN_HELP_SECTIONS.flatMap((section, index) => [
+      ...(index === 0 ? [] : ['']),
+      bold(section.title),
+      ...section.rows.map(fullRow),
+    ]),
     '',
     dim('Run `reup help <command>` or `reup <command> --help` for details.'),
   ].join('\n')

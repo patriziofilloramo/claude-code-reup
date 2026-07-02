@@ -66,6 +66,7 @@ import {
   createVisibleWindow,
   deriveSearchResults,
 } from './session-view.js'
+import { tuiViewportLayoutForWidth } from './layout.js'
 
 type FocusedPanel = 'projects' | 'sessions'
 
@@ -868,6 +869,7 @@ function App({ onResume }: AppProps) {
   // ---------------------------------------------------------------------------
 
   const terminalHeight = stdout?.rows ?? 24
+  const terminalWidth = stdout?.columns ?? 80
   const availableBodyRows = Math.max(6, terminalHeight - CHROME_ROW_COUNT)
   const maximumVisibleSessionRows = calculateMaximumVisibleSessions(availableBodyRows, false)
   const [visibleProjects, visibleProjectSelectionIndex] = createVisibleWindow(
@@ -880,6 +882,11 @@ function App({ onResume }: AppProps) {
     selectedSessionIndex,
     maximumVisibleSessionRows
   )
+  const viewportLayout = tuiViewportLayoutForWidth({
+    projects: visibleProjects,
+    resumePreviewOpen: resumeCardSession !== null,
+    terminalWidth,
+  })
 
   if (launching) {
     return (
@@ -971,60 +978,81 @@ function App({ onResume }: AppProps) {
       )
     }
 
+    const projectPanel = (
+      <ProjectList
+        isFocused={focusedPanel === 'projects'}
+        layout={viewportLayout.projectPanel}
+        projects={visibleProjects}
+        selectedIndex={visibleProjectSelectionIndex}
+        totalCount={matchingProjects.length}
+      />
+    )
+
+    const sessionPanel =
+      resumeCardSession && selectedProject ? (
+        <ResumeCard
+          isActive={activeSessionIds.has(resumeCardSession.id)}
+          layout={viewportLayout.resumeCard}
+          projectId={selectedProject.id}
+          session={resumeCardSession}
+          onResume={() => {
+            const s = resumeCardSession
+            setResumeCardSession(null)
+            resumeSession(s)
+          }}
+          onClose={() => setResumeCardSession(null)}
+        />
+      ) : isProjectActionMenuOpen && selectedProject ? (
+        <ProjectActionMenu
+          project={selectedProject}
+          onExecute={executeProjectAction}
+          onClose={() => setIsProjectActionMenuOpen(false)}
+        />
+      ) : isSessionActionMenuOpen && focusedSession ? (
+        <SessionActionMenu
+          isActive={activeSessionIds.has(focusedSession.id)}
+          isBulkSelected={bulkSelectedIds.has(focusedSession.id)}
+          session={focusedSession}
+          onExecute={executeSessionAction}
+          onClose={() => setIsSessionActionMenuOpen(false)}
+        />
+      ) : (
+        <SessionList
+          activeSessionIds={activeSessionIds}
+          attentionSessionIds={attentionSessionIds}
+          bulkSelectedIds={bulkSelectedIds}
+          busySessionIds={busySessionIds}
+          isFocused={focusedPanel === 'sessions'}
+          layout={viewportLayout.sessionPanel}
+          project={selectedProject}
+          remotelyActiveSessionIds={remotelyActiveSessionIds}
+          selectedIndex={visibleSessionSelectionIndex}
+          sessions={visibleSessions}
+          totalCount={selectableSessions.length}
+        />
+      )
+
+    // Ultra-narrow terminals get one panel at a time; any open overlay
+    // (resume preview, action menu) claims that single slot over the
+    // project list, matching what the session panel slot already renders.
+    if (viewportLayout.bodyMode !== 'split') {
+      const overlayOpen =
+        resumeCardSession !== null || isProjectActionMenuOpen || isSessionActionMenuOpen
+      const showProjectPanel =
+        viewportLayout.bodyMode === 'single-panel' && focusedPanel === 'projects' && !overlayOpen
+      return <Box flexGrow={1}>{showProjectPanel ? projectPanel : sessionPanel}</Box>
+    }
+
     return (
       <Box flexGrow={1}>
-        <ProjectList
-          isFocused={focusedPanel === 'projects'}
-          projects={visibleProjects}
-          selectedIndex={visibleProjectSelectionIndex}
-          totalCount={matchingProjects.length}
-        />
-        {resumeCardSession && selectedProject ? (
-          <ResumeCard
-            isActive={activeSessionIds.has(resumeCardSession.id)}
-            projectId={selectedProject.id}
-            session={resumeCardSession}
-            onResume={() => {
-              const s = resumeCardSession
-              setResumeCardSession(null)
-              resumeSession(s)
-            }}
-            onClose={() => setResumeCardSession(null)}
-          />
-        ) : isProjectActionMenuOpen && selectedProject ? (
-          <ProjectActionMenu
-            project={selectedProject}
-            onExecute={executeProjectAction}
-            onClose={() => setIsProjectActionMenuOpen(false)}
-          />
-        ) : isSessionActionMenuOpen && focusedSession ? (
-          <SessionActionMenu
-            isActive={activeSessionIds.has(focusedSession.id)}
-            isBulkSelected={bulkSelectedIds.has(focusedSession.id)}
-            session={focusedSession}
-            onExecute={executeSessionAction}
-            onClose={() => setIsSessionActionMenuOpen(false)}
-          />
-        ) : (
-          <SessionList
-            activeSessionIds={activeSessionIds}
-            attentionSessionIds={attentionSessionIds}
-            bulkSelectedIds={bulkSelectedIds}
-            busySessionIds={busySessionIds}
-            isFocused={focusedPanel === 'sessions'}
-            project={selectedProject}
-            remotelyActiveSessionIds={remotelyActiveSessionIds}
-            selectedIndex={visibleSessionSelectionIndex}
-            sessions={visibleSessions}
-            totalCount={selectableSessions.length}
-          />
-        )}
+        {projectPanel}
+        {sessionPanel}
       </Box>
     )
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflow="hidden" width={terminalWidth}>
       <AppHeader usage={liveUsage} version={APP.version} />
       <AppToolbar
         focusLabel={smartViewLabel(smartViewId)}

@@ -18,6 +18,16 @@ const WATCH_REFRESH_THROTTLE_MS = 5_000
 
 type RefreshMode = 'interval' | 'manual' | 'watch'
 
+/**
+ * How much filesystem watching the visible surfaces justify:
+ * - `full`: dashboard open — watch everything, including transcript churn.
+ * - `signals`: only the sidebar tree — watch just locks and hook markers, the
+ *   rare events that flip live/needs-input state, so the shared sidebar never
+ *   flickers busy while Claude streams transcript writes.
+ * - `off`: nothing visible.
+ */
+export type RefreshScope = 'full' | 'off' | 'signals'
+
 export interface RefreshTarget {
   refresh(): Promise<void>
 }
@@ -35,7 +45,7 @@ export class ReupRefreshController implements vscode.Disposable {
   private pendingRefreshReason: string | null = null
   private pendingUrgent = false
   private refreshInFlight: Promise<void> | null = null
-  private visible = false
+  private scope: RefreshScope = 'off'
   private readonly watcherDisposables: vscode.Disposable[] = []
   private readonly watchers: vscode.FileSystemWatcher[] = []
 
@@ -63,15 +73,16 @@ export class ReupRefreshController implements vscode.Disposable {
     )
   }
 
-  setVisible(visible: boolean): void {
-    if (this.visible === visible) return
-    this.visible = visible
-    if (!visible) {
+  setScope(scope: RefreshScope): void {
+    if (this.scope === scope) return
+    const wasOff = this.scope === 'off'
+    this.scope = scope
+    if (scope === 'off') {
       this.clearRuntime()
       return
     }
     this.reconfigure()
-    void this.refresh('view opened')
+    if (wasOff) void this.refresh('view opened')
   }
 
   dispose(): void {
@@ -82,20 +93,23 @@ export class ReupRefreshController implements vscode.Disposable {
 
   reconfigure(): void {
     this.clearRuntime()
-    if (!this.visible || this.disposed) return
+    if (this.scope === 'off' || this.disposed) return
 
     const mode = readRefreshMode()
-    this.logger.info('VS Code refresh mode configured', mode)
+    this.logger.info('VS Code refresh mode configured', mode, this.scope)
     if (mode === 'watch') {
-      this.startFilesystemWatchers()
-      this.startGitWatchers()
+      this.startSignalWatchers()
+      if (this.scope === 'full') {
+        this.startProjectWatchers()
+        this.startGitWatchers()
+      }
     } else if (mode === 'interval') {
       this.startSafetyInterval()
     }
   }
 
   requestRefresh(reason: string, urgent = false): void {
-    if (this.disposed || !this.visible) return
+    if (this.disposed || this.scope === 'off') return
     // An urgent request (attention markers, lock transitions) skips the
     // throttle so a "needs input" flip shows within the debounce window; a
     // later non-urgent event must not demote an already-urgent pending one.
@@ -115,8 +129,13 @@ export class ReupRefreshController implements vscode.Disposable {
     )
   }
 
+  /** Read through a getter: the scope can change while a refresh awaits. */
+  private get watchingAnything(): boolean {
+    return this.scope !== 'off'
+  }
+
   private async refresh(reason: string): Promise<void> {
-    if (this.disposed || !this.visible) return
+    if (this.disposed || this.scope === 'off') return
     if (this.refreshInFlight) {
       this.pendingRefreshReason = reason
       return
@@ -132,7 +151,7 @@ export class ReupRefreshController implements vscode.Disposable {
       this.refreshInFlight = null
       const pendingReason = this.pendingRefreshReason
       this.pendingRefreshReason = null
-      if (pendingReason && !this.disposed && this.visible) {
+      if (pendingReason && !this.disposed && this.watchingAnything) {
         this.requestRefresh(`queued after ${pendingReason}`)
       }
     }
@@ -158,10 +177,16 @@ export class ReupRefreshController implements vscode.Disposable {
     }, SAFETY_REFRESH_MS)
   }
 
-  private startFilesystemWatchers(): void {
+  private startProjectWatchers(): void {
     this.addWatcher(getClaudeProjectsDirectory(), '**/*', 'Claude project')
-    // Lock transitions and hook-captured markers drive the live/needs-input
-    // signals; they are rare and time-sensitive, so they bypass the throttle.
+  }
+
+  /**
+   * Lock transitions and hook-captured markers drive the live/needs-input
+   * signals; they are rare and time-sensitive, so they bypass the throttle
+   * and stay active even when only the sidebar tree is visible.
+   */
+  private startSignalWatchers(): void {
     this.addWatcher(join(getClaudeDirectory(), 'sessions'), '**/*', 'Claude session lock', true)
     this.addWatcher(join(getReupDirectory(), 'attention'), '**/*', 'Reup attention marker', true)
     this.addWatcher(join(getReupDirectory(), 'activity'), '**/*', 'Reup work marker', true)
@@ -170,7 +195,13 @@ export class ReupRefreshController implements vscode.Disposable {
   private startGitWatchers(): void {
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       void resolveGitDirectory(folder.uri.fsPath).then((gitDirectory) => {
-        if (!gitDirectory || !this.visible || this.disposed || readRefreshMode() !== 'watch') return
+        if (
+          !gitDirectory ||
+          this.scope !== 'full' ||
+          this.disposed ||
+          readRefreshMode() !== 'watch'
+        )
+          return
         this.addWatcher(gitDirectory, 'HEAD', 'Git HEAD')
         this.addWatcher(gitDirectory, 'refs/heads/**', 'Git branch')
       })

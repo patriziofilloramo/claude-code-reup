@@ -4,8 +4,10 @@ import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { LiveUsageSummary, UsageLimitWindow } from '../../core/usage/live-usage.js'
 import { relativeTime } from '../../utils/time.js'
+import { TUI_LAYOUT, usageHeaderLayoutForWidth } from '../layout.js'
+import type { UsageHeaderLayout } from '../layout.js'
 
-const USAGE_BAR_WIDTH = 10
+const USAGE_BAR_WIDTH = TUI_LAYOUT.usageHeader.barWidth
 
 interface AppHeaderProps {
   usage?: LiveUsageSummary | null
@@ -29,7 +31,7 @@ export interface UsageDisplay {
 
 export default function AppHeader({ usage, version }: AppHeaderProps) {
   const { stdout } = useStdout()
-  const compact = (stdout?.columns ?? 80) < 100
+  const layout = usageHeaderLayoutForWidth(stdout?.columns ?? 80)
   const usageDisplay = usage === undefined ? null : formatUsageDisplay(usage)
 
   return (
@@ -46,40 +48,44 @@ export default function AppHeader({ usage, version }: AppHeaderProps) {
         <Text bold color={COLORS.accent}>
           {LABELS.appName}
         </Text>
-        {compact ? (
-          <Text color={COLORS.muted}> v{version}</Text>
-        ) : (
+        {layout.showBrandProduct ? (
           <Text color={COLORS.muted}>
             {' — '}
             {LABELS.brandProduct} v{version}
           </Text>
+        ) : (
+          <Text color={COLORS.muted}> v{version}</Text>
         )}
       </Box>
-      {usageDisplay ? <UsageSummary compact={compact} display={usageDisplay} /> : null}
+      {usageDisplay && layout.showSummary ? (
+        <UsageSummary layout={layout} display={usageDisplay} />
+      ) : null}
     </Box>
   )
 }
 
-function UsageSummary({ compact, display }: { compact: boolean; display: UsageDisplay }) {
+function UsageSummary({ layout, display }: { layout: UsageHeaderLayout; display: UsageDisplay }) {
   return (
     <Box gap={2}>
-      <Text color={COLORS.dim}>{LABELS.limitsLabel}</Text>
+      {layout.showLimitsLabel ? <Text color={COLORS.dim}>{LABELS.limitsLabel}</Text> : null}
       {display.limits.map((limit) => (
         <Box key={limit.label} gap={1}>
-          <Text bold color={limit.color}>
-            {limit.label}
-          </Text>
-          {compact ? null : (
+          {layout.showLimitLabels ? (
+            <Text bold color={limit.color}>
+              {limit.label}
+            </Text>
+          ) : null}
+          {layout.showBars ? (
             <Box>
               <Text color={limit.color}>{limit.barFilled}</Text>
               <Text color={COLORS.dim}>{limit.barEmpty}</Text>
             </Box>
-          )}
-          <Text color={limit.color}>{limit.percentage}</Text>
-          {limit.reset ? <Text color={COLORS.dim}>{limit.reset}</Text> : null}
+          ) : null}
+          {layout.showPercentage ? <Text color={limit.color}>{limit.percentage}</Text> : null}
+          {layout.showReset && limit.reset ? <Text color={COLORS.dim}>{limit.reset}</Text> : null}
         </Box>
       ))}
-      {compact ? null : display.statusText ? (
+      {layout.showStatus && display.statusText ? (
         <Text color={COLORS.muted}>{display.statusText}</Text>
       ) : null}
       {display.creditsEnabled ? <Text color={COLORS.ok}>{LABELS.creditsEnabled}</Text> : null}

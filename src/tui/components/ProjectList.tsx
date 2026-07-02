@@ -1,12 +1,14 @@
-import { Box, Text, useStdout } from 'ink'
+import { Box, Text } from 'ink'
 
 import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
 import type { Project } from '../../core/session/session-model.js'
-import { compactProjectLabel, projectPanelLayoutForTerminal } from '../layout.js'
+import { TUI_LAYOUT, compactProjectLabel, projectSessionCountLabel } from '../layout.js'
+import type { ResolvedProjectPanelLayout } from '../layout.js'
 
 interface ProjectListProps {
   isFocused: boolean
+  layout: ResolvedProjectPanelLayout
   projects: Project[]
   selectedIndex: number
   totalCount: number
@@ -14,26 +16,24 @@ interface ProjectListProps {
 
 export default function ProjectList({
   isFocused,
+  layout,
   projects,
   selectedIndex,
   totalCount,
 }: ProjectListProps) {
-  const { stdout } = useStdout()
-  const terminalWidth = stdout?.columns ?? 80
   const labelColor = isFocused ? COLORS.accent : COLORS.dim
-  const projectPanelLayout = projectPanelLayoutForTerminal(terminalWidth, projects)
 
   return (
     <Box
       borderBottom={false}
       borderColor={COLORS.border}
       borderLeft={false}
-      borderRight={true}
+      borderRight={layout.showRightBorder}
       borderStyle="single"
       borderTop={false}
       flexDirection="column"
       flexShrink={0}
-      width={projectPanelLayout.width}
+      width={layout.width}
     >
       <Box gap={1} paddingX={1}>
         <Text bold color={labelColor}>
@@ -56,18 +56,20 @@ export default function ProjectList({
                 {projectLabel}
               </Text>
             </Box>
-            {projectPanelLayout.showProjectGroups && project.groupName ? (
-              <Box flexShrink={0} paddingLeft={1} width={14}>
+            {layout.showProjectGroups && project.groupName ? (
+              <Box flexShrink={0} paddingLeft={1} width={TUI_LAYOUT.projectPanel.groupColumnWidth}>
                 <Text color={COLORS.accent} wrap="truncate">
                   [{project.groupName}]
                 </Text>
               </Box>
             ) : null}
-            <Box flexShrink={0} width={7}>
-              <Text color={isFocusedSelected ? COLORS.accent : COLORS.dim}>
-                {' (' + project.sessions.length + ')'}
-              </Text>
-            </Box>
+            {layout.showSessionCounts ? (
+              <Box flexShrink={0} width={layout.countColumnWidth}>
+                <Text color={isFocusedSelected ? COLORS.accent : COLORS.dim}>
+                  {projectSessionCountLabel(project.sessions.length)}
+                </Text>
+              </Box>
+            ) : null}
           </Box>
         )
       })}

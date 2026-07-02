@@ -28,11 +28,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let treeVisible = false
   let refreshController: ReupRefreshController | null = null
   const updateRefreshVisibility = (): void => {
-    // Continuous filesystem watching is reserved for the dashboard. Keeping
-    // it attached to a contributed TreeView can make the shared VS Code
-    // sidebar appear perpetually busy while Claude is writing transcripts.
-    // The tree receives one-shot refreshes when opened and after Reup actions.
-    refreshController?.setVisible(dashboardVisible)
+    // Full filesystem watching (transcript churn included) is reserved for
+    // the dashboard — attached to the contributed TreeView it makes the
+    // shared VS Code sidebar appear perpetually busy while Claude writes.
+    // The tree alone still watches the rare lock/marker signal events, so
+    // live and needs-input state stays current without the churn.
+    refreshController?.setScope(dashboardVisible ? 'full' : treeVisible ? 'signals' : 'off')
   }
   const refreshAll = async (): Promise<void> => {
     const changed = await treeProvider.refresh({ notifyView: treeVisible })
@@ -73,6 +74,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeView.onDidChangeVisibility((event) => {
       treeVisible = event.visible
       statusBar.setVisible(event.visible)
+      updateRefreshVisibility()
       if (event.visible && !treeProvider.renderCurrentModel()) void refreshAll()
     }),
     treeView.onDidChangeSelection((event) => {

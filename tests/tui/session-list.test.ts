@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Session } from '../../src/core/session/session-model.js'
-import {
-  formatSessionSummary,
-  formatTokenCount,
-  sessionLivenessGlyph,
-} from '../../src/tui/components/SessionList.js'
+import { formatSessionSummary, formatTokenCount } from '../../src/tui/components/SessionList.js'
+import { sessionStatusMarker } from '../../src/tui/session-status-marker.js'
 
 describe('TUI session list', () => {
   it('keeps compact context values readable', () => {
@@ -27,32 +24,54 @@ describe('TUI session list', () => {
     ).toBe('just now · 2 msgs · 8.2k ctx')
   })
 
-  it('pulses busy sessions so a working agent differs from an attached idle process', () => {
-    const frames = new Set(
-      [0, 1, 2, 3].map((frame) => sessionLivenessGlyph(true, true, false, frame).glyph)
+  it('keeps busy sessions as filled dots while pulsing by color', () => {
+    const frames = [0, 1, 2, 3].map((frame) =>
+      sessionStatusMarker(markerState({ isActive: true, isBusy: true, pulseFrame: frame }))
     )
-    expect(frames.size).toBeGreaterThan(1)
+    expect(new Set(frames.map((frame) => frame.glyph))).toEqual(new Set(['●']))
+    expect(new Set(frames.map((frame) => frame.color)).size).toBeGreaterThan(1)
   })
 
-  it('lets a session waiting on the user outrank every other liveness state', () => {
-    const attention = sessionLivenessGlyph(true, true, false, 0, true)
+  it('lets a session waiting on the user replace the dot with an alert marker', () => {
+    const attention = sessionStatusMarker(
+      markerState({ isActive: true, isBusy: true, needsAttention: true })
+    )
     expect(attention.glyph).toBe('!')
-    const frames = new Set(
-      [0, 1, 2, 3].map((frame) => sessionLivenessGlyph(true, true, false, frame, true).glyph)
-    )
-    expect(frames.size).toBeGreaterThan(1)
   })
 
-  it('keeps steady liveness glyphs for non-busy states', () => {
-    expect(sessionLivenessGlyph(true, false, false, 0).glyph).toBe('●')
-    expect(sessionLivenessGlyph(false, false, true, 0).glyph).toBe('◌')
-    expect(sessionLivenessGlyph(false, false, false, 0).glyph).toBe('●')
-    // The glyph must not change with the pulse frame when the session is not busy.
-    expect(sessionLivenessGlyph(true, false, false, 1).glyph).toBe(
-      sessionLivenessGlyph(true, false, false, 2).glyph
+  it('uses a single filled-dot marker for normal liveness states', () => {
+    expect(sessionStatusMarker(markerState({ isActive: true })).glyph).toBe('●')
+    expect(sessionStatusMarker(markerState({ isRemotelyActive: true })).glyph).toBe('●')
+    expect(sessionStatusMarker(markerState()).glyph).toBe('●')
+  })
+
+  it('replaces the marker for attention-worthy health states', () => {
+    expect(sessionStatusMarker(markerState({ status: 'expiring' })).glyph).toBe('!')
+    expect(sessionStatusMarker(markerState({ status: 'path-missing' })).glyph).toBe('!')
+  })
+
+  it('never resurrects the historical interrupted flag as a live indicator', () => {
+    // interrupted is full-transcript triage data that can stay true forever;
+    // rendering it as an alert re-creates the permanent-! bug (PROJECT_MEMORY).
+    expect(sessionStatusMarker(markerState({ status: 'interrupted' })).glyph).toBe('●')
+    expect(sessionStatusMarker(markerState({ status: 'interrupted', isActive: true }))).toEqual(
+      sessionStatusMarker(markerState({ isActive: true }))
     )
   })
 })
+
+function markerState(overrides: Partial<Parameters<typeof sessionStatusMarker>[0]> = {}) {
+  return {
+    isActive: false,
+    isBulkSelected: false,
+    isBusy: false,
+    isRemotelyActive: false,
+    needsAttention: false,
+    pulseFrame: 0,
+    status: 'ok' as const,
+    ...overrides,
+  }
+}
 
 function session(overrides: Partial<Session> = {}): Session {
   return {

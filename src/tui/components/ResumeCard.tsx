@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
 import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
@@ -14,7 +14,7 @@ import { primaryStatus } from '../../core/session/session-signals.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import type { SessionPreview } from '../../core/session/session-preview.js'
 import { relativeTime } from '../../utils/time.js'
-import { projectPanelWidthForTerminal } from '../layout.js'
+import type { ResumeCardLayout } from '../layout.js'
 
 // ---------------------------------------------------------------------------
 // Component
@@ -22,6 +22,7 @@ import { projectPanelWidthForTerminal } from '../layout.js'
 
 interface ResumeCardProps {
   isActive: boolean
+  layout: ResumeCardLayout
   projectId: string
   session: Session
   onResume: () => void
@@ -30,12 +31,12 @@ interface ResumeCardProps {
 
 export default function ResumeCard({
   isActive,
+  layout,
   projectId,
   session,
   onResume,
   onClose,
 }: ResumeCardProps) {
-  const { stdout } = useStdout()
   const [preview, setPreview] = useState<SessionPreview | null>(null)
   const [lockInfo, setLockInfo] = useState<SessionLockInfo | null>(null)
   const [filesExpanded, setFilesExpanded] = useState(false)
@@ -82,11 +83,10 @@ export default function ResumeCard({
     session.signals.lastToolFailed === true ||
     preview?.pendingToolName != null
 
-  const terminalWidth = stdout?.columns ?? 80
-  const dividerWidth = Math.max(8, terminalWidth - projectPanelWidthForTerminal(terminalWidth) - 6)
+  const dividerWidth = Math.max(8, layout.width - layout.paddingX * 2)
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
+    <Box flexDirection="column" flexGrow={1} paddingX={layout.paddingX} paddingY={1}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Box gap={1} marginBottom={0}>
         <Text color={isActive ? COLORS.ok : COLORS.border}>●</Text>
@@ -95,22 +95,30 @@ export default function ResumeCard({
         </Text>
       </Box>
 
-      <Box gap={2} marginBottom={1} paddingLeft={2}>
-        {branch ? <Text color={COLORS.muted}>{branch}</Text> : null}
+      <Box gap={1} marginBottom={layout.compact ? 0 : 1} paddingLeft={layout.compact ? 0 : 2}>
         <Text color={COLORS.dim}>{relativeTime(session.updated)}</Text>
         <Text color={COLORS.dim}>
           {session.messageCount} {LABELS.messageCountSuffix}
         </Text>
-        {model ? <Text color={COLORS.border}>{shortModelName(model)}</Text> : null}
-        {contextTokens !== null ? (
+        {layout.showExtendedMetadata && branch ? (
+          <Text color={COLORS.muted} wrap="truncate">
+            {branch}
+          </Text>
+        ) : null}
+        {layout.showExtendedMetadata && model ? (
+          <Text color={COLORS.border}>{shortModelName(model)}</Text>
+        ) : null}
+        {layout.showExtendedMetadata && contextTokens !== null ? (
           <Text color={COLORS.dim}>
             {formatTokenCount(contextTokens)} {LABELS.contextSuffix}
           </Text>
         ) : null}
-        <Text color={COLORS.border}>{LABELS.resumeCardPreviewSuffix}</Text>
+        {layout.showExtendedMetadata ? (
+          <Text color={COLORS.border}>{LABELS.resumeCardPreviewSuffix}</Text>
+        ) : null}
       </Box>
 
-      {session.tags && session.tags.length > 0 ? (
+      {layout.showTags && session.tags && session.tags.length > 0 ? (
         <Box gap={1} marginBottom={1} paddingLeft={2}>
           {session.tags.slice(0, 4).map((tag) => (
             <Text key={tag} color={COLORS.accent}>
@@ -123,11 +131,13 @@ export default function ResumeCard({
         </Box>
       ) : null}
 
-      <Box marginBottom={1}>
-        <Text color={COLORS.border} wrap="truncate">
-          {'─'.repeat(dividerWidth)}
-        </Text>
-      </Box>
+      {layout.showDivider ? (
+        <Box marginBottom={1}>
+          <Text color={COLORS.border} wrap="truncate">
+            {'─'.repeat(dividerWidth)}
+          </Text>
+        </Box>
+      ) : null}
 
       {/* ── Live / status signals ────────────────────────────────────────── */}
       {isActive ? (
@@ -142,10 +152,14 @@ export default function ResumeCard({
             </Text>
           ) : null}
           <Box flexDirection="column" marginTop={1} paddingLeft={2}>
-            <Text color={COLORS.warn}>{LABELS.activeSessionWarningIntro}</Text>
-            <Text color={COLORS.muted}>{LABELS.activeSessionWarningTranscript}</Text>
-            <Text color={COLORS.muted}>{LABELS.activeSessionWarningVisibility}</Text>
-            <Text color={COLORS.muted}>{LABELS.activeSessionWarningFiles}</Text>
+            {layout.compact ? null : (
+              <>
+                <Text color={COLORS.warn}>{LABELS.activeSessionWarningIntro}</Text>
+                <Text color={COLORS.muted}>{LABELS.activeSessionWarningTranscript}</Text>
+                <Text color={COLORS.muted}>{LABELS.activeSessionWarningVisibility}</Text>
+                <Text color={COLORS.muted}>{LABELS.activeSessionWarningFiles}</Text>
+              </>
+            )}
           </Box>
         </Box>
       ) : status === 'expiring' ? (
@@ -160,17 +174,20 @@ export default function ResumeCard({
 
       {/* ── Content sections ─────────────────────────────────────────────── */}
       <PreviewSection
+        compact={layout.compact}
         isLoading={isLoading}
         label="what you asked for"
         text={preview?.goal ?? null}
       />
       <PreviewSection
+        compact={layout.compact}
         isLoading={isLoading}
         label="where claude left off"
         text={preview?.lastResponse ?? null}
       />
-      {!isLoading && automaticContext?.plan ? (
+      {!layout.compact && !isLoading && automaticContext?.plan ? (
         <PreviewSection
+          compact={false}
           isLoading={false}
           label={automaticFactLabel(
             'native plan',
@@ -180,7 +197,10 @@ export default function ResumeCard({
           text={automaticContext.plan.text}
         />
       ) : null}
-      {!isLoading && automaticContext && automaticContext.todos.items.length > 0 ? (
+      {!layout.compact &&
+      !isLoading &&
+      automaticContext &&
+      automaticContext.todos.items.length > 0 ? (
         <TodoPreviewSection todos={automaticContext.todos} />
       ) : null}
 
@@ -188,12 +208,14 @@ export default function ResumeCard({
       {!isLoading && interrupted ? (
         <Box flexDirection="column" marginBottom={1}>
           <Text color={COLORS.warn}>{LABELS.interruptedWarningTitle}</Text>
-          <Text color={COLORS.muted}>{LABELS.interruptedWarningBody}</Text>
+          {layout.compact ? null : (
+            <Text color={COLORS.muted}>{LABELS.interruptedWarningBody}</Text>
+          )}
         </Box>
       ) : null}
 
       {/* ── Files in use ─────────────────────────────────────────────────── */}
-      {!isLoading && preview && preview.touchedFiles.length > 0 ? (
+      {layout.showFiles && !isLoading && preview && preview.touchedFiles.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>
           <Text color={COLORS.dim}>
             {LABELS.filesInUseLabel}
@@ -209,27 +231,8 @@ export default function ResumeCard({
         </Box>
       ) : null}
 
-      {/* ── Spacer + footer hint ─────────────────────────────────────────── */}
+      {/* Keep action hints in AppFooter so preview mode has one footer. */}
       <Box flexGrow={1} />
-      <Box gap={3}>
-        <Text>
-          <Text color={COLORS.ok}>▶ {LABELS.keyEnter}</Text>
-          <Text color={COLORS.muted}>
-            {' '}
-            {LABELS.wordResume} {LABELS.wordSession}
-          </Text>
-        </Text>
-        <Text color={COLORS.muted}>
-          <Text color={COLORS.text}>{LABELS.keyEsc}</Text>
-          {' ' + LABELS.wordBack}
-        </Text>
-        {!isLoading && preview && preview.touchedFiles.length > 0 ? (
-          <Text color={COLORS.muted}>
-            <Text color={COLORS.text}>{LABELS.keyFiles}</Text>
-            {' ' + LABELS.wordFiles}
-          </Text>
-        ) : null}
-      </Box>
     </Box>
   )
 }
@@ -239,19 +242,22 @@ export default function ResumeCard({
 // ---------------------------------------------------------------------------
 
 interface PreviewSectionProps {
+  compact?: boolean
   isLoading: boolean
   label: string
   text: string | null
 }
 
-function PreviewSection({ isLoading, label, text }: PreviewSectionProps) {
+function PreviewSection({ compact = false, isLoading, label, text }: PreviewSectionProps) {
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column" marginBottom={compact ? 0 : 1}>
       <Text color={COLORS.dim}>{label}</Text>
       {isLoading ? (
         <Text color={COLORS.border}>···</Text>
       ) : text ? (
-        <Text color={COLORS.textSub}>{text}</Text>
+        <Text color={COLORS.textSub} wrap={compact ? 'truncate' : 'wrap'}>
+          {text}
+        </Text>
       ) : (
         <Text color={COLORS.border}>—</Text>
       )}
