@@ -92,6 +92,12 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
       return
     }
 
+    case 'attention': {
+      const { runAttentionCommand } = await import('./attention-command.js')
+      await runAttentionCommand(commandArguments)
+      return
+    }
+
     case 'config': {
       const { runConfigCommand } = await import('./config-command.js')
       await runConfigCommand(commandArguments)

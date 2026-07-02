@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP } from '../config/app.js'
@@ -13,6 +14,20 @@ import {
   mergeSessionLockStatuses,
 } from '../core/session/active-sessions.js'
 import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
+import {
+  combineWorkEvidence,
+  isAttentionActive,
+  readAttentionMarkers,
+  readWorkSignalMarkers,
+} from '../core/session/attention.js'
+import type { AttentionMarker, WorkSignalMarker } from '../core/session/attention.js'
+import { sessionTranscriptPath } from '../core/session/session-preview.js'
+import {
+  TRANSCRIPT_RUNNING_WINDOW_MS,
+  isAwaitingUserReply,
+  readSessionTailActivity,
+} from '../core/session/session-tail.js'
+import type { SessionTailActivity } from '../core/session/session-tail.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
 import { readLiveUsageSummary } from '../core/usage/live-usage.js'
@@ -51,6 +66,7 @@ import {
   createVisibleWindow,
   deriveSearchResults,
 } from './session-view.js'
+import { tuiViewportLayoutForWidth } from './layout.js'
 
 type FocusedPanel = 'projects' | 'sessions'
 
@@ -85,6 +101,10 @@ function App({ onResume }: AppProps) {
   const [sessionLockStatuses, setSessionLockStatuses] = useState<
     Map<string, MergedSessionLockStatus>
   >(new Map())
+  const [attentionMarkers, setAttentionMarkers] = useState<AttentionMarker[]>([])
+  const [workMarkers, setWorkMarkers] = useState<Map<string, WorkSignalMarker>>(new Map())
+  const [transcriptActivityMs, setTranscriptActivityMs] = useState<Map<string, number>>(new Map())
+  const [sessionTails, setSessionTails] = useState<Map<string, SessionTailActivity>>(new Map())
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -105,6 +125,13 @@ function App({ onResume }: AppProps) {
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set())
+
+  // The 1 s liveness poll needs the latest project mapping without
+  // re-creating its interval on every project refresh.
+  const projectsRef = useRef<Project[]>([])
+  useEffect(() => {
+    projectsRef.current = projects
+  }, [projects])
 
   const [launching, setLaunching] = useState<LaunchState | null>(null)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
@@ -159,11 +186,46 @@ function App({ onResume }: AppProps) {
       if (refreshInProgress) return
       refreshInProgress = true
       try {
-        const liveRecords = await getLiveSessionRecords()
+        const [liveRecords, markers, workSignals] = await Promise.all([
+          getLiveSessionRecords(),
+          readAttentionMarkers(),
+          readWorkSignalMarkers(),
+        ])
         if (disposed) return
         const lockStatuses = mergeSessionLockStatuses(liveRecords)
+
+        // Transcript modification times are the freshest work evidence the
+        // TUI can get: lock files do not always carry a status field, and the
+        // slow project refresh leaves session.updated too stale for liveness.
+        // The tail is read alongside so a turn that ended on an unanswered
+        // tool call (a question with no Notification hook) can raise attention.
+        const activityBySession = new Map<string, number>()
+        const tailBySession = new Map<string, SessionTailActivity>()
+        await Promise.all(
+          [...lockStatuses.keys()].map(async (sessionId) => {
+            const project = projectsRef.current.find((candidate) =>
+              candidate.sessions.some((session) => session.id === sessionId)
+            )
+            if (!project) return
+            const transcriptPath = sessionTranscriptPath(project.id, sessionId)
+            try {
+              const stats = await stat(transcriptPath)
+              activityBySession.set(sessionId, stats.mtimeMs)
+            } catch {
+              // A brand-new session may not have a transcript yet.
+            }
+            const tail = await readSessionTailActivity(transcriptPath)
+            if (tail) tailBySession.set(sessionId, tail)
+          })
+        )
+        if (disposed) return
+
         setActiveSessionIds(new Set(lockStatuses.keys()))
         setSessionLockStatuses(lockStatuses)
+        setAttentionMarkers(markers)
+        setWorkMarkers(new Map(workSignals.map((marker) => [marker.sessionId, marker])))
+        setTranscriptActivityMs(activityBySession)
+        setSessionTails(tailBySession)
       } finally {
         refreshInProgress = false
       }
@@ -238,26 +300,75 @@ function App({ onResume }: AppProps) {
 
   // A stale busy flag (session died or was interrupted mid-turn) must not
   // pulse forever: busy is trusted only with a fresh transition or recent
-  // transcript activity backing it.
+  // transcript activity backing it. Lock files do not always carry a status
+  // field at all (VS Code peers, freshly spawned processes) - for those, a
+  // transcript written seconds ago is proof of work in itself.
   const busySessionIds = useMemo(() => {
-    const updatedMsBySessionId = new Map<string, number>()
-    for (const project of projects) {
-      for (const session of project.sessions) {
-        const updatedMs = Date.parse(session.updated)
-        if (Number.isFinite(updatedMs)) updatedMsBySessionId.set(session.id, updatedMs)
-      }
-    }
     const busyIds = new Set<string>()
+    const now = Date.now()
     for (const [sessionId, lockStatus] of sessionLockStatuses) {
-      if (lockStatus.status !== 'busy') continue
+      const activityMs = transcriptActivityMs.get(sessionId) ?? null
+      // Turn-boundary hooks cover locks that omit the status field entirely.
+      const evidence = combineWorkEvidence(
+        lockStatus.status,
+        lockStatus.statusUpdatedAt,
+        workMarkers.get(sessionId)
+      )
+      if (evidence.status === 'busy') {
+        if (isBusyEvidenceFresh(evidence.statusUpdatedAt, activityMs, now)) {
+          busyIds.add(sessionId)
+        }
+        continue
+      }
       if (
-        isBusyEvidenceFresh(lockStatus.statusUpdatedAt, updatedMsBySessionId.get(sessionId) ?? null)
+        evidence.status === null &&
+        activityMs !== null &&
+        now - activityMs < TRANSCRIPT_RUNNING_WINDOW_MS
       ) {
         busyIds.add(sessionId)
       }
     }
     return busyIds
-  }, [projects, sessionLockStatuses])
+  }, [sessionLockStatuses, transcriptActivityMs, workMarkers])
+
+  // Sessions currently waiting on the user, resolved against the same
+  // evidence rules the web strip uses: a marker dies as soon as the session
+  // shows life after the event or its process disappears. Hook markers cover
+  // permission and input prompts; the tail check covers a turn that ended on
+  // an unanswered tool call, where no Notification hook ever fires.
+  const attentionSessionIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const marker of attentionMarkers) {
+      const lockStatus = sessionLockStatuses.get(marker.sessionId)
+      const active = isAttentionActive(marker, {
+        isLive: lockStatus !== undefined,
+        lastActivityMs: transcriptActivityMs.get(marker.sessionId) ?? null,
+        statusUpdatedAt: lockStatus?.statusUpdatedAt ?? null,
+      })
+      if (active) ids.add(marker.sessionId)
+    }
+    for (const [sessionId, lockStatus] of sessionLockStatuses) {
+      if (ids.has(sessionId)) continue
+      const evidence = combineWorkEvidence(
+        lockStatus.status,
+        lockStatus.statusUpdatedAt,
+        workMarkers.get(sessionId)
+      )
+      if (isAwaitingUserReply(evidence.status, sessionTails.get(sessionId) ?? null)) {
+        ids.add(sessionId)
+      }
+    }
+    return ids
+  }, [attentionMarkers, sessionLockStatuses, sessionTails, transcriptActivityMs, workMarkers])
+
+  // One terminal bell per new attention event; a re-render must never re-ring.
+  const previousAttentionIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const previous = previousAttentionIdsRef.current
+    const hasNewAttention = [...attentionSessionIds].some((id) => !previous.has(id))
+    previousAttentionIdsRef.current = new Set(attentionSessionIds)
+    if (hasNewAttention) process.stdout.write('\u0007')
+  }, [attentionSessionIds])
 
   const REMOTE_ACTIVE_THRESHOLD_MS = 5 * 60 * 1000
   const remotelyActiveSessionIds = useMemo(() => {
@@ -758,6 +869,7 @@ function App({ onResume }: AppProps) {
   // ---------------------------------------------------------------------------
 
   const terminalHeight = stdout?.rows ?? 24
+  const terminalWidth = stdout?.columns ?? 80
   const availableBodyRows = Math.max(6, terminalHeight - CHROME_ROW_COUNT)
   const maximumVisibleSessionRows = calculateMaximumVisibleSessions(availableBodyRows, false)
   const [visibleProjects, visibleProjectSelectionIndex] = createVisibleWindow(
@@ -770,6 +882,11 @@ function App({ onResume }: AppProps) {
     selectedSessionIndex,
     maximumVisibleSessionRows
   )
+  const viewportLayout = tuiViewportLayoutForWidth({
+    projects: visibleProjects,
+    resumePreviewOpen: resumeCardSession !== null,
+    terminalWidth,
+  })
 
   if (launching) {
     return (
@@ -861,59 +978,81 @@ function App({ onResume }: AppProps) {
       )
     }
 
+    const projectPanel = (
+      <ProjectList
+        isFocused={focusedPanel === 'projects'}
+        layout={viewportLayout.projectPanel}
+        projects={visibleProjects}
+        selectedIndex={visibleProjectSelectionIndex}
+        totalCount={matchingProjects.length}
+      />
+    )
+
+    const sessionPanel =
+      resumeCardSession && selectedProject ? (
+        <ResumeCard
+          isActive={activeSessionIds.has(resumeCardSession.id)}
+          layout={viewportLayout.resumeCard}
+          projectId={selectedProject.id}
+          session={resumeCardSession}
+          onResume={() => {
+            const s = resumeCardSession
+            setResumeCardSession(null)
+            resumeSession(s)
+          }}
+          onClose={() => setResumeCardSession(null)}
+        />
+      ) : isProjectActionMenuOpen && selectedProject ? (
+        <ProjectActionMenu
+          project={selectedProject}
+          onExecute={executeProjectAction}
+          onClose={() => setIsProjectActionMenuOpen(false)}
+        />
+      ) : isSessionActionMenuOpen && focusedSession ? (
+        <SessionActionMenu
+          isActive={activeSessionIds.has(focusedSession.id)}
+          isBulkSelected={bulkSelectedIds.has(focusedSession.id)}
+          session={focusedSession}
+          onExecute={executeSessionAction}
+          onClose={() => setIsSessionActionMenuOpen(false)}
+        />
+      ) : (
+        <SessionList
+          activeSessionIds={activeSessionIds}
+          attentionSessionIds={attentionSessionIds}
+          bulkSelectedIds={bulkSelectedIds}
+          busySessionIds={busySessionIds}
+          isFocused={focusedPanel === 'sessions'}
+          layout={viewportLayout.sessionPanel}
+          project={selectedProject}
+          remotelyActiveSessionIds={remotelyActiveSessionIds}
+          selectedIndex={visibleSessionSelectionIndex}
+          sessions={visibleSessions}
+          totalCount={selectableSessions.length}
+        />
+      )
+
+    // Ultra-narrow terminals get one panel at a time; any open overlay
+    // (resume preview, action menu) claims that single slot over the
+    // project list, matching what the session panel slot already renders.
+    if (viewportLayout.bodyMode !== 'split') {
+      const overlayOpen =
+        resumeCardSession !== null || isProjectActionMenuOpen || isSessionActionMenuOpen
+      const showProjectPanel =
+        viewportLayout.bodyMode === 'single-panel' && focusedPanel === 'projects' && !overlayOpen
+      return <Box flexGrow={1}>{showProjectPanel ? projectPanel : sessionPanel}</Box>
+    }
+
     return (
       <Box flexGrow={1}>
-        <ProjectList
-          isFocused={focusedPanel === 'projects'}
-          projects={visibleProjects}
-          selectedIndex={visibleProjectSelectionIndex}
-          totalCount={matchingProjects.length}
-        />
-        {resumeCardSession && selectedProject ? (
-          <ResumeCard
-            isActive={activeSessionIds.has(resumeCardSession.id)}
-            projectId={selectedProject.id}
-            session={resumeCardSession}
-            onResume={() => {
-              const s = resumeCardSession
-              setResumeCardSession(null)
-              resumeSession(s)
-            }}
-            onClose={() => setResumeCardSession(null)}
-          />
-        ) : isProjectActionMenuOpen && selectedProject ? (
-          <ProjectActionMenu
-            project={selectedProject}
-            onExecute={executeProjectAction}
-            onClose={() => setIsProjectActionMenuOpen(false)}
-          />
-        ) : isSessionActionMenuOpen && focusedSession ? (
-          <SessionActionMenu
-            isActive={activeSessionIds.has(focusedSession.id)}
-            isBulkSelected={bulkSelectedIds.has(focusedSession.id)}
-            session={focusedSession}
-            onExecute={executeSessionAction}
-            onClose={() => setIsSessionActionMenuOpen(false)}
-          />
-        ) : (
-          <SessionList
-            activeSessionIds={activeSessionIds}
-            bulkSelectedIds={bulkSelectedIds}
-            busySessionIds={busySessionIds}
-            isFocused={focusedPanel === 'sessions'}
-            project={selectedProject}
-            remotelyActiveSessionIds={remotelyActiveSessionIds}
-            selectedIndex={visibleSessionSelectionIndex}
-            sessions={visibleSessions}
-            totalCount={selectableSessions.length}
-          />
-        )}
+        {projectPanel}
+        {sessionPanel}
       </Box>
     )
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflow="hidden" width={terminalWidth}>
       <AppHeader usage={liveUsage} version={APP.version} />
       <AppToolbar
         focusLabel={smartViewLabel(smartViewId)}

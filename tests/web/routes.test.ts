@@ -332,6 +332,145 @@ describe('web routes', () => {
     expect(entries[0]?.activityState).toBe('idle')
   })
 
+  it('surfaces attention for a session waiting on the user and resolves it after a response', async () => {
+    await createKnownSession()
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'live.json'),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+    const { writeAttentionMarker } = await import('../../src/core/session/attention.js')
+    await writeAttentionMarker({
+      message: 'Claude needs your permission to use Bash',
+      occurredAt: new Date(Date.now() + 5_000).toISOString(),
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+    })
+
+    const waiting = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      attention: { message: string } | null
+    }>
+    expect(waiting).toHaveLength(1)
+    expect(waiting[0]?.attention?.message).toBe('Claude needs your permission to use Bash')
+
+    // The user answered: the lock transitions after the event, so the same
+    // marker must no longer alert (and is cleaned up server-side).
+    await writeFile(
+      join(sessionsDirectory, 'live.json'),
+      JSON.stringify({
+        pid: process.pid,
+        sessionId: SESSION_ID,
+        status: 'busy',
+        statusUpdatedAt: Date.now() + 10_000,
+      })
+    )
+    const resolved = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      attention: unknown
+    }>
+    expect(resolved[0]?.attention).toBeNull()
+  })
+
+  it('reports running from a turn-boundary marker when the lock has no status field', async () => {
+    // The VS Code scenario: claude-vscode locks omit status entirely, and the
+    // transcript pauses while Claude thinks. The UserPromptSubmit work marker
+    // must carry the busy state through the quiet stretch.
+    const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
+    await mkdir(projectDirectory, { recursive: true })
+    await writeFile(
+      join(projectDirectory, `${SESSION_ID}.jsonl`),
+      JSON.stringify({
+        cwd: claudeDirectory,
+        message: { content: 'hello' },
+        timestamp: new Date(Date.now() - 60_000).toISOString(),
+        type: 'user',
+      })
+    )
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'vscode-peer.json'),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+    const { writeWorkSignalMarker } = await import('../../src/core/session/attention.js')
+    await writeWorkSignalMarker({
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+      state: 'busy',
+    })
+
+    const busy = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      activityState: string
+    }>
+    expect(busy[0]?.activityState).toBe('running')
+
+    // The Stop hook ends the turn: the same session must stop reading busy.
+    await writeWorkSignalMarker({
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: SESSION_ID,
+      state: 'idle',
+    })
+    const done = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      activityState: string
+    }>
+    expect(done[0]?.activityState).toBe('idle')
+  })
+
+  it('never drops an alert for a session that is not discoverable yet', async () => {
+    // A brand-new VS Code panel has a live lock but no transcript: the
+    // session is invisible to discovery, yet its needs-input alert must
+    // surface with fallback naming.
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'fresh-panel.json'),
+      JSON.stringify({
+        cwd: join(claudeDirectory, 'some-workspace'),
+        pid: process.pid,
+        sessionId: LOCK_ONLY_SESSION_ID,
+      })
+    )
+    const { writeAttentionMarker } = await import('../../src/core/session/attention.js')
+    await writeAttentionMarker({
+      message: 'Claude needs your permission to use Bash',
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: LOCK_ONLY_SESSION_ID,
+    })
+
+    const entries = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      attention: { message: string } | null
+      projectName: string
+      sessionId: string
+    }>
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.sessionId).toBe(LOCK_ONLY_SESSION_ID)
+    expect(entries[0]?.attention?.message).toBe('Claude needs your permission to use Bash')
+    expect(entries[0]?.projectName).toBe('some-workspace')
+  })
+
+  it('garbage-collects work markers left behind by ended sessions', async () => {
+    const { readWorkSignalMarkers, writeWorkSignalMarker } =
+      await import('../../src/core/session/attention.js')
+    // No lock exists for this session: its final Stop marker must not
+    // accumulate forever.
+    await writeWorkSignalMarker({
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: LOCK_ONLY_SESSION_ID,
+      state: 'idle',
+    })
+
+    await buildApp().request('/api/live-activity')
+    // Cleanup is fire-and-forget; give the unlink a moment.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(await readWorkSignalMarkers()).toEqual([])
+  })
+
   it('returns a Markdown handoff packet for the web action bar', async () => {
     await createKnownSession()
 

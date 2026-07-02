@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { COLORS } from '../../src/config/theme.js'
 import type { LiveUsageSummary } from '../../src/core/usage/live-usage.js'
 import { formatUsageDisplay } from '../../src/tui/components/AppHeader.js'
+import { usageHeaderLayoutForWidth } from '../../src/tui/layout.js'
 
 describe('TUI usage header', () => {
   it('distinguishes off, waiting, stale, warning, and danger states', () => {
@@ -48,6 +49,54 @@ describe('TUI usage header', () => {
 
     expect(formatUsageDisplay(enabled).creditsEnabled).toBe(true)
     expect(formatUsageDisplay(summary(42, true, 'fresh')).creditsEnabled).toBe(false)
+  })
+
+  it('hides account limits on very narrow terminals and compacts before that', () => {
+    expect(usageHeaderLayoutForWidth(29).mode).toBe('hidden')
+    expect(usageHeaderLayoutForWidth(30).mode).toBe('minimal')
+    expect(usageHeaderLayoutForWidth(34).mode).toBe('minimal')
+    expect(usageHeaderLayoutForWidth(35).mode).toBe('compact')
+    expect(usageHeaderLayoutForWidth(48).mode).toBe('compact')
+    expect(usageHeaderLayoutForWidth(120).mode).toBe('full')
+  })
+
+  it('keeps only usage bars and percentages in minimal mode', () => {
+    expect(usageHeaderLayoutForWidth(34)).toMatchObject({
+      mode: 'minimal',
+      showBars: true,
+      showBrandProduct: false,
+      showLimitLabels: false,
+      showLimitsLabel: false,
+      showPercentage: true,
+      showReset: false,
+      showSummary: true,
+      showStatus: false,
+    })
+  })
+
+  it('keeps usage bars in compact mode while dropping reset chatter', () => {
+    expect(usageHeaderLayoutForWidth(48)).toMatchObject({
+      mode: 'compact',
+      showBars: true,
+      showBrandProduct: false,
+      showLimitLabels: true,
+      showLimitsLabel: true,
+      showPercentage: true,
+      showReset: false,
+      showSummary: true,
+      showStatus: false,
+    })
+    expect(usageHeaderLayoutForWidth(120)).toMatchObject({
+      mode: 'full',
+      showBars: true,
+      showBrandProduct: true,
+      showLimitLabels: true,
+      showLimitsLabel: true,
+      showPercentage: true,
+      showReset: true,
+      showSummary: true,
+      showStatus: true,
+    })
   })
 })
 

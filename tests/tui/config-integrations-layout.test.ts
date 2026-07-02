@@ -14,7 +14,13 @@ describe('config integrations layout', () => {
 
     expect(integrations).toContain('const usageFocused = cursor === 0')
     expect(integrations).toContain('<FeatureCard focused={usageFocused}>')
-    expect(integrations).toContain('<FeatureCard focused={cursor >= 1}>')
+    expect(integrations).toContain(
+      'const attentionFocused = cursor === INTEGRATION_ATTENTION_CURSOR'
+    )
+    expect(integrations).toContain('<FeatureCard focused={attentionFocused}>')
+    expect(integrations).toContain(
+      '<FeatureCard focused={cursor >= INTEGRATION_FIRST_SHELL_CURSOR}>'
+    )
   })
 
   it('aligns headings, rows, descriptions, and focused details', async () => {
@@ -35,7 +41,7 @@ describe('config integrations layout', () => {
     expect(source).toContain(
       '.sort((left, right) => Number(right.detected) - Number(left.detected))'
     )
-    expect(source).toContain('DISPLAY_SHELLS[cursor - 1]')
+    expect(source).toContain('DISPLAY_SHELLS[cursor - INTEGRATION_FIRST_SHELL_CURSOR]')
     expect(source).toContain('DISPLAY_SHELLS.map')
     expect(source).toContain('<Text bold color={COLORS.ok} inverse>')
   })

@@ -1,7 +1,8 @@
-import { Box, Text } from 'ink'
+import { Box, Text, useStdout } from 'ink'
 
 import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
+import { appToolbarLayoutForWidth } from '../layout.js'
 import SearchBar from './SearchBar.js'
 
 interface AppToolbarProps {
@@ -19,6 +20,9 @@ export default function AppToolbar({
   projectCount,
   searchQuery,
 }: AppToolbarProps) {
+  const { stdout } = useStdout()
+  const layout = appToolbarLayoutForWidth(stdout?.columns ?? 80)
+
   return (
     <Box
       borderBottom={true}
@@ -42,13 +46,15 @@ export default function AppToolbar({
               {LABELS.focusLabel} {focusLabel}
             </Text>
           ) : null}
-          <Text color={COLORS.muted}>
-            {'  '}
-            <Text color={COLORS.text}>{LABELS.keySearch}</Text>
-            {' ' + LABELS.wordSearch + '  '}
-            <Text color={COLORS.text}>{LABELS.keyTab}</Text>
-            {' ' + LABELS.wordSwitch}
-          </Text>
+          {layout.showNavigationHints ? (
+            <Text color={COLORS.muted}>
+              {'  '}
+              <Text color={COLORS.text}>{LABELS.keySearch}</Text>
+              {' ' + LABELS.wordSearch + '  '}
+              <Text color={COLORS.text}>{LABELS.keyTab}</Text>
+              {' ' + LABELS.wordSwitch}
+            </Text>
+          ) : null}
         </Box>
       )}
     </Box>

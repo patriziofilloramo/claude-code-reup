@@ -7,7 +7,6 @@ const commandsSource = readFileSync('src/tui/commands.ts', 'utf8')
 const footerSource = readFileSync('src/tui/components/AppFooter.tsx', 'utf8')
 const projectListSource = readFileSync('src/tui/components/ProjectList.tsx', 'utf8')
 const resumeCardSource = readFileSync('src/tui/components/ResumeCard.tsx', 'utf8')
-const sessionListSource = readFileSync('src/tui/components/SessionList.tsx', 'utf8')
 
 describe('TUI organization parity guardrails', () => {
   it('uses the shared smart-view model and exposes keyboard focus controls', () => {
@@ -33,16 +32,19 @@ describe('TUI organization parity guardrails', () => {
 
   it('surfaces organization and provenance without duplicating metadata logic', () => {
     expect(projectListSource).toContain('project.groupName')
-    expect(projectListSource).toContain('projectPanelLayout.showProjectGroups')
+    expect(projectListSource).toContain('layout.showProjectGroups')
     expect(projectListSource).not.toContain('width={4}')
-    expect(projectListSource).toContain('width={7}')
+    expect(projectListSource).not.toContain('width={7}')
+    expect(projectListSource).toContain('width={layout.countColumnWidth}')
     expect(resumeCardSource).toContain('automaticFactLabel(')
     expect(resumeCardSource).toContain('automaticContext.plan.source')
     expect(resumeCardSource).toContain('todos.updatedAt')
   })
 
-  it('keeps the session list horizontally dense so sessions get the available width', () => {
-    expect(sessionListSource).not.toContain('key={session.id} marginBottom={0} paddingX={1}')
-    expect(sessionListSource).toContain('key={session.id} marginBottom={0}')
+  it('keeps resume preview actions in the app footer only', () => {
+    expect(footerSource).toContain('if (isResumeCardOpen)')
+    expect(resumeCardSource).not.toContain('LABELS.keyEnter')
+    expect(resumeCardSource).not.toContain('LABELS.keyEsc')
+    expect(resumeCardSource).not.toContain('LABELS.keyFiles')
   })
 })

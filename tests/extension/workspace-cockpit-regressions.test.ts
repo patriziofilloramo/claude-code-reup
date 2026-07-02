@@ -50,15 +50,16 @@ describe('workspace cockpit guardrails', () => {
     expect(treeSource).toContain('treeView.badge')
     expect(treeSource).toContain('const visibleSessionCount = group.sessions.length')
     expect(extensionSource).toContain('treeProvider.attachTreeView(treeView)')
-    expect(extensionSource).toContain('refreshController?.setVisible(dashboardVisible)')
+    // The tree alone runs signal-scoped watching (locks + markers); full
+    // watching, with its transcript churn, stays reserved for the dashboard.
+    expect(extensionSource).toContain(
+      "refreshController?.setScope(dashboardVisible ? 'full' : treeVisible ? 'signals' : 'off')"
+    )
     expect(extensionSource).toContain(
       'if (event.visible && !treeProvider.renderCurrentModel()) void refreshAll()'
     )
     expect(extensionSource).toContain(
       'if (treeVisible && !treeProvider.renderCurrentModel()) void refreshAll()'
-    )
-    expect(extensionSource).not.toContain(
-      'refreshController?.setVisible(treeVisible || dashboardVisible)'
     )
     expect(treeSource).toContain('renderCurrentModel(): boolean')
     expect(treeSource).toContain('if (!this.model || !this.modelFingerprint) return false')

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+
+- Attention alerts: `reup attention setup` registers a reversible Claude Code
+  Notification hook so Reup knows the moment a session waits on a permission
+  decision or idle input. The web live strip pins those sessions in red with
+  the waiting reason and can raise desktop notifications (needs input, and
+  turn finished while the tab is hidden); the TUI pulses a red marker and
+  rings the terminal bell. `reup attention remove` restores the previous hook
+  configuration exactly and clears stored alerts.
+- Near real-time working-state detection: session busy/idle state now comes
+  from Claude Code's own lock files, merged per session and corroborated for
+  freshness, pushed to the browser over typed SSE events within ~150 ms.
+- Exact turn boundaries for every session: `reup attention setup` also
+  registers UserPromptSubmit/Stop hooks, giving Reup its own busy/idle signal
+  for sessions whose lock files omit the status field (VS Code peers). A
+  transcript written within the last seconds also reads as running, and
+  attached-but-quiet sessions stay visible in the live strip (dimmed as Idle)
+  instead of flickering out.
+
 ### Removed
 
 - The experimental `reup sync` cross-device Project Memory feature (the `sync`

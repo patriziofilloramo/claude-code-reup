@@ -335,7 +335,7 @@ export async function showSessionDetailPicker(
       model.sessions.map((session) => ({
         description: `${session.projectName} · ${formatRelativeTime(session.updated)}`,
         detail: session.advice.explanation,
-        label: `${statusCodicon(session.primaryStatus, session.isActive)} ${session.title}`,
+        label: `${statusCodicon(session.primaryStatus, session.isActive, session.needsInput)} ${session.title}`,
         session,
       })),
       {

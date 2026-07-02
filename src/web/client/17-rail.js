@@ -352,17 +352,34 @@ function shortRelativeTime(isoTimestamp) {
 }
 
 /** Builds the live activity strip rows from the current liveActivity snapshot. */
+function activityDisplayRank(entry) {
+  if (entry.attention) return 0
+  if (entry.activityState === 'running') return 1
+  if (entry.activityState === 'waiting') return 2
+  return 3
+}
+
 function buildActivitySectionHtml() {
   if (liveActivity.length === 0) return ''
+  // An attached session never vanishes from the strip: quiet ones render
+  // dimmed as Idle at the bottom instead of flickering in and out. Sessions
+  // waiting on the user always come first, in red.
+  var ordered = liveActivity.slice().sort(function (a, b) {
+    return activityDisplayRank(a) - activityDisplayRank(b)
+  })
   var rows = ''
   var count = 0
-  for (var i = 0; i < liveActivity.length; i++) {
-    var entry = liveActivity[i]
-    if (!entry.projectId || !entry.sessionId) continue
+  for (var i = 0; i < ordered.length; i++) {
+    var entry = ordered[i]
+    // Fallback alert entries (session not discoverable yet) have no project
+    // id; they still render, just without click-to-select navigation.
+    if (!entry.sessionId) continue
     var state = entry.activityState || 'idle'
-    if (state === 'idle') continue
-    var stateLabel =
-      state === 'running'
+    var needsInput = !!entry.attention
+    var stateClass = needsInput ? 'attention' : state
+    var stateLabel = needsInput
+      ? STRINGS.activityNeedsInput
+      : state === 'running'
         ? STRINGS.activityRunning
         : state === 'waiting'
           ? STRINGS.activityWaiting
@@ -375,14 +392,20 @@ function buildActivitySectionHtml() {
         escapeHtml(shortRelativeTime(entry.lastEventAt)) +
         '</span>'
       : ''
+    var message =
+      needsInput && entry.attention.message
+        ? '<span class="activity-msg">' + escapeHtml(entry.attention.message) + '</span>'
+        : ''
     rows +=
-      '<div class="rail-item rail-live-item" data-rail-action="select-session" data-project-id="' +
+      '<div class="rail-item rail-live-item' +
+      (needsInput ? ' attention' : state === 'idle' ? ' idle' : '') +
+      '" data-rail-action="select-session" data-project-id="' +
       escapeHtml(entry.projectId) +
       '" data-session-id="' +
       escapeHtml(entry.sessionId) +
       '">' +
       '<span class="activity-dot ' +
-      escapeHtml(state) +
+      escapeHtml(stateClass) +
       '"></span>' +
       '<span class="activity-copy">' +
       '<span class="activity-title">' +
@@ -390,7 +413,7 @@ function buildActivitySectionHtml() {
       '</span>' +
       '<span class="activity-meta">' +
       '<span class="activity-state ' +
-      escapeHtml(state) +
+      escapeHtml(stateClass) +
       '">' +
       escapeHtml(stateLabel) +
       '</span>' +
@@ -400,6 +423,7 @@ function buildActivitySectionHtml() {
       tool +
       time +
       '</span>' +
+      message +
       '</span>' +
       '</div>'
     count++

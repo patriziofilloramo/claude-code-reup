@@ -87,8 +87,9 @@ export function renderInspectorHtml(
     <button class="secondary" data-action="revealProject">Reveal Project</button>
   </div>
   <div class="pills">
+    ${session.needsInput ? '<span class="pill pill-warning">● needs input</span>' : ''}
     ${healthStatus ? `<span class="pill ${statusPillClass(session.primaryStatus)}">${escapeHtml(healthStatus)}</span>` : ''}
-    ${session.isActive ? '<span class="pill pill-active">● active</span>' : ''}
+    ${session.isActive && !session.needsInput ? '<span class="pill pill-active">● active</span>' : ''}
     ${session.tags.map((tag) => `<span class="pill tag">#${escapeHtml(tag)}</span>`).join('')}
   </div>
   <div class="facts">

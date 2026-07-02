@@ -162,9 +162,115 @@ function connectLiveUpdates() {
 
 /** Applies a live-activity entry list and re-renders every consumer of it. */
 function applyLiveActivity(entries) {
+  raiseDesktopAlerts(entries)
   liveActivity = entries
   renderRail()
   if (selectedSession) renderInspector(deriveVisibleSessions())
+}
+
+// ---------------------------------------------------------------------------
+// Desktop alerts: "needs input" and "turn finished"
+// ---------------------------------------------------------------------------
+
+function desktopAlertsPreferred() {
+  try {
+    return localStorage.getItem(NOTIFY_PREFERENCE) === '1'
+  } catch {
+    return false
+  }
+}
+
+function desktopAlertsEnabled() {
+  return desktopAlertsPreferred() && Notification.permission === 'granted'
+}
+
+/**
+ * Compares the incoming snapshot with the previous one and raises at most one
+ * notification per event: a session newly waiting on the user (always), or a
+ * running session that finished its turn (only while the tab is hidden —
+ * a visible dashboard already shows it).
+ */
+function raiseDesktopAlerts(entries) {
+  var enabled = desktopAlertsEnabled()
+  var nextStates = new Map()
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i]
+    if (!entry.sessionId) continue
+    nextStates.set(entry.sessionId, entry.activityState || 'idle')
+    var name = entry.sessionName || entry.sessionId
+
+    if (entry.attention) {
+      var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
+      if (!notifiedAttentionKeys.has(attentionKey)) {
+        notifiedAttentionKeys.add(attentionKey)
+        if (enabled) {
+          raiseNotification(
+            fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
+            entry.attention.message || '',
+            entry
+          )
+        }
+      }
+      continue
+    }
+
+    var previousState = previousActivityStates.get(entry.sessionId)
+    var finishedTurn =
+      previousState === 'running' &&
+      (entry.activityState === 'waiting' || entry.activityState === 'idle')
+    if (finishedTurn && enabled && document.hidden) {
+      raiseNotification(fmt(STRINGS.notifyTurnCompleteTitle, { name: name }), '', entry)
+    }
+  }
+  previousActivityStates = nextStates
+}
+
+function raiseNotification(title, body, entry) {
+  try {
+    var notification = new Notification(title, {
+      body: body,
+      tag: 'reup:' + entry.sessionId,
+    })
+    notification.onclick = function () {
+      window.focus()
+      var project = projects.find(function (candidate) {
+        return candidate.id === entry.projectId
+      })
+      if (!project) return
+      var session = project.sessions.find(function (candidate) {
+        return candidate.id === entry.sessionId
+      })
+      selectProject(project)
+      if (session) selectSession(session)
+    }
+  } catch {
+    // Notifications are best-effort; never let them break data refresh.
+  }
+}
+
+function renderNotifyButton() {
+  if (!elements.notifyButton) return
+  var on = desktopAlertsPreferred()
+  elements.notifyButton.textContent = on ? '🔔 ' + STRINGS.footerNotifyBtn : STRINGS.footerNotifyBtn
+  elements.notifyButton.classList.toggle('active', on)
+}
+
+async function toggleDesktopAlerts() {
+  if (desktopAlertsPreferred()) {
+    localStorage.removeItem(NOTIFY_PREFERENCE)
+    renderNotifyButton()
+    showToast(STRINGS.notifyDisabled)
+    return
+  }
+  var permission = Notification.permission
+  if (permission !== 'granted') permission = await Notification.requestPermission()
+  if (permission !== 'granted') {
+    showToast(STRINGS.notifyDenied, 'err')
+    return
+  }
+  localStorage.setItem(NOTIFY_PREFERENCE, '1')
+  renderNotifyButton()
+  showToast(STRINGS.notifyEnabled)
 }
 
 /**
@@ -222,3 +328,11 @@ window.matchMedia('(max-width: 639px)').addEventListener('change', function (e) 
 // Theme toggle button in footer.
 var themeBtn = document.getElementById('ftr-theme-btn')
 if (themeBtn) themeBtn.addEventListener('click', cycleTheme)
+
+// Desktop-alerts toggle button in footer.
+if (elements.notifyButton) {
+  elements.notifyButton.addEventListener('click', function () {
+    void toggleDesktopAlerts()
+  })
+  renderNotifyButton()
+}
