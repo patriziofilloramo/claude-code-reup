@@ -418,6 +418,59 @@ describe('web routes', () => {
     expect(done[0]?.activityState).toBe('idle')
   })
 
+  it('never drops an alert for a session that is not discoverable yet', async () => {
+    // A brand-new VS Code panel has a live lock but no transcript: the
+    // session is invisible to discovery, yet its needs-input alert must
+    // surface with fallback naming.
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'fresh-panel.json'),
+      JSON.stringify({
+        cwd: join(claudeDirectory, 'some-workspace'),
+        pid: process.pid,
+        sessionId: LOCK_ONLY_SESSION_ID,
+      })
+    )
+    const { writeAttentionMarker } = await import('../../src/core/session/attention.js')
+    await writeAttentionMarker({
+      message: 'Claude needs your permission to use Bash',
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: LOCK_ONLY_SESSION_ID,
+    })
+
+    const entries = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      attention: { message: string } | null
+      projectName: string
+      sessionId: string
+    }>
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.sessionId).toBe(LOCK_ONLY_SESSION_ID)
+    expect(entries[0]?.attention?.message).toBe('Claude needs your permission to use Bash')
+    expect(entries[0]?.projectName).toBe('some-workspace')
+  })
+
+  it('garbage-collects work markers left behind by ended sessions', async () => {
+    const { readWorkSignalMarkers, writeWorkSignalMarker } =
+      await import('../../src/core/session/attention.js')
+    // No lock exists for this session: its final Stop marker must not
+    // accumulate forever.
+    await writeWorkSignalMarker({
+      occurredAt: new Date().toISOString(),
+      schemaVersion: 1,
+      sessionId: LOCK_ONLY_SESSION_ID,
+      state: 'idle',
+    })
+
+    await buildApp().request('/api/live-activity')
+    // Cleanup is fire-and-forget; give the unlink a moment.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(await readWorkSignalMarkers()).toEqual([])
+  })
+
   it('returns a Markdown handoff packet for the web action bar', async () => {
     await createKnownSession()
 

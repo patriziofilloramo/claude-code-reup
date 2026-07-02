@@ -2,6 +2,7 @@ import { loadProjects } from '../core/project/project-discovery.js'
 import { getLiveSessionRecords, mergeSessionLockStatuses } from '../core/session/active-sessions.js'
 import {
   clearAttentionMarker,
+  clearWorkSignalMarker,
   combineWorkEvidence,
   isAttentionActive,
   readAttentionMarkers,
@@ -58,6 +59,11 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
   const workMarkerBySession = new Map(
     workMarkers.map((marker) => [marker.sessionId, marker] as const)
   )
+  // Ended sessions leave their last Stop marker behind; without cleanup the
+  // marker directory grows one file per session ever run.
+  for (const marker of workMarkers) {
+    if (!lockStatuses.has(marker.sessionId)) void clearWorkSignalMarker(marker.sessionId)
+  }
   if (activeSessionIds.length === 0) return { activeSessionIds, entries: [] }
 
   const sessionIndex = new Map<string, { project: Project; session: Session }>()
@@ -68,13 +74,16 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
     }
   }
 
+  const cwdBySession = new Map<string, string>()
+  for (const record of liveRecords) {
+    if (record.cwd && !cwdBySession.has(record.sessionId)) {
+      cwdBySession.set(record.sessionId, record.cwd)
+    }
+  }
+
   const entries = await Promise.all(
     [...lockStatuses].map(async ([sessionId, lockStatus]) => {
       const found = sessionIndex.get(sessionId)
-      if (!found) return null
-
-      const { project, session } = found
-      const tail = await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
       // Turn-boundary hooks cover the sessions whose locks omit the status
       // field entirely (VS Code peers); the newer transition wins.
       const evidence = combineWorkEvidence(
@@ -82,6 +91,32 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
         lockStatus.statusUpdatedAt,
         workMarkerBySession.get(sessionId)
       )
+
+      if (!found) {
+        // A session outside discovery (brand-new, no transcript yet) must
+        // still surface its alert: an attention event is never dropped just
+        // because the session is not resume-visible.
+        const attention = resolveSessionAttention(
+          attentionBySession.get(sessionId),
+          evidence.statusUpdatedAt,
+          null
+        )
+        if (!attention) return null
+        const cwd = cwdBySession.get(sessionId)
+        return {
+          sessionId,
+          projectId: '',
+          projectName: cwd ? (cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd) : 'new session',
+          sessionName: sessionId.slice(0, 8),
+          lastToolName: null,
+          activityState: resolveActivityState(evidence.status, null, evidence.statusUpdatedAt),
+          attention,
+          lastEventAt: null,
+        }
+      }
+
+      const { project, session } = found
+      const tail = await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
       const attention = resolveSessionAttention(
         attentionBySession.get(sessionId),
         evidence.statusUpdatedAt,

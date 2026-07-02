@@ -554,7 +554,7 @@ describe('web client session-row invariants', () => {
     expect(activityRail).toContain('rail-live-item')
     expect(activityRail).toContain('activity-title')
     expect(activityRail).toContain('activity-meta')
-    expect(activityRail).toContain('if (!entry.projectId || !entry.sessionId) continue')
+    expect(activityRail).toContain('if (!entry.sessionId) continue')
     expect(activityRail).not.toContain('live-placeholder')
     expect(activityRail).not.toContain('activityDetail')
   })

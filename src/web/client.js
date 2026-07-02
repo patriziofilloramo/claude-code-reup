@@ -4847,7 +4847,9 @@ function buildActivitySectionHtml() {
   var count = 0
   for (var i = 0; i < ordered.length; i++) {
     var entry = ordered[i]
-    if (!entry.projectId || !entry.sessionId) continue
+    // Fallback alert entries (session not discoverable yet) have no project
+    // id; they still render, just without click-to-select navigation.
+    if (!entry.sessionId) continue
     var state = entry.activityState || 'idle'
     var needsInput = !!entry.attention
     var stateClass = needsInput ? 'attention' : state

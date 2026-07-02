@@ -188,6 +188,13 @@ export async function readWorkSignalMarkers(): Promise<WorkSignalMarker[]> {
   return markers.filter((marker): marker is WorkSignalMarker => marker !== null)
 }
 
+/** Removes one session's work marker (dead-session cleanup). Best-effort. */
+export async function clearWorkSignalMarker(sessionId: string): Promise<void> {
+  await unlink(join(getWorkSignalDirectory(), `${stableSessionKey(sessionId)}.json`)).catch(
+    () => {}
+  )
+}
+
 /** Removes every stored work marker (used by `reup attention remove`). */
 export async function clearAllWorkSignalMarkers(): Promise<void> {
   await rm(getWorkSignalDirectory(), { force: true, recursive: true })
