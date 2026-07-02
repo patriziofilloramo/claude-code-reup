@@ -1,15 +1,11 @@
 import { getLiveSessionRecords, mergeSessionLockStatuses } from '../core/session/active-sessions.js'
 import {
-  clearAttentionMarker,
+  applyHookPayload,
   isAttentionActive,
   logHookCapture,
-  parseNotificationHookPayload,
-  parseWorkSignalHookPayload,
   readAttentionMarkers,
-  writeAttentionMarker,
-  writeWorkSignalMarker,
 } from '../core/session/attention.js'
-import type { HookCaptureOutcome } from '../core/session/attention.js'
+import type { HookCaptureResult } from '../core/session/attention.js'
 import {
   isAttentionHookConfigured,
   removeAttentionHook,
@@ -102,74 +98,18 @@ async function remove(): Promise<void> {
 }
 
 async function captureFromNotificationHook(): Promise<void> {
-  let outcome: string | null = null
-  let sessionId: string | null = null
-  let hookEvent: string | null = null
-
+  let result: HookCaptureResult = { hookEvent: null, outcome: 'ignored-tty', sessionId: null }
   try {
-    if (process.stdin.isTTY) {
-      outcome = 'ignored-tty'
-      return
-    }
-
-    const payload = parsePayload(await readStdin())
-    if (!payload) {
-      outcome = 'parse-failed'
-      return
-    }
-
-    // One capture endpoint serves every registered hook event: turn
-    // boundaries (UserPromptSubmit/Stop) become work markers, everything
-    // else is treated as a needs-input notification.
-    const workSignal = parseWorkSignalHookPayload(payload)
-    if (workSignal) {
-      sessionId = workSignal.sessionId
-      hookEvent = String(
-        (payload as Record<string, unknown>)['hook_event_name'] ?? 'Stop/UserPromptSubmit'
-      )
-      await writeWorkSignalMarker(workSignal)
-      // A submitted prompt means the user responded; the alert is over.
-      if (workSignal.state === 'busy') {
-        await clearAttentionMarker(workSignal.sessionId)
-        outcome = 'attention-marker-cleared'
-      } else {
-        outcome = 'work-marker-written'
-      }
-      return
-    }
-
-    const attention = parseNotificationHookPayload(payload)
-    if (attention) {
-      sessionId = attention.sessionId
-      hookEvent = 'Notification'
-      await writeAttentionMarker(attention)
-      outcome = 'attention-marker-written'
-      return
-    }
-
-    outcome = 'unrecognized-payload'
+    if (process.stdin.isTTY) return
+    result = await applyHookPayload(await readStdin())
   } catch (error) {
     // A hook failure must never disrupt Claude Code; keep it inspectable.
-    if (outcome === null) outcome = 'parse-failed'
+    result = { ...result, outcome: 'capture-failed' }
     log.debug('attention capture failed:', error)
   } finally {
-    // Always log, even on parse/recognition failures
-    if (outcome) {
-      await logHookCapture({
-        at: new Date().toISOString(),
-        hookEvent,
-        sessionId,
-        outcome: outcome as HookCaptureOutcome,
-      }).catch(() => {})
-    }
-  }
-}
-
-function parsePayload(raw: string): unknown {
-  try {
-    return JSON.parse(raw.replace(/^\uFEFF/, ''))
-  } catch {
-    return null
+    // The log line is the only visible trace hooks leave; write it even for
+    // failures so a broken hook is distinguishable from one that never fired.
+    await logHookCapture({ at: new Date().toISOString(), ...result }).catch(() => {})
   }
 }
 

@@ -1,368 +1,289 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import {
-  clearAttentionMarker,
-  parseNotificationHookPayload,
-  parseWorkSignalHookPayload,
+  applyHookPayload,
+  getHookCaptureLogPath,
+  logHookCapture,
   readAttentionMarkers,
   readWorkSignalMarkers,
-  writeAttentionMarker,
-  writeWorkSignalMarker,
 } from '../../src/core/session/attention.js'
 import { getLiveSessionRecords } from '../../src/core/session/active-sessions.js'
 import {
+  isAwaitingUserReply,
   readSessionTailActivity,
-  resolveActivityState,
 } from '../../src/core/session/session-tail.js'
+import { resolveSessionAttention } from '../../src/web/live-activity-model.js'
 
 const SESSION_ID = '22222222-2222-4222-8222-222222222222'
 
-interface TestEnv {
-  claudeDir: string
-  previousConfigDir: string | undefined
-}
-
 describe('live-attention-signal', () => {
-  let env: TestEnv
+  let claudeDirectory: string
+  let previousConfigDir: string | undefined
 
   beforeEach(async () => {
-    env = {
-      claudeDir: await mkdir(join(tmpdir(), `reup-live-attention-test-${Date.now()}`), {
-        recursive: true,
-      }).then((p) => p || ''),
-      previousConfigDir: process.env['CLAUDE_CONFIG_DIR'],
-    }
-    process.env['CLAUDE_CONFIG_DIR'] = env.claudeDir
+    claudeDirectory = await mkdtemp(join(tmpdir(), 'reup-live-attention-test-'))
+    previousConfigDir = process.env['CLAUDE_CONFIG_DIR']
+    process.env['CLAUDE_CONFIG_DIR'] = claudeDirectory
   })
 
   afterEach(async () => {
-    if (env.previousConfigDir === undefined) delete process.env['CLAUDE_CONFIG_DIR']
-    else process.env['CLAUDE_CONFIG_DIR'] = env.previousConfigDir
-    await rm(env.claudeDir, { force: true, recursive: true })
+    if (previousConfigDir === undefined) delete process.env['CLAUDE_CONFIG_DIR']
+    else process.env['CLAUDE_CONFIG_DIR'] = previousConfigDir
+    await rm(claudeDirectory, { force: true, recursive: true })
   })
 
-  describe('Case 1 & 2: Notification hook (permission/options)', () => {
-    it('captures a Notification hook payload and reports attention', async () => {
-      // Fake a live session by writing a lock file
-      await createFakeLiveSession(SESSION_ID, 'idle')
-
-      // Pipe a Notification payload through the attention capture command
-      const payload = {
-        session_id: SESSION_ID,
-        message: 'Claude needs permission to use Bash',
-        hook_event_name: 'Notification',
-      }
-      await simulateHookCapture(JSON.stringify(payload))
-
-      // Verify the marker was written
+  describe('applyHookPayload (the real capture path)', () => {
+    it('writes an attention marker for a Notification payload', async () => {
+      const result = await applyHookPayload(
+        JSON.stringify({
+          session_id: SESSION_ID,
+          hook_event_name: 'Notification',
+          message: 'Claude needs permission to use Bash',
+        })
+      )
+      expect(result).toEqual({
+        hookEvent: 'Notification',
+        outcome: 'attention-marker-written',
+        sessionId: SESSION_ID,
+      })
       const markers = await readAttentionMarkers()
       expect(markers).toHaveLength(1)
-      expect(markers[0]!.sessionId).toBe(SESSION_ID)
-      expect(markers[0]!.message).toBe('Claude needs permission to use Bash')
+      expect(markers[0]?.message).toBe('Claude needs permission to use Bash')
     })
 
-    it('clears attention when UserPromptSubmit hook fires (user responds)', async () => {
-      // Setup: live session + attention marker
-      await createFakeLiveSession(SESSION_ID, 'idle')
-      const notificationPayload = {
-        session_id: SESSION_ID,
-        message: 'Claude needs permission',
-      }
-      await simulateHookCapture(JSON.stringify(notificationPayload))
-
-      let markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(1)
-
-      // Simulate user responding: UserPromptSubmit hook fires, setting state to 'busy'
-      const userPromptPayload = {
-        session_id: SESSION_ID,
-        hook_event_name: 'UserPromptSubmit',
-      }
-      await simulateHookCapture(JSON.stringify(userPromptPayload))
-
-      // Attention marker should be cleared (deleted)
-      markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(0)
-    })
-
-    it('clears attention when activity resumes after the marker', async () => {
-      // Setup: live session with recent activity
-      const now = Date.now()
-      await createFakeLiveSession(SESSION_ID, 'idle', now)
-
-      // Marker created just before
-      const markerTime = new Date(now - 1000).toISOString()
-      const notificationPayload = {
-        session_id: SESSION_ID,
-        message: 'Claude waiting',
-      }
-      await simulateHookCaptureAt(JSON.stringify(notificationPayload), markerTime)
-
-      // Verify marker exists
-      const markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(1)
-
-      // Simulate user interaction: update lock status to show recent activity
-      await updateFakeLiveSession(SESSION_ID, 'busy', now + 5000)
-
-      // Re-check: the marker should now be considered inactive (statusUpdatedAt > marker time)
-      const liveRecords = await getLiveSessionRecords()
-      const lockStatus = liveRecords.find((r) => r.sessionId === SESSION_ID)
-      expect(lockStatus?.statusUpdatedAt).toBeGreaterThan(Date.parse(markerTime))
-
-      // Note: in real usage, the web/TUI will call isAttentionActive() to check;
-      // this test just verifies the data is there for them to check
-    })
-  })
-
-  describe('Case 3: Waiting state (pending tool call, no hook fired)', () => {
-    it('detects waiting state: pending tool in tail + idle lock + live session', async () => {
-      // Setup: live session with idle lock
-      await createFakeLiveSession(SESSION_ID, 'idle')
-
-      // Create transcript with a pending tool call in the tail
-      const transcriptPath = join(
-        env.claudeDir,
-        'projects',
-        'test',
-        'sessions',
-        SESSION_ID,
-        'transcript.jsonl'
+    it('clears the attention marker when the user submits a prompt', async () => {
+      await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'Notification', message: 'x' })
       )
-      const transcript = buildTranscriptWithPendingTool(SESSION_ID, true)
-      await mkdir(join(env.claudeDir, 'projects', 'test', 'sessions', SESSION_ID), {
-        recursive: true,
-      })
-      await writeFile(transcriptPath, transcript)
+      expect(await readAttentionMarkers()).toHaveLength(1)
 
-      // Parse tail activity
-      const tail = await readSessionTailActivity(transcriptPath)
-      expect(tail).not.toBeNull()
-      expect(tail!.toolPending).toBe(true)
-
-      // Resolve activity state with idle lock + pending tool
-      const activityState = resolveActivityState('idle', tail)
-      expect(activityState).toBe('waiting')
-    })
-
-    it('clears waiting state when tool result is provided', async () => {
-      await createFakeLiveSession(SESSION_ID, 'idle')
-
-      // Start with pending tool
-      const transcriptPath = join(
-        env.claudeDir,
-        'projects',
-        'test',
-        'sessions',
-        SESSION_ID,
-        'transcript.jsonl'
+      const result = await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'UserPromptSubmit' })
       )
-      let transcript = buildTranscriptWithPendingTool(SESSION_ID, true)
-      await mkdir(join(env.claudeDir, 'projects', 'test', 'sessions', SESSION_ID), {
-        recursive: true,
-      })
-      await writeFile(transcriptPath, transcript)
-
-      let tail = await readSessionTailActivity(transcriptPath)
-      expect(tail!.toolPending).toBe(true)
-      expect(resolveActivityState('idle', tail)).toBe('waiting')
-
-      // Append tool result
-      transcript = buildTranscriptWithPendingTool(SESSION_ID, false)
-      await writeFile(transcriptPath, transcript)
-
-      tail = await readSessionTailActivity(transcriptPath)
-      expect(tail!.toolPending).toBe(false)
-      expect(resolveActivityState('idle', tail)).toBe('idle')
-    })
-  })
-
-  describe('Regression: bug #1 (permanent yellow ! in TUI)', () => {
-    it('clears attention when work signal shows session became busy', async () => {
-      // Setup: live session + attention marker
-      await createFakeLiveSession(SESSION_ID, 'idle')
-      const notificationPayload = {
-        session_id: SESSION_ID,
-        message: 'Claude waiting',
-      }
-      const markerTime = new Date().toISOString()
-      await simulateHookCaptureAt(JSON.stringify(notificationPayload), markerTime)
-
-      let markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(1)
-
-      // Simulate: UserPromptSubmit hook fires (user responded)
-      const busyPayload = {
-        session_id: SESSION_ID,
-        hook_event_name: 'UserPromptSubmit',
-      }
-      await simulateHookCapture(JSON.stringify(busyPayload))
-
-      // Work signal should be written, attention marker should be cleared
+      expect(result.outcome).toBe('attention-marker-cleared')
+      expect(await readAttentionMarkers()).toHaveLength(0)
       const workMarkers = await readWorkSignalMarkers()
-      expect(workMarkers.some((m) => m.sessionId === SESSION_ID && m.state === 'busy')).toBe(true)
+      expect(workMarkers).toEqual([
+        expect.objectContaining({ sessionId: SESSION_ID, state: 'busy' }),
+      ])
+    })
 
-      markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(0)
+    it('keeps the attention marker on a Stop turn boundary', async () => {
+      await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'Notification', message: 'x' })
+      )
+      const result = await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'Stop' })
+      )
+      expect(result.outcome).toBe('work-marker-written')
+      expect(await readAttentionMarkers()).toHaveLength(1)
+    })
+
+    it('strips a BOM before parsing', async () => {
+      const result = await applyHookPayload(
+        '﻿' + JSON.stringify({ session_id: SESSION_ID, message: 'hello' })
+      )
+      expect(result.outcome).toBe('attention-marker-written')
+    })
+
+    it('reports malformed and unrecognized payloads without writing anything', async () => {
+      expect((await applyHookPayload('not json')).outcome).toBe('parse-failed')
+      expect((await applyHookPayload('[1,2]')).outcome).toBe('unrecognized-payload')
+      expect((await applyHookPayload(JSON.stringify({ message: 'no id' }))).outcome).toBe(
+        'unrecognized-payload'
+      )
+      expect(await readAttentionMarkers()).toHaveLength(0)
+      expect(await readWorkSignalMarkers()).toHaveLength(0)
     })
   })
 
-  describe('Regression: bug #2 (web session list vs live feed disagreement)', () => {
-    it('orphaned tool_use beyond tail window does not block clearing via hooks', async () => {
-      // This is more of a structural test: verify that even if a tool_use
-      // is beyond the tail window (invisible to tail scan but present in full scan),
-      // the hook system can still clear attention independently.
-
-      await createFakeLiveSession(SESSION_ID, 'idle')
-
-      // Write a marker
-      const notificationPayload = {
-        session_id: SESSION_ID,
-        message: 'Waiting',
-      }
-      await simulateHookCapture(JSON.stringify(notificationPayload))
-
-      let markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(1)
-
-      // Clear it via hook
-      const userPromptPayload = {
-        session_id: SESSION_ID,
-        hook_event_name: 'UserPromptSubmit',
-      }
-      await simulateHookCapture(JSON.stringify(userPromptPayload))
-
-      markers = await readAttentionMarkers()
-      expect(markers).toHaveLength(0)
-
-      // The key insight: the hook-based marker system is independent from
-      // the full-transcript scan. Even if the full scan would report "interrupted",
-      // the hook system correctly clears. Once we wire both into the unified signal,
-      // the live consumers will use whichever is fresher/more accurate.
-    })
-  })
-
-  // ============================================================================
-  // Test helpers
-  // ============================================================================
-
-  async function createFakeLiveSession(
-    sessionId: string,
-    status: 'busy' | 'idle',
-    statusUpdatedAt: number = Date.now()
-  ): Promise<void> {
-    const sessionsDir = join(env.claudeDir, 'sessions')
-    await mkdir(sessionsDir, { recursive: true })
-
-    const lockFile = join(sessionsDir, `${sessionId}.json`)
-    await writeFile(
-      lockFile,
-      JSON.stringify({
-        sessionId,
-        pid: process.pid, // Our process is always alive
-        cwd: null,
-        startedAt: Date.now(),
-        status,
-        statusUpdatedAt,
+  describe('hook capture log', () => {
+    it('appends one JSONL line per invocation, creating the directory if needed', async () => {
+      await logHookCapture({
+        at: '2026-07-02T12:00:00.000Z',
+        hookEvent: 'Notification',
+        sessionId: SESSION_ID,
+        outcome: 'attention-marker-written',
       })
-    )
-  }
+      await logHookCapture({
+        at: '2026-07-02T12:00:01.000Z',
+        hookEvent: null,
+        sessionId: null,
+        outcome: 'parse-failed',
+      })
+      const lines = (await readFile(getHookCaptureLogPath(), 'utf8')).trim().split('\n')
+      expect(lines).toHaveLength(2)
+      expect(JSON.parse(lines[0]!)).toMatchObject({ outcome: 'attention-marker-written' })
+      expect(JSON.parse(lines[1]!)).toMatchObject({ outcome: 'parse-failed' })
+    })
+  })
 
-  async function updateFakeLiveSession(
-    sessionId: string,
-    status: 'busy' | 'idle',
-    statusUpdatedAt: number
-  ): Promise<void> {
-    const lockFile = join(env.claudeDir, 'sessions', `${sessionId}.json`)
+  describe('fake liveness via lock files', () => {
+    it('a lock file with our own pid reads as a live session', async () => {
+      await createFakeLiveSession(SESSION_ID, 'idle')
+      const records = await getLiveSessionRecords()
+      expect(records).toEqual([expect.objectContaining({ sessionId: SESSION_ID, status: 'idle' })])
+    })
+  })
+
+  describe('isAwaitingUserReply (Case 3: blocked turn, no hook)', () => {
+    it('is true when the turn ended with an unanswered tool call', async () => {
+      const transcriptPath = await writeTranscript(transcriptWithPendingTool('Bash'))
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.toolPending).toBe(true)
+      expect(isAwaitingUserReply('idle', tail)).toBe(true)
+    })
+
+    it('is false while an ordinary tool is still running (busy lock)', async () => {
+      const transcriptPath = await writeTranscript(transcriptWithPendingTool('Bash'))
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(isAwaitingUserReply('busy', tail)).toBe(false)
+      expect(isAwaitingUserReply(null, tail)).toBe(false)
+    })
+
+    it('is true for a pending user-facing question even while the lock is busy', async () => {
+      // AskUserQuestion keeps the turn (and the lock) busy for as long as the
+      // user has not answered — the pending tool name is the signal.
+      const transcriptPath = await writeTranscript(transcriptWithPendingTool('AskUserQuestion'))
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(isAwaitingUserReply('busy', tail)).toBe(true)
+      expect(isAwaitingUserReply(null, tail)).toBe(true)
+      expect(isAwaitingUserReply('idle', tail)).toBe(true)
+    })
+
+    it('is false once the tool call is answered', async () => {
+      const transcriptPath = await writeTranscript(transcriptWithResolvedTool())
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.toolPending).toBe(false)
+      expect(isAwaitingUserReply('idle', tail)).toBe(false)
+    })
+
+    it('is false after the user interrupts or sends a new prompt', async () => {
+      const transcriptPath = await writeTranscript(
+        transcriptWithPendingTool('AskUserQuestion') +
+          '\n' +
+          JSON.stringify({
+            type: 'user',
+            timestamp: isoAgo(1_000),
+            message: { content: [{ type: 'text', text: 'never mind, do something else' }] },
+          })
+      )
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.toolPending).toBe(false)
+      expect(isAwaitingUserReply('idle', tail)).toBe(false)
+      expect(isAwaitingUserReply('busy', tail)).toBe(false)
+    })
+  })
+
+  describe('resolveSessionAttention (web live feed)', () => {
+    it('does NOT alert for a freshly finished turn (regression: waiting-state false positive)', async () => {
+      // A turn that just completed normally: recent event, no pending tool,
+      // idle lock. This must never read as "Claude needs you".
+      const transcriptPath = await writeTranscript(transcriptWithResolvedTool(2_000))
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(tail?.state).not.toBe('idle') // fresh enough to be running/waiting
+      expect(resolveSessionAttention(undefined, Date.now() - 2_000, tail, 'idle')).toBeNull()
+    })
+
+    it('alerts for a turn that ended on an unanswered tool call', async () => {
+      const transcriptPath = await writeTranscript(transcriptWithPendingTool('Bash'))
+      const tail = await readSessionTailActivity(transcriptPath)
+      const attention = resolveSessionAttention(undefined, Date.now() - 40_000, tail, 'idle')
+      expect(attention).not.toBeNull()
+      expect(attention?.since).toBe(tail?.lastEventAt)
+    })
+
+    it('alerts for a pending user question while the turn is still busy', async () => {
+      const transcriptPath = await writeTranscript(transcriptWithPendingTool('AskUserQuestion'))
+      const tail = await readSessionTailActivity(transcriptPath)
+      expect(resolveSessionAttention(undefined, Date.now(), tail, 'busy')).not.toBeNull()
+    })
+
+    it('prefers an active hook marker and reports its message', async () => {
+      const occurredAt = new Date().toISOString()
+      const marker = {
+        message: 'Claude needs your permission to use Bash',
+        occurredAt,
+        schemaVersion: 1 as const,
+        sessionId: SESSION_ID,
+      }
+      const attention = resolveSessionAttention(marker, null, null, 'idle')
+      expect(attention).toEqual({ message: marker.message, since: occurredAt })
+    })
+
+    it('clears a hook marker once the session shows later activity', async () => {
+      const marker = {
+        message: 'stale',
+        occurredAt: isoAgo(60_000),
+        schemaVersion: 1 as const,
+        sessionId: SESSION_ID,
+      }
+      // statusUpdatedAt after the marker means the user responded.
+      expect(resolveSessionAttention(marker, Date.now(), null, 'busy')).toBeNull()
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  async function createFakeLiveSession(sessionId: string, status: 'busy' | 'idle'): Promise<void> {
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
     await writeFile(
-      lockFile,
+      join(sessionsDirectory, `${sessionId}.json`),
       JSON.stringify({
         sessionId,
+        // The test's own process is always alive, so the lock always passes
+        // the liveness probe without needing a real Claude Code process.
         pid: process.pid,
         cwd: null,
         startedAt: Date.now(),
         status,
-        statusUpdatedAt,
+        statusUpdatedAt: Date.now(),
       })
     )
   }
 
-  async function simulateHookCapture(payload: string): Promise<void> {
-    // Simulate piping a payload through stdin to `reup attention capture`
-    // Mimics the logic in captureFromNotificationHook()
-    const parsed = JSON.parse(payload)
-    const workSignal = parseWorkSignalHookPayload(parsed)
-    if (workSignal) {
-      await writeWorkSignalMarker(workSignal)
-      // A submitted prompt means the user responded; the alert is over.
-      if (workSignal.state === 'busy') await clearAttentionMarker(workSignal.sessionId)
-      return
-    }
-
-    const attention = parseNotificationHookPayload(parsed)
-    if (attention) {
-      await writeAttentionMarker(attention)
-      return
-    }
-
-    throw new Error('Unrecognized payload')
+  async function writeTranscript(contents: string): Promise<string> {
+    const transcriptPath = join(claudeDirectory, 'transcript.jsonl')
+    await writeFile(transcriptPath, contents)
+    return transcriptPath
   }
 
-  async function simulateHookCaptureAt(payload: string, occurredAt: string): Promise<void> {
-    const parsed = JSON.parse(payload)
-    const attention = parseNotificationHookPayload(parsed, occurredAt)
-    if (attention) {
-      await writeAttentionMarker(attention)
-      return
-    }
-    throw new Error('Parse failed')
+  function isoAgo(milliseconds: number): string {
+    return new Date(Date.now() - milliseconds).toISOString()
   }
 
-  function buildTranscriptWithPendingTool(sessionId: string, pending: boolean): string {
-    const toolId = 'tool-1'
-    const lines: string[] = []
-    const now = Date.now()
+  function transcriptWithPendingTool(toolName: string): string {
+    return JSON.stringify({
+      type: 'assistant',
+      timestamp: isoAgo(40_000),
+      message: {
+        content: [{ type: 'tool_use', id: 'tool-1', name: toolName, input: {} }],
+      },
+    })
+  }
 
-    // Assistant message with tool_use
-    lines.push(
+  function transcriptWithResolvedTool(ageMs = 35_000): string {
+    return [
       JSON.stringify({
         type: 'assistant',
-        timestamp: new Date(now - 40000).toISOString(), // Old, well outside any freshness window
+        timestamp: isoAgo(ageMs + 5_000),
         message: {
-          content: [
-            {
-              type: 'tool_use',
-              id: toolId,
-              name: 'Bash',
-              input: { command: 'echo hello' },
-            },
-          ],
+          content: [{ type: 'tool_use', id: 'tool-1', name: 'Bash', input: { command: 'ls' } }],
         },
-      })
-    )
-
-    // If not pending, add tool result (with old timestamp to represent completed work)
-    if (!pending) {
-      lines.push(
-        JSON.stringify({
-          type: 'user',
-          timestamp: new Date(now - 35000).toISOString(), // Still old, so state = 'idle'
-          message: {
-            content: [
-              {
-                type: 'tool_result',
-                tool_use_id: toolId,
-                content: 'hello',
-              },
-            ],
-          },
-        })
-      )
-    }
-
-    return lines.join('\n')
+      }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: isoAgo(ageMs),
+        message: {
+          content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }],
+        },
+      }),
+    ].join('\n')
   }
 })

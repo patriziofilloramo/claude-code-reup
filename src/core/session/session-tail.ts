@@ -98,6 +98,32 @@ export function resolveActivityState(
   return tailState
 }
 
+/**
+ * Tools that block on the user by design. A pending call to one of these
+ * means Claude is waiting for a reply even while the lock still reads busy,
+ * because the turn keeps running until the user answers.
+ */
+const USER_REPLY_TOOL_NAMES = new Set(['AskUserQuestion', 'ExitPlanMode'])
+
+/**
+ * True when a live session is blocked on the user with no Notification hook
+ * to say so. Two shapes qualify: the turn ended (`idle` evidence) while the
+ * transcript tail still holds an unanswered tool call, or the pending call is
+ * to a tool that exists to ask the user something (`AskUserQuestion`,
+ * `ExitPlanMode`), which keeps the lock busy for as long as the user is
+ * silent. The tail parser clears pending tool uses on any later user prompt
+ * or interrupt marker, so a pending call here is genuinely unanswered — not
+ * merely a turn resting between prompts.
+ */
+export function isAwaitingUserReply(
+  workStatus: 'busy' | 'idle' | null,
+  tail: SessionTailActivity | null
+): boolean {
+  if (tail?.toolPending !== true || tail.lastEventAt === null) return false
+  if (workStatus === 'idle') return true
+  return tail.lastToolName !== null && USER_REPLY_TOOL_NAMES.has(tail.lastToolName)
+}
+
 function applyLastEventFallback(
   activity: SessionTailActivity,
   lastEventAt: string

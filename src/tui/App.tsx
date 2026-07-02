@@ -22,7 +22,12 @@ import {
 } from '../core/session/attention.js'
 import type { AttentionMarker, WorkSignalMarker } from '../core/session/attention.js'
 import { sessionTranscriptPath } from '../core/session/session-preview.js'
-import { TRANSCRIPT_RUNNING_WINDOW_MS } from '../core/session/session-tail.js'
+import {
+  TRANSCRIPT_RUNNING_WINDOW_MS,
+  isAwaitingUserReply,
+  readSessionTailActivity,
+} from '../core/session/session-tail.js'
+import type { SessionTailActivity } from '../core/session/session-tail.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
 import { readLiveUsageSummary } from '../core/usage/live-usage.js'
@@ -98,6 +103,7 @@ function App({ onResume }: AppProps) {
   const [attentionMarkers, setAttentionMarkers] = useState<AttentionMarker[]>([])
   const [workMarkers, setWorkMarkers] = useState<Map<string, WorkSignalMarker>>(new Map())
   const [transcriptActivityMs, setTranscriptActivityMs] = useState<Map<string, number>>(new Map())
+  const [sessionTails, setSessionTails] = useState<Map<string, SessionTailActivity>>(new Map())
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -190,19 +196,25 @@ function App({ onResume }: AppProps) {
         // Transcript modification times are the freshest work evidence the
         // TUI can get: lock files do not always carry a status field, and the
         // slow project refresh leaves session.updated too stale for liveness.
+        // The tail is read alongside so a turn that ended on an unanswered
+        // tool call (a question with no Notification hook) can raise attention.
         const activityBySession = new Map<string, number>()
+        const tailBySession = new Map<string, SessionTailActivity>()
         await Promise.all(
           [...lockStatuses.keys()].map(async (sessionId) => {
             const project = projectsRef.current.find((candidate) =>
               candidate.sessions.some((session) => session.id === sessionId)
             )
             if (!project) return
+            const transcriptPath = sessionTranscriptPath(project.id, sessionId)
             try {
-              const stats = await stat(sessionTranscriptPath(project.id, sessionId))
+              const stats = await stat(transcriptPath)
               activityBySession.set(sessionId, stats.mtimeMs)
             } catch {
               // A brand-new session may not have a transcript yet.
             }
+            const tail = await readSessionTailActivity(transcriptPath)
+            if (tail) tailBySession.set(sessionId, tail)
           })
         )
         if (disposed) return
@@ -212,6 +224,7 @@ function App({ onResume }: AppProps) {
         setAttentionMarkers(markers)
         setWorkMarkers(new Map(workSignals.map((marker) => [marker.sessionId, marker])))
         setTranscriptActivityMs(activityBySession)
+        setSessionTails(tailBySession)
       } finally {
         refreshInProgress = false
       }
@@ -319,7 +332,9 @@ function App({ onResume }: AppProps) {
 
   // Sessions currently waiting on the user, resolved against the same
   // evidence rules the web strip uses: a marker dies as soon as the session
-  // shows life after the event or its process disappears.
+  // shows life after the event or its process disappears. Hook markers cover
+  // permission and input prompts; the tail check covers a turn that ended on
+  // an unanswered tool call, where no Notification hook ever fires.
   const attentionSessionIds = useMemo(() => {
     const ids = new Set<string>()
     for (const marker of attentionMarkers) {
@@ -331,8 +346,19 @@ function App({ onResume }: AppProps) {
       })
       if (active) ids.add(marker.sessionId)
     }
+    for (const [sessionId, lockStatus] of sessionLockStatuses) {
+      if (ids.has(sessionId)) continue
+      const evidence = combineWorkEvidence(
+        lockStatus.status,
+        lockStatus.statusUpdatedAt,
+        workMarkers.get(sessionId)
+      )
+      if (isAwaitingUserReply(evidence.status, sessionTails.get(sessionId) ?? null)) {
+        ids.add(sessionId)
+      }
+    }
     return ids
-  }, [attentionMarkers, sessionLockStatuses, transcriptActivityMs])
+  }, [attentionMarkers, sessionLockStatuses, sessionTails, transcriptActivityMs, workMarkers])
 
   // One terminal bell per new attention event; a re-render must never re-ring.
   const previousAttentionIdsRef = useRef<Set<string>>(new Set())

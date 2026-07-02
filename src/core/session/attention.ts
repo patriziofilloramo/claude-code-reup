@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
+  appendFile,
   mkdir,
   readdir,
   readFile,
   rename,
   rm,
+  stat,
   unlink,
   writeFile,
-  appendFile,
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -291,21 +292,76 @@ export type HookCaptureOutcome =
   | 'ignored-tty'
   | 'parse-failed'
   | 'unrecognized-payload'
+  | 'capture-failed'
 
-export interface HookCaptureLogEntry {
-  at: string
+export interface HookCaptureResult {
   hookEvent: string | null
-  sessionId: string | null
   outcome: HookCaptureOutcome
+  sessionId: string | null
+}
+
+export interface HookCaptureLogEntry extends HookCaptureResult {
+  at: string
+}
+
+/**
+ * Applies one raw hook payload (the exact stdin bytes Claude Code pipes to
+ * `reup attention capture`) to the marker store and reports what happened.
+ * This is the single capture code path: the CLI adds only stdin plumbing and
+ * logging around it, so tests exercising this function exercise production.
+ */
+export async function applyHookPayload(rawPayload: string): Promise<HookCaptureResult> {
+  // Windows shells may prepend a byte-order mark that JSON.parse rejects.
+  const text = rawPayload.charCodeAt(0) === 0xfeff ? rawPayload.slice(1) : rawPayload
+  let payload: unknown
+  try {
+    payload = JSON.parse(text)
+  } catch {
+    return { hookEvent: null, outcome: 'parse-failed', sessionId: null }
+  }
+  if (!isRecord(payload)) {
+    return { hookEvent: null, outcome: 'unrecognized-payload', sessionId: null }
+  }
+  const hookEvent =
+    typeof payload['hook_event_name'] === 'string' ? payload['hook_event_name'] : null
+
+  // One capture endpoint serves every registered hook event: turn boundaries
+  // (UserPromptSubmit/Stop) become work markers, everything else is treated
+  // as a needs-input notification.
+  const workSignal = parseWorkSignalHookPayload(payload)
+  if (workSignal) {
+    await writeWorkSignalMarker(workSignal)
+    // A submitted prompt means the user responded; the alert is over.
+    if (workSignal.state === 'busy') {
+      await clearAttentionMarker(workSignal.sessionId)
+      return { hookEvent, outcome: 'attention-marker-cleared', sessionId: workSignal.sessionId }
+    }
+    return { hookEvent, outcome: 'work-marker-written', sessionId: workSignal.sessionId }
+  }
+
+  const attention = parseNotificationHookPayload(payload)
+  if (attention) {
+    await writeAttentionMarker(attention)
+    return { hookEvent, outcome: 'attention-marker-written', sessionId: attention.sessionId }
+  }
+
+  return { hookEvent, outcome: 'unrecognized-payload', sessionId: null }
+}
+
+/** The capture log is halved once it crosses this size, keeping the newest entries. */
+const CAPTURE_LOG_MAX_BYTES = 1024 * 1024
+
+export function getHookCaptureLogPath(): string {
+  return join(getReupDirectory(), 'attention-capture.log')
 }
 
 /** Append one log entry per hook invocation for diagnostics (always-on, not gated by REUP_DEBUG). */
 export async function logHookCapture(entry: HookCaptureLogEntry): Promise<void> {
   try {
-    const logPath = join(getReupDirectory(), 'attention-capture.log')
-    await appendFile(logPath, JSON.stringify(entry) + '\n', 'utf8')
-    // Truncate log if it grows too large (cap at ~10MB, keep last ~100k lines)
-    await truncateLogIfNeeded(logPath, 10 * 1024 * 1024)
+    const logPath = getHookCaptureLogPath()
+    await mkdir(getReupDirectory(), { recursive: true })
+    await appendFile(logPath, JSON.stringify(entry) + '\n', { encoding: 'utf8', mode: 0o600 })
+    await truncateLogIfNeeded(logPath, CAPTURE_LOG_MAX_BYTES)
   } catch (error) {
     // Log failure must never disrupt Claude Code; keep it inspectable if needed.
     log.debug('hook capture log failed:', error)
@@ -314,22 +370,13 @@ export async function logHookCapture(entry: HookCaptureLogEntry): Promise<void> 
 
 async function truncateLogIfNeeded(filePath: string, maxSizeBytes: number): Promise<void> {
   try {
-    const stat = await readFile(filePath, { flag: 'r' })
-      .then(() => ({ size: 0 }))
-      .catch(() => null)
-    if (!stat) return
-
-    // Get file size via a different approach since fs.stat is not imported
-    const content = await readFile(filePath, 'utf8')
-    if (Buffer.byteLength(content, 'utf8') > maxSizeBytes) {
-      const lines = content.split('\n')
-      const keepLines = Math.max(1000, Math.floor(lines.length / 10))
-      const trimmed = lines.slice(-keepLines).join('\n')
-      const tmpPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
-      await writeFile(tmpPath, trimmed, 'utf8')
-      await rename(tmpPath, filePath)
-    }
+    if ((await stat(filePath)).size <= maxSizeBytes) return
+    const lines = (await readFile(filePath, 'utf8')).split('\n')
+    const trimmed = lines.slice(Math.floor(lines.length / 2)).join('\n')
+    const tmpPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+    await writeFile(tmpPath, trimmed, { encoding: 'utf8', mode: 0o600 })
+    await rename(tmpPath, filePath)
   } catch {
-    // Truncation is best-effort; don't fail the hook if it fails
+    // Truncation is best-effort; a concurrent hook may have already rotated it.
   }
 }
