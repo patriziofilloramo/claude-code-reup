@@ -33,6 +33,7 @@ export class ReupRefreshController implements vscode.Disposable {
   private intervalTimer: NodeJS.Timeout | null = null
   private lastRefreshStartedAt = 0
   private pendingRefreshReason: string | null = null
+  private pendingUrgent = false
   private refreshInFlight: Promise<void> | null = null
   private visible = false
   private readonly watcherDisposables: vscode.Disposable[] = []
@@ -93,16 +94,21 @@ export class ReupRefreshController implements vscode.Disposable {
     }
   }
 
-  requestRefresh(reason: string): void {
+  requestRefresh(reason: string, urgent = false): void {
     if (this.disposed || !this.visible) return
+    // An urgent request (attention markers, lock transitions) skips the
+    // throttle so a "needs input" flip shows within the debounce window; a
+    // later non-urgent event must not demote an already-urgent pending one.
+    this.pendingUrgent = urgent || (this.debounceTimer !== null && this.pendingUrgent)
     this.clearDebounce()
     const throttleDelay =
-      readRefreshMode() === 'watch'
+      !this.pendingUrgent && readRefreshMode() === 'watch'
         ? Math.max(0, this.lastRefreshStartedAt + WATCH_REFRESH_THROTTLE_MS - Date.now())
         : 0
     this.debounceTimer = setTimeout(
       () => {
         this.debounceTimer = null
+        this.pendingUrgent = false
         void this.refresh(reason)
       },
       Math.max(WATCH_DEBOUNCE_MS, throttleDelay)
@@ -154,11 +160,11 @@ export class ReupRefreshController implements vscode.Disposable {
 
   private startFilesystemWatchers(): void {
     this.addWatcher(getClaudeProjectsDirectory(), '**/*', 'Claude project')
-    this.addWatcher(join(getClaudeDirectory(), 'sessions'), '**/*', 'Claude session lock')
-    // Hook-captured markers drive the needs-input signal; without these the
-    // tree only notices attention on the next transcript or lock change.
-    this.addWatcher(join(getReupDirectory(), 'attention'), '**/*', 'Reup attention marker')
-    this.addWatcher(join(getReupDirectory(), 'activity'), '**/*', 'Reup work marker')
+    // Lock transitions and hook-captured markers drive the live/needs-input
+    // signals; they are rare and time-sensitive, so they bypass the throttle.
+    this.addWatcher(join(getClaudeDirectory(), 'sessions'), '**/*', 'Claude session lock', true)
+    this.addWatcher(join(getReupDirectory(), 'attention'), '**/*', 'Reup attention marker', true)
+    this.addWatcher(join(getReupDirectory(), 'activity'), '**/*', 'Reup work marker', true)
   }
 
   private startGitWatchers(): void {
@@ -171,23 +177,23 @@ export class ReupRefreshController implements vscode.Disposable {
     }
   }
 
-  private addWatcher(root: string, pattern: string, label: string): void {
+  private addWatcher(root: string, pattern: string, label: string, urgent = false): void {
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(root, pattern)
     )
     this.watchers.push(watcher)
     watcher.onDidChange(
-      () => this.requestRefresh(`${label} change`),
+      () => this.requestRefresh(`${label} change`, urgent),
       undefined,
       this.watcherDisposables
     )
     watcher.onDidCreate(
-      () => this.requestRefresh(`${label} create`),
+      () => this.requestRefresh(`${label} create`, urgent),
       undefined,
       this.watcherDisposables
     )
     watcher.onDidDelete(
-      () => this.requestRefresh(`${label} delete`),
+      () => this.requestRefresh(`${label} delete`, urgent),
       undefined,
       this.watcherDisposables
     )

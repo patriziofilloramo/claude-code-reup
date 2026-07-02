@@ -43,6 +43,14 @@ describe('VS Code Session Inspector', () => {
     expect(none).not.toContain('Project Memory')
   })
 
+  it('shows a needs-input pill instead of the active pill while waiting on the user', () => {
+    const preview = extractSessionPreview([])
+    const waiting = renderInspectorHtml(session({ isActive: true, needsInput: true }), preview)
+    expect(waiting).toContain('● needs input')
+    expect(waiting).toContain('pill-warning')
+    expect(waiting).not.toContain('● active')
+  })
+
   it('renders structured plan markdown instead of flattening it into one paragraph', () => {
     const preview = extractSessionPreview([
       JSON.stringify({

@@ -39,4 +39,15 @@ describe('VS Code refresh controller guardrails', () => {
     expect(source).toContain("join(getClaudeDirectory(), 'sessions')")
     expect(source).toContain('resolveGitDirectory')
   })
+
+  it('refreshes needs-input signals urgently, bypassing the watch throttle', () => {
+    // Attention/work markers and lock transitions flip the needs-input state;
+    // they are rare and time-sensitive, so they must skip the 5s throttle.
+    expect(source).toContain("join(getReupDirectory(), 'attention')")
+    expect(source).toContain("join(getReupDirectory(), 'activity')")
+    expect(source).toContain("'Claude session lock', true")
+    expect(source).toContain("'Reup attention marker', true")
+    expect(source).toContain("'Reup work marker', true")
+    expect(source).toContain('!this.pendingUrgent && readRefreshMode()')
+  })
 })
