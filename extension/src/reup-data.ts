@@ -3,7 +3,8 @@ import { isAbsolute, relative, resolve } from 'node:path'
 
 import { loadProjects } from '../../src/core/project/project-discovery.js'
 import { normalizePathForComparison } from '../../src/core/project/path-comparison.js'
-import { getActiveSessions } from '../../src/core/session/active-sessions.js'
+import { resolveLiveSessionSignals } from '../../src/core/session/live-attention.js'
+import type { LiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { Project, Session, SessionStatus } from '../../src/core/session/session-model.js'
 import { isValidSessionId } from '../../src/core/session/session-model.js'
 import {
@@ -52,7 +53,10 @@ export interface ExtensionSession {
   id: string
   isActive: boolean
   messageCount: number
+  /** True for any attention-worthy state: waiting on input or a triage status. */
   needsAttention: boolean
+  /** True when the live session is waiting on the user right now. */
+  needsInput: boolean
   planSummary: string | null
   primaryStatus: SessionStatus
   projectId: string
@@ -116,8 +120,9 @@ export class ReupDataSource {
   }
 
   async loadModel(options: LoadExtensionModelOptions): Promise<ExtensionSessionModel> {
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
-    const sessions = await createExtensionSessions(projects, activeSessionIds, options)
+    const projects = await loadProjects()
+    const signals = await resolveLiveSessionSignals(projects)
+    const sessions = await createExtensionSessions(projects, signals, options)
     const visibleProjectIds = new Set(sessions.map((session) => session.projectId))
     const extensionProjects = projects
       .filter((project) => visibleProjectIds.has(project.id))
@@ -136,8 +141,9 @@ export class ReupDataSource {
   }
 
   async loadCockpitModel(context: CockpitContext): Promise<ExtensionCockpitModel> {
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
-    const sessions = await createExtensionSessions(projects, activeSessionIds, {
+    const projects = await loadProjects()
+    const signals = await resolveLiveSessionSignals(projects)
+    const sessions = await createExtensionSessions(projects, signals, {
       includeArchived: context.includeArchived ?? false,
       includePreviewHints: false,
       workspacePath: context.workspaceRoots[0],
@@ -157,11 +163,12 @@ export class ReupDataSource {
   }
 
   async resolveSession(projectId: string, sessionId: string): Promise<ExtensionSession | null> {
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const projects = await loadProjects()
+    const signals = await resolveLiveSessionSignals(projects)
     const project = projects.find((candidate) => candidate.id === projectId)
     const session = project?.sessions.find((candidate) => candidate.id === sessionId)
     if (!project || !session || !isResumeVisibleSession(session)) return null
-    return createExtensionSession(project, session, activeSessionIds, {
+    return createExtensionSession(project, session, signals, {
       includePreviewHints: false,
     })
   }
@@ -175,7 +182,8 @@ export class ReupDataSource {
     includeArchived: boolean,
     onProgress?: (scanned: number, total: number) => void
   ): Promise<ExtensionContentMatch[]> {
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const projects = await loadProjects()
+    const signals = await resolveLiveSessionSignals(projects)
     const searchableProjects = projects.map((project) => ({
       ...project,
       sessions: project.sessions.filter((session) =>
@@ -186,7 +194,7 @@ export class ReupDataSource {
     return Promise.all(
       matches.map(async (match) => ({
         matchCount: match.matchCount,
-        session: await createExtensionSession(match.project, match.session, activeSessionIds, {
+        session: await createExtensionSession(match.project, match.session, signals, {
           includePreviewHints: false,
         }),
         snippet: match.snippet,
@@ -205,7 +213,8 @@ export class ReupDataSource {
     path: string,
     includeArchived: boolean
   ): Promise<ExtensionTouchedMatch[]> {
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const projects = await loadProjects()
+    const signals = await resolveLiveSessionSignals(projects)
     const matches = await searchTouchedFiles(path, projects, { includeArchived })
     return Promise.all(
       matches.map(async (match) => ({
@@ -213,7 +222,7 @@ export class ReupDataSource {
         lastTouchedAt: match.lastTouchedAt,
         matchCount: match.matchCount,
         matchedPaths: match.matchedPaths,
-        session: await createExtensionSession(match.project, match.session, activeSessionIds, {
+        session: await createExtensionSession(match.project, match.session, signals, {
           includePreviewHints: false,
         }),
       }))
@@ -263,7 +272,7 @@ export function isExtensionSessionVisible(
 
 async function createExtensionSessions(
   projects: Project[],
-  activeSessionIds: ReadonlySet<string>,
+  signals: LiveSessionSignals,
   options: LoadExtensionModelOptions
 ): Promise<ExtensionSession[]> {
   const rawRows = projects.flatMap((project) =>
@@ -274,7 +283,7 @@ async function createExtensionSessions(
 
   return Promise.all(
     rawRows.map(async ({ project, session }, index) =>
-      createExtensionSession(project, session, activeSessionIds, {
+      createExtensionSession(project, session, signals, {
         includePreviewHints: options.includePreviewHints && index < PREVIEW_HINT_LIMIT,
       })
     )
@@ -284,16 +293,17 @@ async function createExtensionSessions(
 async function createExtensionSession(
   project: Project,
   session: Session,
-  activeSessionIds: ReadonlySet<string>,
+  signals: LiveSessionSignals,
   options: { includePreviewHints: boolean }
 ): Promise<ExtensionSession> {
   const status = primaryStatus(session.signals)
+  const needsInput = signals.needsInputSessionIds.has(session.id)
   const previewHints = options.includePreviewHints
     ? await loadPreviewHints(project.id, session.id)
     : { planSummary: null, todoSummary: null }
 
   return {
-    advice: getResumeAdvice(session, activeSessionIds.has(session.id)),
+    advice: getResumeAdvice(session, signals.activeSessionIds.has(session.id)),
     archived: session.signals.archived,
     branch: session.gitBranch ?? null,
     branchDrift:
@@ -303,9 +313,10 @@ async function createExtensionSession(
     contextTokens: session.context.latestContextTokens,
     currentBranch: session.currentBranch ?? null,
     id: session.id,
-    isActive: activeSessionIds.has(session.id),
+    isActive: signals.activeSessionIds.has(session.id),
     messageCount: session.messageCount,
-    needsAttention: isAttentionStatus(status),
+    needsAttention: needsInput || isAttentionStatus(status),
+    needsInput,
     planSummary: previewHints.planSummary,
     primaryStatus: status,
     projectId: project.id,
@@ -318,8 +329,13 @@ async function createExtensionSession(
   }
 }
 
+/**
+ * Triage statuses that mark a session attention-worthy on their own. Live
+ * needs-input detection (`resolveLiveSessionSignals`) replaced the historical
+ * `interrupted` flag here — that flag is `reup cleanup`/`doctor` material.
+ */
 export function isAttentionStatus(status: SessionStatus): boolean {
-  return status === 'interrupted' || status === 'expiring' || status === 'path-missing'
+  return status === 'expiring' || status === 'path-missing'
 }
 
 function createExtensionProject(project: Project, sessions: ExtensionSession[]): ExtensionProject {

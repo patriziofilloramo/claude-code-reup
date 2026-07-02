@@ -22,11 +22,22 @@ export function formatRelativeTime(isoTimestamp: string | null): string {
   return isoTimestamp ? relativeTime(isoTimestamp) : 'unknown'
 }
 
-export function statusCodicon(status: SessionStatus, isActive: boolean): string {
-  return `$(${statusThemeIconId(status, isActive)})`
+export function statusCodicon(
+  status: SessionStatus,
+  isActive: boolean,
+  needsInput = false
+): string {
+  return `$(${statusThemeIconId(status, isActive, needsInput)})`
 }
 
-export function statusThemeIconId(status: SessionStatus, isActive: boolean): string {
+export function statusThemeIconId(
+  status: SessionStatus,
+  isActive: boolean,
+  needsInput = false
+): string {
+  // Waiting on the user outranks the live dot: an active session is exactly
+  // where a needs-input alert must stay visible.
+  if (needsInput) return 'bell-dot'
   if (isActive) return 'circle-filled'
   switch (status) {
     case 'expiring':
@@ -57,7 +68,12 @@ export function statusLabel(status: SessionStatus): string | null {
   }
 }
 
-export function statusThemeColorId(status: SessionStatus, isActive: boolean): string | undefined {
+export function statusThemeColorId(
+  status: SessionStatus,
+  isActive: boolean,
+  needsInput = false
+): string | undefined {
+  if (needsInput) return 'problemsWarningIcon.foreground'
   if (isActive) return 'testing.iconPassed'
   if (status === 'interrupted') return 'problemsWarningIcon.foreground'
   if (status === 'expiring' || status === 'path-missing') return 'problemsErrorIcon.foreground'

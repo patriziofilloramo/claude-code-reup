@@ -28,6 +28,7 @@ function session(overrides: Partial<ExtensionSession>): ExtensionSession {
     isActive: false,
     messageCount: 1,
     needsAttention: false,
+    needsInput: false,
     planSummary: null,
     primaryStatus: 'ok',
     projectId: 'project',
@@ -91,9 +92,11 @@ describe('VS Code extension data adapter helpers', () => {
     )
   })
 
-  it('keeps heavily compacted sessions out of the attention bucket', () => {
+  it('keeps triage-only statuses out of the attention bucket', () => {
     expect(isAttentionStatus('heavily-compacted')).toBe(false)
-    expect(isAttentionStatus('interrupted')).toBe(true)
+    // The historical interrupted flag sticks forever on stale transcripts;
+    // live needs-input detection replaced it as the attention driver.
+    expect(isAttentionStatus('interrupted')).toBe(false)
     expect(isAttentionStatus('expiring')).toBe(true)
     expect(isAttentionStatus('path-missing')).toBe(true)
   })

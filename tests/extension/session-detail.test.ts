@@ -108,6 +108,7 @@ function session(overrides: Partial<ExtensionSession> = {}): ExtensionSession {
     isActive: true,
     messageCount: 42,
     needsAttention: true,
+    needsInput: false,
     planSummary: null,
     primaryStatus: 'interrupted',
     projectId: 'p--demo',

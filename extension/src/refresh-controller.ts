@@ -5,6 +5,7 @@ import * as vscode from 'vscode'
 import {
   getClaudeDirectory,
   getClaudeProjectsDirectory,
+  getReupDirectory,
 } from '../../src/core/project/claude-paths.js'
 import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
 import { affectsReupConfiguration, getReupConfigurationValue } from './configuration.js'
@@ -154,6 +155,10 @@ export class ReupRefreshController implements vscode.Disposable {
   private startFilesystemWatchers(): void {
     this.addWatcher(getClaudeProjectsDirectory(), '**/*', 'Claude project')
     this.addWatcher(join(getClaudeDirectory(), 'sessions'), '**/*', 'Claude session lock')
+    // Hook-captured markers drive the needs-input signal; without these the
+    // tree only notices attention on the next transcript or lock change.
+    this.addWatcher(join(getReupDirectory(), 'attention'), '**/*', 'Reup attention marker')
+    this.addWatcher(join(getReupDirectory(), 'activity'), '**/*', 'Reup work marker')
   }
 
   private startGitWatchers(): void {

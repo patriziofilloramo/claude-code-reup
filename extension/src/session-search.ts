@@ -165,7 +165,7 @@ function metadataItem(session: ExtensionSession): SearchItem {
     ]
       .filter(Boolean)
       .join(' · '),
-    label: `${statusCodicon(session.primaryStatus, session.isActive)} ${session.title}`,
+    label: `${statusCodicon(session.primaryStatus, session.isActive, session.needsInput)} ${session.title}`,
     session,
   }
 }

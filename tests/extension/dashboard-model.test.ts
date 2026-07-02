@@ -86,6 +86,7 @@ function session(id: string, overrides: Partial<ExtensionSession> = {}): Extensi
     isActive: false,
     messageCount: 1,
     needsAttention: false,
+    needsInput: false,
     planSummary: null,
     primaryStatus: 'ok',
     projectId: 'shared',

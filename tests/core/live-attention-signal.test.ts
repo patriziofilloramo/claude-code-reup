@@ -11,6 +11,8 @@ import {
   readWorkSignalMarkers,
 } from '../../src/core/session/attention.js'
 import { getLiveSessionRecords } from '../../src/core/session/active-sessions.js'
+import { resolveLiveSessionSignals } from '../../src/core/session/live-attention.js'
+import type { Project } from '../../src/core/session/session-model.js'
 import {
   isAwaitingUserReply,
   readSessionTailActivity,
@@ -276,6 +278,37 @@ describe('live-attention-signal', () => {
     })
   })
 
+  describe('resolveLiveSessionSignals (shared by inbox and the VS Code extension)', () => {
+    it('flags a live session blocked on a plain-text question', async () => {
+      await createFakeLiveSession(SESSION_ID, 'idle')
+      await writeProjectTranscript('proj', SESSION_ID, transcriptWithTextMessage('Continue?'))
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)])
+      expect(signals.activeSessionIds.has(SESSION_ID)).toBe(true)
+      expect(signals.needsInputSessionIds.has(SESSION_ID)).toBe(true)
+    })
+
+    it('flags a live session with an active Notification marker', async () => {
+      await createFakeLiveSession(SESSION_ID, 'idle')
+      await writeProjectTranscript('proj', SESSION_ID, transcriptWithTextMessage('working on it.'))
+      await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'Notification', message: 'x' })
+      )
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)])
+      expect(signals.needsInputSessionIds.has(SESSION_ID)).toBe(true)
+    })
+
+    it('reports a working session as active but not needing input', async () => {
+      await createFakeLiveSession(SESSION_ID, 'busy')
+      await writeProjectTranscript('proj', SESSION_ID, transcriptWithPendingTool('Bash'))
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)])
+      expect(signals.activeSessionIds.has(SESSION_ID)).toBe(true)
+      expect(signals.needsInputSessionIds.has(SESSION_ID)).toBe(false)
+    })
+  })
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -302,6 +335,48 @@ describe('live-attention-signal', () => {
     const transcriptPath = join(claudeDirectory, 'transcript.jsonl')
     await writeFile(transcriptPath, contents)
     return transcriptPath
+  }
+
+  async function writeProjectTranscript(
+    projectId: string,
+    sessionId: string,
+    contents: string
+  ): Promise<void> {
+    const projectDirectory = join(claudeDirectory, 'projects', projectId)
+    await mkdir(projectDirectory, { recursive: true })
+    await writeFile(join(projectDirectory, `${sessionId}.jsonl`), contents)
+  }
+
+  function fakeProject(projectId: string, sessionId: string): Project {
+    return {
+      id: projectId,
+      path: '/workspace',
+      sessions: [
+        {
+          context: {
+            latestContextTokens: null,
+            latestModel: null,
+            latestOutputTokens: null,
+            models: [],
+          },
+          created: new Date().toISOString(),
+          id: sessionId,
+          messageCount: 1,
+          name: 'test session',
+          projectPath: '/workspace',
+          signals: {
+            analysisComplete: true,
+            archived: false,
+            compactionCount: 0,
+            expiresInDays: 20,
+            interrupted: false,
+            lastToolFailed: false,
+            pathExists: true,
+          },
+          updated: new Date().toISOString(),
+        },
+      ],
+    }
   }
 
   function isoAgo(milliseconds: number): string {

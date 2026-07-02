@@ -98,7 +98,7 @@ function touchedSessionPick(match: ExtensionTouchedMatch): vscode.QuickPickItem 
   return {
     description: `${match.session.projectName} · ${formatRelativeTime(match.lastTouchedAt ?? match.session.updated)}`,
     detail: [match.gitBranch ?? match.session.branch, edits].filter(Boolean).join(' · '),
-    label: `${statusCodicon(match.session.primaryStatus, match.session.isActive)} ${match.session.title}`,
+    label: `${statusCodicon(match.session.primaryStatus, match.session.isActive, match.session.needsInput)} ${match.session.title}`,
     session: match.session,
   }
 }
@@ -194,7 +194,7 @@ function sessionItem(match: ExtensionTouchedMatch): SessionItem {
     detail: [match.gitBranch ?? session.branch ?? session.currentBranch, edits]
       .filter(Boolean)
       .join(' · '),
-    label: `${statusCodicon(session.primaryStatus, session.isActive)} ${session.title}`,
+    label: `${statusCodicon(session.primaryStatus, session.isActive, session.needsInput)} ${session.title}`,
     session,
   }
 }

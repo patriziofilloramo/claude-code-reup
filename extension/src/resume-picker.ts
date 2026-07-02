@@ -100,8 +100,9 @@ async function showResumePicker(options: {
 
 function toQuickPickItem(session: ExtensionSession): SessionQuickPickItem {
   const flags = [
+    session.needsInput ? 'needs input' : null,
     session.isActive ? 'active' : null,
-    session.needsAttention ? session.primaryStatus : null,
+    session.needsAttention && !session.needsInput ? session.primaryStatus : null,
     session.todoSummary ? `todos ${session.todoSummary}` : null,
     session.planSummary ? 'plan' : null,
     formatContextTokens(session.contextTokens),
@@ -118,7 +119,7 @@ function toQuickPickItem(session: ExtensionSession): SessionQuickPickItem {
     ]
       .filter(Boolean)
       .join(' - '),
-    label: `${statusCodicon(session.primaryStatus, session.isActive)} ${session.title}`,
+    label: `${statusCodicon(session.primaryStatus, session.isActive, session.needsInput)} ${session.title}`,
     session,
   }
 }

@@ -1,15 +1,7 @@
-import { getLiveSessionRecords, mergeSessionLockStatuses } from '../core/session/active-sessions.js'
 import { loadProjects } from '../core/project/project-discovery.js'
-import {
-  combineWorkEvidence,
-  isAttentionActive,
-  readAttentionMarkers,
-  readWorkSignalMarkers,
-} from '../core/session/attention.js'
+import { resolveLiveSessionSignals } from '../core/session/live-attention.js'
 import type { Project, Session, SessionStatus } from '../core/session/session-model.js'
-import { sessionTranscriptPath } from '../core/session/session-preview.js'
 import { primaryStatus } from '../core/session/session-signals.js'
-import { isAwaitingUserReply, readSessionTailActivity } from '../core/session/session-tail.js'
 import { relativeTime } from '../utils/time.js'
 import { writeOutput } from './output.js'
 
@@ -38,51 +30,9 @@ const INBOX_ACTIONABLE_STATUSES: ReadonlySet<SessionStatus> = new Set(['expiring
 
 /** Prints non-archived sessions that are active, waiting on input, or need triage. */
 export async function showInbox(): Promise<void> {
-  const [projects, liveRecords, attentionMarkers, workSignals] = await Promise.all([
-    loadProjects(),
-    getLiveSessionRecords(),
-    readAttentionMarkers(),
-    readWorkSignalMarkers(),
-  ])
-  const lockStatuses = mergeSessionLockStatuses(liveRecords)
-  const workMarkerBySession = new Map(workSignals.map((marker) => [marker.sessionId, marker]))
-  const attentionBySession = new Map(attentionMarkers.map((marker) => [marker.sessionId, marker]))
-
-  const projectBySessionId = new Map<string, Project>()
-  for (const project of projects) {
-    for (const session of project.sessions) projectBySessionId.set(session.id, project)
-  }
-
-  // Same evidence rules as the TUI and the web activity strip: a hook marker
-  // survives only until the session shows life after it, and a turn that
-  // ended on an unanswered tool call counts as waiting even without a hook.
-  const needsInputIds = new Set<string>()
-  await Promise.all(
-    [...lockStatuses].map(async ([sessionId, lockStatus]) => {
-      const evidence = combineWorkEvidence(
-        lockStatus.status,
-        lockStatus.statusUpdatedAt,
-        workMarkerBySession.get(sessionId)
-      )
-      const project = projectBySessionId.get(sessionId)
-      const tail = project
-        ? await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
-        : null
-      const marker = attentionBySession.get(sessionId)
-      const lastActivityMs = tail?.lastEventAt ? Date.parse(tail.lastEventAt) : null
-      const markerActive =
-        marker !== undefined &&
-        isAttentionActive(marker, {
-          isLive: true,
-          lastActivityMs:
-            lastActivityMs !== null && Number.isFinite(lastActivityMs) ? lastActivityMs : null,
-          statusUpdatedAt: evidence.statusUpdatedAt,
-        })
-      if (markerActive || isAwaitingUserReply(evidence.status, tail)) needsInputIds.add(sessionId)
-    })
-  )
-
-  writeOutput(formatInbox(projects, new Set(lockStatuses.keys()), needsInputIds))
+  const projects = await loadProjects()
+  const signals = await resolveLiveSessionSignals(projects)
+  writeOutput(formatInbox(projects, signals.activeSessionIds, signals.needsInputSessionIds))
 }
 
 export function formatInbox(
