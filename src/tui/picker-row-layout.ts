@@ -1,23 +1,31 @@
+import { terminalWidthOrDefault } from '../cli/terminal-text.js'
+
+/**
+ * One-line picker row layout. The meta tiers describe reveal order, not visual
+ * order: `primaryMeta` appears first as the terminal widens, `tertiaryMeta`
+ * last. Each picker decides which datum goes in which tier and where the tier
+ * sits in the row; every visible tier renders a fixed-width column so rows
+ * stay aligned regardless of per-row content.
+ */
 export interface PickerRowLayout {
   coreMetaWidth: number
   primaryMetaWidth: number
   primaryWidth: number
-  quaternaryMetaWidth: number
   secondaryMetaWidth: number
   showPrimaryMeta: boolean
   showSecondaryMeta: boolean
   showTertiaryMeta: boolean
-  showQuaternaryMeta: boolean
   tertiaryMetaWidth: number
   width: number
 }
+
+const PICKER_DEFAULT_TERMINAL_WIDTH = 80
 
 const PICKER_ROW_WIDTHS = {
   minLayout: 56,
   primaryMeta: 64,
   secondaryMeta: 82,
   tertiaryMeta: 104,
-  quaternaryMeta: 120,
 } as const
 
 const PICKER_ROW_COLUMNS = {
@@ -26,27 +34,20 @@ const PICKER_ROW_COLUMNS = {
   primaryMeta: 7,
   secondaryMeta: 11,
   tertiaryMeta: 18,
-  quaternaryMeta: 8,
 } as const
 
 export function pickerRowLayoutForWidth(width: number | undefined): PickerRowLayout {
-  const terminalWidth =
-    typeof width === 'number' && Number.isSafeInteger(width) && width > 0 ? width : 80
+  const terminalWidth = terminalWidthOrDefault(width, PICKER_DEFAULT_TERMINAL_WIDTH)
   const resolvedWidth = Math.max(terminalWidth, PICKER_ROW_WIDTHS.minLayout)
   const showPrimaryMeta = terminalWidth >= PICKER_ROW_WIDTHS.primaryMeta
   const showSecondaryMeta = terminalWidth >= PICKER_ROW_WIDTHS.secondaryMeta
   const showTertiaryMeta = terminalWidth >= PICKER_ROW_WIDTHS.tertiaryMeta
-  const showQuaternaryMeta = terminalWidth >= PICKER_ROW_WIDTHS.quaternaryMeta
   const metadataWidth =
     (showPrimaryMeta ? PICKER_ROW_COLUMNS.primaryMeta : 0) +
     (showSecondaryMeta ? PICKER_ROW_COLUMNS.secondaryMeta : 0) +
-    (showTertiaryMeta ? PICKER_ROW_COLUMNS.tertiaryMeta : 0) +
-    (showQuaternaryMeta ? PICKER_ROW_COLUMNS.quaternaryMeta : 0)
+    (showTertiaryMeta ? PICKER_ROW_COLUMNS.tertiaryMeta : 0)
   const metadataGaps =
-    Number(showPrimaryMeta) +
-    Number(showSecondaryMeta) +
-    Number(showTertiaryMeta) +
-    Number(showQuaternaryMeta)
+    Number(showPrimaryMeta) + Number(showSecondaryMeta) + Number(showTertiaryMeta)
   const primaryMaxWidth =
     terminalWidth >= PICKER_ROW_WIDTHS.tertiaryMeta
       ? 72
@@ -66,12 +67,10 @@ export function pickerRowLayoutForWidth(width: number | undefined): PickerRowLay
         resolvedWidth - PICKER_ROW_COLUMNS.chromeReserve - metadataWidth - metadataGaps
       )
     ),
-    quaternaryMetaWidth: PICKER_ROW_COLUMNS.quaternaryMeta,
     secondaryMetaWidth: PICKER_ROW_COLUMNS.secondaryMeta,
     showPrimaryMeta,
     showSecondaryMeta,
     showTertiaryMeta,
-    showQuaternaryMeta,
     tertiaryMetaWidth: PICKER_ROW_COLUMNS.tertiaryMeta,
     width: resolvedWidth,
   }

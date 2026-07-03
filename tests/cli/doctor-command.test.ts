@@ -82,4 +82,38 @@ describe('formatDoctorReport', () => {
     expect(output).toContain('Next: Leave them alone unless sessions are missing')
     expect(output).toContain('2d remaining')
   })
+
+  it('does not claim "0d remaining" when the expiry signal is unknown', () => {
+    const report = emptyReport()
+    report.expiring.push({
+      context: {
+        latestContextTokens: null,
+        latestModel: null,
+        latestOutputTokens: null,
+        models: [],
+      },
+      created: '2026-06-11T00:00:00.000Z',
+      id: '10000000-0000-0000-0000-000000000001',
+      messageCount: 4,
+      name: 'Review release',
+      primaryStatus: 'expiring',
+      projectId: 'project',
+      projectPath: '/workspace',
+      signals: {
+        analysisComplete: true,
+        archived: false,
+        compactionCount: 0,
+        expiresInDays: null,
+        interrupted: false,
+        lastToolFailed: false,
+        pathExists: true,
+      },
+      updated: '2026-06-11T00:00:00.000Z',
+    })
+
+    const output = formatDoctorReport(report)
+
+    expect(output).not.toContain('0d remaining')
+    expect(output).toContain('expiry unknown')
+  })
 })

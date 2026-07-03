@@ -136,10 +136,7 @@ export function ConfigApp({
 
     if (currentTab === 'Integrations') {
       await handleIntegrationAction()
-      return
     }
-
-    return
   }
 
   async function handleIntegrationAction(): Promise<void> {

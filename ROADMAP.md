@@ -240,7 +240,9 @@ Improvements shipped after M8:
       named conditions; `resolveVisibility()` in `App.tsx` replaces scattered per-command checks;
       HelpOverlay and CommandPalette both derive from the same source of truth
 - [x] **3-state startup cleanup** — `autoCleanupOnStart: 'off' | 'on' | 'auto'`; `auto` silently
-      archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs
+      archives only high-confidence candidates; boolean migration in `readUserPrefsSync()` for old prefs.
+      _Superseded 2026-07-03: startup cleanup and the Features config tab were removed entirely
+      (`reup cleanup` remains as an explicit, manual, reversible command)._
 - [x] **Config UI style unification** — Integrations and Features tabs show status bullet inline
       with title (consistent across all tabs); Features tab describes each state in plain text
 - [x] **`reup --help` fixes** — cleanup is described consistently as reversible archiving; removed `[key=val]`

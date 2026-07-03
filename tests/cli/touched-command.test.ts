@@ -234,4 +234,44 @@ describe('formatTouchedTable', () => {
     )
     expect(formatTouchedTable('session-query', results, 42)).not.toContain('...')
   })
+
+  it('preserves the filename when a compact row truncates a long touched path', () => {
+    const results = [
+      result({
+        gitBranch: 'feature/very-long-responsive-terminal-layout-branch',
+        matchedPaths: [
+          '/workspace/claude-sessions-manager/src/core/session/very/deeply/nested/directory/important-target-file.ts',
+        ],
+        projectName: 'claude-sessions-manager-longer-name',
+        projectPath: '/workspace/claude-sessions-manager',
+        sessionName: 'Session',
+      }),
+    ]
+
+    const output = formatTouchedTable('important-target-file', results, 75)
+    expectLinesWithinWidth(output, 75)
+    expect(output).toContain('important-target-file.ts')
+    expect(output).not.toContain('src/core/session')
+  })
+
+  it('does not stretch the session column past its content width in a wide terminal', () => {
+    const results = [
+      result({
+        gitBranch: null,
+        matchedPaths: ['/workspace/p/a.ts'],
+        projectName: 'p',
+        projectPath: '/workspace/p',
+        sessionName: 'short',
+      }),
+    ]
+
+    const headerLine = formatTouchedTable('a.ts', results, 200).split('\n')[0] as string
+    const sessionColumnStart = headerLine.indexOf('SESSION')
+    const whenColumnStart = headerLine.indexOf('WHEN')
+    expect(sessionColumnStart).toBeGreaterThanOrEqual(0)
+    expect(whenColumnStart).toBeGreaterThanOrEqual(0)
+    // With no cap the session column would swallow nearly all 200 columns;
+    // capped at content width it stays close to its natural size.
+    expect(whenColumnStart - sessionColumnStart).toBeLessThan(30)
+  })
 })

@@ -16,6 +16,8 @@ import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import { relativeTime } from '../utils/time.js'
 import { failCommand, writeOutput } from './output.js'
 import {
+  SESSION_ACTIVE_MARKER,
+  SESSION_IDLE_MARKER,
   compactRelativeTimeLabel,
   formatSingleLineRow,
   padVisibleEnd,
@@ -38,8 +40,6 @@ const ANSI_COLORS: Record<string, string> = {
   '32': '\u001b[32m',
   '90': '\u001b[90m',
 }
-const ACTIVE_MARKER = '\u25cf'
-const IDLE_MARKER = '\u25cb'
 const LIST_TABLE_MIN_SESSION_WIDTH = 18
 const LIST_PROJECT_MIN_WIDTH = 10
 const LIST_PROJECT_MAX_WIDTH = 24
@@ -311,8 +311,8 @@ export function formatSessionTable(
     project: session.projectName,
     session: session.alias ?? session.name,
     state: session.active
-      ? colorize(ACTIVE_MARKER, '32', useColor)
-      : colorize(IDLE_MARKER, '90', useColor),
+      ? colorize(SESSION_ACTIVE_MARKER, '32', useColor)
+      : colorize(SESSION_IDLE_MARKER, '90', useColor),
     updated: compactRelativeTimeLabel(relativeTime(session.updated)),
   }))
   const width = terminalWidthOrDefault(terminalWidth)
@@ -412,30 +412,36 @@ function sessionTableWidths(
     LIST_PROJECT_MAX_WIDTH,
     Math.max(7, ...rows.map((row) => visibleLength(row.project)))
   )
+  const naturalSession = Math.max(
+    LIST_TABLE_MIN_SESSION_WIDTH,
+    ...rows.map((row) => visibleLength(row.session))
+  )
   const separators = 2 * 4
   const fixedWithoutProject = state + id + updated + separators
   let project = naturalProject
-  let session = width - fixedWithoutProject - project
+  let sessionBudget = width - fixedWithoutProject - project
 
-  if (session < LIST_TABLE_MIN_SESSION_WIDTH) {
-    const reclaimed = LIST_TABLE_MIN_SESSION_WIDTH - session
+  if (sessionBudget < LIST_TABLE_MIN_SESSION_WIDTH) {
+    const reclaimed = LIST_TABLE_MIN_SESSION_WIDTH - sessionBudget
     project = Math.max(LIST_PROJECT_MIN_WIDTH, project - reclaimed)
-    session = width - fixedWithoutProject - project
+    sessionBudget = width - fixedWithoutProject - project
   }
-  if (session < LIST_TABLE_MIN_SESSION_WIDTH) return null
-  return { id, project, session, state, updated }
+  if (sessionBudget < LIST_TABLE_MIN_SESSION_WIDTH) return null
+  // Cap at content width so short tables do not stretch to the full terminal.
+  return { id, project, session: Math.min(sessionBudget, naturalSession), state, updated }
 }
 
 function formatSessionTableRow(
   row: { id: string; project: string; session: string; state: string; updated: string },
   widths: { id: number; project: number; session: number; state: number; updated: number }
 ): string {
+  // The last column stays unpadded so rows carry no trailing whitespace.
   return [
     padVisibleEnd(truncateVisible(row.state, widths.state), widths.state),
     padVisibleEnd(truncateVisible(row.project, widths.project), widths.project),
     padVisibleEnd(truncateVisible(row.session, widths.session), widths.session),
     padVisibleEnd(truncateVisible(row.updated, widths.updated), widths.updated),
-    padVisibleEnd(truncateVisible(row.id, widths.id), widths.id),
+    truncateVisible(row.id, widths.id),
   ].join('  ')
 }
 

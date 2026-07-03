@@ -78,7 +78,9 @@ function doctorSections(report: DiagnosticsReport): DoctorSection[] {
       items: report.expiring.map((item) =>
         formatItem(item.id.slice(0, 8), [
           item.alias ?? item.name,
-          `${item.signals.expiresInDays ?? 0}d remaining`,
+          item.signals.expiresInDays === null
+            ? 'expiry unknown'
+            : `${item.signals.expiresInDays}d remaining`,
           item.projectPath,
         ])
       ),

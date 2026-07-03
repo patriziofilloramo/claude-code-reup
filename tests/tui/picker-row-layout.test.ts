@@ -13,7 +13,6 @@ describe('TUI picker row layout', () => {
       showPrimaryMeta: false,
       showSecondaryMeta: false,
       showTertiaryMeta: false,
-      showQuaternaryMeta: false,
       width: 56,
     })
     expect(pickerRowLayoutForWidth(82)).toMatchObject({
@@ -23,11 +22,10 @@ describe('TUI picker row layout', () => {
       showTertiaryMeta: false,
     })
     expect(pickerRowLayoutForWidth(120)).toMatchObject({
-      primaryWidth: 65,
+      primaryWidth: 72,
       showPrimaryMeta: true,
       showSecondaryMeta: true,
       showTertiaryMeta: true,
-      showQuaternaryMeta: true,
       width: 120,
     })
   })

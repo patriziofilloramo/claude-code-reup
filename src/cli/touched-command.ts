@@ -16,7 +16,8 @@ import { readCurrentWorkingDirectory } from '../utils/process.js'
 import { relativeTime } from '../utils/time.js'
 import { failCommand, writeOutput } from './output.js'
 import {
-  clipVisible,
+  SESSION_ACTIVE_MARKER,
+  SESSION_IDLE_MARKER,
   compactRelativeTimeLabel,
   formatSingleLineRow,
   padVisibleEnd,
@@ -59,8 +60,6 @@ export interface TouchedResultDocument {
 export type TouchedOptionResult = { options: TouchedOptions } | { error: string }
 
 const USAGE = 'usage: reup touched [path] [--json] [--archived] [--limit <count>]'
-const ACTIVE_MARKER = '\u25cf'
-const IDLE_MARKER = '\u25cb'
 const TOUCHED_TABLE_MIN_SESSION_WIDTH = 16
 const TOUCHED_TABLE_MIN_TOUCHED_WIDTH = 12
 const TOUCHED_PROJECT_MAX_WIDTH = 18
@@ -274,7 +273,7 @@ export function formatTouchedTable(
 
   const rows = results.map((result) => ({
     id: result.sessionId.slice(0, 8),
-    state: result.active ? ACTIVE_MARKER : IDLE_MARKER,
+    state: result.active ? SESSION_ACTIVE_MARKER : SESSION_IDLE_MARKER,
     project: result.projectName,
     session: result.sessionName,
     touched: showTouched ? describeTouched(result) : '',
@@ -381,6 +380,10 @@ function touchedTableWidths(
       )
     : 0
   const when = Math.max(4, ...rows.map((row) => visibleLength(row.when)))
+  const naturalSession = Math.max(
+    TOUCHED_TABLE_MIN_SESSION_WIDTH,
+    ...rows.map((row) => visibleLength(row.session))
+  )
   const columnCount = 4 + (showTouched ? 1 : 0) + (showBranch ? 1 : 0)
   const separators = 2 * (columnCount - 1)
   const fixed = state + project + branch + when + separators
@@ -390,15 +393,16 @@ function touchedTableWidths(
         Math.max(7, ...rows.map((row) => visibleLength(row.touched)))
       )
     : 0
-  let session = width - fixed - touched
+  let sessionBudget = width - fixed - touched
 
-  if (showTouched && session < TOUCHED_TABLE_MIN_SESSION_WIDTH) {
-    const reclaimed = TOUCHED_TABLE_MIN_SESSION_WIDTH - session
+  if (showTouched && sessionBudget < TOUCHED_TABLE_MIN_SESSION_WIDTH) {
+    const reclaimed = TOUCHED_TABLE_MIN_SESSION_WIDTH - sessionBudget
     touched = Math.max(TOUCHED_TABLE_MIN_TOUCHED_WIDTH, touched - reclaimed)
-    session = width - fixed - touched
+    sessionBudget = width - fixed - touched
   }
-  if (session < TOUCHED_TABLE_MIN_SESSION_WIDTH) return null
-  return { branch, project, session, state, touched, when }
+  if (sessionBudget < TOUCHED_TABLE_MIN_SESSION_WIDTH) return null
+  // Cap at content width so short tables do not stretch to the full terminal.
+  return { branch, project, session: Math.min(sessionBudget, naturalSession), state, touched, when }
 }
 
 function formatTouchedRow(
@@ -432,7 +436,8 @@ function formatTouchedRow(
   if (showBranch) {
     cells.push(padVisibleEnd(truncateVisible(row.branch, widths.branch), widths.branch))
   }
-  cells.push(padVisibleEnd(truncateVisible(row.when, widths.when), widths.when))
+  // The last column stays unpadded so rows carry no trailing whitespace.
+  cells.push(truncateVisible(row.when, widths.when))
   return cells.join('  ')
 }
 
@@ -453,8 +458,9 @@ function formatCompactTouchedRow(
   return formatSingleLineRow({
     coreParts: [row.id],
     metadataParts: [
+      // Truncate from the start so the filename (the useful tail) survives.
       showTouched && width >= TOUCHED_COMPACT_PATH_MIN_WIDTH
-        ? clipVisible(row.touched, TOUCHED_PATH_MAX_WIDTH)
+        ? truncateVisibleStart(row.touched, TOUCHED_PATH_MAX_WIDTH)
         : '',
       width >= TOUCHED_COMPACT_PROJECT_MIN_WIDTH ? row.project : '',
       showBranch && width >= TOUCHED_COMPACT_BRANCH_MIN_WIDTH ? row.branch : '',
