@@ -15,6 +15,16 @@ import { log } from '../utils/logger.js'
 import { readCurrentWorkingDirectory } from '../utils/process.js'
 import { relativeTime } from '../utils/time.js'
 import { failCommand, writeOutput } from './output.js'
+import {
+  clipVisible,
+  compactRelativeTimeLabel,
+  formatSingleLineRow,
+  padVisibleEnd,
+  terminalWidthOrDefault,
+  truncateVisible,
+  truncateVisibleStart,
+  visibleLength,
+} from './terminal-text.js'
 
 export const TOUCHED_SCHEMA_VERSION = 1
 
@@ -49,6 +59,17 @@ export interface TouchedResultDocument {
 export type TouchedOptionResult = { options: TouchedOptions } | { error: string }
 
 const USAGE = 'usage: reup touched [path] [--json] [--archived] [--limit <count>]'
+const ACTIVE_MARKER = '\u25cf'
+const IDLE_MARKER = '\u25cb'
+const TOUCHED_TABLE_MIN_SESSION_WIDTH = 16
+const TOUCHED_TABLE_MIN_TOUCHED_WIDTH = 12
+const TOUCHED_PROJECT_MAX_WIDTH = 18
+const TOUCHED_BRANCH_MAX_WIDTH = 18
+const TOUCHED_PATH_MAX_WIDTH = 40
+const TOUCHED_COMPACT_PATH_MIN_WIDTH = 64
+const TOUCHED_COMPACT_PROJECT_MIN_WIDTH = 80
+const TOUCHED_COMPACT_BRANCH_MIN_WIDTH = 96
+const TOUCHED_COMPACT_WHEN_MIN_WIDTH = 56
 
 /** Parses `reup touched` arguments without touching process-global state. */
 export function parseTouchedOptions(commandArguments: string[]): TouchedOptionResult {
@@ -119,7 +140,7 @@ export async function runTouchedCommand(commandArguments: string[]): Promise<voi
     console.log(JSON.stringify(createTouchedDocument(options.query, results), null, 2))
     return
   }
-  writeOutput(formatTouchedTable(options.query, results))
+  writeOutput(formatTouchedTable(options.query, results, process.stdout.columns))
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +258,11 @@ export function createTouchedDocument(
  * edit and the branch it happened on. The TOUCHED column appears only when it
  * adds information beyond the query; BRANCH only when a branch was recorded.
  */
-export function formatTouchedTable(query: string, results: TouchedResult[]): string {
+export function formatTouchedTable(
+  query: string,
+  results: TouchedResult[],
+  terminalWidth?: number
+): string {
   if (results.length === 0) return `No sessions touched a file matching "${query}".`
 
   const queryKey = pathMatchKey(query)
@@ -248,25 +273,25 @@ export function formatTouchedTable(query: string, results: TouchedResult[]): str
   const showBranch = results.some((result) => result.gitBranch !== null)
 
   const rows = results.map((result) => ({
-    // Plain marker (no ANSI) keeps every column aligned regardless of colour.
-    state: result.active ? '●' : ' ',
-    project: truncate(result.projectName, 20),
-    session: truncate(result.sessionName, 32),
-    touched: showTouched ? truncate(describeTouched(result), 40) : '',
-    branch: showBranch ? truncate(result.gitBranch ?? '', 24) : '',
-    when: relativeTime(result.lastTouchedAt),
+    id: result.sessionId.slice(0, 8),
+    state: result.active ? ACTIVE_MARKER : IDLE_MARKER,
+    project: result.projectName,
+    session: result.sessionName,
+    touched: showTouched ? describeTouched(result) : '',
+    branch: showBranch ? (result.gitBranch ?? '') : '',
+    when: compactRelativeTimeLabel(relativeTime(result.lastTouchedAt)),
   }))
-  const widths = {
-    state: 1,
-    project: Math.max(7, ...rows.map((row) => row.project.length)),
-    session: Math.max(7, ...rows.map((row) => row.session.length)),
-    touched: showTouched ? Math.max(7, ...rows.map((row) => row.touched.length)) : 0,
-    branch: showBranch ? Math.max(6, ...rows.map((row) => row.branch.length)) : 0,
-    when: Math.max(4, ...rows.map((row) => row.when.length)),
+  const width = terminalWidthOrDefault(terminalWidth)
+  const widths = touchedTableWidths(rows, width, showTouched, showBranch)
+  if (widths === null) {
+    return rows
+      .map((row) => formatCompactTouchedRow(row, width, showTouched, showBranch))
+      .join('\n')
   }
-  const header = formatRow(
+
+  const header = formatTouchedRow(
     {
-      state: ' ',
+      state: 'S',
       project: 'PROJECT',
       session: 'SESSION',
       touched: 'TOUCHED',
@@ -277,7 +302,10 @@ export function formatTouchedTable(query: string, results: TouchedResult[]): str
     showTouched,
     showBranch
   )
-  return [header, ...rows.map((row) => formatRow(row, widths, showTouched, showBranch))].join('\n')
+  return [
+    header,
+    ...rows.map((row) => formatTouchedRow(row, widths, showTouched, showBranch)),
+  ].join('\n')
 }
 
 function toTouchedResult(
@@ -320,12 +348,60 @@ function displayNameFromPath(path: string): string {
   return path.split(/[/\\]/).filter(Boolean).pop() ?? path
 }
 
-function truncate(value: string, maximumLength: number): string {
-  const compact = value.replace(/\s+/g, ' ').trim()
-  return compact.length <= maximumLength ? compact : `${compact.slice(0, maximumLength - 1)}…`
+function touchedTableWidths(
+  rows: Array<{
+    state: string
+    id: string
+    project: string
+    session: string
+    touched: string
+    branch: string
+    when: string
+  }>,
+  width: number,
+  showTouched: boolean,
+  showBranch: boolean
+): {
+  state: number
+  project: number
+  session: number
+  touched: number
+  branch: number
+  when: number
+} | null {
+  const state = 1
+  const project = Math.min(
+    TOUCHED_PROJECT_MAX_WIDTH,
+    Math.max(7, ...rows.map((row) => visibleLength(row.project)))
+  )
+  const branch = showBranch
+    ? Math.min(
+        TOUCHED_BRANCH_MAX_WIDTH,
+        Math.max(6, ...rows.map((row) => visibleLength(row.branch)))
+      )
+    : 0
+  const when = Math.max(4, ...rows.map((row) => visibleLength(row.when)))
+  const columnCount = 4 + (showTouched ? 1 : 0) + (showBranch ? 1 : 0)
+  const separators = 2 * (columnCount - 1)
+  const fixed = state + project + branch + when + separators
+  let touched = showTouched
+    ? Math.min(
+        TOUCHED_PATH_MAX_WIDTH,
+        Math.max(7, ...rows.map((row) => visibleLength(row.touched)))
+      )
+    : 0
+  let session = width - fixed - touched
+
+  if (showTouched && session < TOUCHED_TABLE_MIN_SESSION_WIDTH) {
+    const reclaimed = TOUCHED_TABLE_MIN_SESSION_WIDTH - session
+    touched = Math.max(TOUCHED_TABLE_MIN_TOUCHED_WIDTH, touched - reclaimed)
+    session = width - fixed - touched
+  }
+  if (session < TOUCHED_TABLE_MIN_SESSION_WIDTH) return null
+  return { branch, project, session, state, touched, when }
 }
 
-function formatRow(
+function formatTouchedRow(
   row: {
     state: string
     project: string
@@ -346,12 +422,47 @@ function formatRow(
   showBranch: boolean
 ): string {
   const cells = [
-    row.state.padEnd(widths.state),
-    row.project.padEnd(widths.project),
-    row.session.padEnd(widths.session),
+    padVisibleEnd(truncateVisible(row.state, widths.state), widths.state),
+    padVisibleEnd(truncateVisible(row.project, widths.project), widths.project),
+    padVisibleEnd(truncateVisible(row.session, widths.session), widths.session),
   ]
-  if (showTouched) cells.push(row.touched.padEnd(widths.touched))
-  if (showBranch) cells.push(row.branch.padEnd(widths.branch))
-  cells.push(row.when.padEnd(widths.when))
+  if (showTouched) {
+    cells.push(padVisibleEnd(truncateVisibleStart(row.touched, widths.touched), widths.touched))
+  }
+  if (showBranch) {
+    cells.push(padVisibleEnd(truncateVisible(row.branch, widths.branch), widths.branch))
+  }
+  cells.push(padVisibleEnd(truncateVisible(row.when, widths.when), widths.when))
   return cells.join('  ')
+}
+
+function formatCompactTouchedRow(
+  row: {
+    state: string
+    id: string
+    project: string
+    session: string
+    touched: string
+    branch: string
+    when: string
+  },
+  width: number,
+  showTouched: boolean,
+  showBranch: boolean
+): string {
+  return formatSingleLineRow({
+    coreParts: [row.id],
+    metadataParts: [
+      showTouched && width >= TOUCHED_COMPACT_PATH_MIN_WIDTH
+        ? clipVisible(row.touched, TOUCHED_PATH_MAX_WIDTH)
+        : '',
+      width >= TOUCHED_COMPACT_PROJECT_MIN_WIDTH ? row.project : '',
+      showBranch && width >= TOUCHED_COMPACT_BRANCH_MIN_WIDTH ? row.branch : '',
+      width >= TOUCHED_COMPACT_WHEN_MIN_WIDTH ? row.when : '',
+    ],
+    prefix: `${row.state} `,
+    primary: row.session,
+    primaryMinWidth: TOUCHED_TABLE_MIN_SESSION_WIDTH,
+    width,
+  })
 }

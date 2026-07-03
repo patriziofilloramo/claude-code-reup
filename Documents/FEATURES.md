@@ -32,7 +32,7 @@ session health — they show you titles and dates; Reup shows you _state_.
 | **Branch drift detection**    | Compares the branch recorded in the transcript against the current git HEAD in the session's working directory. Warns before you resume into the wrong branch. Shown in both TUI and web.                                                                                                               |
 | **Remote-active heuristic**   | Sessions with no local lock file but a transcript written within the last 5 minutes show a hollow dot `◌` instead of `●`. Catches sessions running in another terminal or on another machine — without any network access.                                                                              |
 | **Lost & Found**              | Automatically surfaces three categories: sessions approaching Claude Code's cleanup window (expiring), sessions whose recorded path no longer exists (path-missing), and transcripts present on disk but absent from any project index (orphaned). Available in the web UI panel and via `reup doctor`. |
-| **reup doctor**               | Non-destructive, local-only diagnosis command. Checks for stale sidecar locks, broken or absent indices, orphaned transcripts, and missing project paths. Every finding includes an explanation and a suggested action.                                                                                 |
+| **reup doctor**               | Non-destructive, local-only diagnosis command. Checks for stale sidecar locks, broken or absent indices, orphaned transcripts, missing project paths, and sessions nearing Claude cleanup. Every finding includes an explanation and a suggested action.                                                |
 | **Index corruption recovery** | When `sessions-index.json` is absent or corrupt, Reup walks the transcript directory and reconstructs session metadata from raw JSONL events. Index corruption does not hide sessions — they surface automatically. _This is a gap across all tools reviewed in the 2026 competitive survey._           |
 
 **Unique to Reup:** all of the above. Branch drift detection, the remote-active
@@ -212,8 +212,8 @@ feature is not shipped, advertised, or kept dormant in the codebase.
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Zero-config defaults**   | Works out of the box with `reup`. No config file required.                                                                                          |
 | **reup config CLI**        | `reup config get/set/reset <key>` reads and writes `~/.claude/reup/prefs.json`.                                                                     |
-| **reup config TUI**        | Keyboard-navigable Interface, Integrations, and Features tabs. Integrations show their exact effect and are reversible from within the UI.          |
-| **Persistent preferences** | Theme, integration state, and startup-cleanup mode are persisted across invocations.                                                                |
+| **reup config TUI**        | Keyboard-navigable Interface and Integrations tabs. Integrations show their exact effect and are reversible from within the UI.                     |
+| **Persistent preferences** | Theme and integration state are persisted across invocations.                                                                                       |
 | **Theme system**           | Dark (default), Light, and Terminal (phosphor) themes. Single design-token layer — switching themes requires no code changes, only a new token set. |
 | **i18n groundwork**        | TUI user-facing strings centralised to `src/config/labels.ts` and guarded by a lint rule. Adding a language becomes a data file, not a code change. |
 

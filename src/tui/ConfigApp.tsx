@@ -5,7 +5,6 @@ import { Box, Text, render, useApp, useInput } from 'ink'
 import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { ThemeName } from '../config/theme-tokens.js'
-import type { AutoCleanup } from '../core/user-prefs.js'
 import { readUserPrefs, setUserPref } from '../core/user-prefs.js'
 import {
   isUsageStatusLineConfigured,
@@ -19,13 +18,12 @@ import {
 } from '../core/session/attention-hooks-integration.js'
 import { copyToClipboard } from '../utils/system.js'
 
-const TABS = ['Interface', 'Integrations', 'Features'] as const
+const TABS = ['Interface', 'Integrations'] as const
 type Tab = (typeof TABS)[number]
 
 const TAB_CURSOR_MAX: Record<Tab, number> = {
   Interface: 2,
   Integrations: 4,
-  Features: 0,
 }
 
 /** Integrations tab rows: 0 = usage capture, 1 = attention alerts, 2+ = shells. */
@@ -76,7 +74,6 @@ export function ConfigApp({
   const [tabIndex, setTabIndex] = useState(initialTabIndex)
   const [cursor, setCursor] = useState(0)
   const [theme, setTheme] = useState<ThemeName>('dark')
-  const [autoCleanupOnStart, setAutoCleanupOnStart] = useState<AutoCleanup>('off')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
   const [attentionConfigured, setAttentionConfigured] = useState<boolean | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -86,7 +83,6 @@ export function ConfigApp({
   useEffect(() => {
     void readUserPrefs().then((prefs) => {
       setTheme(prefs.theme)
-      setAutoCleanupOnStart(prefs.autoCleanupOnStart)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
     void isAttentionHookConfigured().then(setAttentionConfigured)
@@ -143,7 +139,7 @@ export function ConfigApp({
       return
     }
 
-    await handleFeaturesAction()
+    return
   }
 
   async function handleIntegrationAction(): Promise<void> {
@@ -219,14 +215,6 @@ export function ConfigApp({
     }
   }
 
-  async function handleFeaturesAction(): Promise<void> {
-    const cycle: Record<AutoCleanup, AutoCleanup> = { off: 'on', on: 'auto', auto: 'off' }
-    const next = cycle[autoCleanupOnStart]
-    await setUserPref('autoCleanupOnStart', next)
-    setAutoCleanupOnStart(next)
-    setStatusMsg({ ok: true, text: `Cleanup on start: ${next}` })
-  }
-
   return (
     <Box flexDirection="column">
       <Box gap={1} paddingX={1} paddingTop={1}>
@@ -259,9 +247,6 @@ export function ConfigApp({
             cursor={cursor}
             usageConfigured={usageConfigured}
           />
-        )}
-        {currentTab === 'Features' && (
-          <FeaturesTab autoCleanupOnStart={autoCleanupOnStart} cursor={cursor} />
         )}
       </Box>
 
@@ -406,37 +391,6 @@ function IntegrationsTab({
             )
           })}
         </Box>
-      </FeatureCard>
-    </Box>
-  )
-}
-
-function FeaturesTab({
-  autoCleanupOnStart,
-  cursor,
-}: {
-  autoCleanupOnStart: AutoCleanup
-  cursor: number
-}) {
-  const cleanupLabel =
-    autoCleanupOnStart === 'on' ? 'on' : autoCleanupOnStart === 'auto' ? 'auto' : 'off'
-
-  return (
-    <Box flexDirection="column" gap={1}>
-      <FeatureCard focused={cursor === 0}>
-        <SelectableRow
-          active={autoCleanupOnStart !== 'off'}
-          description={
-            autoCleanupOnStart === 'off'
-              ? 'No automatic cleanup. Run `reup cleanup` manually.'
-              : autoCleanupOnStart === 'auto'
-                ? 'Archives high-confidence cleanup candidates automatically on startup.'
-                : 'Shows cleanup picker before opening reup; you choose what to archive.'
-          }
-          focused={cursor === 0}
-          label="Cleanup on start"
-          status={cleanupLabel}
-        />
       </FeatureCard>
     </Box>
   )

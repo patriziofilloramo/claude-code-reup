@@ -4,29 +4,20 @@ import { join } from 'node:path'
 import type { ThemeName } from '../config/theme-tokens.js'
 import { getReupDirectory } from './project/claude-paths.js'
 
-export type AutoCleanup = 'off' | 'on' | 'auto'
-
 export interface UserPrefs {
-  autoCleanupOnStart: AutoCleanup
   theme: ThemeName
 }
 
 const DEFAULT_PREFS: UserPrefs = {
-  autoCleanupOnStart: 'off',
   theme: 'dark',
 }
 
-const VALID_AUTO_CLEANUP_VALUES = new Set<AutoCleanup>(['off', 'on', 'auto'])
 const VALID_THEME_NAMES = new Set<ThemeName>(['dark', 'light', 'terminal'])
 
 export const PREF_SPECS: Record<keyof UserPrefs, { description: string; values: string[] }> = {
   theme: {
     description: 'Color theme for TUI and web UI',
     values: ['dark', 'light', 'terminal'],
-  },
-  autoCleanupOnStart: {
-    description: 'Cleanup mode on startup: off=disabled, on=show picker, auto=silent archive',
-    values: ['off', 'on', 'auto'],
   },
 }
 
@@ -38,23 +29,12 @@ export function readUserPrefsSync(): UserPrefs {
   try {
     const raw = readFileSync(prefsPath(), 'utf8')
     const parsed = JSON.parse(raw) as Record<string, unknown>
-    // Migrate old boolean autoCleanupOnStart → 'on' / 'off'
-    if (typeof parsed['autoCleanupOnStart'] === 'boolean') {
-      parsed['autoCleanupOnStart'] = parsed['autoCleanupOnStart'] ? 'on' : 'off'
-    }
     return {
-      autoCleanupOnStart: isAutoCleanup(parsed['autoCleanupOnStart'])
-        ? parsed['autoCleanupOnStart']
-        : DEFAULT_PREFS.autoCleanupOnStart,
       theme: isThemeName(parsed['theme']) ? parsed['theme'] : DEFAULT_PREFS.theme,
     }
   } catch {
     return { ...DEFAULT_PREFS }
   }
-}
-
-function isAutoCleanup(value: unknown): value is AutoCleanup {
-  return typeof value === 'string' && VALID_AUTO_CLEANUP_VALUES.has(value as AutoCleanup)
 }
 
 function isThemeName(value: unknown): value is ThemeName {

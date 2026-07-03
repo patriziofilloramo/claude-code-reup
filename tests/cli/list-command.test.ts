@@ -10,6 +10,7 @@ import {
   shortestUniqueIdPrefix,
 } from '../../src/cli/list-command.js'
 import type { ListOptions, ListedSession } from '../../src/cli/list-command.js'
+import { visibleLength } from '../../src/cli/terminal-text.js'
 import { applyOrgMetadata, filterProjectsByOrg } from '../../src/core/org/org-filters.js'
 import type { OrgData } from '../../src/core/org/org-model.js'
 import { emptyOrgData } from '../../src/core/org/org-prefs.js'
@@ -17,6 +18,12 @@ import type { Project, Session } from '../../src/core/session/session-model.js'
 
 const GENERATED_AT = '2026-06-10T15:00:00.000Z'
 const SESSION_ID = '00000000-0000-0000-0000-000000000001'
+
+function expectLinesWithinWidth(output: string, width: number): void {
+  for (const line of output.split('\n')) {
+    expect(visibleLength(line)).toBeLessThanOrEqual(width)
+  }
+}
 
 function createSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -203,15 +210,41 @@ describe('list command', () => {
   it('formats a compact table that remains readable without colour', () => {
     const output = formatSessionTable(listedSessions().slice(0, 1))
 
-    expect(output).toContain('ID PREFIX')
-    expect(output).toContain('STATE')
+    expect(output).toContain('ID')
+    expect(output).toContain('S')
     expect(output).toContain('PROJECT')
     expect(output).toContain('SESSION')
-    expect(output).toContain('● active')
+    expect(output).toContain('\u25cf')
     expect(output).toContain('reup')
     expect(output).toContain('CLI foundation')
     expect(output).toContain(SESSION_ID.slice(0, 8))
     expect(output).not.toContain('\u001b[')
+  })
+
+  it('keeps human list output inside the supplied terminal width', () => {
+    const sessions = listedSessions().map((session, index) => ({
+      ...session,
+      id: `${index}${index}${index}${index}${index}${index}${index}${index}-0000-0000-0000-00000000000${index}`,
+      projectName: 'claude-sessions-manager',
+      alias: undefined,
+      name:
+        index === 0
+          ? 'Implement cross-device project memory sync and next steps'
+          : 'Investigate and fix broken git history rendering in narrow terminals',
+    }))
+
+    for (const width of [90, 70, 42]) {
+      const output = formatSessionTable(sessions, false, sessions, width)
+      expectLinesWithinWidth(output, width)
+      expect(output).toContain('\u25cf')
+      if (width >= 72) expect(output).toContain('claude')
+    }
+
+    expect(formatSessionTable(sessions, false, sessions, 42).split('\n')).toHaveLength(
+      sessions.length
+    )
+    expect(formatSessionTable(sessions, false, sessions, 42)).toContain('00000000')
+    expect(formatSessionTable(sessions, false, sessions, 42)).not.toContain('...')
   })
 
   it('lengthens displayed ID prefixes until they are globally unambiguous', () => {

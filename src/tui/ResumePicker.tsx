@@ -3,9 +3,12 @@ import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
 import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
+import type { Project } from '../core/session/session-model.js'
 import type { RankedSession } from '../core/session/session-ranking.js'
 import { filterSessionCandidates } from '../core/session/session-ranking.js'
 import { relativeTime } from '../utils/time.js'
+import { DeepSearchPicker } from './DeepSearchPicker.js'
+import { pickerSessionRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 
 export interface ResumePickerSelection {
@@ -23,6 +26,54 @@ interface ResumePickerProps {
 
 const PICKER_CHROME_ROWS = 7
 
+function ResumePickerShell({
+  candidates,
+  currentDirectory,
+  initialQuery,
+  onSelect,
+  projects,
+}: {
+  candidates: RankedSession[]
+  currentDirectory?: string
+  initialQuery?: string
+  onSelect: (selection: ResumePickerSelection) => void
+  projects?: Project[]
+}) {
+  const [mode, setMode] = useState<'normal' | 'deep'>('normal')
+  const [deepQuery, setDeepQuery] = useState(initialQuery ?? '')
+
+  function openDeepSearch(query: string): void {
+    setDeepQuery(query)
+    setMode('deep')
+  }
+
+  if (mode === 'deep' && projects) {
+    return (
+      <DeepSearchPicker
+        query={deepQuery}
+        projects={projects}
+        onBack={() => setMode('normal')}
+        onSelect={(match) =>
+          onSelect({
+            projectPath: match.session.projectPath,
+            sessionId: match.session.id,
+          })
+        }
+      />
+    )
+  }
+
+  return (
+    <ResumePicker
+      candidates={candidates}
+      currentDirectory={currentDirectory}
+      initialQuery={initialQuery}
+      onDeepSearch={projects ? openDeepSearch : undefined}
+      onSelect={onSelect}
+    />
+  )
+}
+
 export function ResumePicker({
   candidates,
   currentDirectory,
@@ -38,6 +89,7 @@ export function ResumePicker({
 
   const matchingCandidates = filterSessionCandidates(candidates, query)
   const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - PICKER_CHROME_ROWS)
+  const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
   const [visibleCandidates, visibleSelectedIndex] = createVisibleWindow(
     matchingCandidates,
     selectedIndex,
@@ -99,7 +151,7 @@ export function ResumePicker({
   })
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflow="hidden" width={stdout?.columns}>
       <Box gap={1} paddingX={1}>
         <Text bold color={COLORS.accent}>
           {LABELS.resumePickerDirectoryTitle}
@@ -126,6 +178,7 @@ export function ResumePicker({
               candidate={candidate}
               isSelected={index === visibleSelectedIndex}
               key={candidate.session.id}
+              layout={rowLayout}
             />
           ))
         )}
@@ -166,31 +219,43 @@ export function ResumePicker({
 function ResumePickerRow({
   candidate,
   isSelected,
+  layout,
 }: {
   candidate: RankedSession
   isSelected: boolean
+  layout: PickerRowLayout
 }) {
   const { project, session } = candidate
   const projectName = project.path.split(/[/\\]/).filter(Boolean).pop() ?? project.path
   const sessionName = session.alias ?? session.name
 
   return (
-    <Box gap={1} paddingX={1}>
+    <Box gap={1} height={1} overflow="hidden" paddingX={1} width={layout.width}>
       <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
-      <Text color={candidate.active ? COLORS.ok : COLORS.dim}>{candidate.active ? '*' : 'o'}</Text>
-      <Text
-        bold={isSelected}
-        color={session.signals.archived ? COLORS.muted : COLORS.text}
-        wrap="truncate"
-      >
-        {sessionName}
-      </Text>
-      {candidate.inCurrentDirectory ? (
-        <Text color={COLORS.accent}>{LABELS.currentLabel}</Text>
+      <Text color={candidate.active ? COLORS.ok : COLORS.dim}>{'\u25cf'}</Text>
+      <Box flexShrink={0} overflow="hidden" width={layout.primaryWidth}>
+        <Text bold={isSelected} color={session.signals.archived ? COLORS.muted : COLORS.text}>
+          {sessionName}
+        </Text>
+      </Box>
+      <Box flexShrink={0} overflow="hidden" width={layout.coreMetaWidth}>
+        <Text color={COLORS.dim}>{session.id.slice(0, 8)}</Text>
+      </Box>
+      {layout.showTertiaryMeta && candidate.inCurrentDirectory ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.tertiaryMetaWidth}>
+          <Text color={COLORS.accent}>{LABELS.currentLabel}</Text>
+        </Box>
       ) : null}
-      <Text color={COLORS.muted}>{projectName}</Text>
-      <Text color={COLORS.dim}>{relativeTime(session.updated)}</Text>
-      <Text color={COLORS.dim}>{session.id.slice(0, 8)}</Text>
+      {layout.showSecondaryMeta ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.secondaryMetaWidth}>
+          <Text color={COLORS.muted}>{projectName}</Text>
+        </Box>
+      ) : null}
+      {layout.showPrimaryMeta ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.primaryMetaWidth}>
+          <Text color={COLORS.dim}>{relativeTime(session.updated)}</Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }
@@ -200,16 +265,16 @@ export function runResumePicker(
   candidates: RankedSession[],
   currentDirectory?: string,
   initialQuery?: string,
-  onDeepSearch?: (query: string) => void
+  projects?: Project[]
 ): Promise<ResumePickerSelection | null> {
   return new Promise((resolve) => {
     let selection: ResumePickerSelection | null = null
     const { waitUntilExit } = render(
-      <ResumePicker
+      <ResumePickerShell
         candidates={candidates}
         currentDirectory={currentDirectory}
         initialQuery={initialQuery}
-        onDeepSearch={onDeepSearch}
+        projects={projects}
         onSelect={(selectedSession) => {
           selection = selectedSession
         }}

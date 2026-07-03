@@ -2,7 +2,7 @@
   "name": "reup-vscode",
   "displayName": "Reup for Claude Code",
   "description": "Find, understand, and safely resume Claude Code sessions across every project.",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "publisher": "reup-local",
   "private": true,
   "icon": "media/reup-brand.png",

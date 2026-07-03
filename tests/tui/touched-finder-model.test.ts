@@ -81,10 +81,14 @@ describe('filterTouchedFiles', () => {
 describe('buildTouchedSessionRows', () => {
   it('preserves match order and flags active sessions', () => {
     const rows = buildTouchedSessionRows(
-      [match({ session: session({ id: 'a' }) }), match({ session: session({ id: 'b' }) })],
-      new Set(['b'])
+      [
+        match({ session: session({ id: 'aaaaaaaa-0000-0000-0000-000000000000' }) }),
+        match({ session: session({ id: 'bbbbbbbb-0000-0000-0000-000000000000' }) }),
+      ],
+      new Set(['bbbbbbbb-0000-0000-0000-000000000000'])
     )
     expect(rows.map((row) => row.active)).toEqual([false, true])
+    expect(rows.map((row) => row.id)).toEqual(['aaaaaaaa', 'bbbbbbbb'])
   })
 
   it('prefers the matched-write branch, then session branches', () => {

@@ -883,6 +883,7 @@ function App({ onResume }: AppProps) {
     maximumVisibleSessionRows
   )
   const viewportLayout = tuiViewportLayoutForWidth({
+    actionMenuOpen: isProjectActionMenuOpen || isSessionActionMenuOpen,
     projects: visibleProjects,
     resumePreviewOpen: resumeCardSession !== null,
     terminalWidth,

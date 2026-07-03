@@ -7,15 +7,15 @@ import { COLORS } from '../config/theme.js'
 import type { ContentMatch } from '../core/session/session-search.js'
 import type { Project } from '../core/session/session-model.js'
 import { relativeTime } from '../utils/time.js'
+import { pickerSessionRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 
 const FOOTER_ROWS = 2
-// header(1) + blank(1) + col-header(1) + rows-margin-bottom(1) + optional footer + 1 buffer
-const CHROME_ROWS = 5 + FOOTER_ROWS
+// header(1) + blank(1) + rows-margin-bottom(1) + optional footer + 1 buffer
+const CHROME_ROWS = 4 + FOOTER_ROWS
 
-function truncate(value: string, maxLength: number): string {
-  const compact = value.replace(/\s+/g, ' ').trim()
-  return compact.length <= maxLength ? compact : `${compact.slice(0, maxLength - 1)}…`
+function compactText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
 }
 
 interface RowData {
@@ -78,38 +78,27 @@ function DeepSearchPicker({
     }
   }, [query, projects])
 
-  // Each result occupies 2 terminal rows (table row + snippet line)
+  // Each result intentionally occupies 2 terminal rows: summary + snippet.
   const chromeRows = showFooter ? CHROME_ROWS : CHROME_ROWS - FOOTER_ROWS
   const maxVisible = Math.max(2, Math.floor(((stdout?.rows ?? 20) - chromeRows) / 2))
   const items = results ?? []
+  const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
 
   const rowData: RowData[] = items.map((m) => {
     const projectName = m.project.path.split(/[/\\]/).filter(Boolean).pop() ?? m.project.path
     return {
       active: activeIds.has(m.session.id),
-      project: truncate(projectName, 24),
-      session: truncate(m.session.alias ?? m.session.name, 36),
+      project: projectName,
+      session: m.session.alias ?? m.session.name,
       updated: relativeTime(m.session.updated),
       matches: m.matchCount === 1 ? '1 hit' : `${m.matchCount} hits`,
       id: m.session.id.slice(0, 8),
-      snippet: m.snippet,
+      snippet: compactText(m.snippet),
     }
   })
 
   const paired = items.map((match, i) => ({ match, row: rowData[i] as RowData }))
   const [visiblePairs, visibleSelected] = createVisibleWindow(paired, selectedIndex, maxVisible)
-
-  const widths =
-    rowData.length === 0
-      ? { state: 8, project: 7, session: 7, updated: 7, matches: 7, id: 9 }
-      : {
-          state: 8,
-          project: Math.max(7, ...rowData.map((r) => r.project.length)),
-          session: Math.max(7, ...rowData.map((r) => r.session.length)),
-          updated: Math.max(7, ...rowData.map((r) => r.updated.length)),
-          matches: Math.max(7, ...rowData.map((r) => r.matches.length)),
-          id: 9,
-        }
 
   const isLoading = results === null
 
@@ -140,12 +129,16 @@ function DeepSearchPicker({
     exit()
   })
 
-  // Snippet indent: past cursor(2) + state column(state+2), aligned under the title.
-  const snippetIndent = '  ' + ' '.repeat(widths.state + 2)
-
   return (
-    <Box flexDirection="column">
-      <Box gap={2} marginBottom={1} paddingX={1}>
+    <Box flexDirection="column" overflow="hidden" width={stdout?.columns}>
+      <Box
+        gap={2}
+        height={1}
+        marginBottom={1}
+        overflow="hidden"
+        paddingX={1}
+        width={rowLayout.width}
+      >
         <Text bold color={COLORS.orange}>
           {LABELS.deepSearchTitle}
         </Text>
@@ -157,7 +150,7 @@ function DeepSearchPicker({
         </Text>
         {isLoading ? (
           <Text color={COLORS.orange}>
-            {LABELS.deepSearchScanning} {progress.scanned}/{progress.total}…
+            {LABELS.deepSearchScanning} {progress.scanned}/{progress.total}...
           </Text>
         ) : (
           <Text color={COLORS.muted}>
@@ -167,19 +160,7 @@ function DeepSearchPicker({
         )}
       </Box>
 
-      <Box paddingX={1}>
-        <Text color={COLORS.dim}>
-          {'  '}
-          {'STATE'.padEnd(widths.state + 2)}
-          {'PROJECT'.padEnd(widths.project + 2)}
-          {'SESSION'.padEnd(widths.session + 2)}
-          {'UPDATED'.padEnd(widths.updated + 2)}
-          {'HITS'.padEnd(widths.matches + 2)}
-          {'ID PREFIX'}
-        </Text>
-      </Box>
-
-      <Box flexDirection="column" marginBottom={1}>
+      <Box flexDirection="column" marginBottom={1} overflow="hidden" width={rowLayout.width}>
         {isLoading ? (
           <Box paddingX={1}>
             <Text color={COLORS.muted}>{LABELS.deepSearchScanningTranscripts}</Text>
@@ -193,32 +174,13 @@ function DeepSearchPicker({
         ) : (
           visiblePairs.map(({ match, row }, idx) => {
             const isSelected = idx === visibleSelected
-            const stateText = row.active ? '● active' : '○ idle'
-            const stateColor = row.active ? COLORS.ok : COLORS.dim
             return (
-              <Box key={match.session.id} flexDirection="column" paddingX={1}>
-                <Box>
-                  <Text color={isSelected ? COLORS.accent : COLORS.dim}>
-                    {isSelected ? '▶ ' : '  '}
-                  </Text>
-                  <Text color={stateColor}>{stateText.padEnd(widths.state + 2)}</Text>
-                  <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.muted}>
-                    {row.project.padEnd(widths.project + 2)}
-                  </Text>
-                  <Text bold={isSelected}>{row.session.padEnd(widths.session + 2)}</Text>
-                  <Text color={COLORS.dim}>{row.updated.padEnd(widths.updated + 2)}</Text>
-                  <Text color={isSelected ? COLORS.orange : COLORS.dim}>
-                    {row.matches.padEnd(widths.matches + 2)}
-                  </Text>
-                  <Text color={COLORS.dim}>{row.id}</Text>
-                </Box>
-                <Box marginBottom={1}>
-                  <Text color={isSelected ? COLORS.accent : COLORS.dim} wrap="truncate">
-                    {snippetIndent}↳{' '}
-                    <Text color={isSelected ? COLORS.textSub : COLORS.dim}>{row.snippet}</Text>
-                  </Text>
-                </Box>
-              </Box>
+              <DeepSearchResultRow
+                isSelected={isSelected}
+                key={match.session.id}
+                layout={rowLayout}
+                row={row}
+              />
             )
           })
         )}
@@ -254,6 +216,56 @@ function DeepSearchPicker({
           </Text>
         </Box>
       ) : null}
+    </Box>
+  )
+}
+
+function DeepSearchResultRow({
+  row,
+  isSelected,
+  layout,
+}: {
+  row: RowData
+  isSelected: boolean
+  layout: PickerRowLayout
+}) {
+  const snippetWidth = Math.max(1, layout.width - 6)
+
+  return (
+    <Box flexDirection="column" width={layout.width}>
+      <Box gap={1} height={1} overflow="hidden" paddingX={1} width={layout.width}>
+        <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
+        <Text color={row.active ? COLORS.ok : COLORS.dim}>{'\u25cf'}</Text>
+        <Box flexShrink={0} overflow="hidden" width={layout.primaryWidth}>
+          <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.muted}>
+            {row.session}
+          </Text>
+        </Box>
+        <Box flexShrink={0} overflow="hidden" width={layout.coreMetaWidth}>
+          <Text color={COLORS.dim}>{row.id}</Text>
+        </Box>
+        {layout.showPrimaryMeta ? (
+          <Box flexShrink={0} overflow="hidden" width={layout.primaryMetaWidth}>
+            <Text color={isSelected ? COLORS.orange : COLORS.dim}>{row.matches}</Text>
+          </Box>
+        ) : null}
+        {layout.showSecondaryMeta ? (
+          <Box flexShrink={0} overflow="hidden" width={layout.secondaryMetaWidth}>
+            <Text color={COLORS.muted}>{row.project}</Text>
+          </Box>
+        ) : null}
+        {layout.showTertiaryMeta ? (
+          <Box flexShrink={0} overflow="hidden" width={layout.tertiaryMetaWidth}>
+            <Text color={COLORS.dim}>{row.updated}</Text>
+          </Box>
+        ) : null}
+      </Box>
+      <Box gap={1} height={1} marginBottom={1} overflow="hidden" paddingX={1} width={layout.width}>
+        <Text color={isSelected ? COLORS.accent : COLORS.dim}>{'\u21b3'}</Text>
+        <Box flexShrink={0} overflow="hidden" width={snippetWidth}>
+          <Text color={isSelected ? COLORS.textSub : COLORS.dim}>{row.snippet}</Text>
+        </Box>
+      </Box>
     </Box>
   )
 }

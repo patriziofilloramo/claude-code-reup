@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { findAutoArchiveCandidates, findCleanupCandidates } from '../../src/core/session/cleanup.js'
+import { findCleanupCandidates } from '../../src/core/session/cleanup.js'
 import type { Project, Session } from '../../src/core/session/session-model.js'
 
 describe('cleanup candidate selection', () => {
-  it('limits unattended archiving to high-confidence candidates', () => {
+  it('scores deterministic cleanup candidates for explicit review', () => {
     const projects = [
       createProject([
         createSession('empty', { messageCount: 0 }),
@@ -19,11 +19,12 @@ describe('cleanup candidate selection', () => {
       new Set(),
       Date.parse('2026-06-15T00:00:00Z')
     )
-    const automaticCandidates = findAutoArchiveCandidates(candidates)
 
-    expect(automaticCandidates.map((candidate) => candidate.session.name).sort()).toEqual([
-      'empty',
-      'expired',
+    expect(candidates.map((candidate) => [candidate.session.name, candidate.score])).toEqual([
+      ['empty', 100],
+      ['expired', 85],
+      ['trivial', 60],
+      ['stale', 40],
     ])
   })
 })

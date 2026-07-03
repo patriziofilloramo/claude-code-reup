@@ -16,7 +16,9 @@ function emptyReport(): DiagnosticsReport {
 
 describe('formatDoctorReport', () => {
   it('prints a clear healthy result', () => {
-    expect(formatDoctorReport(emptyReport())).toBe('Reup Doctor\n\nNo issues found.')
+    expect(formatDoctorReport(emptyReport())).toBe(
+      'Reup Doctor\nLocal session-data health check\n\nOK  No issues found.'
+    )
   })
 
   it('groups non-destructive diagnostics by issue type', () => {
@@ -41,15 +43,43 @@ describe('formatDoctorReport', () => {
       path: '/claude/projects/project/.reup-link',
       projectId: 'project',
     })
+    report.expiring.push({
+      context: {
+        latestContextTokens: null,
+        latestModel: null,
+        latestOutputTokens: null,
+        models: [],
+      },
+      created: '2026-06-11T00:00:00.000Z',
+      id: '10000000-0000-0000-0000-000000000001',
+      messageCount: 4,
+      name: 'Review release',
+      primaryStatus: 'expiring',
+      projectId: 'project',
+      projectPath: '/workspace',
+      signals: {
+        analysisComplete: true,
+        archived: false,
+        compactionCount: 0,
+        expiresInDays: 2,
+        interrupted: false,
+        lastToolFailed: false,
+        pathExists: true,
+      },
+      updated: '2026-06-11T00:00:00.000Z',
+    })
 
     const output = formatDoctorReport(report)
 
-    expect(output).toContain('Reup Doctor · 4 issues')
+    expect(output).toContain('Reup Doctor')
+    expect(output).toContain('5 findings')
     expect(output).toContain('Broken session indices (1)')
     expect(output).toContain('Stale sidecar locks (1)')
     expect(output).toContain('Orphaned transcripts (1)')
     expect(output).toContain('Legacy Project Memory artifacts (1)')
-    expect(output).toContain('no longer manages Project Memory')
-    expect(output).toContain('Reup falls back to readable transcripts')
+    expect(output).toContain('Sessions nearing Claude cleanup (1)')
+    expect(output).toContain('Why:  This release no longer manages Project Memory artifacts.')
+    expect(output).toContain('Next: Leave them alone unless sessions are missing')
+    expect(output).toContain('2d remaining')
   })
 })

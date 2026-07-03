@@ -11,6 +11,9 @@ export const TUI_LAYOUT = {
   body: {
     minSplitWidth: MIN_SPLIT_VIEW_WIDTH,
   },
+  actionMenu: {
+    fullWidthBelow: 100,
+  },
   usageHeader: {
     minVisibleWidth: MIN_SPLIT_VIEW_WIDTH,
     minCompactWidth: 35,
@@ -52,7 +55,7 @@ export interface ProjectPanelProject {
   sessions: unknown[]
 }
 
-export type BodyLayoutMode = 'split' | 'single-panel' | 'full-width-preview'
+export type BodyLayoutMode = 'split' | 'single-panel' | 'full-width-actions' | 'full-width-preview'
 export type UsageHeaderMode = 'full' | 'compact' | 'minimal' | 'hidden'
 
 export interface ProjectPanelLayout {
@@ -125,6 +128,7 @@ export interface TuiViewportLayout {
 }
 
 export interface TuiViewportLayoutOptions {
+  actionMenuOpen?: boolean
   projects?: ProjectPanelProject[]
   resumePreviewOpen?: boolean
   terminalWidth: number
@@ -156,9 +160,12 @@ export function shouldShowProjectSessionCounts(terminalWidth: number): boolean {
 
 export function bodyLayoutModeForWidth(
   terminalWidth: number,
-  resumePreviewOpen = false
+  options: { actionMenuOpen?: boolean; resumePreviewOpen?: boolean } = {}
 ): BodyLayoutMode {
-  if (resumePreviewOpen) return 'full-width-preview'
+  if (options.resumePreviewOpen) return 'full-width-preview'
+  if (options.actionMenuOpen && terminalWidth < TUI_LAYOUT.actionMenu.fullWidthBelow) {
+    return 'full-width-actions'
+  }
   return shouldUseSinglePanelLayout(terminalWidth) ? 'single-panel' : 'split'
 }
 
@@ -273,17 +280,18 @@ export function projectPanelLayoutForTerminal(
 }
 
 export function tuiViewportLayoutForWidth({
+  actionMenuOpen = false,
   projects = [],
   resumePreviewOpen = false,
   terminalWidth,
 }: TuiViewportLayoutOptions): TuiViewportLayout {
-  const bodyMode = bodyLayoutModeForWidth(terminalWidth, resumePreviewOpen)
+  const bodyMode = bodyLayoutModeForWidth(terminalWidth, { actionMenuOpen, resumePreviewOpen })
   const baseProjectPanel = projectPanelLayoutForTerminal(terminalWidth, projects)
-  const projectPanelWidth = bodyMode === 'single-panel' ? terminalWidth : baseProjectPanel.width
-  const sessionPanelWidth =
-    bodyMode === 'single-panel'
-      ? terminalWidth
-      : Math.max(0, terminalWidth - baseProjectPanel.width)
+  const bodyUsesSingleSlot = bodyMode !== 'split'
+  const projectPanelWidth = bodyUsesSingleSlot ? terminalWidth : baseProjectPanel.width
+  const sessionPanelWidth = bodyUsesSingleSlot
+    ? terminalWidth
+    : Math.max(0, terminalWidth - baseProjectPanel.width)
 
   return {
     bodyMode,

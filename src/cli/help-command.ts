@@ -117,7 +117,9 @@ The compatibility shortcut reup --theme <dark|light|terminal> remains supported.
 Usage:
   reup doctor
 
-Runs non-destructive health checks. Reup never repairs Claude-owned files automatically.`,
+Runs non-destructive health checks for broken indices, stale locks,
+orphaned transcripts, missing paths, and sessions nearing Claude cleanup.
+Every finding includes why it matters and the suggested next step.`,
 
   handoff: `reup handoff - create a continuation packet
 

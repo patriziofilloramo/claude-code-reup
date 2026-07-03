@@ -8,6 +8,7 @@ import {
   parseTouchedOptions,
 } from '../../src/cli/touched-command.js'
 import type { TouchedResult } from '../../src/cli/touched-command.js'
+import { visibleLength } from '../../src/cli/terminal-text.js'
 import type { TouchedFileMatch } from '../../src/core/session/session-file-search.js'
 import type { Session } from '../../src/core/session/session-model.js'
 import type { RankedSession } from '../../src/core/session/session-ranking.js'
@@ -25,6 +26,12 @@ function result(overrides: Partial<TouchedResult> = {}): TouchedResult {
     sessionId: '00000000-0000-0000-0000-000000000001',
     sessionName: 'Build the lookup',
     ...overrides,
+  }
+}
+
+function expectLinesWithinWidth(output: string, width: number): void {
+  for (const line of output.split('\n')) {
+    expect(visibleLength(line)).toBeLessThanOrEqual(width)
   }
 }
 
@@ -190,5 +197,41 @@ describe('formatTouchedTable', () => {
       result({ matchedPaths: ['/elsewhere/shared-config.ts'] }),
     ])
     expect(table).toContain('shared-config.ts')
+  })
+
+  it('keeps human touched output inside the supplied terminal width', () => {
+    const results = [
+      result({
+        active: true,
+        gitBranch: 'feature/very-long-responsive-terminal-layout',
+        matchedPaths: [
+          '/workspace/claude-sessions-manager/src/core/session/session-query.ts',
+          '/workspace/claude-sessions-manager/src/tui/TouchedFinder.tsx',
+        ],
+        projectName: 'claude-sessions-manager',
+        projectPath: '/workspace/claude-sessions-manager',
+        sessionName: 'Investigate and fix broken git history rendering in narrow terminals',
+      }),
+      result({
+        gitBranch: 'main',
+        projectName: 'Phone',
+        sessionName: 'Review Xiaomi phone session history',
+      }),
+    ]
+
+    for (const width of [90, 70, 42]) {
+      const output = formatTouchedTable('session-query', results, width)
+      expectLinesWithinWidth(output, width)
+      expect(output).toContain('\u25cf')
+      if (width >= 64) expect(output).toContain('session-query')
+    }
+
+    expect(formatTouchedTable('session-query', results, 42).split('\n')).toHaveLength(
+      results.length
+    )
+    expect(formatTouchedTable('session-query', results, 42)).toContain(
+      results[0]!.sessionId.slice(0, 8)
+    )
+    expect(formatTouchedTable('session-query', results, 42)).not.toContain('...')
   })
 })

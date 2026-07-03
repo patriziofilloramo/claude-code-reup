@@ -6,6 +6,7 @@ import { shortestUniqueIdPrefix } from '../cli/list-command.js'
 import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import { relativeTime } from '../utils/time.js'
+import { pickerSessionRowLayoutForWidth } from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 
 interface SearchResultsPickerProps {
@@ -15,13 +16,8 @@ interface SearchResultsPickerProps {
   onDeepSearch?: (query: string) => void
 }
 
-// header(1) + blank(1) + col-header(1) + rows-margin-bottom(1) + footer-border+content(2)
-const CHROME_ROWS = 6
-
-function truncate(value: string, maxLength: number): string {
-  const compact = value.replace(/\s+/g, ' ').trim()
-  return compact.length <= maxLength ? compact : `${compact.slice(0, maxLength - 1)}…`
-}
+// header(1) + blank(1) + rows-margin-bottom(1) + footer-border+content(2)
+const CHROME_ROWS = 5
 
 interface RowData {
   fullId: string
@@ -43,28 +39,18 @@ export function SearchResultsPicker({
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const maxVisible = Math.max(4, (stdout?.rows ?? 24) - CHROME_ROWS)
+  const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
 
   const rowData: RowData[] = sessions.map((s) => ({
     fullId: s.id,
     id: shortestUniqueIdPrefix(s.id, sessions),
-    project: truncate(s.projectName, 24),
-    session: truncate(s.alias ?? s.name, 36),
+    project: s.projectName,
+    session: s.alias ?? s.name,
     updated: relativeTime(s.updated),
     active: s.active,
   }))
 
   const [visibleRows, visibleSelected] = createVisibleWindow(rowData, selectedIndex, maxVisible)
-
-  const widths =
-    rowData.length === 0
-      ? { state: 8, project: 7, session: 7, updated: 7, id: 9 }
-      : {
-          state: 8,
-          project: Math.max(7, ...rowData.map((r) => r.project.length)),
-          session: Math.max(7, ...rowData.map((r) => r.session.length)),
-          updated: Math.max(7, ...rowData.map((r) => r.updated.length)),
-          id: Math.max(9, ...rowData.map((r) => r.id.length)),
-        }
 
   useInput((input, key) => {
     if (key.escape || input === 'q') {
@@ -93,7 +79,7 @@ export function SearchResultsPicker({
   })
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflow="hidden" width={stdout?.columns}>
       <Box gap={2} marginBottom={1} paddingX={1}>
         <Text>
           {LABELS.searchPrefix}{' '}
@@ -113,17 +99,6 @@ export function SearchResultsPicker({
         ) : null}
       </Box>
 
-      <Box paddingX={1}>
-        <Text color={COLORS.dim}>
-          {'  '}
-          {'STATE'.padEnd(widths.state + 2)}
-          {'PROJECT'.padEnd(widths.project + 2)}
-          {'SESSION'.padEnd(widths.session + 2)}
-          {'UPDATED'.padEnd(widths.updated + 2)}
-          {'ID PREFIX'}
-        </Text>
-      </Box>
-
       <Box flexDirection="column" marginBottom={1}>
         {sessions.length === 0 ? (
           <Box paddingX={1}>
@@ -132,20 +107,38 @@ export function SearchResultsPicker({
         ) : (
           visibleRows.map((row, index) => {
             const isSelected = index === visibleSelected
-            const stateText = row.active ? '● active' : '○ idle'
             const stateColor = row.active ? COLORS.ok : COLORS.dim
             return (
-              <Box key={row.fullId} paddingX={1}>
+              <Box
+                key={row.fullId}
+                gap={1}
+                height={1}
+                overflow="hidden"
+                paddingX={1}
+                width={rowLayout.width}
+              >
                 <Text color={isSelected ? COLORS.accent : COLORS.dim}>
-                  {isSelected ? '▶ ' : '  '}
+                  {isSelected ? '>' : ' '}
                 </Text>
-                <Text color={stateColor}>{stateText.padEnd(widths.state + 2)}</Text>
-                <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.muted}>
-                  {row.project.padEnd(widths.project + 2)}
-                </Text>
-                <Text bold={isSelected}>{row.session.padEnd(widths.session + 2)}</Text>
-                <Text color={COLORS.dim}>{row.updated.padEnd(widths.updated + 2)}</Text>
-                <Text color={COLORS.dim}>{row.id}</Text>
+                <Text color={stateColor}>{'\u25cf'}</Text>
+                <Box flexShrink={0} overflow="hidden" width={rowLayout.primaryWidth}>
+                  <Text bold={isSelected} color={isSelected ? COLORS.text : COLORS.muted}>
+                    {row.session}
+                  </Text>
+                </Box>
+                <Box flexShrink={0} overflow="hidden" width={rowLayout.coreMetaWidth}>
+                  <Text color={COLORS.dim}>{row.id}</Text>
+                </Box>
+                {rowLayout.showSecondaryMeta ? (
+                  <Box flexShrink={0} overflow="hidden" width={rowLayout.secondaryMetaWidth}>
+                    <Text color={COLORS.muted}>{row.project}</Text>
+                  </Box>
+                ) : null}
+                {rowLayout.showPrimaryMeta ? (
+                  <Box flexShrink={0} overflow="hidden" width={rowLayout.primaryMetaWidth}>
+                    <Text color={COLORS.dim}>{row.updated}</Text>
+                  </Box>
+                ) : null}
               </Box>
             )
           })

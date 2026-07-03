@@ -5,11 +5,19 @@ import { describe, expect, it } from 'vitest'
 const CONFIG_APP_PATH = join(process.cwd(), 'src', 'tui', 'ConfigApp.tsx')
 
 describe('config integrations layout', () => {
+  it('keeps config focused on interface choices and external integrations', async () => {
+    const source = await readFile(CONFIG_APP_PATH, 'utf8')
+
+    expect(source).toContain("const TABS = ['Interface', 'Integrations'] as const")
+    expect(source).not.toContain('function FeaturesTab(')
+    expect(source).not.toContain('Cleanup on start')
+  })
+
   it('uses focused cards for usage and shell completion', async () => {
     const source = await readFile(CONFIG_APP_PATH, 'utf8')
     const integrations = source.slice(
       source.indexOf('function IntegrationsTab('),
-      source.indexOf('function FeaturesTab(')
+      source.indexOf('function FeatureCard(')
     )
 
     expect(integrations).toContain('const usageFocused = cursor === 0')
@@ -27,7 +35,7 @@ describe('config integrations layout', () => {
     const source = await readFile(CONFIG_APP_PATH, 'utf8')
     const integrations = source.slice(
       source.indexOf('function IntegrationsTab('),
-      source.indexOf('function FeaturesTab(')
+      source.indexOf('function FeatureCard(')
     )
 
     expect(integrations).toContain('<Box flexDirection="column" paddingLeft={2}>')

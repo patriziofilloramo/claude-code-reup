@@ -5,6 +5,7 @@ import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { TouchedFileSummary } from '../core/session/session-file-search.js'
 import { relativeTime } from '../utils/time.js'
+import { pickerRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 import { filterTouchedFiles } from './touched-finder-model.js'
 
@@ -49,6 +50,7 @@ export function TouchedFilePicker({
 
   const matchingFiles = filterTouchedFiles(files, query)
   const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - PICKER_CHROME_ROWS)
+  const rowLayout = pickerRowLayoutForWidth(stdout?.columns)
   const [visibleFiles, visibleSelectedIndex] = createVisibleWindow(
     matchingFiles,
     selectedIndex,
@@ -103,7 +105,7 @@ export function TouchedFilePicker({
   })
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflow="hidden" width={stdout?.columns}>
       <Box gap={1} paddingX={1}>
         <Text bold color={COLORS.accent}>
           {LABELS.touchedPickerTitle}
@@ -130,6 +132,7 @@ export function TouchedFilePicker({
               file={file}
               isSelected={index === visibleSelectedIndex}
               key={file.path}
+              layout={rowLayout}
               projectPath={projectPath}
             />
           ))
@@ -165,23 +168,38 @@ export function TouchedFilePicker({
 function TouchedFileRow({
   file,
   isSelected,
+  layout,
   projectPath,
 }: {
   file: TouchedFileSummary
   isSelected: boolean
+  layout: PickerRowLayout
   projectPath?: string
 }) {
+  const sessionCount = `${file.sessionCount} ${LABELS.wordSessions}`
   return (
-    <Box gap={1} paddingX={1}>
+    <Box gap={1} height={1} overflow="hidden" paddingX={1} width={layout.width}>
       <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
-      <Text color={COLORS.dim}>{relativeTime(file.lastTouchedAt)}</Text>
-      <Text color={COLORS.muted}>
-        {file.sessionCount} {LABELS.wordSessions}
-      </Text>
-      {file.gitBranch ? <Text color={COLORS.accent}>{file.gitBranch}</Text> : null}
-      <Text bold={isSelected} color={COLORS.text} wrap="truncate">
-        {relativeToProject(file.path, projectPath)}
-      </Text>
+      <Box flexShrink={0} overflow="hidden" width={layout.primaryWidth}>
+        <Text bold={isSelected} color={COLORS.text}>
+          {relativeToProject(file.path, projectPath)}
+        </Text>
+      </Box>
+      {layout.showTertiaryMeta && file.gitBranch ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.tertiaryMetaWidth}>
+          <Text color={COLORS.accent}>{file.gitBranch}</Text>
+        </Box>
+      ) : null}
+      {layout.showSecondaryMeta ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.secondaryMetaWidth}>
+          <Text color={COLORS.muted}>{sessionCount}</Text>
+        </Box>
+      ) : null}
+      {layout.showPrimaryMeta ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.primaryMetaWidth}>
+          <Text color={COLORS.dim}>{relativeTime(file.lastTouchedAt)}</Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }

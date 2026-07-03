@@ -8,51 +8,92 @@ export async function runDoctor(): Promise<void> {
 }
 
 export function formatDoctorReport(report: DiagnosticsReport): string {
-  const issueCount =
-    report.brokenIndices.length +
-    report.legacyProjectMemoryArtifacts.length +
-    report.orphanedTranscripts.length +
-    report.pathMissing.length +
-    report.staleLocks.length
+  const sections = doctorSections(report).filter((section) => section.items.length > 0)
+  const findingCount = sections.reduce((count, section) => count + section.items.length, 0)
 
-  if (issueCount === 0) return 'Reup Doctor\n\nNo issues found.'
+  const lines = ['Reup Doctor', 'Local session-data health check']
 
-  const lines = [`Reup Doctor · ${issueCount} issue${issueCount === 1 ? '' : 's'}`]
-  appendSection(
-    lines,
-    'Broken session indices',
-    report.brokenIndices.map((item) => `${item.projectId}: ${item.reason}`),
-    'Claude Code owns these files; Reup falls back to readable transcripts.'
-  )
-  appendSection(
-    lines,
-    'Stale sidecar locks',
-    report.staleLocks.map((item) => `${item.path}: ${item.reason}`),
-    'No live owner was detected; Reup can recover abandoned locks on its next metadata write.'
-  )
-  appendSection(
-    lines,
-    'Legacy Project Memory artifacts',
-    report.legacyProjectMemoryArtifacts.map((item) => `${item.projectId}: ${item.path}`),
-    'This release no longer manages Project Memory. Review these paths manually before deleting or moving anything.'
-  )
-  appendSection(
-    lines,
-    'Orphaned transcripts',
-    report.orphanedTranscripts.map((item) => `${item.projectId}: ${item.sessionId}`),
-    'The transcript exists but is absent from its project index.'
-  )
-  appendSection(
-    lines,
-    'Missing session paths',
-    report.pathMissing.map((item) => `${item.id.slice(0, 8)}: ${item.projectPath}`),
-    'The recorded working directory no longer exists.'
-  )
+  if (findingCount === 0) {
+    lines.push('', 'OK  No issues found.')
+    return lines.join('\n')
+  }
+
+  lines.push('', `${findingCount} finding${findingCount === 1 ? '' : 's'}`)
+  for (const section of sections) appendSection(lines, section)
   return lines.join('\n')
 }
 
-function appendSection(lines: string[], title: string, items: string[], explanation: string): void {
-  if (items.length === 0) return
-  lines.push('', `${title} (${items.length})`, `  ${explanation}`)
-  for (const item of items) lines.push(`  - ${item}`)
+interface DoctorSection {
+  items: string[]
+  nextStep: string
+  title: string
+  why: string
+}
+
+function doctorSections(report: DiagnosticsReport): DoctorSection[] {
+  return [
+    {
+      title: 'Broken session indices',
+      why: 'Claude Code owns these files. Reup falls back to readable transcripts.',
+      nextStep: 'Leave them alone unless sessions are missing from Claude Code itself.',
+      items: report.brokenIndices.map((item) =>
+        formatItem(item.projectId, [item.reason, item.path])
+      ),
+    },
+    {
+      title: 'Stale sidecar locks',
+      why: 'No live owner was detected for a Reup metadata lock.',
+      nextStep: 'Reup can recover abandoned locks on its next metadata write.',
+      items: report.staleLocks.map((item) => formatItem(item.projectId, [item.reason, item.path])),
+    },
+    {
+      title: 'Legacy Project Memory artifacts',
+      why: 'This release no longer manages Project Memory artifacts.',
+      nextStep: 'Review these paths manually before deleting or moving anything.',
+      items: report.legacyProjectMemoryArtifacts.map((item) =>
+        formatItem(item.projectId, [item.kind.replaceAll('-', ' '), item.path])
+      ),
+    },
+    {
+      title: 'Orphaned transcripts',
+      why: 'The transcript exists on disk but is absent from its project index.',
+      nextStep: 'Keep it if you need the transcript; otherwise cleanup can archive stale sessions.',
+      items: report.orphanedTranscripts.map((item) =>
+        formatItem(item.sessionId.slice(0, 8), [item.projectPath, item.projectId])
+      ),
+    },
+    {
+      title: 'Missing session paths',
+      why: 'The recorded working directory no longer exists.',
+      nextStep:
+        'Restore the path, archive the session, or use the transcript as read-only history.',
+      items: report.pathMissing.map((item) =>
+        formatItem(item.id.slice(0, 8), [item.alias ?? item.name, item.projectPath])
+      ),
+    },
+    {
+      title: 'Sessions nearing Claude cleanup',
+      why: 'Claude Code may stop resuming these sessions when the cleanup window closes.',
+      nextStep: 'Resume or hand off anything still important; archive the rest when ready.',
+      items: report.expiring.map((item) =>
+        formatItem(item.id.slice(0, 8), [
+          item.alias ?? item.name,
+          `${item.signals.expiresInDays ?? 0}d remaining`,
+          item.projectPath,
+        ])
+      ),
+    },
+  ]
+}
+
+function appendSection(lines: string[], section: DoctorSection): void {
+  lines.push('', `[!] ${section.title} (${section.items.length})`)
+  lines.push(`    Why:  ${section.why}`)
+  lines.push(`    Next: ${section.nextStep}`)
+  lines.push('    Items:')
+  for (const item of section.items) lines.push(item)
+}
+
+function formatItem(title: string, details: string[]): string {
+  return [`      - ${title}`, ...details.map((detail) => `        ${detail}`)].join('\n')
 }

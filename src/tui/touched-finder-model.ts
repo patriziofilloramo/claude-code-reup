@@ -18,6 +18,7 @@ export function filterTouchedFiles(
 export interface TouchedSessionRow {
   active: boolean
   branch: string | null
+  id: string
   matchCount: number
   project: string
   session: string
@@ -32,6 +33,7 @@ export function buildTouchedSessionRows(
   return matches.map((match) => ({
     active: activeSessionIds.has(match.session.id),
     branch: match.gitBranch ?? match.session.gitBranch ?? match.session.currentBranch ?? null,
+    id: match.session.id.slice(0, 8),
     matchCount: match.matchCount,
     project: match.project.path.split(/[/\\]/).filter(Boolean).pop() ?? match.project.path,
     session: match.session.alias ?? match.session.name,

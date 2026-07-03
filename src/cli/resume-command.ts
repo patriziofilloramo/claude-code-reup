@@ -63,7 +63,7 @@ async function selectResumeTargetInteractively(): Promise<DirectResumeSelection 
     if (candidates.length === 0) return { error: 'no resumable sessions found' }
 
     const { runResumePicker } = await import('../tui/ResumePicker.js')
-    const selection = await runResumePicker(candidates, currentDirectory)
+    const selection = await runResumePicker(candidates, currentDirectory, undefined, projects)
     releaseTerminalInput()
     return selection ? { result: selection } : null
   } catch (error) {

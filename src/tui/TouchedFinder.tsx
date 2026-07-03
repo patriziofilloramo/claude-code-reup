@@ -10,6 +10,7 @@ import {
   type TouchedFileSummary,
 } from '../core/session/session-file-search.js'
 import type { Project, Session } from '../core/session/session-model.js'
+import { pickerSessionRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 import { TouchedFilePicker } from './TouchedFilePicker.js'
 import { buildTouchedSessionRows, type TouchedSessionRow } from './touched-finder-model.js'
@@ -129,6 +130,7 @@ function TouchedSessionsView({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const rows = buildTouchedSessionRows(matches, activeSessionIds)
   const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - SESSIONS_CHROME_ROWS)
+  const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
   const paired = matches.map((match, index) => ({ match, row: rows[index] as TouchedSessionRow }))
   const [visiblePairs, visibleSelectedIndex] = createVisibleWindow(
     paired,
@@ -156,7 +158,7 @@ function TouchedSessionsView({
   })
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflow="hidden" width={stdout?.columns}>
       <Box gap={1} paddingX={1}>
         <Text bold color={COLORS.accent}>
           {LABELS.touchedPickerTitle}
@@ -180,6 +182,7 @@ function TouchedSessionsView({
             <TouchedSessionRowView
               isSelected={index === visibleSelectedIndex}
               key={match.session.id}
+              layout={rowLayout}
               row={row}
             />
           ))
@@ -212,20 +215,39 @@ function TouchedSessionsView({
 function TouchedSessionRowView({
   row,
   isSelected,
+  layout,
 }: {
   row: TouchedSessionRow
   isSelected: boolean
+  layout: PickerRowLayout
 }) {
   return (
-    <Box gap={1} paddingX={1}>
+    <Box gap={1} height={1} overflow="hidden" paddingX={1} width={layout.width}>
       <Text color={isSelected ? COLORS.accent : COLORS.dim}>{isSelected ? '>' : ' '}</Text>
-      <Text color={row.active ? COLORS.ok : COLORS.dim}>{row.active ? '*' : 'o'}</Text>
-      <Text bold={isSelected} color={COLORS.text} wrap="truncate">
-        {row.session}
-      </Text>
-      <Text color={COLORS.muted}>{row.project}</Text>
-      {row.branch ? <Text color={COLORS.accent}>{row.branch}</Text> : null}
-      <Text color={COLORS.dim}>{row.when}</Text>
+      <Text color={row.active ? COLORS.ok : COLORS.dim}>{'\u25cf'}</Text>
+      <Box flexShrink={0} overflow="hidden" width={layout.primaryWidth}>
+        <Text bold={isSelected} color={COLORS.text}>
+          {row.session}
+        </Text>
+      </Box>
+      <Box flexShrink={0} overflow="hidden" width={layout.coreMetaWidth}>
+        <Text color={COLORS.dim}>{row.id}</Text>
+      </Box>
+      {layout.showSecondaryMeta ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.secondaryMetaWidth}>
+          <Text color={COLORS.muted}>{row.project}</Text>
+        </Box>
+      ) : null}
+      {layout.showTertiaryMeta && row.branch ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.tertiaryMetaWidth}>
+          <Text color={COLORS.accent}>{row.branch}</Text>
+        </Box>
+      ) : null}
+      {layout.showPrimaryMeta ? (
+        <Box flexShrink={0} overflow="hidden" width={layout.primaryMetaWidth}>
+          <Text color={COLORS.dim}>{row.when}</Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }

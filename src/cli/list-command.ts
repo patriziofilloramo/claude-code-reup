@@ -15,6 +15,14 @@ import { primaryStatus } from '../core/session/session-signals.js'
 import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import { relativeTime } from '../utils/time.js'
 import { failCommand, writeOutput } from './output.js'
+import {
+  compactRelativeTimeLabel,
+  formatSingleLineRow,
+  padVisibleEnd,
+  terminalWidthOrDefault,
+  truncateVisible,
+  visibleLength,
+} from './terminal-text.js'
 
 export const SESSION_LIST_SCHEMA_VERSION = 2
 
@@ -30,6 +38,13 @@ const ANSI_COLORS: Record<string, string> = {
   '32': '\u001b[32m',
   '90': '\u001b[90m',
 }
+const ACTIVE_MARKER = '\u25cf'
+const IDLE_MARKER = '\u25cb'
+const LIST_TABLE_MIN_SESSION_WIDTH = 18
+const LIST_PROJECT_MIN_WIDTH = 10
+const LIST_PROJECT_MAX_WIDTH = 24
+const LIST_COMPACT_PROJECT_MIN_WIDTH = 72
+const LIST_COMPACT_UPDATED_MIN_WIDTH = 56
 
 export interface ListOptions {
   activeOnly: boolean
@@ -191,7 +206,14 @@ export async function runListCommand(commandArguments: string[]): Promise<void> 
     console.log(JSON.stringify(createSessionListDocument(visibleSessions), null, 2))
     return
   }
-  writeOutput(formatSessionTable(visibleSessions, process.stdout.isTTY === true, allSessions))
+  writeOutput(
+    formatSessionTable(
+      visibleSessions,
+      process.stdout.isTTY === true,
+      allSessions,
+      process.stdout.columns
+    )
+  )
 }
 
 /**
@@ -279,38 +301,35 @@ export function filterListedSessions(
 export function formatSessionTable(
   sessions: ListedSession[],
   useColor = false,
-  allSessions = sessions
+  allSessions = sessions,
+  terminalWidth?: number
 ): string {
   if (sessions.length === 0) return 'No sessions match.'
 
   const rows = sessions.map((session) => ({
     id: shortestUniqueIdPrefix(session.id, allSessions),
-    project: truncate(session.projectName, 24),
-    session: truncate(session.alias ?? session.name, 36),
+    project: session.projectName,
+    session: session.alias ?? session.name,
     state: session.active
-      ? colorize('● active', '32', useColor)
-      : colorize('○ idle', '90', useColor),
-    updated: relativeTime(session.updated),
+      ? colorize(ACTIVE_MARKER, '32', useColor)
+      : colorize(IDLE_MARKER, '90', useColor),
+    updated: compactRelativeTimeLabel(relativeTime(session.updated)),
   }))
-  const widths = {
-    id: Math.max(9, ...rows.map((row) => row.id.length)),
-    project: Math.max(7, ...rows.map((row) => row.project.length)),
-    session: Math.max(7, ...rows.map((row) => row.session.length)),
-    state: 8,
-    updated: Math.max(7, ...rows.map((row) => row.updated.length)),
-  }
+  const width = terminalWidthOrDefault(terminalWidth)
+  const widths = sessionTableWidths(rows, width)
+  if (widths === null) return rows.map((row) => formatCompactSessionRow(row, width)).join('\n')
 
-  const header = formatTableRow(
+  const header = formatSessionTableRow(
     {
-      id: 'ID PREFIX',
+      id: 'ID',
       project: 'PROJECT',
       session: 'SESSION',
-      state: 'STATE',
-      updated: 'UPDATED',
+      state: 'S',
+      updated: 'WHEN',
     },
     widths
   )
-  return [header, ...rows.map((row) => formatTableRow(row, widths))].join('\n')
+  return [header, ...rows.map((row) => formatSessionTableRow(row, widths))].join('\n')
 }
 
 /** Returns the shortest globally unambiguous prefix, with a readable minimum. */
@@ -378,35 +397,68 @@ function displayNameFromPath(path: string): string {
   return path.split(/[/\\]/).filter(Boolean).pop() ?? path
 }
 
-function truncate(value: string, maximumLength: number): string {
-  const compactValue = value.replace(/\s+/g, ' ').trim()
-  return compactValue.length <= maximumLength
-    ? compactValue
-    : `${compactValue.slice(0, maximumLength - 1)}…`
-}
-
 function colorize(value: string, ansiColor: string, enabled: boolean): string {
   return enabled ? `${ANSI_COLORS[ansiColor] ?? ''}${value}${ANSI_RESET}` : value
 }
 
-function formatTableRow(
+function sessionTableWidths(
+  rows: Array<{ id: string; project: string; session: string; state: string; updated: string }>,
+  width: number
+): { id: number; project: number; session: number; state: number; updated: number } | null {
+  const state = 1
+  const id = Math.max(2, ...rows.map((row) => visibleLength(row.id)))
+  const updated = Math.max(4, ...rows.map((row) => visibleLength(row.updated)))
+  const naturalProject = Math.min(
+    LIST_PROJECT_MAX_WIDTH,
+    Math.max(7, ...rows.map((row) => visibleLength(row.project)))
+  )
+  const separators = 2 * 4
+  const fixedWithoutProject = state + id + updated + separators
+  let project = naturalProject
+  let session = width - fixedWithoutProject - project
+
+  if (session < LIST_TABLE_MIN_SESSION_WIDTH) {
+    const reclaimed = LIST_TABLE_MIN_SESSION_WIDTH - session
+    project = Math.max(LIST_PROJECT_MIN_WIDTH, project - reclaimed)
+    session = width - fixedWithoutProject - project
+  }
+  if (session < LIST_TABLE_MIN_SESSION_WIDTH) return null
+  return { id, project, session, state, updated }
+}
+
+function formatSessionTableRow(
   row: { id: string; project: string; session: string; state: string; updated: string },
   widths: { id: number; project: number; session: number; state: number; updated: number }
 ): string {
   return [
-    padVisible(row.state, widths.state),
-    row.project.padEnd(widths.project),
-    row.session.padEnd(widths.session),
-    row.updated.padEnd(widths.updated),
-    row.id.padEnd(widths.id),
+    padVisibleEnd(truncateVisible(row.state, widths.state), widths.state),
+    padVisibleEnd(truncateVisible(row.project, widths.project), widths.project),
+    padVisibleEnd(truncateVisible(row.session, widths.session), widths.session),
+    padVisibleEnd(truncateVisible(row.updated, widths.updated), widths.updated),
+    padVisibleEnd(truncateVisible(row.id, widths.id), widths.id),
   ].join('  ')
 }
 
-function padVisible(value: string, width: number): string {
-  const visibleValue = Object.values(ANSI_COLORS).reduce(
-    (text, color) => text.replaceAll(color, ''),
-    value.replaceAll(ANSI_RESET, '')
-  )
-  const visibleLength = visibleValue.length
-  return value + ' '.repeat(Math.max(0, width - visibleLength))
+function formatCompactSessionRow(
+  row: { id: string; project: string; session: string; state: string; updated: string },
+  width: number
+): string {
+  return formatSingleLineRow({
+    coreParts: [row.id],
+    metadataParts: [
+      width >= LIST_COMPACT_UPDATED_MIN_WIDTH ? row.updated : '',
+      width >= LIST_COMPACT_PROJECT_MIN_WIDTH ? row.project : '',
+    ],
+    prefix: `${row.state} `,
+    primary: row.session,
+    primaryMaxWidth: compactSessionPrimaryWidth(width),
+    primaryMinWidth: LIST_TABLE_MIN_SESSION_WIDTH,
+    width,
+  })
+}
+
+function compactSessionPrimaryWidth(width: number): number {
+  if (width >= LIST_COMPACT_PROJECT_MIN_WIDTH) return 36
+  if (width >= LIST_COMPACT_UPDATED_MIN_WIDTH) return 32
+  return 28
 }

@@ -31,16 +31,16 @@ describe('user preferences', () => {
     )
 
     expect(readUserPrefsSync()).toEqual({
-      autoCleanupOnStart: 'off',
       theme: 'dark',
     })
   })
 
-  it('ignores removed sync preferences instead of keeping them dormant', async () => {
+  it('ignores removed preferences instead of keeping them dormant', async () => {
     await writeFile(
       join(temporaryClaudeDirectory, 'reup', 'prefs.json'),
       JSON.stringify({
         advancedDiscovery: 'on',
+        autoCleanupOnStart: 'auto',
         crossDeviceSessionStorage: 'on',
         experimentalSharedSync: 'on',
         projectSearchPaths: ['/tmp/projects'],
@@ -48,7 +48,7 @@ describe('user preferences', () => {
       })
     )
 
-    expect(readUserPrefsSync()).toEqual({ autoCleanupOnStart: 'off', theme: 'dark' })
+    expect(readUserPrefsSync()).toEqual({ theme: 'dark' })
   })
 
   it('copies legacy private app data into the Reup directory on first read', async () => {

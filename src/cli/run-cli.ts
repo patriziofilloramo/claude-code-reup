@@ -196,41 +196,6 @@ function acceptsNoArguments(command: string, commandArguments: string[]): boolea
 // -----------------------------------------------------------------------------
 
 async function runTerminalInterface(): Promise<void> {
-  const { readUserPrefsSync } = await import('../core/user-prefs.js')
-  const { autoCleanupOnStart } = readUserPrefsSync()
-  if (autoCleanupOnStart !== 'off') {
-    const { getActiveSessions } = await import('../core/session/active-sessions.js')
-    const { findAutoArchiveCandidates, findCleanupCandidates } =
-      await import('../core/session/cleanup.js')
-    const { loadProjects } = await import('../core/project/project-discovery.js')
-    const { setSessionArchived } = await import('../core/session/session-metadata.js')
-
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
-    const candidates = findCleanupCandidates(projects, activeSessionIds)
-    if (candidates.length > 0) {
-      if (autoCleanupOnStart === 'auto') {
-        const safeCandidates = findAutoArchiveCandidates(candidates)
-        await Promise.all(
-          safeCandidates.map((candidate) =>
-            setSessionArchived(candidate.projectId, candidate.session.id, true)
-          )
-        )
-      } else {
-        // 'on' mode — show picker, user selects
-        const { runCleanupPicker } = await import('../tui/CleanupPicker.js')
-        const chosen = await runCleanupPicker(candidates)
-        releaseTerminalInput()
-        if (chosen && chosen.length > 0) {
-          await Promise.all(
-            candidates
-              .filter((c) => chosen.some((ch) => ch.session.id === c.session.id))
-              .map((c) => setSessionArchived(c.projectId, c.session.id, true))
-          )
-        }
-      }
-    }
-  }
-
   const { runTUI } = await import('../tui/App.js')
   const resumeTarget = await runTUI()
   if (!resumeTarget) return

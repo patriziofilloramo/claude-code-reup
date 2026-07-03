@@ -22,7 +22,7 @@ describe('TUI responsive layout', () => {
     expect(shouldUseSinglePanelLayout(120)).toBe(false)
     expect(bodyLayoutModeForWidth(29)).toBe('single-panel')
     expect(bodyLayoutModeForWidth(30)).toBe('split')
-    expect(bodyLayoutModeForWidth(120, true)).toBe('full-width-preview')
+    expect(bodyLayoutModeForWidth(120, { resumePreviewOpen: true })).toBe('full-width-preview')
   })
 
   it('drops project session counts only in the ultra-narrow project view', () => {
@@ -192,6 +192,34 @@ describe('TUI responsive layout', () => {
       },
       resumeCard: {
         width: 120,
+      },
+    })
+  })
+
+  it('lets action menus claim the full body width below 100 columns', () => {
+    const projects = [
+      { path: 'Apps/claude-sessions-manager', sessions: Array.from({ length: 26 }) },
+    ]
+
+    expect(
+      tuiViewportLayoutForWidth({ terminalWidth: 99, projects, actionMenuOpen: true })
+    ).toMatchObject({
+      bodyMode: 'full-width-actions',
+      projectPanel: {
+        showRightBorder: false,
+        width: 99,
+      },
+      sessionPanel: {
+        width: 99,
+      },
+    })
+
+    expect(
+      tuiViewportLayoutForWidth({ terminalWidth: 100, projects, actionMenuOpen: true })
+    ).toMatchObject({
+      bodyMode: 'split',
+      projectPanel: {
+        showRightBorder: true,
       },
     })
   })
