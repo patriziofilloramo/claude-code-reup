@@ -598,6 +598,40 @@ describe('session loading', () => {
     })
   })
 
+  if (process.platform === 'win32') {
+    it('matches older live sessions by encoded project id when Windows reports a short cwd alias', async () => {
+      const projectPath =
+        'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\reup-loading-test-ci\\slow-first-flush-workspace'
+      const encodedProjectId = encodeProjectPath(projectPath)
+      const encodedProjectDirectory = join(claudeDirectory, 'projects', encodedProjectId)
+      const startedAt = Date.now() - 60 * 60 * 1000
+      await mkdir(encodedProjectDirectory, { recursive: true })
+      await writeFile(join(encodedProjectDirectory, `${FOURTH_SESSION_ID}.jsonl`), '')
+      await writeLiveSessionLock(
+        'live-short-cwd-first-flush.json',
+        FOURTH_SESSION_ID,
+        projectPath,
+        startedAt
+      )
+
+      const projects = await loadProjects()
+      const project = projects.find((candidate) => candidate.id === encodedProjectId)
+
+      expect(project).toMatchObject({
+        id: encodedProjectId,
+        path: projectPath,
+        sessions: [
+          {
+            id: FOURTH_SESSION_ID,
+            messageCount: 0,
+            name: 'New session',
+            projectPath,
+          },
+        ],
+      })
+    })
+  }
+
   it('resolves current branches independently for sessions in different working directories', async () => {
     const firstWorkspace = join(claudeDirectory, 'first-workspace')
     const secondWorkspace = join(claudeDirectory, 'second-workspace')

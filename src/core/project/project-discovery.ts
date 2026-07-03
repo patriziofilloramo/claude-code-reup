@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { access, readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { log } from '../../utils/logger.js'
@@ -326,11 +326,13 @@ async function addGhostSessions(
 ): Promise<Session[]> {
   const now = Date.now()
   const knownIds = new Set(sessions.map((s) => s.id))
+  const projectDirectoryName = basename(projectDirectory)
 
   const candidates = liveSessions.filter(
     (record): record is SessionLockRecord & { cwd: string } =>
       record.cwd !== null &&
-      pathsReferToSameLocation(record.cwd, projectPath) &&
+      (pathsReferToSameLocation(record.cwd, projectPath) ||
+        encodeProjectPath(record.cwd) === projectDirectoryName) &&
       !knownIds.has(record.sessionId)
   )
 
