@@ -1,5 +1,5 @@
 import { cpSync, existsSync } from 'node:fs'
-import { readdir } from 'node:fs/promises'
+import { access, readdir } from 'node:fs/promises'
 import os from 'node:os'
 import { join } from 'node:path'
 
@@ -123,6 +123,19 @@ async function resolveEncodedPath(
       .sort((left, right) => right.length - left.length)[0]
 
     if (!matchingEntry) {
+      const shortNameSegment =
+        pathSeparator === '\\'
+          ? await resolveWindowsShortNameSegment(resolvedPath, encodedPathRemainder)
+          : null
+      if (shortNameSegment) {
+        resolvedPath = join(resolvedPath, shortNameSegment)
+        encodedPathRemainder =
+          encodedPathRemainder === shortNameSegment
+            ? ''
+            : encodedPathRemainder.slice(shortNameSegment.length + 1)
+        continue
+      }
+
       return join(resolvedPath, encodedPathRemainder.replace(/-/g, pathSeparator))
     }
 
@@ -134,4 +147,25 @@ async function resolveEncodedPath(
   }
 
   return resolvedPath
+}
+
+async function resolveWindowsShortNameSegment(
+  resolvedPath: string,
+  encodedPathRemainder: string
+): Promise<string | null> {
+  const separatorIndex = encodedPathRemainder.indexOf('-')
+  const segment =
+    separatorIndex === -1 ? encodedPathRemainder : encodedPathRemainder.slice(0, separatorIndex)
+  if (!isWindowsShortNameSegment(segment)) return null
+
+  try {
+    await access(join(resolvedPath, segment))
+    return segment
+  } catch {
+    return null
+  }
+}
+
+export function isWindowsShortNameSegment(segment: string): boolean {
+  return /^[^/\\.-]{1,6}~\d+(?:\.[^/\\.-]{1,3})?$/i.test(segment)
 }

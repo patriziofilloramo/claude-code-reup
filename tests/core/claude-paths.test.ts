@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   decodeProjectDirectoryName,
   encodeProjectPath,
+  isWindowsShortNameSegment,
   resolveProjectPath,
 } from '../../src/core/project/claude-paths.js'
 
@@ -42,4 +43,18 @@ describe('decodeProjectDirectoryName', () => {
       }
     })
   }
+})
+
+describe('isWindowsShortNameSegment', () => {
+  it('recognizes conservative Windows 8.3 path aliases', () => {
+    expect(isWindowsShortNameSegment('RUNNER~1')).toBe(true)
+    expect(isWindowsShortNameSegment('PROGRA~2')).toBe(true)
+    expect(isWindowsShortNameSegment('NODEJS~1.TMP')).toBe(true)
+  })
+
+  it('does not treat ordinary hyphenated project names as short aliases', () => {
+    expect(isWindowsShortNameSegment('reup-loading-test')).toBe(false)
+    expect(isWindowsShortNameSegment('slow-first-flush-workspace')).toBe(false)
+    expect(isWindowsShortNameSegment('runner')).toBe(false)
+  })
 })
