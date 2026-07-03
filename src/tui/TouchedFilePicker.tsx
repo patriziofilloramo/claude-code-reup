@@ -5,7 +5,11 @@ import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import type { TouchedFileSummary } from '../core/session/session-file-search.js'
 import { relativeTime } from '../utils/time.js'
-import { pickerRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
+import {
+  maximumVisibleRowsForTerminal,
+  pickerRowLayoutForWidth,
+  type PickerRowLayout,
+} from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 import { filterTouchedFiles } from './touched-finder-model.js'
 
@@ -49,7 +53,7 @@ export function TouchedFilePicker({
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const matchingFiles = filterTouchedFiles(files, query)
-  const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - PICKER_CHROME_ROWS)
+  const maximumVisibleRows = maximumVisibleRowsForTerminal(stdout?.rows, PICKER_CHROME_ROWS, 20)
   const rowLayout = pickerRowLayoutForWidth(stdout?.columns)
   const [visibleFiles, visibleSelectedIndex] = createVisibleWindow(
     matchingFiles,

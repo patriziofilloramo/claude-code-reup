@@ -10,7 +10,11 @@ import {
   type TouchedFileSummary,
 } from '../core/session/session-file-search.js'
 import type { Project, Session } from '../core/session/session-model.js'
-import { pickerSessionRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
+import {
+  maximumVisibleRowsForTerminal,
+  pickerSessionRowLayoutForWidth,
+  type PickerRowLayout,
+} from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 import { TouchedFilePicker } from './TouchedFilePicker.js'
 import { buildTouchedSessionRows, type TouchedSessionRow } from './touched-finder-model.js'
@@ -129,7 +133,7 @@ function TouchedSessionsView({
   const { stdout } = useStdout()
   const [selectedIndex, setSelectedIndex] = useState(0)
   const rows = buildTouchedSessionRows(matches, activeSessionIds)
-  const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - SESSIONS_CHROME_ROWS)
+  const maximumVisibleRows = maximumVisibleRowsForTerminal(stdout?.rows, SESSIONS_CHROME_ROWS, 20)
   const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
   const paired = matches.map((match, index) => ({ match, row: rows[index] as TouchedSessionRow }))
   const [visiblePairs, visibleSelectedIndex] = createVisibleWindow(

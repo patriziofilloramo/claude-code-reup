@@ -8,7 +8,11 @@ import type { RankedSession } from '../core/session/session-ranking.js'
 import { filterSessionCandidates } from '../core/session/session-ranking.js'
 import { relativeTime } from '../utils/time.js'
 import { DeepSearchPicker } from './DeepSearchPicker.js'
-import { pickerSessionRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
+import {
+  maximumVisibleRowsForTerminal,
+  pickerSessionRowLayoutForWidth,
+  type PickerRowLayout,
+} from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 
 export interface ResumePickerSelection {
@@ -88,7 +92,7 @@ export function ResumePicker({
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const matchingCandidates = filterSessionCandidates(candidates, query)
-  const maximumVisibleRows = Math.max(4, (stdout?.rows ?? 20) - PICKER_CHROME_ROWS)
+  const maximumVisibleRows = maximumVisibleRowsForTerminal(stdout?.rows, PICKER_CHROME_ROWS, 20)
   const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
   const [visibleCandidates, visibleSelectedIndex] = createVisibleWindow(
     matchingCandidates,

@@ -7,7 +7,11 @@ import { COLORS } from '../config/theme.js'
 import type { ContentMatch } from '../core/session/session-search.js'
 import type { Project } from '../core/session/session-model.js'
 import { relativeTime } from '../utils/time.js'
-import { pickerSessionRowLayoutForWidth, type PickerRowLayout } from './picker-row-layout.js'
+import {
+  maximumVisibleItemPairsForTerminal,
+  pickerSessionRowLayoutForWidth,
+  type PickerRowLayout,
+} from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 
 const FOOTER_ROWS = 2
@@ -80,7 +84,7 @@ function DeepSearchPicker({
 
   // Each result intentionally occupies 2 terminal rows: summary + snippet.
   const chromeRows = showFooter ? CHROME_ROWS : CHROME_ROWS - FOOTER_ROWS
-  const maxVisible = Math.max(2, Math.floor(((stdout?.rows ?? 20) - chromeRows) / 2))
+  const maxVisible = maximumVisibleItemPairsForTerminal(stdout?.rows, chromeRows, 20)
   const items = results ?? []
   const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
 

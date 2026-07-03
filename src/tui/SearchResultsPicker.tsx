@@ -6,7 +6,10 @@ import { shortestUniqueIdPrefix } from '../cli/list-command.js'
 import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
 import { relativeTime } from '../utils/time.js'
-import { pickerSessionRowLayoutForWidth } from './picker-row-layout.js'
+import {
+  maximumVisibleRowsForTerminal,
+  pickerSessionRowLayoutForWidth,
+} from './picker-row-layout.js'
 import { createVisibleWindow } from './session-view.js'
 
 interface SearchResultsPickerProps {
@@ -38,7 +41,7 @@ export function SearchResultsPicker({
   const { stdout } = useStdout()
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const maxVisible = Math.max(4, (stdout?.rows ?? 24) - CHROME_ROWS)
+  const maxVisible = maximumVisibleRowsForTerminal(stdout?.rows, CHROME_ROWS, 24)
   const rowLayout = pickerSessionRowLayoutForWidth(stdout?.columns)
 
   const rowData: RowData[] = sessions.map((s) => ({

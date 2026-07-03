@@ -83,3 +83,29 @@ export function pickerSessionRowLayoutForWidth(width: number | undefined): Picke
     primaryWidth: Math.max(1, layout.primaryWidth - layout.coreMetaWidth - 1),
   }
 }
+
+/**
+ * Rows available for a picker's scrollable list, one row per item. Floored at
+ * 1 rather than a larger minimum — a bigger floor can make Ink's frame taller
+ * than a short terminal, which scrolls the title/search line off-screen
+ * (see PROJECT_MEMORY).
+ */
+export function maximumVisibleRowsForTerminal(
+  terminalRows: number | undefined,
+  chromeRows: number,
+  fallbackTerminalRows: number
+): number {
+  return Math.max(1, (terminalRows ?? fallbackTerminalRows) - chromeRows)
+}
+
+/**
+ * Same as `maximumVisibleRowsForTerminal`, for pickers whose rows each occupy
+ * two terminal lines (e.g. a summary line plus a snippet line).
+ */
+export function maximumVisibleItemPairsForTerminal(
+  terminalRows: number | undefined,
+  chromeRows: number,
+  fallbackTerminalRows: number
+): number {
+  return Math.max(1, Math.floor(((terminalRows ?? fallbackTerminalRows) - chromeRows) / 2))
+}
