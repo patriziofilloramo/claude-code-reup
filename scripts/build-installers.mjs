@@ -146,18 +146,21 @@ function findInnoCompiler() {
     process.env['INNO_SETUP_COMPILER'],
     'ISCC.exe',
     'iscc',
+    join(process.env['LOCALAPPDATA'] ?? '', 'Programs', 'Inno Setup 6', 'ISCC.exe'),
     'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe',
     'C:\\Program Files\\Inno Setup 6\\ISCC.exe',
   ].filter(Boolean)
 
   for (const candidate of candidates) {
+    if (candidate.includes('\\') && existsSync(candidate)) return candidate
+
     const result = spawnSync(candidate, ['/?'], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
     })
-    if (!result.error && result.status === 0) return candidate
+    if (!result.error && result.stdout.includes('Inno Setup')) return candidate
   }
   return undefined
 }
