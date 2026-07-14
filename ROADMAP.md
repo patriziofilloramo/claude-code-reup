@@ -4,10 +4,11 @@
 
 ### High
 
-- [ ] **Windows terminal launcher builds shell strings** — `terminal.windows.ts` uses `exec()`
-      to construct shell commands. Input paths come from the filesystem (not the browser), so
-      practical risk is low, but the pattern is still fragile. Needs dedicated testing on a clean
-      Windows environment before any public release. See `terminal.windows.ts`.
+- [x] **Windows terminal launcher shell-string blocker resolved** — `terminal.windows.ts` now
+      uses structured `execFile()` / `spawn()` launch paths for Windows Terminal, PowerShell,
+      and detached `cmd`, with argument-structure regression tests in
+      `tests/core/terminal-windows.test.ts`. Clean Windows manual smoke remains part of
+      release validation, but the fragile `exec()` implementation is no longer present.
 
 - [x] **Public product and package naming resolved** - the product is **Reup**, the CLI command is
       `reup`, and the npm package identity is `@patriziofilloramo/reup`.
@@ -270,6 +271,10 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       `PRIVACY.md`, `SECURITY.md`, `SUPPORT.md`)
 - [x] Make the README install-first and explicit about local-only/no telemetry/no
       account/no warranty/no SLA
+- [x] Add local release-candidate builder (`npm run release:local`) for fast
+      first-phase artifacts with no official publish. It validates the repo,
+      packages the npm tarball and VSIX, writes local SBOM/provenance metadata,
+      and generates `SHA256SUMS.txt` under `release/`.
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
 - [ ] Add the installed `reup` launcher to the current user's `PATH`
 - [ ] Windows installer: offer pre-selected PowerShell completion integration
@@ -278,7 +283,8 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       back up profiles before first modification and remove only Reup-owned blocks
 - [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments
-- [ ] Publish checksums, signatures, SBOM, and provenance attestations
+- [x] Generate local checksums, SBOMs, and provenance metadata for release-candidate artifacts
+- [ ] Publish signed checksums, detached signatures, SBOM, and CI-backed provenance attestations
 
 ---
 
@@ -334,8 +340,7 @@ required. All go/no-go criteria were met.
 
 - [ ] Extension host manual smoke test (activation, Quick Pick, tree refresh,
       integrated-terminal launch) on a clean Windows and macOS environment
-- [ ] Windows terminal launcher (`terminal.windows.ts`) needs dedicated testing
-      before any public release — see open bug above
+- [ ] Clean Windows manual terminal-launch smoke before official public release
 
 ---
 

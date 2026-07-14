@@ -18,6 +18,32 @@ release. Each release should contain:
 - Provenance attestations where CI supports them.
 - Human release notes with install, upgrade, rollback, and known-risk notes.
 
+## Local Release Candidate
+
+The first Milestone 9 phase is a local release candidate only. It prepares the
+best available artifacts and evidence without publishing anything:
+
+```text
+npm run release:local
+```
+
+The command refuses a dirty working tree by default. For script development
+only, pass `-- --allow-dirty`; those artifacts are clearly marked as local
+validation output and must not be distributed.
+
+The local release folder is written under `release/` and contains:
+
+- the npm package tarball from `npm pack`;
+- the packaged VS Code `.vsix`;
+- a source archive when built from a clean commit;
+- root and extension CycloneDX SBOMs from `npm sbom`;
+- `provenance.local.json`;
+- `RELEASE_NOTES.md`;
+- `SHA256SUMS.txt`.
+
+This local RC intentionally skips official publish, signing, notarization,
+detached signatures, CI-backed attestations, and native installer generation.
+
 ## Platform Matrix
 
 | Platform            | Artifact                      | Install goal                        | Verification                     |
@@ -107,6 +133,11 @@ environments:
 - uninstall;
 - checksum verification;
 - signature/notarization verification where applicable.
+
+Before creating a local release candidate, `npm run release:local` runs the
+repository gate: version sync, format check, lint, build, tests, extension
+build/package/smoke, browser-client syntax check, npm audits, and diff
+whitespace checks.
 
 ## Development Installation
 

@@ -440,8 +440,10 @@ platform-specific launchers:
 - Windows: Windows Terminal, PowerShell, `cmd`, then clipboard fallback.
 
 Session IDs are UUID-validated. Unix paths are shell-quoted. The Windows
-launcher still uses carefully escaped shell command strings and requires
-dedicated clean-environment testing before release.
+launcher passes working directories and command tokens through structured
+`execFile()` / `spawn()` arguments, with clipboard fallback only after launch
+attempts fail. Clean Windows manual smoke is still required before official
+public release.
 
 ## Configuration
 
@@ -471,5 +473,6 @@ ESLint covers TypeScript, tests, and the standalone browser JavaScript. Prettier
 covers source, tests, browser HTML/CSS, scripts, workflow files, and maintained
 Markdown.
 
-Before release, also run `node --check src/web/client.js`, `npm audit`, and
+Before release, also run `npm run release:local` for a local release-candidate
+bundle, or at minimum run `node --check src/web/client.js`, `npm audit`, and
 `npm pack --dry-run`.

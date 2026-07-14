@@ -174,6 +174,12 @@ npm run lint
 npm run format:check
 ```
 
+Local release-candidate artifacts, without official publishing:
+
+```bash
+npm run release:local
+```
+
 Useful documents:
 
 - [Architecture](Documents/ARCHITECTURE.md)
