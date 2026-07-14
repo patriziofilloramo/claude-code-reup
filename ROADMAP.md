@@ -280,11 +280,14 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       Node-runtime portable packages with per-user install/uninstall scripts,
       not official signed/native installers.
 - [x] Add optional unsigned Windows `.exe` installer generation via Inno Setup 6. The build writes a clear skip note when `ISCC.exe` is not installed.
+- [x] Add Windows installer task prompts for current-user `PATH` and
+      PowerShell completion. Completion uses managed profile blocks for Windows
+      PowerShell 5.1 and PowerShell 7 and is removed on uninstall.
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
-- [ ] Add the installed `reup` launcher to the current user's `PATH`
-- [ ] Windows installer: offer pre-selected PowerShell completion integration
+- [x] Add the installed `reup` launcher to the current user's `PATH`
+- [x] Windows installer: offer pre-selected PowerShell completion integration
       for Windows PowerShell 5.1 and PowerShell 7
-- [ ] Install shell completion as a managed, idempotent, reversible integration;
+- [x] Install shell completion as a managed, idempotent, reversible integration;
       back up profiles before first modification and remove only Reup-owned blocks
 - [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments

@@ -91,9 +91,11 @@ function buildWindowsPackage(runtimeApp) {
   const packageRoot = join(workDir, `reup-windows-x64-v${version}`)
   const appDir = join(packageRoot, 'app')
   const binDir = join(packageRoot, 'bin')
+  const completionDir = join(packageRoot, 'completion')
 
   cpSync(runtimeApp, appDir, { recursive: true })
   mkdirSync(binDir, { recursive: true })
+  mkdirSync(completionDir, { recursive: true })
   writeFileSync(
     join(binDir, 'reup.cmd'),
     ['@echo off', 'node "%~dp0..\\app\\dist\\index.js" %*', ''].join('\r\n')
@@ -102,6 +104,7 @@ function buildWindowsPackage(runtimeApp) {
     join(binDir, 'reup.ps1'),
     ['#!/usr/bin/env pwsh', '& node "$PSScriptRoot/../app/dist/index.js" @args', ''].join('\n')
   )
+  writeFileSync(join(completionDir, 'reup.ps1'), windowsCompletionLoader())
   writeFileSync(join(packageRoot, 'install.ps1'), windowsInstallScript())
   writeFileSync(join(packageRoot, 'uninstall.ps1'), windowsUninstallScript())
   writeFileSync(join(packageRoot, 'README-INSTALL.txt'), windowsReadme())
@@ -180,6 +183,7 @@ function windowsInnoScript(packageRoot) {
     'AppPublisherURL=https://github.com/patriziofilloramo/claude-code-reup',
     'AppSupportURL=https://github.com/patriziofilloramo/claude-code-reup/issues',
     'DefaultDirName={localappdata}\\Programs\\reup',
+    'DisableDirPage=no',
     'DisableProgramGroupPage=yes',
     'OutputDir=' + escapeInnoPath(installerDir),
     `OutputBaseFilename=${outputBaseName}`,
@@ -195,7 +199,12 @@ function windowsInnoScript(packageRoot) {
     '[Files]',
     'Source: "{#PackageRoot}\\app\\*"; DestDir: "{app}\\app"; Flags: recursesubdirs createallsubdirs ignoreversion',
     'Source: "{#PackageRoot}\\bin\\*"; DestDir: "{app}\\bin"; Flags: recursesubdirs createallsubdirs ignoreversion',
+    'Source: "{#PackageRoot}\\completion\\*"; DestDir: "{app}\\completion"; Flags: recursesubdirs createallsubdirs ignoreversion',
     'Source: "{#PackageRoot}\\README-INSTALL.txt"; DestDir: "{app}"; Flags: ignoreversion',
+    '',
+    '[Tasks]',
+    'Name: "addtopath"; Description: "Add reup to the current user PATH"; Flags: checkedonce',
+    'Name: "powershellcompletion"; Description: "Enable PowerShell tab completion for Windows PowerShell and PowerShell 7"; Flags: checkedonce',
     '',
     '[Icons]',
     'Name: "{userprograms}\\Reup\\Uninstall Reup"; Filename: "{uninstallexe}"',
@@ -205,6 +214,8 @@ function windowsInnoScript(packageRoot) {
     '',
     '[Code]',
     "const PathSeparator = ';';",
+    "const CompletionStartMarker = '# >>> reup completion >>>';",
+    "const CompletionEndMarker = '# <<< reup completion <<<';",
     '',
     'function PathPartMatches(Value: string; Entry: string): Boolean;',
     'begin',
@@ -277,17 +288,92 @@ function windowsInnoScript(packageRoot) {
     "  RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', NextValue);",
     'end;',
     '',
+    'function CompletionBlock(): string;',
+    'begin',
+    `  Result := CompletionStartMarker + #13#10 + '. "' + ExpandConstant('{app}\\completion\\reup.ps1') + '"' + #13#10 + CompletionEndMarker + #13#10;`,
+    'end;',
+    '',
+    'procedure EnsurePowerShellProfile(ProfilePath: string);',
+    'var',
+    '  Content: AnsiString;',
+    '  ParentDir: string;',
+    'begin',
+    '  ParentDir := ExtractFileDir(ProfilePath);',
+    '  ForceDirectories(ParentDir);',
+    '  if FileExists(ProfilePath) then begin',
+    '    if not LoadStringFromFile(ProfilePath, Content) then',
+    "      Content := '';",
+    '  end else begin',
+    "    Content := '';",
+    '  end;',
+    '  if Pos(CompletionStartMarker, Content) > 0 then',
+    '    Exit;',
+    '  if FileExists(ProfilePath) then',
+    "    CopyFile(ProfilePath, ProfilePath + '.reup-backup', False);",
+    "  if (Content <> '') and (Copy(Content, Length(Content), 1) <> #10) then",
+    '    Content := Content + #13#10;',
+    '  Content := Content + CompletionBlock();',
+    '  SaveStringToFile(ProfilePath, Content, False);',
+    'end;',
+    '',
+    'procedure RemovePowerShellProfile(ProfilePath: string);',
+    'var',
+    '  Content: AnsiString;',
+    '  StartPos: Integer;',
+    '  EndPos: Integer;',
+    'begin',
+    '  if not FileExists(ProfilePath) then',
+    '    Exit;',
+    '  if not LoadStringFromFile(ProfilePath, Content) then',
+    '    Exit;',
+    '  StartPos := Pos(CompletionStartMarker, Content);',
+    '  EndPos := Pos(CompletionEndMarker, Content);',
+    '  if (StartPos = 0) or (EndPos = 0) or (EndPos < StartPos) then',
+    '    Exit;',
+    '  Delete(Content, StartPos, EndPos - StartPos + Length(CompletionEndMarker));',
+    '  SaveStringToFile(ProfilePath, Content, False);',
+    'end;',
+    '',
+    'procedure InstallPowerShellCompletion();',
+    'begin',
+    "  EnsurePowerShellProfile(ExpandConstant('{userdocs}\\WindowsPowerShell\\Microsoft.PowerShell_profile.ps1'));",
+    "  EnsurePowerShellProfile(ExpandConstant('{userdocs}\\PowerShell\\Microsoft.PowerShell_profile.ps1'));",
+    'end;',
+    '',
+    'procedure RemovePowerShellCompletion();',
+    'begin',
+    "  RemovePowerShellProfile(ExpandConstant('{userdocs}\\WindowsPowerShell\\Microsoft.PowerShell_profile.ps1'));",
+    "  RemovePowerShellProfile(ExpandConstant('{userdocs}\\PowerShell\\Microsoft.PowerShell_profile.ps1'));",
+    'end;',
+    '',
     'procedure CurStepChanged(CurStep: TSetupStep);',
     'begin',
-    '  if CurStep = ssPostInstall then',
-    "    AddToUserPath(ExpandConstant('{app}\\bin'));",
+    '  if CurStep = ssPostInstall then begin',
+    "    if WizardIsTaskSelected('addtopath') then",
+    "      AddToUserPath(ExpandConstant('{app}\\bin'));",
+    "    if WizardIsTaskSelected('powershellcompletion') then",
+    '      InstallPowerShellCompletion();',
+    '  end;',
     'end;',
     '',
     'procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);',
     'begin',
-    '  if CurUninstallStep = usPostUninstall then',
+    '  if CurUninstallStep = usPostUninstall then begin',
     "    RemoveFromUserPath(ExpandConstant('{app}\\bin'));",
+    '    RemovePowerShellCompletion();',
+    '  end;',
     'end;',
+    '',
+  ].join('\r\n')
+}
+
+function windowsCompletionLoader() {
+  return [
+    '$ErrorActionPreference = "SilentlyContinue"',
+    '$ReupCommand = Join-Path $PSScriptRoot "..\\bin\\reup.cmd"',
+    'if (Test-Path $ReupCommand) {',
+    '  & $ReupCommand completion powershell | Out-String | Invoke-Expression',
+    '}',
     '',
   ].join('\r\n')
 }
@@ -378,7 +464,8 @@ function windowsReadme() {
     '  - Requires Node.js 20 or newer on PATH.',
     '  - Installs per-user to %LOCALAPPDATA%\\Programs\\reup.',
     '  - Adds only the Reup bin directory to the current user PATH.',
-    '  - Does not install shell completion or weaken execution policy permanently.',
+    '  - The .exe installer can also add PowerShell completion through managed profile blocks.',
+    '  - Does not weaken execution policy permanently.',
     '  - Unsigned RC package; not an official public installer.',
     '',
   ].join('\r\n')
@@ -461,8 +548,8 @@ function writeInstallerNotes() {
       '- Installs per-user only.',
       '- Does not publish to npm, GitHub Releases, or the VS Code Marketplace.',
       '- Generates an unsigned Windows `.exe` when Inno Setup 6 is installed.',
+      '- The Windows `.exe` asks before adding PATH and PowerShell completion.',
       '- Does not sign, notarize, generate `.deb`, or generate `.rpm` packages yet.',
-      '- Does not install shell completion yet.',
       '',
       '## Windows `.exe` Builder',
       '',
@@ -482,6 +569,7 @@ function writeInstallerNotes() {
       '- `reup --version`',
       '- `reup doctor`',
       '- `reup web` binds to localhost',
+      '- PowerShell completion works after opening a new PowerShell session when selected',
       '- uninstall removes the launcher from PATH/symlink location',
       '',
     ].join('\n')

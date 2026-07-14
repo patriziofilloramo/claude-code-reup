@@ -73,8 +73,13 @@ winget install --id JRSoftware.InnoSetup -e
 
 If Inno Setup is missing, `release:installers` still creates the portable
 Windows zip and writes `WINDOWS_EXE_INSTALLER_SKIPPED.txt`. These artifacts do
-not install shell completion, publish anything, sign artifacts, notarize macOS
-output, or produce `.deb` / `.rpm` packages.
+not publish anything, sign artifacts, notarize macOS output, or produce `.deb`
+/ `.rpm` packages.
+
+The Windows `.exe` shows installer tasks for adding `reup` to the current user
+`PATH` and enabling PowerShell tab completion for Windows PowerShell 5.1 and
+PowerShell 7. Completion is implemented through clearly marked managed profile
+blocks and removed during uninstall.
 
 ## Platform Matrix
 
