@@ -275,6 +275,11 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       first-phase artifacts with no official publish. It validates the repo,
       packages the npm tarball and VSIX, writes local SBOM/provenance metadata,
       and generates `SHA256SUMS.txt` under `release/`.
+- [x] Add local installable RC packages (`npm run release:installers`) for
+      Windows, macOS, and Linux clean-machine smoke. These are unsigned,
+      Node-runtime portable packages with per-user install/uninstall scripts,
+      not official signed/native installers.
+- [x] Add optional unsigned Windows `.exe` installer generation via Inno Setup 6. The build writes a clear skip note when `ISCC.exe` is not installed.
 - [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
 - [ ] Add the installed `reup` launcher to the current user's `PATH`
 - [ ] Windows installer: offer pre-selected PowerShell completion integration

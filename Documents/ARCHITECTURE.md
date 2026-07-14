@@ -474,5 +474,6 @@ covers source, tests, browser HTML/CSS, scripts, workflow files, and maintained
 Markdown.
 
 Before release, also run `npm run release:local` for a local release-candidate
-bundle, or at minimum run `node --check src/web/client.js`, `npm audit`, and
+bundle and `npm run release:installers` for installable RC packages, or at
+minimum run `node --check src/web/client.js`, `npm audit`, and
 `npm pack --dry-run`.

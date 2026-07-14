@@ -180,6 +180,12 @@ Local release-candidate artifacts, without official publishing:
 npm run release:local
 ```
 
+Local installable RC packages for clean-machine smoke tests:
+
+```bash
+npm run release:installers
+```
+
 Useful documents:
 
 - [Architecture](Documents/ARCHITECTURE.md)

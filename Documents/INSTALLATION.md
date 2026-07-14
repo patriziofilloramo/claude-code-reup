@@ -44,6 +44,38 @@ The local release folder is written under `release/` and contains:
 This local RC intentionally skips official publish, signing, notarization,
 detached signatures, CI-backed attestations, and native installer generation.
 
+## Local Installable Packages
+
+After the local RC path is healthy, build per-platform installable RC packages:
+
+```text
+npm run release:installers
+```
+
+This command runs `npm run release:local` first, then adds installable packages
+under the same release folder:
+
+- `installers/reup-setup-windows-x64-v<version>.exe` when Inno Setup is installed;
+- `installers/reup-windows-x64-v<version>.zip`;
+- `installers/reup-macos-universal-v<version>.tar.gz`;
+- `installers/reup-linux-x64-v<version>.tar.gz`;
+- `INSTALLERS.md` with smoke-test instructions;
+- updated `SHA256SUMS.txt`.
+
+These packages include the built Reup app and production `node_modules`, but
+still require Node.js 20 or newer on the target machine. They install per-user
+only and are meant for clean-machine validation before signed native installers.
+The Windows `.exe` is built with Inno Setup 6 when available:
+
+```text
+winget install --id JRSoftware.InnoSetup -e
+```
+
+If Inno Setup is missing, `release:installers` still creates the portable
+Windows zip and writes `WINDOWS_EXE_INSTALLER_SKIPPED.txt`. These artifacts do
+not install shell completion, publish anything, sign artifacts, notarize macOS
+output, or produce `.deb` / `.rpm` packages.
+
 ## Platform Matrix
 
 | Platform            | Artifact                      | Install goal                        | Verification                     |
@@ -54,6 +86,11 @@ detached signatures, CI-backed attestations, and native installer generation.
 | Linux Fedora/RHEL   | `.rpm`                        | Package-managed install/uninstall   | SHA-256 + package metadata       |
 | Linux generic       | `.tar.gz`                     | Portable install for power users    | SHA-256                          |
 | VS Code             | `.vsix`                       | Manual extension install            | SHA-256                          |
+
+The local RC installable packages intentionally cover the portable/package
+shape first. Unsigned Windows `.exe` generation is available with Inno Setup;
+signed Windows artifacts, package-manager Linux artifacts, and macOS
+notarization remain official-release work.
 
 ## Installer Principles
 
