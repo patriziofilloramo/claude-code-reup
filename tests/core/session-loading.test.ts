@@ -598,6 +598,68 @@ describe('session loading', () => {
     })
   })
 
+  it('surfaces real transcript metadata for a live session the metadata index has not caught up to yet', async () => {
+    const projectPath = join(claudeDirectory, 'metadata-lag-workspace')
+    const encodedProjectId = encodeProjectPath(projectPath)
+    const encodedProjectDirectory = join(claudeDirectory, 'projects', encodedProjectId)
+    await mkdir(projectPath)
+    await mkdir(encodedProjectDirectory, { recursive: true })
+
+    // A pre-existing, indexed session keeps loadProjects() on the metadata
+    // index fast path, which is what shadows a just-started session's
+    // transcript until Claude Code appends it to sessions-index.json.
+    await writeFile(join(encodedProjectDirectory, `${SESSION_ID}.jsonl`), '{}')
+    await writeFile(
+      join(encodedProjectDirectory, 'sessions-index.json'),
+      JSON.stringify({
+        sessions: [
+          {
+            created: '2026-06-01T09:00:00.000Z',
+            id: SESSION_ID,
+            messageCount: 3,
+            name: 'Already indexed session',
+            projectPath,
+            updated: '2026-06-01T09:05:00.000Z',
+          },
+        ],
+      })
+    )
+
+    // The live session's transcript is already on disk with real content —
+    // the index just has not listed it yet.
+    await writeFile(
+      join(encodedProjectDirectory, `${FOURTH_SESSION_ID}.jsonl`),
+      [
+        JSON.stringify({
+          cwd: projectPath,
+          message: { content: 'Investigate the flaky upload test' },
+          timestamp: '2026-06-01T10:00:00.000Z',
+          type: 'user',
+        }),
+        JSON.stringify({
+          message: { content: [{ text: 'Looking into it', type: 'text' }] },
+          timestamp: '2026-06-01T10:01:00.000Z',
+          type: 'assistant',
+        }),
+      ].join('\n')
+    )
+    await writeLiveSessionLock('live-metadata-lag.json', FOURTH_SESSION_ID, projectPath)
+
+    const projects = await loadProjects()
+    const project = projects.find((candidate) => candidate.id === encodedProjectId)
+    const liveSession = project?.sessions.find((session) => session.id === FOURTH_SESSION_ID)
+
+    // Regression: addGhostSessions used to always fall back to a 0-message
+    // ghost here, which isResumeVisibleSession then filtered out of the web
+    // session list entirely — a live session with a full transcript vanished.
+    expect(liveSession).toMatchObject({
+      id: FOURTH_SESSION_ID,
+      messageCount: 2,
+      name: 'Investigate the flaky upload test',
+      projectPath,
+    })
+  })
+
   if (process.platform === 'win32') {
     it('matches older live sessions by encoded project id when Windows reports a short cwd alias', async () => {
       const projectPath =

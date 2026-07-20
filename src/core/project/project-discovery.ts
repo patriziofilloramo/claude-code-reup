@@ -338,18 +338,32 @@ async function addGhostSessions(
 
   if (candidates.length === 0) return sessions
 
-  const ghosts: Session[] = []
+  const revived: Session[] = []
   for (const record of candidates) {
     const jsonlPath = join(projectDirectory, `${record.sessionId}.jsonl`)
     const jsonlExists = await access(jsonlPath)
       .then(() => true)
       .catch(() => false)
-    if (!jsonlExists && !isRecentLockRecord(record.startedAt, now)) continue
-    ghosts.push(buildGhostSession(record))
+
+    if (jsonlExists) {
+      // The transcript exists but discovery missed this session — typically
+      // because the metadata index (loadIndexedSessions) has not listed a
+      // just-started or actively-running session yet, so the fast path
+      // shadowed its transcript. Parse the authoritative transcript so the
+      // live session carries real metadata instead of a 0-message ghost,
+      // which isResumeVisibleSession would otherwise filter out entirely.
+      const parsed = await parseSessionTranscript(jsonlPath, projectPath)
+      revived.push(parsed ?? buildGhostSession(record))
+      continue
+    }
+
+    // No transcript on disk yet: surface only during Claude Code's short
+    // startup/first-flush window, where the live lock is the sole evidence.
+    if (isRecentLockRecord(record.startedAt, now)) revived.push(buildGhostSession(record))
   }
 
-  if (ghosts.length === 0) return sessions
-  return [...ghosts, ...sessions].sort(compareSessionsByRecentActivity)
+  if (revived.length === 0) return sessions
+  return [...revived, ...sessions].sort(compareSessionsByRecentActivity)
 }
 
 /** Builds a minimal session entry for a live process with no discoverable transcript. */
