@@ -29,8 +29,11 @@ export function registerProjectRoutes(app: Hono): void {
     '/api/projects',
     apiRoute(async (context) => {
       const orgFilter = orgProjectFilterFromQuery(context)
-      const projects = await loadProjectsMatchingOrgFilter(orgFilter)
-      return context.json(projects.map((project) => serializeProject(project)))
+      const [projects, activeSessionIds] = await Promise.all([
+        loadProjectsMatchingOrgFilter(orgFilter),
+        getActiveSessions(),
+      ])
+      return context.json(projects.map((project) => serializeProject(project, activeSessionIds)))
     })
   )
 
@@ -42,7 +45,10 @@ export function registerProjectRoutes(app: Hono): void {
 
       if (!normalizedQuery && !hasOrgProjectFilter(orgFilter)) return context.json([])
 
-      const projects = await loadProjectsMatchingOrgFilter(orgFilter)
+      const [projects, activeSessionIds] = await Promise.all([
+        loadProjectsMatchingOrgFilter(orgFilter),
+        getActiveSessions(),
+      ])
 
       const hits: Array<ApiSession & { projectName: string }> = []
 
@@ -56,7 +62,7 @@ export function registerProjectRoutes(app: Hono): void {
           ) {
             continue
           }
-          hits.push({ ...serializeSession(session), projectName })
+          hits.push({ ...serializeSession(session, activeSessionIds.has(session.id)), projectName })
           if (hits.length >= APP.maxSearchResults) return context.json(hits)
         }
       }

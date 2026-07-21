@@ -581,6 +581,59 @@ describe('web client session-row invariants', () => {
     expect(scheduleRefresh).toContain('void refreshProjectData().then(function () {')
     expect(scheduleRefresh).toContain('return refreshLiveActivity()')
   })
+
+  it('gives the session-list dot the same working/waiting/idle/attention states as the rail', () => {
+    const rowState = sourceBetween(
+      'function liveSessionRowState(sessionId)',
+      'function buildSessionRowHtml(session)'
+    )
+    const sessionRow = sourceBetween(
+      'function buildSessionRowHtml(session)',
+      'function buildEmptySessionListHtml'
+    )
+
+    // Same source of truth as the rail/inspector — findLiveActivity — and the
+    // same attention-first precedence, so the three surfaces cannot disagree.
+    expect(rowState).toContain('findLiveActivity(sessionId)')
+    expect(rowState).toContain("entry && entry.attention ? 'attention'")
+    expect(rowState).toContain('STRINGS.activityRunning')
+    expect(rowState).toContain('STRINGS.activityWaiting')
+    expect(rowState).toContain('STRINGS.activityIdle')
+    expect(rowState).toContain('STRINGS.activityNeedsInput')
+
+    // A live session with no live-activity entry yet must not crash or show
+    // a stale/wrong state — it falls back to idle rather than throwing.
+    expect(rowState).toContain("entry ? entry.activityState || 'idle' : 'idle'")
+
+    expect(sessionRow).toContain(
+      'const liveState = isLive ? liveSessionRowState(session.id) : null'
+    )
+    expect(sessionRow).toContain(
+      "(liveState ? '<span class=\"activity-dot ' + escapeHtml(liveState.state) + '\"></span>' : '')"
+    )
+    // A non-live session keeps the exact old markup: an empty, tooltip-less slot.
+    expect(sessionRow).not.toContain("(isLive ? '◉' : '')")
+  })
+
+  it('reuses the rail activity-dot component for the session-list dot instead of duplicating its colours', () => {
+    const sLiveStart = stylesSource.indexOf('.s-live {')
+    const sLive = stylesSource.slice(sLiveStart, stylesSource.indexOf('}', sLiveStart))
+    expect(sLive).toContain('display: flex')
+    expect(sLive).toContain('justify-content: center')
+    // No independent colour rules for .s-live — it only centers a child
+    // .activity-dot, whose running/waiting/attention colours are defined once.
+    expect(sLive).not.toContain('background')
+    expect(sLive).not.toContain('color: var(--green)')
+  })
+
+  it('re-renders the session list (for the live dot) whenever live-activity data updates, not only on SSE pushes', () => {
+    const applyActivity = sourceBetween(
+      'function applyLiveActivity(entries)',
+      'async function refreshLiveActivity()'
+    )
+
+    expect(applyActivity).toContain('renderSessions()')
+  })
 })
 
 describe('web client org layer invariants', () => {

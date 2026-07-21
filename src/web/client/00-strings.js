@@ -25,7 +25,6 @@ const STRINGS = {
     'Sessions needing attention: interrupted, expiring, or with missing paths',
 
   // ── Session list ──────────────────────────────────────────────────────────
-  sessionLiveTooltip: 'Active — this session is currently running',
   sessionBranchTooltip: 'Branch: {branch}',
   sessionTimeTooltip: 'Last active: {date}',
   sessionModelTooltip: 'Model: {model}',

@@ -963,13 +963,10 @@ body {
   white-space: nowrap;
 }
 .s-live {
-  color: var(--green);
-  display: inline-block;
+  align-items: center;
+  display: flex;
   flex-shrink: 0;
-  font-size: 0.65em;
-  line-height: 1;
-  text-align: center;
-  width: 1em;
+  justify-content: center;
 }
 
 .s-badge {

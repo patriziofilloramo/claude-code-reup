@@ -213,6 +213,15 @@ to one session simultaneously:
 - `analysisComplete`
 
 `primaryStatus()` derives a single display-priority badge. It is never stored.
+It is a raw, liveness-unaware read of the signals — `reup doctor`/`cleanup`
+need that. The web API layer (`serializeSession` in `src/web/api-model.ts`)
+applies one further, display-only correction on top: a live session's
+transcript very often ends on a dangling tool call (a tool in flight), which
+is the same condition `interrupted` reads — but for an attached session that
+is normal mid-turn state, not an abandoned one. `serializeSession` recomputes
+the displayed status with `interrupted` forced false for live sessions,
+falling through to whatever status would otherwise apply. `lastToolFailed` is
+not corrected — a real tool failure still shows regardless of liveness.
 
 JSONL analysis detects unresolved tool calls, the latest failed tool-result
 batch, `compact_boundary` events, titles, recorded branch, cwd, timestamps, and

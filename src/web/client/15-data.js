@@ -166,6 +166,11 @@ function applyLiveActivity(entries) {
   liveActivity = entries
   renderRail()
   if (selectedSession) renderInspector(deriveVisibleSessions())
+  // The session-list dot reads activityState too (see buildSessionRowHtml),
+  // so live-activity updates outside the SSE path (initial load, the poll
+  // fallback) must reach it — the SSE handler already re-renders separately
+  // when activeSessionIds itself changes.
+  renderSessions()
 }
 
 // ---------------------------------------------------------------------------

@@ -34,7 +34,6 @@ const STRINGS = {
     'Sessions needing attention: interrupted, expiring, or with missing paths',
 
   // ── Session list ──────────────────────────────────────────────────────────
-  sessionLiveTooltip: 'Active — this session is currently running',
   sessionBranchTooltip: 'Branch: {branch}',
   sessionTimeTooltip: 'Last active: {date}',
   sessionModelTooltip: 'Model: {model}',
@@ -2503,12 +2502,34 @@ function buildTagChipsHtml(tags) {
   return html
 }
 
+/**
+ * Resolves the working/waiting/idle/attention state for a live session row,
+ * matching the rail's and inspector's activityDot treatment. Falls back to
+ * "idle" when the session is live but has no live-activity entry yet (a
+ * brief gap right after activeSessionIds updates, before the next snapshot).
+ */
+function liveSessionRowState(sessionId) {
+  const entry = findLiveActivity(sessionId)
+  const state =
+    entry && entry.attention ? 'attention' : entry ? entry.activityState || 'idle' : 'idle'
+  const label =
+    entry && entry.attention
+      ? STRINGS.activityNeedsInput
+      : state === 'running'
+        ? STRINGS.activityRunning
+        : state === 'waiting'
+          ? STRINGS.activityWaiting
+          : STRINGS.activityIdle
+  return { label, state }
+}
+
 /** Renders a single session row (two lines + optional deep-search snippet) as an HTML string. */
 function buildSessionRowHtml(session) {
   const isSelected = selectedSession && session.id === selectedSession.id
   const branch = session.gitBranch || null
   const displayName = session.alias || session.name
   const isLive = activeSessionIds.has(session.id)
+  const liveState = isLive ? liveSessionRowState(session.id) : null
 
   return (
     '<div class="sess-row' +
@@ -2522,9 +2543,9 @@ function buildSessionRowHtml(session) {
     (isSelected ? '▶' : ' ') +
     '</span>' +
     '<span class="s-live"' +
-    (isLive ? ' title="' + escapeHtml(STRINGS.sessionLiveTooltip) + '"' : '') +
+    (liveState ? ' title="' + escapeHtml(liveState.label) + '"' : '') +
     '>' +
-    (isLive ? '◉' : '') +
+    (liveState ? '<span class="activity-dot ' + escapeHtml(liveState.state) + '"></span>' : '') +
     '</span>' +
     (renamingSessionId === session.id
       ? '<input class="s-rename-input" value="' + escapeHtml(displayName) + '" maxlength="160">'
@@ -4174,6 +4195,11 @@ function applyLiveActivity(entries) {
   liveActivity = entries
   renderRail()
   if (selectedSession) renderInspector(deriveVisibleSessions())
+  // The session-list dot reads activityState too (see buildSessionRowHtml),
+  // so live-activity updates outside the SSE path (initial load, the poll
+  // fallback) must reach it — the SSE handler already re-renders separately
+  // when activeSessionIds itself changes.
+  renderSessions()
 }
 
 // ---------------------------------------------------------------------------
