@@ -201,20 +201,39 @@ export interface ApiErrorResponse {
 
 /**
  * Enriches a raw {@link Session} with its derived `primaryStatus`.
- * Use whenever a session is included in an API response.
+ *
+ * A live session's transcript very often ends on a dangling tool call in
+ * flight — the same condition `primaryStatus` reads as `interrupted`. For an
+ * attached session that is normal mid-turn state, not an abandoned one; the
+ * web UI's activity-state dot already conveys the real state, so the
+ * "interrupted" triage badge would be actively misleading here. A genuine
+ * tool failure (`lastToolFailed`) is not corrected: that happened regardless
+ * of whether the session is still live afterward. `primaryStatus` itself
+ * stays untouched — `reup doctor`/`cleanup` need the raw, always-true-until-
+ * resumed triage signal, not this display-only correction.
  */
-export function serializeSession(session: Session): ApiSession {
-  return { ...session, primaryStatus: primaryStatus(session.signals) }
+export function serializeSession(session: Session, isLive: boolean): ApiSession {
+  const status = primaryStatus(session.signals)
+  const displayStatus =
+    status === 'interrupted' && isLive && !session.signals.lastToolFailed
+      ? primaryStatus({ ...session.signals, interrupted: false })
+      : status
+  return { ...session, primaryStatus: displayStatus }
 }
 
 /**
  * Serialises a {@link Project} and all its sessions for API responses.
  * Use for the `/api/projects` endpoint and any response that embeds project data.
  */
-export function serializeProject(project: Project): ApiProject {
+export function serializeProject(
+  project: Project,
+  activeSessionIds: ReadonlySet<string>
+): ApiProject {
   return {
     ...project,
-    sessions: project.sessions.filter(isResumeVisibleSession).map(serializeSession),
+    sessions: project.sessions
+      .filter(isResumeVisibleSession)
+      .map((session) => serializeSession(session, activeSessionIds.has(session.id))),
   }
 }
 
