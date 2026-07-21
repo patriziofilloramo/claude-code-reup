@@ -20,6 +20,21 @@
   transcript written within the last seconds also reads as running, and
   attached-but-quiet sessions stay visible in the live strip (dimmed as Idle)
   instead of flickering out.
+- Web session list: the live-session dot now shows the same
+  working/waiting/idle/needs-input states as the live activity strip and
+  inspector, instead of a single binary "active" indicator.
+
+### Fixed
+
+- A session whose transcript already exists but whose metadata index has not
+  listed it yet (a startup/first-flush race) no longer disappears entirely
+  from the web session list. It now surfaces with its real name and message
+  count instead of a placeholder ghost.
+- Web session list and search results no longer show "✗ interrupted" for an
+  actively-running session whose last transcript event is simply a tool call
+  in flight — that is normal mid-turn state, not an interruption. A genuine
+  tool failure still shows the badge regardless of whether the session is
+  still live.
 
 ### Removed
 
