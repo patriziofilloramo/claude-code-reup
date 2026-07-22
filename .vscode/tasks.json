@@ -29,6 +29,51 @@
         "panel": "dedicated",
         "reveal": "always"
       }
+    },
+    {
+      "label": "Build Reup Installer Packages (release:installers)",
+      "detail": "Runs the full validated release pipeline (tests, extension host smoke test, npm audit) before packaging. Takes several minutes.",
+      "type": "shell",
+      "command": "npm run release:installers",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Install Reup CLI Locally (install.ps1)",
+      "detail": "Extracts the most recently built Windows package and runs its install.ps1. Run 'Build Reup Installer Packages' first if release/ is empty or stale.",
+      "type": "shell",
+      "command": "npm run install:cli",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Uninstall Reup CLI Locally (uninstall.ps1)",
+      "detail": "Runs uninstall.ps1 from the last local install. Removes the installed copy and its PATH entry.",
+      "type": "shell",
+      "command": "npm run uninstall:cli",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always"
+      }
     }
   ]
 }
