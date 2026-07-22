@@ -310,11 +310,16 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       `.cmd` needs no execution-policy allowance at all. Verified by reproducing the exact
       failure and confirming the fix under `-ExecutionPolicy Restricted`.
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments —
-      partially covered from the current dev machine (Windows launcher + PATH resolution
-      tested for real, see the item above); still needs actual clean Windows/macOS/Linux
-      VMs per `Documents/INSTALLATION.md`'s Validation checklist (upgrade over a previous
-      install, repair, uninstall, and the macOS/Linux `.sh` packages have not been run on
-      their real target platforms at all).
+      partially covered from the current dev machine. Windows launcher + PATH resolution
+      tested for real (see the item above). Also found and fixed a real in-place-upgrade bug
+      while testing here: `windowsInstallScript()` copied the new `app`/`bin` into the
+      install directory without removing the old ones first, so files the new package no
+      longer ships (like the `bin/reup.ps1` just removed) survived every upgrade — confirmed
+      against this machine's own stale 2026-07-14 install, not just in theory. Fixed to match
+      `unixInstallScript()`'s existing clean-remove-then-copy behavior. Still needs actual
+      clean Windows/macOS/Linux VMs per `Documents/INSTALLATION.md`'s Validation checklist —
+      repair, uninstall, and the macOS/Linux `.sh` packages have not been run on their real
+      target platforms at all.
 - [x] Generate local checksums, SBOMs, and provenance metadata for release-candidate artifacts
 - [ ] Publish signed checksums, detached signatures, SBOM, and CI-backed provenance attestations
 
