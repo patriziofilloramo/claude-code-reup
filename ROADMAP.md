@@ -54,6 +54,39 @@ ready.
 
 ---
 
+## To Be Discussed
+
+Open product decisions, not yet made. Nothing here blocks the current release scope;
+each item stays parked until explicitly decided.
+
+- **Package signing and notarization** — Windows code-signing certificate, macOS Developer ID
+  signing + notarization, and whether to pursue either at all for the first public release vs.
+  staying unsigned/RC-only for longer. Budget and "do we want an official distribution channel
+  yet" are both open. Once decided, covers the two remaining M9 checkboxes: publishing signed
+  checksums/detached signatures/CI-backed provenance attestations, and the signed/notarized
+  entries in `Documents/INSTALLATION.md`'s Platform Matrix.
+- **Linux `.deb`/`.rpm` packages** — `Documents/INSTALLATION.md` documents these as intentional
+  later-phase work; only the portable `.tar.gz` exists today. Needs a decision on whether
+  package-manager-native installers are worth building before or independently of signing.
+- **CI-backed provenance vs. local-only** — `release:local` already generates
+  `provenance.local.json` and CycloneDX SBOMs locally; whether to wire actual CI-attested
+  provenance (e.g. SLSA-style) is unscoped and tied to whether/when this project gets a real CI
+  release pipeline instead of local RC builds.
+- **Clean-VM installer verification** — upgrade, repair, and uninstall have only been verified
+  from this dev machine (see Milestone 9's "Add upgrade, repair, and uninstall verification"
+  item for what was and wasn't covered). Needs actual clean Windows/macOS/Linux VMs; not
+  blocking further development, but blocking calling M9 done.
+- **Minor: live-activity state during a background task** (raised 2026-07-22) — Reup's
+  running/waiting/idle detection reflects Claude Code's own turn state (`UserPromptSubmit` /
+  `Stop` hooks), not whether a background OS process a tool call spawned is still executing.
+  Observed directly: a session showed `idle` while a multi-minute `release:installers` build
+  was still running in the background, because Claude's own turn had already ended. This is
+  arguably correct as designed (the assistant genuinely was idle), but whether a distinct
+  "idle with background work outstanding" state would be useful is an open, low-priority UX
+  question — not investigated further.
+
+---
+
 ## Milestone 2 — Session signals ✓ done
 
 - [x] Replace single `SessionStatus` with independent `SessionSignals` (archived, interrupted,
@@ -283,14 +316,43 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
 - [x] Add Windows installer task prompts for current-user `PATH` and
       PowerShell completion. Completion uses managed profile blocks for Windows
       PowerShell 5.1 and PowerShell 7 and is removed on uninstall.
-- [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
+- [x] Build per-user installable packages for Windows, macOS, and Linux —
+      `npm run release:installers` produces a Windows `.exe` (Inno Setup) + `.zip`, and
+      per-platform `.tar.gz` for macOS/Linux, all verified to build successfully with `npm audit`
+      clean. Ran the full pipeline end to end: extracted the Windows zip and confirmed
+      `reup.cmd --version` and bare `reup --version` (via PATH) both work, including under
+      `-ExecutionPolicy Restricted`. Confirmed `install.sh`/`uninstall.sh`/`bin/reup` carry
+      correct `755` permissions inside both Unix tarballs despite being built on Windows
+      (GNU tar preserves the mode Node's `chmodSync` sets). Did not run `install.ps1`
+      against this machine's real environment (would touch the live user PATH and could
+      collide with the `npm link`-ed dev install already on it) or the `.sh` scripts on a
+      real macOS/Linux box — that gap is the item below. "Self-contained" is a stretch:
+      these still require Node.js 20+ preinstalled on the target machine, matching
+      `Documents/INSTALLATION.md`'s documented intentional scope (portable/package shape
+      first, signed/notarized/bundled-runtime is later-phase work).
 - [x] Add the installed `reup` launcher to the current user's `PATH`
 - [x] Windows installer: offer pre-selected PowerShell completion integration
       for Windows PowerShell 5.1 and PowerShell 7
 - [x] Install shell completion as a managed, idempotent, reversible integration;
       back up profiles before first modification and remove only Reup-owned blocks
-- [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
-- [ ] Add upgrade, repair, and uninstall verification on clean platform environments
+- [x] Ensure the Windows launcher works without weakening PowerShell execution policy —
+      resolved: `bin/reup.cmd` is the only launcher shipped; `bin/reup.ps1` was removed
+      because PowerShell's command lookup prefers a same-named `.ps1` over `.cmd` in the
+      same PATH directory, which made bare `reup` resolve to the `.ps1` and fail under the
+      Restricted execution policy (the default on many Windows machines) even though the
+      `.cmd` needs no execution-policy allowance at all. Verified by reproducing the exact
+      failure and confirming the fix under `-ExecutionPolicy Restricted`.
+- [ ] Add upgrade, repair, and uninstall verification on clean platform environments —
+      partially covered from the current dev machine. Windows launcher + PATH resolution
+      tested for real (see the item above). Also found and fixed a real in-place-upgrade bug
+      while testing here: `windowsInstallScript()` copied the new `app`/`bin` into the
+      install directory without removing the old ones first, so files the new package no
+      longer ships (like the `bin/reup.ps1` just removed) survived every upgrade — confirmed
+      against this machine's own stale 2026-07-14 install, not just in theory. Fixed to match
+      `unixInstallScript()`'s existing clean-remove-then-copy behavior. Still needs actual
+      clean Windows/macOS/Linux VMs per `Documents/INSTALLATION.md`'s Validation checklist —
+      repair, uninstall, and the macOS/Linux `.sh` packages have not been run on their real
+      target platforms at all.
 - [x] Generate local checksums, SBOMs, and provenance metadata for release-candidate artifacts
 - [ ] Publish signed checksums, detached signatures, SBOM, and CI-backed provenance attestations
 

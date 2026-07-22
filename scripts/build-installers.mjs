@@ -96,13 +96,17 @@ function buildWindowsPackage(runtimeApp) {
   cpSync(runtimeApp, appDir, { recursive: true })
   mkdirSync(binDir, { recursive: true })
   mkdirSync(completionDir, { recursive: true })
+  // .cmd only — deliberately no bin/reup.ps1. PowerShell's command lookup
+  // prefers a same-named .ps1 over .cmd/.exe in the same PATH directory, so
+  // shipping both would make PowerShell resolve bare `reup` to the .ps1 and
+  // fail under the Restricted execution policy (the out-of-box default on
+  // many Windows machines), even though the .cmd works everywhere with no
+  // execution-policy dependency at all. Verified: with both files present,
+  // `reup` throws "running scripts is disabled on this system" under
+  // -ExecutionPolicy Restricted; with only reup.cmd, it runs unaffected.
   writeFileSync(
     join(binDir, 'reup.cmd'),
     ['@echo off', 'node "%~dp0..\\app\\dist\\index.js" %*', ''].join('\r\n')
-  )
-  writeFileSync(
-    join(binDir, 'reup.ps1'),
-    ['#!/usr/bin/env pwsh', '& node "$PSScriptRoot/../app/dist/index.js" @args', ''].join('\n')
   )
   writeFileSync(join(completionDir, 'reup.ps1'), windowsCompletionLoader())
   writeFileSync(join(packageRoot, 'install.ps1'), windowsInstallScript())
@@ -422,6 +426,11 @@ function windowsInstallScript() {
     '$Source = $PSScriptRoot',
     'if (-not (Test-Path (Join-Path $Source "app\\dist\\index.js"))) { throw "Run this script from the extracted Reup package." }',
     'New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null',
+    // Remove the previous app/bin before copying so an upgrade cannot leave
+    // stale files behind that the new package no longer ships (matches
+    // unixInstallScript, which already does the equivalent rm -rf).
+    'Remove-Item -LiteralPath (Join-Path $InstallDir "app") -Recurse -Force -ErrorAction SilentlyContinue',
+    'Remove-Item -LiteralPath (Join-Path $InstallDir "bin") -Recurse -Force -ErrorAction SilentlyContinue',
     'Copy-Item -Path (Join-Path $Source "app"), (Join-Path $Source "bin") -Destination $InstallDir -Recurse -Force',
     '$Bin = Join-Path $InstallDir "bin"',
     '$CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")',

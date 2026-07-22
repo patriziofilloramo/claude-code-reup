@@ -76,6 +76,24 @@ Windows zip and writes `WINDOWS_EXE_INSTALLER_SKIPPED.txt`. These artifacts do
 not publish anything, sign artifacts, notarize macOS output, or produce `.deb`
 / `.rpm` packages.
 
+### Testing the Windows Package Locally
+
+To install the most recently built Windows RC package on the current
+development machine without hunting through `release/` manually:
+
+```text
+npm run install:cli
+npm run uninstall:cli
+```
+
+Both are also available as VS Code tasks ("Install Reup CLI Locally
+(install.ps1)" / "Uninstall Reup CLI Locally (uninstall.ps1)"). They find the
+newest `release/reup-v*/installers/reup-windows-x64-v*.zip`, extract it to
+`.install-staging/windows/` (gitignored), and run its `install.ps1` /
+`uninstall.ps1`. Neither script builds anything itself — run
+`release:installers` first. Installing modifies the current user's real PATH,
+same as running `install.ps1` directly from an extracted package would.
+
 The Windows `.exe` shows installer tasks for adding `reup` to the current user
 `PATH` and enabling PowerShell tab completion for Windows PowerShell 5.1 and
 PowerShell 7. Completion is implemented through clearly marked managed profile
