@@ -426,6 +426,11 @@ function windowsInstallScript() {
     '$Source = $PSScriptRoot',
     'if (-not (Test-Path (Join-Path $Source "app\\dist\\index.js"))) { throw "Run this script from the extracted Reup package." }',
     'New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null',
+    // Remove the previous app/bin before copying so an upgrade cannot leave
+    // stale files behind that the new package no longer ships (matches
+    // unixInstallScript, which already does the equivalent rm -rf).
+    'Remove-Item -LiteralPath (Join-Path $InstallDir "app") -Recurse -Force -ErrorAction SilentlyContinue',
+    'Remove-Item -LiteralPath (Join-Path $InstallDir "bin") -Recurse -Force -ErrorAction SilentlyContinue',
     'Copy-Item -Path (Join-Path $Source "app"), (Join-Path $Source "bin") -Destination $InstallDir -Recurse -Force',
     '$Bin = Join-Path $InstallDir "bin"',
     '$CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")',
