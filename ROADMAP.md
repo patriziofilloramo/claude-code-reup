@@ -289,7 +289,13 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       for Windows PowerShell 5.1 and PowerShell 7
 - [x] Install shell completion as a managed, idempotent, reversible integration;
       back up profiles before first modification and remove only Reup-owned blocks
-- [ ] Ensure the Windows launcher works without weakening PowerShell execution policy
+- [x] Ensure the Windows launcher works without weakening PowerShell execution policy —
+      resolved: `bin/reup.cmd` is the only launcher shipped; `bin/reup.ps1` was removed
+      because PowerShell's command lookup prefers a same-named `.ps1` over `.cmd` in the
+      same PATH directory, which made bare `reup` resolve to the `.ps1` and fail under the
+      Restricted execution policy (the default on many Windows machines) even though the
+      `.cmd` needs no execution-policy allowance at all. Verified by reproducing the exact
+      failure and confirming the fix under `-ExecutionPolicy Restricted`.
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments
 - [x] Generate local checksums, SBOMs, and provenance metadata for release-candidate artifacts
 - [ ] Publish signed checksums, detached signatures, SBOM, and CI-backed provenance attestations
