@@ -283,7 +283,20 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
 - [x] Add Windows installer task prompts for current-user `PATH` and
       PowerShell completion. Completion uses managed profile blocks for Windows
       PowerShell 5.1 and PowerShell 7 and is removed on uninstall.
-- [ ] Build self-contained, per-user installers for Windows, macOS, and Linux
+- [x] Build per-user installable packages for Windows, macOS, and Linux —
+      `npm run release:installers` produces a Windows `.exe` (Inno Setup) + `.zip`, and
+      per-platform `.tar.gz` for macOS/Linux, all verified to build successfully with `npm audit`
+      clean. Ran the full pipeline end to end: extracted the Windows zip and confirmed
+      `reup.cmd --version` and bare `reup --version` (via PATH) both work, including under
+      `-ExecutionPolicy Restricted`. Confirmed `install.sh`/`uninstall.sh`/`bin/reup` carry
+      correct `755` permissions inside both Unix tarballs despite being built on Windows
+      (GNU tar preserves the mode Node's `chmodSync` sets). Did not run `install.ps1`
+      against this machine's real environment (would touch the live user PATH and could
+      collide with the `npm link`-ed dev install already on it) or the `.sh` scripts on a
+      real macOS/Linux box — that gap is the item below. "Self-contained" is a stretch:
+      these still require Node.js 20+ preinstalled on the target machine, matching
+      `Documents/INSTALLATION.md`'s documented intentional scope (portable/package shape
+      first, signed/notarized/bundled-runtime is later-phase work).
 - [x] Add the installed `reup` launcher to the current user's `PATH`
 - [x] Windows installer: offer pre-selected PowerShell completion integration
       for Windows PowerShell 5.1 and PowerShell 7
@@ -296,7 +309,12 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       Restricted execution policy (the default on many Windows machines) even though the
       `.cmd` needs no execution-policy allowance at all. Verified by reproducing the exact
       failure and confirming the fix under `-ExecutionPolicy Restricted`.
-- [ ] Add upgrade, repair, and uninstall verification on clean platform environments
+- [ ] Add upgrade, repair, and uninstall verification on clean platform environments —
+      partially covered from the current dev machine (Windows launcher + PATH resolution
+      tested for real, see the item above); still needs actual clean Windows/macOS/Linux
+      VMs per `Documents/INSTALLATION.md`'s Validation checklist (upgrade over a previous
+      install, repair, uninstall, and the macOS/Linux `.sh` packages have not been run on
+      their real target platforms at all).
 - [x] Generate local checksums, SBOMs, and provenance metadata for release-candidate artifacts
 - [ ] Publish signed checksums, detached signatures, SBOM, and CI-backed provenance attestations
 
