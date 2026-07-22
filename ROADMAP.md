@@ -54,6 +54,39 @@ ready.
 
 ---
 
+## To Be Discussed
+
+Open product decisions, not yet made. Nothing here blocks the current release scope;
+each item stays parked until explicitly decided.
+
+- **Package signing and notarization** — Windows code-signing certificate, macOS Developer ID
+  signing + notarization, and whether to pursue either at all for the first public release vs.
+  staying unsigned/RC-only for longer. Budget and "do we want an official distribution channel
+  yet" are both open. Once decided, covers the two remaining M9 checkboxes: publishing signed
+  checksums/detached signatures/CI-backed provenance attestations, and the signed/notarized
+  entries in `Documents/INSTALLATION.md`'s Platform Matrix.
+- **Linux `.deb`/`.rpm` packages** — `Documents/INSTALLATION.md` documents these as intentional
+  later-phase work; only the portable `.tar.gz` exists today. Needs a decision on whether
+  package-manager-native installers are worth building before or independently of signing.
+- **CI-backed provenance vs. local-only** — `release:local` already generates
+  `provenance.local.json` and CycloneDX SBOMs locally; whether to wire actual CI-attested
+  provenance (e.g. SLSA-style) is unscoped and tied to whether/when this project gets a real CI
+  release pipeline instead of local RC builds.
+- **Clean-VM installer verification** — upgrade, repair, and uninstall have only been verified
+  from this dev machine (see Milestone 9's "Add upgrade, repair, and uninstall verification"
+  item for what was and wasn't covered). Needs actual clean Windows/macOS/Linux VMs; not
+  blocking further development, but blocking calling M9 done.
+- **Minor: live-activity state during a background task** (raised 2026-07-22) — Reup's
+  running/waiting/idle detection reflects Claude Code's own turn state (`UserPromptSubmit` /
+  `Stop` hooks), not whether a background OS process a tool call spawned is still executing.
+  Observed directly: a session showed `idle` while a multi-minute `release:installers` build
+  was still running in the background, because Claude's own turn had already ended. This is
+  arguably correct as designed (the assistant genuinely was idle), but whether a distinct
+  "idle with background work outstanding" state would be useful is an open, low-priority UX
+  question — not investigated further.
+
+---
+
 ## Milestone 2 — Session signals ✓ done
 
 - [x] Replace single `SessionStatus` with independent `SessionSignals` (archived, interrupted,
