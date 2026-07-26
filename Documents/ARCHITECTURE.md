@@ -246,6 +246,22 @@ Writes are coordinated at two levels:
 The lock detects dead owners and stale invalid lock files. The updated sidecar
 is written to a PID-specific temporary file and atomically renamed into place.
 
+Reading the sidecar reports three outcomes, and the distinction is load-bearing
+(2026-07-26):
+
+- `absent` — the file does not exist; the project genuinely has no metadata.
+- `loaded` — parsed into an object.
+- `unreadable` — the file exists but could not be read or parsed (`EACCES`,
+  `EBUSY`, truncation, a non-object root).
+
+Only `absent` means "empty". Update paths refuse an `unreadable` sidecar with
+`ProjectSidecarUnreadableError`, naming the file to repair and leaving it
+untouched; the HTTP layer maps that to 409. Read paths still degrade to "no
+metadata" so one damaged file cannot hide a project from discovery. Collapsing
+`unreadable` into `absent` is what previously let a single archive toggle
+rewrite the file from empty and discard every other session's alias, tags, and
+archive state while reporting success.
+
 Archiving only hides a session in Reup. It is not a transcript backup.
 
 ## Active Sessions
@@ -261,7 +277,11 @@ the same active Claude sessions.
 work stacks (projects and sessions grouped by intent), and a recency-ordered
 tag palette. That state persists to `~/.claude/reup/org.json` behind a
 schema version, an advisory lock, and atomic writes; per-session and
-per-project tags live in each project's `reup.json` sidecar instead. Shared
+per-project tags live in each project's `reup.json` sidecar instead. The write
+path applies the same coercion as the read path, so a file missing collections
+is completed in place instead of failing deep inside a mutation, and refuses an
+unparseable file with `OrgDataUnreadableError` rather than overwriting it —
+the same "unreadable is not empty" rule as the sidecar. Shared
 filtering (`org-filters.ts`) applies group, stack, and tag selection
 identically across web, TUI, and CLI, and `session-smart-view.ts` assigns each
 session to exactly one priority-ordered Inbox bucket.
@@ -365,6 +385,27 @@ modules under `web/routes/`, API serialization, local-request security, and
 CLAUDE.md filesystem handling. `routes.ts` remains the single readable map of
 the HTTP surface.
 
+Two access controls sit in front of that surface (2026-07-26):
+
+- `localHostOnly()` is registered as `app.use('*', …)` in `buildApp` and
+  rejects any request whose `Host` is not loopback, reads included. Binding
+  127.0.0.1 only stops remote sockets, not a browser: DNS rebinding points an
+  attacker's domain at 127.0.0.1, making its page same-origin with Reup, and
+  every read endpoint returns transcripts, project paths, and CLAUDE.md
+  contents. The `Host` header still names the attacker's domain, which is why
+  it is the discriminator. Global registration is deliberate — a per-route
+  opt-in only protects the routes someone remembered to annotate.
+- `guardedRoute` adds the `Origin` check and stays mandatory for every
+  mutating route; `tests/web/route-security.test.ts` enforces that statically,
+  so error-mapping decorators compose _inside_ it rather than wrapping it.
+
+The served page carries a Content-Security-Policy with a per-render nonce on
+`script-src`. `style-src` intentionally keeps `'unsafe-inline'` with no nonce,
+because the UI renders `style=""` attributes and a nonce would make the browser
+ignore `'unsafe-inline'`. The CSP is defence in depth: values read from
+transcripts (project paths, session names, branches, tool output) are untrusted
+and must still be escaped where they are rendered.
+
 SSE invalidates the short-lived metadata cache before notifying clients about
 relevant transcript, index, active-session, and Reup sidecar changes. A slow
 periodic refresh also keeps external git branch changes and missed filesystem
@@ -453,6 +494,12 @@ launcher passes working directories and command tokens through structured
 `execFile()` / `spawn()` arguments, with clipboard fallback only after launch
 attempts fail. Clean Windows manual smoke is still required before official
 public release.
+
+Both resume paths move into the recorded project directory through
+`tryChangeWorkingDirectory()`. Recorded paths outlive the directories they name
+— Reup surfaces that as the `path-missing` status and still offers resume — so
+a missing directory degrades to launching from the current one with a warning,
+never an aborted launch.
 
 ## Configuration
 

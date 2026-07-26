@@ -1,6 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+First version cleared for production. The security and data-integrity entries
+below come from a pre-production review; each one is covered by a regression
+test.
+
+### Security
+
+- The localhost web server now rejects every request — reads included — whose
+  `Host` header is not loopback. Only state-changing routes were checked
+  before, so a page on an attacker's domain could point that name at
+  127.0.0.1 (DNS rebinding), become same-origin with Reup, and read the whole
+  local Claude history: project paths, full transcripts, and `CLAUDE.md`
+  contents. The check is registered once as middleware, so no endpoint can be
+  added without it.
+- The Lost & Found panel escapes the project paths it renders. A path is taken
+  verbatim from a transcript's `cwd`, and directory names may legally contain
+  markup on Linux and macOS, so opening a session recorded in such a directory
+  could execute script inside the Reup page — with full access to its own API.
+- The web UI now ships a Content-Security-Policy. Scripts are authorised by a
+  per-render nonce, so injected markup cannot execute even if an escaping bug
+  reappears.
+- `usage-last-raw.json` is written owner-only and atomically, matching every
+  other file Reup persists. It carries session identifiers and workspace paths
+  and was previously world-readable on shared machines.
 
 ### Added
 
@@ -26,6 +50,19 @@
 
 ### Fixed
 
+- A `reup.json` that cannot be read is no longer treated as "this project has
+  no Reup metadata". Previously a truncated or briefly locked sidecar made the
+  next alias, tag, or archive change rewrite the file from empty — silently
+  discarding every other session's metadata and reporting success. Updates now
+  fail with the path to repair and leave the file untouched; discovery still
+  degrades gracefully so one damaged file cannot hide a project.
+- A malformed `org.json` no longer produces a generic 500 on group and stack
+  mutations. A file missing collections is completed in place; a file that
+  cannot be parsed is refused with the path to repair, and is never
+  overwritten.
+- Resuming a session whose project directory no longer exists no longer aborts
+  the TUI launch with a raw filesystem error. Both resume paths now fall back
+  to the current directory and say so, matching what `reup resume` already did.
 - A session whose transcript already exists but whose metadata index has not
   listed it yet (a startup/first-flush race) no longer disappears entirely
   from the web session list. It now surfaces with its real name and message
