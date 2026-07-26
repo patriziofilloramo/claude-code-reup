@@ -7,6 +7,7 @@ import { withAdvisoryFileLock } from '../project/project-sidecar-lock.js'
 import { log } from '../../utils/logger.js'
 import {
   ORG_SCHEMA_VERSION,
+  OrgDataUnreadableError,
   OrgSchemaVersionError,
   type OrgData,
   type ProjectGroup,
@@ -103,12 +104,7 @@ async function enqueueOrgUpdate(updater: (data: OrgData) => void): Promise<void>
   const previousUpdate = orgWriteQueue
   const queuedUpdate = previousUpdate.then(() =>
     withAdvisoryFileLock(orgLockPath(), async () => {
-      const data = await readOrgDataFromDisk()
-      // Guard: refuse to write if a newer Reup version owns this file.
-      if (data !== null && data.schemaVersion !== ORG_SCHEMA_VERSION) {
-        throw new OrgSchemaVersionError(data.schemaVersion)
-      }
-      const currentData = data ?? emptyOrgData()
+      const currentData = (await readOrgDataFromDisk()) ?? emptyOrgData()
       updater(currentData)
       await writeOrgDataAtomically(currentData)
     })
@@ -119,15 +115,41 @@ async function enqueueOrgUpdate(updater: (data: OrgData) => void): Promise<void>
   return queuedUpdate
 }
 
-/** Raw disk read that returns null when the file is missing (not the same as readOrgData). */
+/**
+ * Strict disk read used by the write path. Returns null only when the file is
+ * genuinely missing; anything else that would make a write lossy throws.
+ *
+ * Unlike {@link readOrgData}, which is lenient so the UI can still render, this
+ * runs the same coercion but refuses to hand back a half-shaped object: an
+ * org.json missing `groups` would otherwise make the updater throw a bare
+ * TypeError deep inside a mutation.
+ */
 async function readOrgDataFromDisk(): Promise<OrgData | null> {
+  let raw: string
   try {
-    const raw = await readFile(orgJsonPath(), 'utf8')
-    return JSON.parse(raw) as OrgData
+    raw = await readFile(orgJsonPath(), 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw error
+    throw new OrgDataUnreadableError(orgJsonPath(), { cause: error })
   }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    throw new OrgDataUnreadableError(orgJsonPath(), { cause: error })
+  }
+
+  if (!isRecord(parsed)) throw new OrgDataUnreadableError(orgJsonPath())
+  // Refuse to write over a file a newer Reup version owns.
+  if (parsed['schemaVersion'] !== ORG_SCHEMA_VERSION) {
+    throw new OrgSchemaVersionError(parsed['schemaVersion'])
+  }
+  return coerceOrgData(parsed)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function writeOrgDataAtomically(data: OrgData): Promise<void> {
