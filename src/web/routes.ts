@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { getStoredThemeName } from '../core/theme-preference.js'
+import { localHostOnly } from './request-security.js'
 import { registerClaudeInstructionRoutes } from './routes/claude-instruction-routes.js'
 import { registerDiagnosticsRoute } from './routes/diagnostics-route.js'
 import { registerEventStreamRoute } from './routes/event-stream-route.js'
@@ -12,7 +13,7 @@ import { registerSessionMetadataRoutes } from './routes/session-metadata-routes.
 import { registerTouchedRoute } from './routes/touched-route.js'
 import { registerThemeRoute } from './routes/theme-route.js'
 import { registerUsageRoute } from './routes/usage-route.js'
-import { buildHtml } from './ui.js'
+import { buildUiDocument } from './ui.js'
 
 /**
  * Creates the local web application.
@@ -23,7 +24,16 @@ import { buildHtml } from './ui.js'
 export function buildApp(): Hono {
   const app = new Hono()
 
-  app.get('/', (context) => context.html(buildHtml(getStoredThemeName() ?? 'dark')))
+  // Every route, read or write, is loopback-only. Registered before the routes
+  // so no endpoint can be reachable without it.
+  app.use('*', localHostOnly())
+
+  app.get('/', (context) => {
+    const document = buildUiDocument(getStoredThemeName() ?? 'dark')
+    context.header('Content-Security-Policy', document.contentSecurityPolicy)
+    context.header('X-Frame-Options', 'DENY')
+    return context.html(document.html)
+  })
   registerProjectRoutes(app)
   registerOrgRoutes(app)
   registerResumeRoute(app)

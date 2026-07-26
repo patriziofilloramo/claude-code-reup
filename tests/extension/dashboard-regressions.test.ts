@@ -46,6 +46,8 @@ describe('full-screen dashboard guardrails', () => {
     expect(source).toContain('retainContextWhenHidden: true')
     expect(source).toContain('vscode.setState')
     expect(source).toContain('previewRequestId')
+    expect(source).toContain('refreshRequestId')
+    expect(source).toContain('requestId !== this.refreshRequestId')
     expect(source).toContain('searchRequestId')
     expect(source).toContain('loadPreview')
     expect(source).toContain('searchTranscriptContent')

@@ -164,11 +164,19 @@ function commandNeedsShell(command) {
 }
 
 function isDirty() {
-  const result = spawnSync(resolveCommand('git'), ['diff', '--quiet'], { cwd: root, shell: false })
+  const result = spawnSync(
+    resolveCommand('git'),
+    ['status', '--porcelain=v1', '--untracked-files=normal'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  )
   if (result.error) throw result.error
-  if (result.status === 0) return false
-  if (result.status === 1) return true
-  fail('Unable to determine git working-tree state.')
+  if (result.status !== 0) fail('Unable to determine git working-tree state.')
+  return result.stdout.trim().length > 0
 }
 
 function writeSbom(label, outputRoot, args) {

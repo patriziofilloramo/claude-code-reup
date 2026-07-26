@@ -17,6 +17,7 @@ import { asProjectTreeNode, asSessionTreeNode, ReupSessionTreeProvider } from '.
 import { ReupDataSource } from './reup-data.js'
 import { CockpitStatusBar } from './status-bar.js'
 import { getMigratedGlobalState, getReupConfigurationValue } from './configuration.js'
+import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = createLogger()
@@ -36,6 +37,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshController?.setScope(dashboardVisible ? 'full' : treeVisible ? 'signals' : 'off')
   }
   const refreshAll = async (): Promise<void> => {
+    invalidateProjectCache()
+    dataSource.invalidateTouchedFileCounts()
     const changed = await treeProvider.refresh({ notifyView: treeVisible })
     if (changed) await dashboard?.refresh(treeProvider.getModel() ?? undefined)
   }

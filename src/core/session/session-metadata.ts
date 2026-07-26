@@ -36,6 +36,40 @@ export class ActiveSessionDeletionError extends Error {
 }
 
 /**
+ * Raised when `reup.json` exists but cannot be turned into metadata, and a
+ * caller asked to update it.
+ *
+ * Rewriting an unreadable sidecar would silently discard every alias, tag, and
+ * archive flag it still holds, so updates fail loudly and leave the file
+ * untouched for repair. Read paths degrade to "no Reup metadata" instead.
+ */
+export class ProjectSidecarUnreadableError extends Error {
+  constructor(
+    readonly sidecarPath: string,
+    options?: { cause?: unknown }
+  ) {
+    super(
+      `cannot read Reup metadata at ${sidecarPath}; refusing to overwrite it. ` +
+        'Repair or delete the file, then retry.',
+      options
+    )
+    this.name = 'ProjectSidecarUnreadableError'
+  }
+}
+
+/**
+ * Outcome of reading a project sidecar.
+ *
+ * `absent` and `unreadable` are deliberately distinct: only the former means
+ * "this project has no Reup metadata". Collapsing them is what turns a
+ * transient read failure into permanent data loss on the next write.
+ */
+type ProjectSidecarSnapshot =
+  | { metadata: ProjectSidecarMetadata; state: 'loaded' }
+  | { state: 'absent' }
+  | { cause: unknown; state: 'unreadable' }
+
+/**
  * Serialises writes originating inside this process. The filesystem lock used
  * inside each queued operation coordinates independent Reup processes.
  */
@@ -45,30 +79,76 @@ const projectWriteQueues = new Map<string, Promise<void>>()
 // Sidecar persistence
 // -----------------------------------------------------------------------------
 
-async function readProjectSidecar(
+/**
+ * Loads the sidecar, reporting precisely why no metadata came back.
+ *
+ * A legacy sidecar is migrated only when the current one is genuinely absent,
+ * so a damaged `reup.json` is never shadowed by older data.
+ */
+async function loadProjectSidecar(
   projectDirectory: string,
   options: { insideLock?: boolean } = {}
-): Promise<ProjectSidecarMetadata> {
+): Promise<ProjectSidecarSnapshot> {
   const sidecarPath = join(projectDirectory, PROJECT_SIDECAR_FILE)
-  try {
-    return JSON.parse(await readFile(sidecarPath, 'utf8')) as ProjectSidecarMetadata
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      // A malformed sidecar is equivalent to having no Reup metadata.
-      return {}
-    }
-  }
+  const current = await readSidecarFile(sidecarPath)
+  if (current.state !== 'absent') return current
 
-  if (!(await legacyProjectSidecarExists(projectDirectory))) return {}
+  if (!(await legacyProjectSidecarExists(projectDirectory))) return { state: 'absent' }
 
   if (options.insideLock) await migrateLegacyProjectSidecarWithoutLock(projectDirectory)
   else await migrateLegacyProjectSidecar(projectDirectory)
 
+  return readSidecarFile(sidecarPath)
+}
+
+async function readSidecarFile(sidecarPath: string): Promise<ProjectSidecarSnapshot> {
+  let contents: string
   try {
-    return JSON.parse(await readFile(sidecarPath, 'utf8')) as ProjectSidecarMetadata
-  } catch {
-    return {}
+    contents = await readFile(sidecarPath, 'utf8')
+  } catch (error) {
+    // Only a missing file proves the project has no Reup metadata. EACCES,
+    // EBUSY, and EPERM are contention or permission failures that must not be
+    // mistaken for emptiness.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: 'absent' }
+    return { cause: error, state: 'unreadable' }
   }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(contents)
+  } catch (error) {
+    return { cause: error, state: 'unreadable' }
+  }
+
+  if (!isMetadataObject(parsed)) {
+    return { cause: new TypeError('sidecar root must be a JSON object'), state: 'unreadable' }
+  }
+  return { metadata: parsed, state: 'loaded' }
+}
+
+/**
+ * Best-effort read for display. One damaged sidecar must not hide a project, so
+ * an unreadable file degrades to "no Reup metadata" here — updates go through
+ * {@link enqueueProjectSidecarUpdate}, which refuses instead of overwriting.
+ */
+async function readProjectSidecarForDisplay(
+  projectDirectory: string
+): Promise<ProjectSidecarMetadata> {
+  let snapshot: ProjectSidecarSnapshot
+  try {
+    snapshot = await loadProjectSidecar(projectDirectory)
+  } catch (error) {
+    // Includes a failed legacy migration: discovery must still list the project.
+    snapshot = { cause: error, state: 'unreadable' }
+  }
+
+  if (snapshot.state === 'unreadable') {
+    log.warn(
+      `sidecar: ignoring unreadable ${PROJECT_SIDECAR_FILE} in ${projectDirectory}:`,
+      snapshot.cause
+    )
+  }
+  return snapshot.state === 'loaded' ? snapshot.metadata : {}
 }
 
 async function enqueueProjectSidecarUpdate(
@@ -78,7 +158,14 @@ async function enqueueProjectSidecarUpdate(
   const previousUpdate = projectWriteQueues.get(projectDirectory) ?? Promise.resolve()
   const queuedUpdate = previousUpdate.then(() =>
     withProjectSidecarLock(projectDirectory, async () => {
-      const sidecarMetadata = await readProjectSidecar(projectDirectory, { insideLock: true })
+      const snapshot = await loadProjectSidecar(projectDirectory, { insideLock: true })
+      if (snapshot.state === 'unreadable') {
+        throw new ProjectSidecarUnreadableError(join(projectDirectory, PROJECT_SIDECAR_FILE), {
+          cause: snapshot.cause,
+        })
+      }
+
+      const sidecarMetadata = snapshot.state === 'loaded' ? snapshot.metadata : {}
       updateMetadata(sidecarMetadata)
       await writeProjectSidecarAtomically(projectDirectory, sidecarMetadata)
     })
@@ -167,6 +254,36 @@ async function waitForSidecarReplaceRetry(attempt: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, backoffMs))
 }
 
+function isMetadataObject(value: unknown): value is ProjectSidecarMetadata {
+  if (!isRecord(value)) return false
+  const projectTags = value['projectTags']
+  if (projectTags !== undefined && !isStringArray(projectTags)) return false
+
+  const sessions = value['sessions']
+  if (sessions === undefined) return true
+  return isRecord(sessions) && Object.values(sessions).every(isSessionMetadataObject)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isSessionMetadataObject(value: unknown): value is SessionSidecarMetadata {
+  if (!isRecord(value)) return false
+  const alias = value['alias']
+  const archived = value['archived']
+  const tags = value['tags']
+  return (
+    (alias === undefined || typeof alias === 'string') &&
+    (archived === undefined || typeof archived === 'boolean') &&
+    (tags === undefined || isStringArray(tags))
+  )
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+}
+
 function sessionMetadataEntry(
   metadata: ProjectSidecarMetadata,
   sessionId: string
@@ -185,7 +302,7 @@ export async function mergeProjectSidecarMetadata(
   projectDirectory: string,
   project: Project
 ): Promise<Project> {
-  const sidecarMetadata = await readProjectSidecar(projectDirectory)
+  const sidecarMetadata = await readProjectSidecarForDisplay(projectDirectory)
 
   const projectWithTags: Project = sidecarMetadata.projectTags
     ? { ...project, projectTags: sidecarMetadata.projectTags }

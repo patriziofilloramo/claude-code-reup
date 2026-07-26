@@ -487,15 +487,25 @@ function unixInstallScript(installRootExpression) {
     `INSTALL_DIR=${installRootExpression}`,
     'SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)',
     'BIN_DIR="${HOME}/.local/bin"',
+    'LAUNCHER="$BIN_DIR/reup"',
     'if [ ! -f "$SOURCE_DIR/app/dist/index.js" ]; then',
     '  echo "Run this script from the extracted Reup package." >&2',
+    '  exit 1',
+    'fi',
+    'if [ -L "$LAUNCHER" ]; then',
+    '  if [ "$(readlink "$LAUNCHER")" != "$INSTALL_DIR/bin/reup" ]; then',
+    '    echo "Refusing to replace a launcher not owned by this Reup install: $LAUNCHER" >&2',
+    '    exit 1',
+    '  fi',
+    'elif [ -e "$LAUNCHER" ]; then',
+    '  echo "Refusing to replace an existing file: $LAUNCHER" >&2',
     '  exit 1',
     'fi',
     'mkdir -p "$INSTALL_DIR" "$BIN_DIR"',
     'rm -rf "$INSTALL_DIR/app" "$INSTALL_DIR/bin"',
     'cp -R "$SOURCE_DIR/app" "$INSTALL_DIR/app"',
     'cp -R "$SOURCE_DIR/bin" "$INSTALL_DIR/bin"',
-    'ln -sfn "$INSTALL_DIR/bin/reup" "$BIN_DIR/reup"',
+    'ln -sfn "$INSTALL_DIR/bin/reup" "$LAUNCHER"',
     'echo "Reup installed to $INSTALL_DIR"',
     'echo "Ensure $BIN_DIR is on PATH, then run: reup --version"',
     '',
@@ -508,7 +518,12 @@ function unixUninstallScript(installRootExpression) {
     'set -eu',
     `INSTALL_DIR=${installRootExpression}`,
     'BIN_DIR="${HOME}/.local/bin"',
-    'rm -f "$BIN_DIR/reup"',
+    'LAUNCHER="$BIN_DIR/reup"',
+    'if [ -L "$LAUNCHER" ] && [ "$(readlink "$LAUNCHER")" = "$INSTALL_DIR/bin/reup" ]; then',
+    '  rm -f "$LAUNCHER"',
+    'elif [ -e "$LAUNCHER" ] || [ -L "$LAUNCHER" ]; then',
+    '  echo "Leaving launcher not owned by this Reup install: $LAUNCHER" >&2',
+    'fi',
     'rm -rf "$INSTALL_DIR"',
     'echo "Reup removed from $INSTALL_DIR"',
     '',
@@ -636,11 +651,19 @@ function commandNeedsShell(command) {
 }
 
 function isDirty() {
-  const result = spawnSync(resolveCommand('git'), ['diff', '--quiet'], { cwd: root, shell: false })
+  const result = spawnSync(
+    resolveCommand('git'),
+    ['status', '--porcelain=v1', '--untracked-files=normal'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  )
   if (result.error) throw result.error
-  if (result.status === 0) return false
-  if (result.status === 1) return true
-  fail('Unable to determine git working-tree state.')
+  if (result.status !== 0) fail('Unable to determine git working-tree state.')
+  return result.stdout.trim().length > 0
 }
 
 function writeChecksums(outputRoot) {

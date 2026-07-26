@@ -14,7 +14,7 @@ import {
   updateProjectGroup,
   updateWorkStack,
 } from '../../core/org/org-prefs.js'
-import { OrgSchemaVersionError } from '../../core/org/org-model.js'
+import { OrgDataUnreadableError, OrgSchemaVersionError } from '../../core/org/org-model.js'
 import { log } from '../../utils/logger.js'
 import { apiRoute, guardedRoute } from './route-helper.js'
 
@@ -200,6 +200,10 @@ async function handleOrgMutation(
     if (error instanceof OrgValidationError) return context.json({ error: error.message }, 400)
     if (error instanceof OrgNotFoundError) return context.json({ error: error.message }, 404)
     if (error instanceof OrgSchemaVersionError) return context.json({ error: error.message }, 409)
+    if (error instanceof OrgDataUnreadableError) {
+      log.error('org: refused to overwrite unreadable org.json:', error)
+      return context.json({ error: error.message }, 409)
+    }
     throw error
   }
 }

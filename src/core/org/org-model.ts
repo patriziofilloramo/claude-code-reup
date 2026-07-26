@@ -44,3 +44,24 @@ export class OrgSchemaVersionError extends Error {
     this.name = 'OrgSchemaVersionError'
   }
 }
+
+/**
+ * Error thrown when org.json exists but cannot be parsed, and a write was
+ * requested.
+ *
+ * Same contract as {@link OrgSchemaVersionError}: the file is left untouched
+ * and the caller is told what to repair, rather than the write silently
+ * replacing groups and stacks it could not read.
+ */
+export class OrgDataUnreadableError extends Error {
+  constructor(
+    readonly path: string,
+    options?: { cause?: unknown }
+  ) {
+    super(
+      `cannot read ${path}; refusing to overwrite it. Repair or delete the file, then retry.`,
+      options
+    )
+    this.name = 'OrgDataUnreadableError'
+  }
+}

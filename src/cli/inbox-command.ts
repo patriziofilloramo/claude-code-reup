@@ -4,6 +4,7 @@ import type { Project, Session, SessionStatus } from '../core/session/session-mo
 import { primaryStatus } from '../core/session/session-signals.js'
 import { relativeTime } from '../utils/time.js'
 import { writeOutput } from './output.js'
+import { sanitizeTerminalField } from './terminal-text.js'
 
 interface InboxSession {
   active: boolean
@@ -51,11 +52,11 @@ export function formatInbox(
       item.active ? 'active' : '',
       INBOX_ACTIONABLE_STATUSES.has(item.status) ? item.status : '',
     ].filter(Boolean)
-    lines.push(`${session.alias ?? session.name}`)
+    lines.push(sanitizeTerminalField(session.alias ?? session.name))
     lines.push(
       `  ${labels.join(', ')} · ${relativeTime(session.updated)} · ${session.id.slice(0, 8)}`
     )
-    lines.push(`  ${item.projectPath}`)
+    lines.push(`  ${sanitizeTerminalField(item.projectPath)}`)
   }
   return lines.join('\n')
 }

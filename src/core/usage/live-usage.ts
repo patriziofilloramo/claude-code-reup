@@ -297,11 +297,16 @@ export async function clearLiveUsageSnapshots(): Promise<void> {
   ])
 }
 
-/** Writes the raw status-line payload for post-capture inspection. */
+/**
+ * Writes the raw status-line payload for post-capture inspection.
+ *
+ * It carries session identifiers and workspace paths, so it gets the same
+ * owner-only, atomic treatment as every other file Reup persists: a partial
+ * write must never be observable by `reup usage raw`, and the contents must not
+ * be readable by other accounts on a shared machine.
+ */
 export async function writeRawCapture(rawJson: string): Promise<void> {
-  const path = join(getReupDirectory(), 'usage-last-raw.json')
-  await mkdir(getReupDirectory(), { recursive: true })
-  await writeFile(path, rawJson, 'utf8')
+  await writeTextAtomically(join(getReupDirectory(), 'usage-last-raw.json'), rawJson)
 }
 
 /** Reads back the last raw status-line payload, or null if none exists. */
@@ -500,10 +505,15 @@ async function renameWithContentionRetry(
 }
 
 async function writeJsonAtomically(path: string, value: unknown): Promise<void> {
+  await writeTextAtomically(path, JSON.stringify(value))
+}
+
+/** Owner-only atomic write into the Reup directory: temp file, then rename. */
+async function writeTextAtomically(path: string, contents: string): Promise<void> {
   await mkdir(getReupDirectory(), { recursive: true })
   const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`
   try {
-    await writeFile(temporaryPath, JSON.stringify(value), { encoding: 'utf8', mode: 0o600 })
+    await writeFile(temporaryPath, contents, { encoding: 'utf8', mode: 0o600 })
     await renameWithContentionRetry(temporaryPath, path)
   } finally {
     await unlink(temporaryPath).catch(() => {})

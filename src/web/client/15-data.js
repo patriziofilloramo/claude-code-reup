@@ -25,6 +25,7 @@ async function refreshUsageSummary() {
  * both panels. On first call, auto-selects the session from the URL hash (deep-link support).
  */
 async function refreshProjectData() {
+  const refreshGeneration = ++projectRefreshGeneration
   try {
     const [loadedProjects, activeData, diagnosticsData, loadedOrgData] = await Promise.all([
       requestJson('/api/projects'),
@@ -36,6 +37,7 @@ async function refreshProjectData() {
         return null
       }),
     ])
+    if (refreshGeneration !== projectRefreshGeneration) return
     projects = loadedProjects
     activeSessionIds = new Set(activeData.sessionIds || [])
     if (loadedOrgData) orgData = loadedOrgData
@@ -99,6 +101,7 @@ async function refreshProjectData() {
       }
     }
   } catch (error) {
+    if (refreshGeneration !== projectRefreshGeneration) return
     elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
     console.error('[reup] failed to refresh project data:', error)

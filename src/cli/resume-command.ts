@@ -7,7 +7,7 @@ import { isValidSessionId } from '../core/session/session-model.js'
 import { rankSessionCandidates } from '../core/session/session-ranking.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { log } from '../utils/logger.js'
-import { readCurrentWorkingDirectory } from '../utils/process.js'
+import { readCurrentWorkingDirectory, tryChangeWorkingDirectory } from '../utils/process.js'
 import { failCommand } from './output.js'
 import { selectSession } from './session-selector.js'
 
@@ -103,14 +103,4 @@ export function selectResumeTarget(projects: Project[], selector: string): Direc
   // Preserve direct resume for a valid full UUID that is absent from Reup's
   // current discovery result. Claude Code remains the authority for that ID.
   return isValidSessionId(selector) ? { result: { sessionId: selector } } : selection
-}
-
-function tryChangeWorkingDirectory(projectPath: string | undefined): void {
-  if (!projectPath) return
-  try {
-    process.chdir(projectPath)
-  } catch (error) {
-    log.warn(`recorded project path is unavailable; resuming from ${process.cwd()}: ${projectPath}`)
-    log.debug('resume: failed to change working directory:', error)
-  }
 }

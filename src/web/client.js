@@ -163,6 +163,7 @@ const STRINGS = {
   resumeCommandCopied: 'Command copied to clipboard',
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
+  resumePathUnavailable: 'Project directory is unavailable. Restore it before resuming.',
 
   // ── Touched-file cross-session overlap ────────────────────────────────────
   touchedOthersOne: 'touched by 1 other session',
@@ -374,6 +375,10 @@ const STRINGS = {
  * Substitutes {key} placeholders in a template with values from vars.
  * Use instead of string concatenation so strings remain translatable as
  * complete phrases.
+ *
+ * Substitution only — the result is NOT escaped. Anything that reaches
+ * innerHTML must be wrapped in escapeHtml(), because transcript-derived values
+ * such as project paths are attacker-influenceable.
  */
 function fmt(template, vars) {
   return template.replace(/\{(\w+)\}/g, function (_, key) {
@@ -552,9 +557,13 @@ let searchQuery = ''
 let renamingSessionId = null
 let claudeInstructionsProjectId = null
 let claudeInstructionsSaveTimer = null
+let claudeInstructionsSaveQueue = Promise.resolve()
+let claudeInstructionsDirty = false
+let claudeInstructionsClosing = false
 let liveUpdatesSource = null
 let liveUpdatesRefreshTimer = null
 let usageRefreshInProgress = false
+let projectRefreshGeneration = 0
 let deepLinkProcessed = false
 let ctxProject = null
 let ctxSession = null
@@ -841,13 +850,19 @@ showLoadingOverlay()
 // Shared presentation and request helpers
 // ---------------------------------------------------------------------------
 
-/** Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS. */
+/**
+ * Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS.
+ *
+ * Single quotes are escaped too, so the result stays safe if a template ever
+ * uses single-quoted attributes.
+ */
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 let floatingTooltip = null
@@ -1832,12 +1847,15 @@ function markSessionPreviewsStale() {
 /** Returns action buttons for the selected session. These mirror the row menu and keyboard shortcuts. */
 function buildInspectorActionsHtml(session) {
   const deleteDisabled = activeSessionIds.has(session.id)
+  const resumeDisabled = !session.signals.pathExists
   const isArchived = session.signals.archived
   return (
     '<div class="insp-actions">' +
     '<button class="insp-action primary" data-inspector-action="session-resume" title="' +
-    escapeHtml(STRINGS.inspBtnResumeTooltip) +
-    '">' +
+    escapeHtml(resumeDisabled ? STRINGS.resumePathUnavailable : STRINGS.inspBtnResumeTooltip) +
+    '"' +
+    (resumeDisabled ? ' disabled' : '') +
+    '>' +
     STRINGS.inspBtnResume +
     '</button>' +
     '<button class="insp-action" data-inspector-action="session-handoff" title="' +
@@ -2846,7 +2864,11 @@ function executeSessionAction(action, session) {
 /** Returns the menu/action labels for a session in a single canonical order. */
 function sessionActionItems(session) {
   return [
-    { action: 'session-resume', label: STRINGS.sessionActionResume },
+    {
+      action: 'session-resume',
+      disabled: !session.signals.pathExists,
+      label: STRINGS.sessionActionResume,
+    },
     { action: 'session-handoff', label: STRINGS.sessionActionHandoff },
     { type: 'separator' },
     { action: 'session-rename', label: STRINGS.sessionActionRename },
@@ -2958,11 +2980,17 @@ elements.sessionList.addEventListener('dblclick', function (event) {
 
 /** Opens the resume confirmation dialog pre-populated with the session details. */
 function openResumeDialog(session) {
+  if (!session.signals.pathExists) {
+    showToast(STRINGS.resumePathUnavailable, 'err')
+    return
+  }
   selectSession(session)
   elements.resumeCommand.textContent = 'claude --resume ' + session.id
   elements.resumeDialogName.textContent = session.name
   elements.resumeDialogBranch.textContent = session.gitBranch ? '⎇ ' + session.gitBranch : ''
   elements.resumeDialogMessage.textContent = ''
+  elements.resumeConfirmButton.textContent = STRINGS.resumeConfirmBtn
+  elements.resumeConfirmButton.disabled = false
   elements.resumeOverlay.classList.add('open')
   elements.resumeConfirmButton.focus()
 }
@@ -3003,6 +3031,14 @@ function stopLaunchAnimation(launchAnimationTimer) {
  */
 async function resumeSelectedSession() {
   if (!selectedSession || !selectedProject) return
+  if (!selectedSession.signals.pathExists) {
+    elements.resumeDialogMessage.textContent = STRINGS.resumePathUnavailable
+    if (elements.resumeOverlay.classList.contains('open')) {
+      elements.resumeConfirmButton.disabled = true
+    }
+    showToast(STRINGS.resumePathUnavailable, 'err')
+    return
+  }
   const launchAnimationTimer = startLaunchAnimation()
 
   try {
@@ -3085,16 +3121,34 @@ async function openClaudeInstructionsDrawer() {
   elements.instructionsPath.textContent = instructions.path || '(no CLAUDE.md found)'
   elements.instructionsEditor.value = instructions.content || ''
   elements.instructionsEditor.disabled = instructions.content === null
+  elements.instructionsSaveButton.disabled = instructions.content === null
   elements.instructionsSaveStatus.textContent = ''
   claudeInstructionsProjectId = project.id
+  claudeInstructionsDirty = false
   elements.instructionsDrawer.classList.add('open')
   if (instructions.content !== null) elements.instructionsEditor.focus()
 }
 
-function closeClaudeInstructionsDrawer() {
+async function closeClaudeInstructionsDrawer() {
+  if (claudeInstructionsClosing) return
   clearTimeout(claudeInstructionsSaveTimer)
-  claudeInstructionsProjectId = null
-  elements.instructionsDrawer.classList.remove('open')
+  claudeInstructionsClosing = true
+  const editorWasDisabled = elements.instructionsEditor.disabled
+  const saveButtonWasDisabled = elements.instructionsSaveButton.disabled
+  elements.instructionsEditor.disabled = true
+  elements.instructionsSaveButton.disabled = true
+
+  try {
+    if (claudeInstructionsDirty && !(await saveClaudeInstructions())) return
+    claudeInstructionsProjectId = null
+    elements.instructionsDrawer.classList.remove('open')
+  } finally {
+    claudeInstructionsClosing = false
+    if (elements.instructionsDrawer.classList.contains('open')) {
+      elements.instructionsEditor.disabled = editorWasDisabled
+      elements.instructionsSaveButton.disabled = saveButtonWasDisabled
+    }
+  }
 }
 // ---------------------------------------------------------------------------
 // Lost & Found panel
@@ -3134,7 +3188,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-warn">' +
-          fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
@@ -3159,7 +3213,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-err">' +
-          fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
@@ -3304,38 +3358,62 @@ async function renderDiagnosticsPanel() {
  * user switched selection between the keystroke and the debounce firing.
  */
 async function saveClaudeInstructions() {
-  // A delayed autosave must never write after the drawer changes projects.
-  if (
-    !claudeInstructionsProjectId ||
-    claudeInstructionsProjectId !== (selectedProject && selectedProject.id)
-  ) {
-    return
-  }
+  // The open drawer owns this project ID even if a background refresh changes
+  // the current selection. Closing the drawer clears it, so a delayed timer
+  // can never be redirected to another project.
+  if (!claudeInstructionsProjectId) return false
   clearTimeout(claudeInstructionsSaveTimer)
+  const projectId = claudeInstructionsProjectId
+  const content = elements.instructionsEditor.value
 
-  try {
-    await requestJson('/api/claude-md/' + encodeURIComponent(claudeInstructionsProjectId), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: elements.instructionsEditor.value }),
-    })
-    elements.instructionsSaveStatus.textContent = STRINGS.claudeMdSaved
-    elements.instructionsSaveStatus.className = 'save-status saved'
-  } catch (error) {
-    elements.instructionsSaveStatus.textContent = fmt(STRINGS.claudeMdSaveError, {
-      message: error.message,
-    })
-  }
+  // Every request starts after the previous one settles. A slow older write
+  // can therefore never arrive after and overwrite a newer editor snapshot.
+  const result = claudeInstructionsSaveQueue.then(async function () {
+    try {
+      await requestJson('/api/claude-md/' + encodeURIComponent(projectId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content }),
+      })
+      if (
+        claudeInstructionsProjectId === projectId &&
+        elements.instructionsEditor.value === content
+      ) {
+        claudeInstructionsDirty = false
+        elements.instructionsSaveStatus.textContent = STRINGS.claudeMdSaved
+        elements.instructionsSaveStatus.className = 'save-status saved'
+      }
+      return true
+    } catch (error) {
+      if (
+        claudeInstructionsProjectId === projectId &&
+        elements.instructionsEditor.value === content
+      ) {
+        elements.instructionsSaveStatus.textContent = fmt(STRINGS.claudeMdSaveError, {
+          message: error.message,
+        })
+      }
+      return false
+    }
+  })
+  claudeInstructionsSaveQueue = result.then(function () {
+    return undefined
+  })
+  return result
 }
 
 elements.instructionsTag.addEventListener('click', function (event) {
   event.preventDefault()
   void openClaudeInstructionsDrawer()
 })
-elements.instructionsCloseButton.addEventListener('click', closeClaudeInstructionsDrawer)
-elements.instructionsFooterCloseButton.addEventListener('click', closeClaudeInstructionsDrawer)
+elements.instructionsCloseButton.addEventListener('click', function () {
+  void closeClaudeInstructionsDrawer()
+})
+elements.instructionsFooterCloseButton.addEventListener('click', function () {
+  void closeClaudeInstructionsDrawer()
+})
 elements.instructionsDrawer.addEventListener('click', function (event) {
-  if (event.target === elements.instructionsDrawer) closeClaudeInstructionsDrawer()
+  if (event.target === elements.instructionsDrawer) void closeClaudeInstructionsDrawer()
 })
 elements.diagnosticsButton.addEventListener('click', openDiagnosticsDrawer)
 elements.diagnosticsCloseButton.addEventListener('click', closeDiagnosticsDrawer)
@@ -3343,6 +3421,7 @@ elements.diagnosticsDrawer.addEventListener('click', function (event) {
   if (event.target === elements.diagnosticsDrawer) closeDiagnosticsDrawer()
 })
 elements.instructionsEditor.addEventListener('input', function () {
+  claudeInstructionsDirty = true
   elements.instructionsSaveStatus.textContent = STRINGS.claudeMdUnsaved
   elements.instructionsSaveStatus.className = 'save-status'
   clearTimeout(claudeInstructionsSaveTimer)
@@ -3644,9 +3723,12 @@ function openContextMenuAt(x, y, items) {
       return (
         '<div class="ctx-item' +
         (item.danger ? ' ctx-item-danger' : '') +
+        (item.disabled ? ' ctx-item-disabled' : '') +
         '" data-action="' +
         escapeHtml(item.action) +
-        '">' +
+        '"' +
+        (item.disabled ? ' aria-disabled="true"' : '') +
+        '>' +
         escapeHtml(item.label) +
         '</div>'
       )
@@ -3695,6 +3777,7 @@ function openProjectContextMenu(event, project) {
 elements.contextMenu.addEventListener('click', function (event) {
   const item = event.target.closest('.ctx-item')
   if (!item) return
+  if (item.getAttribute('aria-disabled') === 'true') return
 
   const action = item.dataset.action
   const project = ctxProject
@@ -3898,7 +3981,7 @@ document.addEventListener('keydown', function (event) {
     return
   }
   if (elements.instructionsDrawer.classList.contains('open')) {
-    if (event.key === 'Escape') closeClaudeInstructionsDrawer()
+    if (event.key === 'Escape') void closeClaudeInstructionsDrawer()
     return
   }
   if (elements.diagnosticsDrawer.classList.contains('open')) {
@@ -4054,6 +4137,7 @@ async function refreshUsageSummary() {
  * both panels. On first call, auto-selects the session from the URL hash (deep-link support).
  */
 async function refreshProjectData() {
+  const refreshGeneration = ++projectRefreshGeneration
   try {
     const [loadedProjects, activeData, diagnosticsData, loadedOrgData] = await Promise.all([
       requestJson('/api/projects'),
@@ -4065,6 +4149,7 @@ async function refreshProjectData() {
         return null
       }),
     ])
+    if (refreshGeneration !== projectRefreshGeneration) return
     projects = loadedProjects
     activeSessionIds = new Set(activeData.sessionIds || [])
     if (loadedOrgData) orgData = loadedOrgData
@@ -4128,6 +4213,7 @@ async function refreshProjectData() {
       }
     }
   } catch (error) {
+    if (refreshGeneration !== projectRefreshGeneration) return
     elements.footerStatus.textContent = STRINGS.statusBarLoadError
     elements.footerStatus.className = 'ftr-status err'
     console.error('[reup] failed to refresh project data:', error)

@@ -111,7 +111,7 @@ document.addEventListener('keydown', function (event) {
     return
   }
   if (elements.instructionsDrawer.classList.contains('open')) {
-    if (event.key === 'Escape') closeClaudeInstructionsDrawer()
+    if (event.key === 'Escape') void closeClaudeInstructionsDrawer()
     return
   }
   if (elements.diagnosticsDrawer.classList.contains('open')) {

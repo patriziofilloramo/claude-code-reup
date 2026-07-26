@@ -154,6 +154,7 @@ const STRINGS = {
   resumeCommandCopied: 'Command copied to clipboard',
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
+  resumePathUnavailable: 'Project directory is unavailable. Restore it before resuming.',
 
   // ── Touched-file cross-session overlap ────────────────────────────────────
   touchedOthersOne: 'touched by 1 other session',
@@ -365,6 +366,10 @@ const STRINGS = {
  * Substitutes {key} placeholders in a template with values from vars.
  * Use instead of string concatenation so strings remain translatable as
  * complete phrases.
+ *
+ * Substitution only — the result is NOT escaped. Anything that reaches
+ * innerHTML must be wrapped in escapeHtml(), because transcript-derived values
+ * such as project paths are attacker-influenceable.
  */
 function fmt(template, vars) {
   return template.replace(/\{(\w+)\}/g, function (_, key) {

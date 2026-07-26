@@ -36,7 +36,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-warn">' +
-          fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
@@ -61,7 +61,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-err">' +
-          fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
@@ -206,38 +206,62 @@ async function renderDiagnosticsPanel() {
  * user switched selection between the keystroke and the debounce firing.
  */
 async function saveClaudeInstructions() {
-  // A delayed autosave must never write after the drawer changes projects.
-  if (
-    !claudeInstructionsProjectId ||
-    claudeInstructionsProjectId !== (selectedProject && selectedProject.id)
-  ) {
-    return
-  }
+  // The open drawer owns this project ID even if a background refresh changes
+  // the current selection. Closing the drawer clears it, so a delayed timer
+  // can never be redirected to another project.
+  if (!claudeInstructionsProjectId) return false
   clearTimeout(claudeInstructionsSaveTimer)
+  const projectId = claudeInstructionsProjectId
+  const content = elements.instructionsEditor.value
 
-  try {
-    await requestJson('/api/claude-md/' + encodeURIComponent(claudeInstructionsProjectId), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: elements.instructionsEditor.value }),
-    })
-    elements.instructionsSaveStatus.textContent = STRINGS.claudeMdSaved
-    elements.instructionsSaveStatus.className = 'save-status saved'
-  } catch (error) {
-    elements.instructionsSaveStatus.textContent = fmt(STRINGS.claudeMdSaveError, {
-      message: error.message,
-    })
-  }
+  // Every request starts after the previous one settles. A slow older write
+  // can therefore never arrive after and overwrite a newer editor snapshot.
+  const result = claudeInstructionsSaveQueue.then(async function () {
+    try {
+      await requestJson('/api/claude-md/' + encodeURIComponent(projectId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content }),
+      })
+      if (
+        claudeInstructionsProjectId === projectId &&
+        elements.instructionsEditor.value === content
+      ) {
+        claudeInstructionsDirty = false
+        elements.instructionsSaveStatus.textContent = STRINGS.claudeMdSaved
+        elements.instructionsSaveStatus.className = 'save-status saved'
+      }
+      return true
+    } catch (error) {
+      if (
+        claudeInstructionsProjectId === projectId &&
+        elements.instructionsEditor.value === content
+      ) {
+        elements.instructionsSaveStatus.textContent = fmt(STRINGS.claudeMdSaveError, {
+          message: error.message,
+        })
+      }
+      return false
+    }
+  })
+  claudeInstructionsSaveQueue = result.then(function () {
+    return undefined
+  })
+  return result
 }
 
 elements.instructionsTag.addEventListener('click', function (event) {
   event.preventDefault()
   void openClaudeInstructionsDrawer()
 })
-elements.instructionsCloseButton.addEventListener('click', closeClaudeInstructionsDrawer)
-elements.instructionsFooterCloseButton.addEventListener('click', closeClaudeInstructionsDrawer)
+elements.instructionsCloseButton.addEventListener('click', function () {
+  void closeClaudeInstructionsDrawer()
+})
+elements.instructionsFooterCloseButton.addEventListener('click', function () {
+  void closeClaudeInstructionsDrawer()
+})
 elements.instructionsDrawer.addEventListener('click', function (event) {
-  if (event.target === elements.instructionsDrawer) closeClaudeInstructionsDrawer()
+  if (event.target === elements.instructionsDrawer) void closeClaudeInstructionsDrawer()
 })
 elements.diagnosticsButton.addEventListener('click', openDiagnosticsDrawer)
 elements.diagnosticsCloseButton.addEventListener('click', closeDiagnosticsDrawer)
@@ -245,6 +269,7 @@ elements.diagnosticsDrawer.addEventListener('click', function (event) {
   if (event.target === elements.diagnosticsDrawer) closeDiagnosticsDrawer()
 })
 elements.instructionsEditor.addEventListener('input', function () {
+  claudeInstructionsDirty = true
   elements.instructionsSaveStatus.textContent = STRINGS.claudeMdUnsaved
   elements.instructionsSaveStatus.className = 'save-status'
   clearTimeout(claudeInstructionsSaveTimer)

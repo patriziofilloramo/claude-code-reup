@@ -8,17 +8,17 @@ import { fileURLToPath } from 'node:url'
 const extensionRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(extensionRoot, 'package.json'), 'utf8'))
 const outputPath = join(extensionRoot, 'dist', `reup-vscode-${manifest.version}.vsix`)
-const command = process.platform === 'win32' ? 'vsce.cmd' : 'vsce'
+const vsceEntryPoint = join(extensionRoot, 'node_modules', '@vscode', 'vsce', 'vsce')
 
-const result = spawnSync(command, ['package', '--out', outputPath], {
+const result = spawnSync(process.execPath, [vsceEntryPoint, 'package', '--out', outputPath], {
   cwd: extensionRoot,
   encoding: 'utf8',
-  shell: process.platform === 'win32',
+  shell: false,
   stdio: 'inherit',
 })
 
 if (result.error) {
-  console.error(`Unable to run ${command}. Run "npm ci --prefix extension" first.`)
+  console.error('Unable to run VSCE. Run "npm ci --prefix extension" first.')
   throw result.error
 }
 

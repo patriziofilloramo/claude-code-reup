@@ -17,6 +17,7 @@ interface ProjectCacheEntry {
 const CACHE_TTL_MS = 2_000
 
 let cachedEntry: ProjectCacheEntry | null = null
+let cacheGeneration = 0
 
 export function getCachedProjects(cacheKey: string): Project[] | null {
   if (!cachedEntry) return null
@@ -31,10 +32,27 @@ export function getCachedProjects(cacheKey: string): Project[] | null {
   return cachedEntry.projects
 }
 
-export function setCachedProjects(cacheKey: string, projects: Project[]): void {
+/** Returns a token that becomes stale after the next explicit invalidation. */
+export function getProjectCacheGeneration(): number {
+  return cacheGeneration
+}
+
+/**
+ * Stores a discovery result only when no invalidation happened while it was
+ * being assembled. This prevents an older in-flight scan from repopulating the
+ * cache after a filesystem event or sidecar mutation cleared it.
+ */
+export function setCachedProjects(
+  cacheKey: string,
+  projects: Project[],
+  expectedGeneration = cacheGeneration
+): boolean {
+  if (expectedGeneration !== cacheGeneration) return false
   cachedEntry = { cacheKey, projects, timestamp: Date.now() }
+  return true
 }
 
 export function invalidateProjectCache(): void {
+  cacheGeneration += 1
   cachedEntry = null
 }

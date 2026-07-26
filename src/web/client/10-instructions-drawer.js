@@ -36,14 +36,32 @@ async function openClaudeInstructionsDrawer() {
   elements.instructionsPath.textContent = instructions.path || '(no CLAUDE.md found)'
   elements.instructionsEditor.value = instructions.content || ''
   elements.instructionsEditor.disabled = instructions.content === null
+  elements.instructionsSaveButton.disabled = instructions.content === null
   elements.instructionsSaveStatus.textContent = ''
   claudeInstructionsProjectId = project.id
+  claudeInstructionsDirty = false
   elements.instructionsDrawer.classList.add('open')
   if (instructions.content !== null) elements.instructionsEditor.focus()
 }
 
-function closeClaudeInstructionsDrawer() {
+async function closeClaudeInstructionsDrawer() {
+  if (claudeInstructionsClosing) return
   clearTimeout(claudeInstructionsSaveTimer)
-  claudeInstructionsProjectId = null
-  elements.instructionsDrawer.classList.remove('open')
+  claudeInstructionsClosing = true
+  const editorWasDisabled = elements.instructionsEditor.disabled
+  const saveButtonWasDisabled = elements.instructionsSaveButton.disabled
+  elements.instructionsEditor.disabled = true
+  elements.instructionsSaveButton.disabled = true
+
+  try {
+    if (claudeInstructionsDirty && !(await saveClaudeInstructions())) return
+    claudeInstructionsProjectId = null
+    elements.instructionsDrawer.classList.remove('open')
+  } finally {
+    claudeInstructionsClosing = false
+    if (elements.instructionsDrawer.classList.contains('open')) {
+      elements.instructionsEditor.disabled = editorWasDisabled
+      elements.instructionsSaveButton.disabled = saveButtonWasDisabled
+    }
+  }
 }

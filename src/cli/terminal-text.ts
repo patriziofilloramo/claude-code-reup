@@ -10,6 +10,61 @@ const ANSI_SPLIT_PATTERN = new RegExp(`(${ESCAPE_CHARACTER}\\[[0-9;]*m)`)
 const ANSI_ONLY_PATTERN = new RegExp(`^${ESCAPE_CHARACTER}\\[[0-9;]*m$`)
 const ANSI_RESET = `${ESCAPE_CHARACTER}[0m`
 const TRUNCATION_SUFFIX = '...'
+const SGR_AT_START_PATTERN = new RegExp(`^${ESCAPE_CHARACTER}\\[[0-9;]*m`)
+const REUP_SGR_SEQUENCES = new Set([
+  ANSI_RESET,
+  `${ESCAPE_CHARACTER}[1m`,
+  `${ESCAPE_CHARACTER}[2m`,
+  `${ESCAPE_CHARACTER}[32m`,
+  `${ESCAPE_CHARACTER}[90m`,
+  `${ESCAPE_CHARACTER}[97m`,
+  `${ESCAPE_CHARACTER}[38;2;34;211;238m`,
+  `${ESCAPE_CHARACTER}[38;2;52;211;153m`,
+  `${ESCAPE_CHARACTER}[38;2;251;191;36m`,
+  `${ESCAPE_CHARACTER}[38;2;251;146;60m`,
+  `${ESCAPE_CHARACTER}[38;2;248;113;113m`,
+])
+
+/**
+ * Removes terminal control characters supplied by untrusted local data.
+ * Callers may preserve the small SGR allowlist emitted by Reup renderers;
+ * plain output strips every escape sequence. Newlines and tabs remain
+ * available for intentional CLI layout.
+ */
+export function sanitizeTerminalOutput(value: string, preserveReupStyles = false): string {
+  let sanitized = ''
+  let styleActive = false
+
+  for (let index = 0; index < value.length; index++) {
+    const codePoint = value.charCodeAt(index)
+    if (codePoint === 27) {
+      const sgr = SGR_AT_START_PATTERN.exec(value.slice(index))
+      if (sgr) {
+        if (preserveReupStyles && REUP_SGR_SEQUENCES.has(sgr[0])) {
+          sanitized += sgr[0]
+          styleActive = sgr[0] !== ANSI_RESET
+        }
+        index += sgr[0].length - 1
+      }
+      continue
+    }
+
+    if (codePoint === 9 || codePoint === 10) sanitized += value[index]
+    else if (
+      codePoint >= 32 &&
+      !(codePoint >= 127 && codePoint <= 159) &&
+      codePoint !== 0x061c &&
+      codePoint !== 0x200e &&
+      codePoint !== 0x200f &&
+      !(codePoint >= 0x202a && codePoint <= 0x202e) &&
+      !(codePoint >= 0x2066 && codePoint <= 0x2069)
+    ) {
+      sanitized += value[index]
+    }
+  }
+
+  return styleActive ? sanitized + ANSI_RESET : sanitized
+}
 
 export function terminalWidthOrDefault(
   width: number | undefined,
@@ -20,6 +75,16 @@ export function terminalWidthOrDefault(
 
 export function compactWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+/** Converts one untrusted table/label value into inert, single-line terminal text. */
+export function sanitizeTerminalField(value: string): string {
+  return sanitizeTerminalOutput(value)
+    .replaceAll('\t', ' ')
+    .replaceAll('\n', ' ')
+    .replaceAll('\u2028', ' ')
+    .replaceAll('\u2029', ' ')
+    .trim()
 }
 
 export function stripAnsi(value: string): string {

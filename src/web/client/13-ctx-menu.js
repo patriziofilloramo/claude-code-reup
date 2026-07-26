@@ -23,9 +23,12 @@ function openContextMenuAt(x, y, items) {
       return (
         '<div class="ctx-item' +
         (item.danger ? ' ctx-item-danger' : '') +
+        (item.disabled ? ' ctx-item-disabled' : '') +
         '" data-action="' +
         escapeHtml(item.action) +
-        '">' +
+        '"' +
+        (item.disabled ? ' aria-disabled="true"' : '') +
+        '>' +
         escapeHtml(item.label) +
         '</div>'
       )
@@ -74,6 +77,7 @@ function openProjectContextMenu(event, project) {
 elements.contextMenu.addEventListener('click', function (event) {
   const item = event.target.closest('.ctx-item')
   if (!item) return
+  if (item.getAttribute('aria-disabled') === 'true') return
 
   const action = item.dataset.action
   const project = ctxProject

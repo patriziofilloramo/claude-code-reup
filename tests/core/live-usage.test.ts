@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -7,8 +7,10 @@ import {
   clearUsageCaptureError,
   parseStatusLineUsage,
   readLiveUsageSummary,
+  readRawCapture,
   recordUsageCaptureError,
   writeLiveUsageSnapshot,
+  writeRawCapture,
 } from '../../src/core/usage/live-usage.js'
 
 describe('live usage', () => {
@@ -377,6 +379,38 @@ describe('live usage', () => {
 
     const summary = await readLiveUsageSummary(new Date('2026-06-10T10:01:00.000Z').getTime())
     expect(summary.snapshot?.sessionId).toBe('valid')
+  })
+
+  // The raw payload carries session IDs and workspace paths, and is rewritten
+  // every few seconds while capture is on.
+  describe('raw capture persistence', () => {
+    const RAW_PAYLOAD = JSON.stringify({
+      cwd: '/home/someone/private-client-work',
+      session_id: '11111111-2222-3333-4444-555555555555',
+    })
+
+    it('round-trips the payload', async () => {
+      await writeRawCapture(RAW_PAYLOAD)
+
+      await expect(readRawCapture()).resolves.toBe(RAW_PAYLOAD)
+    })
+
+    it('stores it owner-only, like every other file Reup persists', async () => {
+      await writeRawCapture(RAW_PAYLOAD)
+
+      const rawPath = join(temporaryClaudeDirectory, 'reup', 'usage-last-raw.json')
+      const mode = (await stat(rawPath)).mode & 0o777
+      // Windows does not implement POSIX permission bits.
+      if (process.platform !== 'win32') expect(mode).toBe(0o600)
+    })
+
+    it('leaves no temporary file behind, so a reader never sees a partial write', async () => {
+      await writeRawCapture(RAW_PAYLOAD)
+
+      const reupDirectory = join(temporaryClaudeDirectory, 'reup')
+      const leftovers = (await readdir(reupDirectory)).filter((name) => name.endsWith('.tmp'))
+      expect(leftovers).toEqual([])
+    })
   })
 
   async function configureCapture(installedCommand: string): Promise<void> {

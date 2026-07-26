@@ -14,6 +14,11 @@ export type RouteHandler = (context: Context) => Promise<Response>
  * converted to a standard 500 response — so the error shape and log
  * format are consistent across every endpoint.
  *
+ * This wrapper adds no access control. The loopback-host check is applied
+ * globally in `buildApp`, so read endpoints are already protected against
+ * DNS rebinding; use {@link guardedRoute} whenever a request also changes
+ * state and therefore needs cross-origin protection.
+ *
  * @example
  * app.get('/api/projects', apiRoute(async (c) => {
  *   const projects = await loadProjects()
@@ -33,11 +38,11 @@ export function apiRoute(handler: RouteHandler): RouteHandler {
 
 /**
  * Like {@link apiRoute} but also enforces that the request originates from
- * the local browser before invoking the handler.
+ * the Reup page itself before invoking the handler.
  *
  * This is the correct wrapper for **all state-changing endpoints** (POST, PUT,
- * DELETE). Read-only endpoints that do not touch the filesystem or launch
- * processes use {@link apiRoute} instead.
+ * DELETE). Read-only endpoints use {@link apiRoute} instead and rely on the
+ * global loopback-host middleware alone.
  *
  * Returns 403 Forbidden before the handler is called when the origin check
  * fails, keeping the security gate close to the surface and impossible to

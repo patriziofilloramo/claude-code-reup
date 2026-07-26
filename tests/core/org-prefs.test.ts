@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -17,7 +17,7 @@ import {
   updateProjectGroup,
   updateWorkStack,
 } from '../../src/core/org/org-prefs.js'
-import { OrgSchemaVersionError } from '../../src/core/org/org-model.js'
+import { OrgDataUnreadableError, OrgSchemaVersionError } from '../../src/core/org/org-model.js'
 import { OrgValidationError } from '../../src/core/org/org-validation.js'
 
 describe('org prefs', () => {
@@ -48,6 +48,20 @@ describe('org prefs', () => {
     expect(data.stacks).toEqual([])
     expect(data.tagPalette).toEqual([])
     expect(data.projectGroupAssignments).toEqual({})
+  })
+
+  it('creates private Reup storage before the first locked write', async () => {
+    const reupDirectory = join(temporaryClaudeDirectory, 'reup')
+    const orgPath = join(reupDirectory, 'org.json')
+    await rm(reupDirectory, { force: true, recursive: true })
+
+    await createProjectGroup('First group')
+
+    await expect(readFile(orgPath, 'utf8')).resolves.toContain('First group')
+    if (process.platform !== 'win32') {
+      expect((await stat(reupDirectory)).mode & 0o777).toBe(0o700)
+      expect((await stat(orgPath)).mode & 0o777).toBe(0o600)
+    }
   })
 
   it('degrades to empty when org.json has an unknown schema version', async () => {
@@ -251,6 +265,53 @@ describe('org prefs', () => {
     await recordTagInPalette('bug')
     const data = await readOrgData()
     expect(data.tagPalette.filter((t) => t === 'bug')).toHaveLength(1)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Malformed org.json on the write path
+  // ---------------------------------------------------------------------------
+
+  describe('when org.json is not the shape a mutation expects', () => {
+    async function writeOrgJson(contents: string): Promise<void> {
+      await writeFile(join(temporaryClaudeDirectory, 'reup', 'org.json'), contents, 'utf8')
+    }
+
+    it('fills in absent collections instead of failing deep inside a mutation', async () => {
+      // A hand-edited or partially written file: valid JSON, right version,
+      // missing the arrays every updater walks.
+      await writeOrgJson(JSON.stringify({ schemaVersion: 1 }))
+
+      const group = await createProjectGroup('Billing')
+
+      const data = await readOrgData()
+      expect(data.groups).toEqual([group])
+      expect(data.stacks).toEqual([])
+      expect(data.tagPalette).toEqual([])
+    })
+
+    it('refuses to overwrite a file it cannot parse', async () => {
+      const truncated = '{ "schemaVersion": 1, "groups": [{ "id": "a", "name": "Billing" }'
+      await writeOrgJson(truncated)
+
+      await expect(createProjectGroup('Another')).rejects.toBeInstanceOf(OrgDataUnreadableError)
+      await expect(
+        readFile(join(temporaryClaudeDirectory, 'reup', 'org.json'), 'utf8')
+      ).resolves.toBe(truncated)
+    })
+
+    it('refuses to overwrite a JSON root that is not an object', async () => {
+      await writeOrgJson('[]')
+
+      await expect(createProjectGroup('Another')).rejects.toBeInstanceOf(OrgDataUnreadableError)
+    })
+
+    it('names the file to repair so the failure is actionable', async () => {
+      await writeOrgJson('not json at all')
+
+      await expect(createProjectGroup('Another')).rejects.toThrow(
+        /org\.json[\s\S]*refusing to overwrite/
+      )
+    })
   })
 
   // ---------------------------------------------------------------------------

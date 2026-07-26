@@ -32,6 +32,69 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual([])
   })
 
+  // A page on an attacker's domain that rebinds its name to 127.0.0.1 talks to
+  // this server same-origin, so the same-origin policy stops protecting the
+  // response body. The Host header still names the attacker's domain, and reads
+  // return exactly what such a page would come for: transcripts, project paths,
+  // and CLAUDE.md contents.
+  describe('DNS rebinding', () => {
+    const REBOUND_HOST = { Host: 'attacker.example.com' }
+
+    it('rejects reads addressed to a non-local host', async () => {
+      await createKnownSession()
+
+      const readEndpoints = [
+        '/',
+        '/api/projects',
+        `/api/search?q=${PROJECT_ID}`,
+        '/api/search/deep?q=hello',
+        `/api/session/${SESSION_ID}?project=${PROJECT_ID}`,
+        `/api/sessions/${PROJECT_ID}/${SESSION_ID}/preview`,
+        `/api/sessions/${PROJECT_ID}/${SESSION_ID}/handoff`,
+        `/api/claude-md/${PROJECT_ID}`,
+        '/api/touched/files',
+        '/api/touched/sessions?path=x',
+        '/api/active',
+        '/api/live-activity',
+        '/api/diagnostics',
+        '/api/usage',
+        '/api/org',
+      ]
+
+      const statuses = await Promise.all(
+        readEndpoints.map(async (endpoint) => {
+          const response = await buildApp().request(endpoint, { headers: REBOUND_HOST })
+          return `${endpoint} -> ${String(response.status)}`
+        })
+      )
+
+      expect(statuses).toEqual(readEndpoints.map((endpoint) => `${endpoint} -> 403`))
+    })
+
+    it('leaks nothing in the rejected response body', async () => {
+      await createKnownSession()
+
+      const response = await buildApp().request(
+        `/api/session/${SESSION_ID}?project=${PROJECT_ID}`,
+        { headers: REBOUND_HOST }
+      )
+
+      expect(response.status).toBe(403)
+      await expect(response.text()).resolves.toBe('Forbidden')
+    })
+
+    it('still serves the same reads on the loopback host', async () => {
+      await createKnownSession()
+
+      const response = await buildApp().request('/api/projects', {
+        headers: { Host: 'localhost:3333' },
+      })
+
+      expect(response.status).toBe(200)
+      expect((await response.json()) as unknown[]).toHaveLength(1)
+    })
+  })
+
   it('rejects state-changing requests from a non-local host', async () => {
     const response = await buildApp().request('/api/resume/not-a-session', {
       method: 'POST',
@@ -117,6 +180,32 @@ describe('web routes', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'invalid session id' })
+  })
+
+  it('refuses to resume a session whose recorded project directory is unavailable', async () => {
+    await createKnownSession(join(claudeDirectory, 'missing-workspace'))
+
+    const response = await buildApp().request(`/api/resume/${SESSION_ID}`, {
+      body: JSON.stringify({ projectId: PROJECT_ID }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'project path unavailable' })
+  })
+
+  it('refuses to start a new session when the project directory is unavailable', async () => {
+    await createKnownSession(join(claudeDirectory, 'missing-workspace'))
+
+    const response = await buildApp().request('/api/new-session', {
+      body: JSON.stringify({ projectId: PROJECT_ID }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'project path unavailable' })
   })
 
   it('returns no results for an empty search query', async () => {
@@ -497,6 +586,25 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'archived must be boolean' })
   })
 
+  it('reports a refused write over unreadable metadata instead of a generic failure', async () => {
+    await createKnownSession()
+    await writeFile(
+      join(claudeDirectory, 'projects', PROJECT_ID, 'reup.json'),
+      '{ "sessions": { "truncated"'
+    )
+
+    const response = await buildApp().request(`/api/sessions/${PROJECT_ID}/${SESSION_ID}/archive`, {
+      body: JSON.stringify({ archived: true }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+    const body = (await response.json()) as { error: string }
+
+    expect(response.status).toBe(409)
+    expect(body.error).toMatch(/reup\.json/)
+    expect(body.error).toMatch(/refusing to overwrite/)
+  })
+
   it('refuses to delete an active session', async () => {
     await createKnownSession()
     const sessionsDirectory = join(claudeDirectory, 'sessions')
@@ -515,13 +623,13 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'cannot delete an active session' })
   })
 
-  async function createKnownSession(): Promise<void> {
+  async function createKnownSession(projectPath = claudeDirectory): Promise<void> {
     const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
     await mkdir(projectDirectory, { recursive: true })
     await writeFile(
       join(projectDirectory, `${SESSION_ID}.jsonl`),
       JSON.stringify({
-        cwd: claudeDirectory,
+        cwd: projectPath,
         message: { content: 'hello' },
         timestamp: new Date().toISOString(),
         type: 'user',

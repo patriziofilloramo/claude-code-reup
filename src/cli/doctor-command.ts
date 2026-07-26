@@ -1,6 +1,7 @@
 import { buildDiagnosticsReport } from '../core/health/diagnostics.js'
 import type { DiagnosticsReport } from '../core/health/diagnostics.js'
 import { writeOutput } from './output.js'
+import { sanitizeTerminalField } from './terminal-text.js'
 
 /** Prints non-destructive health checks for Claude Code's local session data. */
 export async function runDoctor(): Promise<void> {
@@ -97,5 +98,8 @@ function appendSection(lines: string[], section: DoctorSection): void {
 }
 
 function formatItem(title: string, details: string[]): string {
-  return [`      - ${title}`, ...details.map((detail) => `        ${detail}`)].join('\n')
+  return [
+    `      - ${sanitizeTerminalField(title)}`,
+    ...details.map((detail) => `        ${sanitizeTerminalField(detail)}`),
+  ].join('\n')
 }

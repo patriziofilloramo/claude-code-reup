@@ -64,6 +64,7 @@ export class ReupDashboard implements vscode.Disposable {
   private dashboardModel: DashboardModel | null = null
   private workspaceProjectIds = new Set<string>()
   private previewRequestId = 0
+  private refreshRequestId = 0
   private searchRequestId = 0
   private usageTimer: NodeJS.Timeout | null = null
 
@@ -127,7 +128,9 @@ export class ReupDashboard implements vscode.Disposable {
   }
 
   async refresh(cockpitModel?: ExtensionCockpitModel): Promise<void> {
-    if (!this.panel) return
+    const panel = this.panel
+    if (!panel) return
+    const requestId = ++this.refreshRequestId
     this.previewCache.clear()
     try {
       const model =
@@ -139,21 +142,27 @@ export class ReupDashboard implements vscode.Disposable {
             (folder) => folder.uri.fsPath
           ),
         }))
-      this.dashboardModel = buildDashboardModel(
+      const dashboardModel = buildDashboardModel(
         model.projects,
         model.sessions,
         model.activeEditorPath
       )
-      this.workspaceProjectIds = new Set(model.workspaceProjects.map((group) => group.project.id))
-      await this.panel.webview.postMessage({
-        model: this.dashboardModel,
-        resumeCapabilities: await this.resumeService.getCapabilities(),
+      const workspaceProjectIds = new Set(model.workspaceProjects.map((group) => group.project.id))
+      const resumeCapabilities = await this.resumeService.getCapabilities()
+      if (requestId !== this.refreshRequestId || this.panel !== panel) return
+
+      this.dashboardModel = dashboardModel
+      this.workspaceProjectIds = workspaceProjectIds
+      await panel.webview.postMessage({
+        model: dashboardModel,
+        resumeCapabilities,
         type: 'model',
-        workspaceProjectIds: [...this.workspaceProjectIds],
+        workspaceProjectIds: [...workspaceProjectIds],
       })
     } catch (error) {
+      if (requestId !== this.refreshRequestId || this.panel !== panel) return
       this.logger.error('dashboard refresh failed', error)
-      await this.panel.webview.postMessage({
+      await panel.webview.postMessage({
         message: error instanceof Error ? error.message : String(error),
         type: 'error',
       })

@@ -14,13 +14,14 @@ import type {
 import { primaryStatus } from '../core/session/session-signals.js'
 import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import { relativeTime } from '../utils/time.js'
-import { failCommand, writeOutput } from './output.js'
+import { failCommand, writeStyledOutput } from './output.js'
 import {
   SESSION_ACTIVE_MARKER,
   SESSION_IDLE_MARKER,
   compactRelativeTimeLabel,
   formatSingleLineRow,
   padVisibleEnd,
+  sanitizeTerminalField,
   terminalWidthOrDefault,
   truncateVisible,
   visibleLength,
@@ -206,7 +207,7 @@ export async function runListCommand(commandArguments: string[]): Promise<void> 
     console.log(JSON.stringify(createSessionListDocument(visibleSessions), null, 2))
     return
   }
-  writeOutput(
+  writeStyledOutput(
     formatSessionTable(
       visibleSessions,
       process.stdout.isTTY === true,
@@ -308,8 +309,8 @@ export function formatSessionTable(
 
   const rows = sessions.map((session) => ({
     id: shortestUniqueIdPrefix(session.id, allSessions),
-    project: session.projectName,
-    session: session.alias ?? session.name,
+    project: sanitizeTerminalField(session.projectName),
+    session: sanitizeTerminalField(session.alias ?? session.name),
     state: session.active
       ? colorize(SESSION_ACTIVE_MARKER, '32', useColor)
       : colorize(SESSION_IDLE_MARKER, '90', useColor),

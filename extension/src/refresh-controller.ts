@@ -7,7 +7,6 @@ import {
   getClaudeProjectsDirectory,
   getReupDirectory,
 } from '../../src/core/project/claude-paths.js'
-import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
 import { affectsReupConfiguration, getReupConfigurationValue } from './configuration.js'
 import { resolveGitDirectory } from './git-workspace.js'
 import type { ReupLogger } from './logger.js'
@@ -75,14 +74,16 @@ export class ReupRefreshController implements vscode.Disposable {
 
   setScope(scope: RefreshScope): void {
     if (this.scope === scope) return
-    const wasOff = this.scope === 'off'
+    const previousScope = this.scope
     this.scope = scope
     if (scope === 'off') {
       this.clearRuntime()
       return
     }
     this.reconfigure()
-    if (wasOff) void this.refresh('view opened')
+    if (previousScope === 'off' || (previousScope === 'signals' && scope === 'full')) {
+      void this.refresh('view opened')
+    }
   }
 
   dispose(): void {
@@ -143,7 +144,6 @@ export class ReupRefreshController implements vscode.Disposable {
 
     this.logger.debug('VS Code cockpit refresh requested', reason)
     this.lastRefreshStartedAt = Date.now()
-    invalidateProjectCache()
     this.refreshInFlight = this.target.refresh()
     try {
       await this.refreshInFlight
