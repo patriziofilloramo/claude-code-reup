@@ -4,6 +4,7 @@ import { loadProjects } from '../core/project/project-discovery.js'
 import { setSessionArchived } from '../core/session/session-metadata.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
 import { writeOutput } from './output.js'
+import { sanitizeTerminalField } from './terminal-text.js'
 
 const CLEANUP_HELP = `
 reup cleanup — review and archive stale sessions
@@ -68,11 +69,11 @@ function formatDryRun(candidates: ReturnType<typeof findCleanupCandidates>): str
     '',
   ]
   for (const c of candidates) {
-    const label = c.session.alias ?? c.session.name
+    const label = sanitizeTerminalField(c.session.alias ?? c.session.name)
     const shortId = c.session.id.slice(0, 8)
     const reasons = c.reasons.join(', ')
     lines.push(`  ${label}  ${shortId}  [${reasons}]`)
-    lines.push(`  ${c.projectPath}`)
+    lines.push(`  ${sanitizeTerminalField(c.projectPath)}`)
     lines.push('')
   }
   lines.push('Run `reup cleanup` to review interactively.')

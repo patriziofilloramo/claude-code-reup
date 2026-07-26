@@ -154,6 +154,7 @@ const STRINGS = {
   resumeCommandCopied: 'Command copied to clipboard',
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
+  resumePathUnavailable: 'Project directory is unavailable. Restore it before resuming.',
 
   // ── Touched-file cross-session overlap ────────────────────────────────────
   touchedOthersOne: 'touched by 1 other session',

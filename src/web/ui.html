@@ -9,10 +9,7 @@
       nonce on purpose — the UI renders style="" attributes, and adding a nonce
       would make the browser ignore 'unsafe-inline' and break them.
     -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'nonce-__REUP_NONCE__'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'"
-    />
+    <meta http-equiv="Content-Security-Policy" content="__REUP_CSP__" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Reup</title>
     <!-- REUP:FAVICON -->

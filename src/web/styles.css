@@ -2349,6 +2349,13 @@ body {
 .ctx-item-danger:hover {
   background: rgb(var(--red-rgb) / 0.08);
 }
+.ctx-item-disabled,
+.ctx-item-disabled:hover {
+  background: transparent;
+  color: var(--text);
+  cursor: not-allowed;
+  opacity: 0.35;
+}
 
 /* ── Project row action buttons ────────────────────────────────────────────── */
 

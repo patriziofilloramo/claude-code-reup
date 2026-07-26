@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getCachedProjects,
+  getProjectCacheGeneration,
   invalidateProjectCache,
   setCachedProjects,
 } from '../../src/core/project/project-cache.js'
@@ -21,5 +22,13 @@ describe('project cache', () => {
     setCachedProjects('/first-projects', [])
 
     expect(getCachedProjects('/second-projects')).toBeNull()
+  })
+
+  it('does not let an in-flight scan repopulate the cache after invalidation', () => {
+    const scanGeneration = getProjectCacheGeneration()
+    invalidateProjectCache()
+
+    expect(setCachedProjects('/projects', [], scanGeneration)).toBe(false)
+    expect(getCachedProjects('/projects')).toBeNull()
   })
 })

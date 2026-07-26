@@ -97,26 +97,34 @@ export interface LoadExtensionModelOptions {
 }
 
 export class ReupDataSource {
-  private touchedCountCache: Map<string, number> | null = null
+  private readonly touchedCountCache = new Map<boolean, Map<string, number>>()
+  private touchedCountCacheGeneration = 0
 
   constructor(private readonly logger: ReupLogger) {}
 
   /**
    * Returns how many sessions edited each file, keyed by path identity. Cached
-   * for the data source's lifetime — one transcript scan reused across every
-   * inspector render. Call invalidateTouchedFileCounts() after data changes.
+   * until the next data refresh, with separate entries for archived-session
+   * visibility. Call invalidateTouchedFileCounts() after data changes.
    */
   async touchedFileCounts(includeArchived: boolean): Promise<Map<string, number>> {
-    if (this.touchedCountCache) return this.touchedCountCache
+    const cached = this.touchedCountCache.get(includeArchived)
+    if (cached) return cached
+
+    const generation = this.touchedCountCacheGeneration
     const files = await this.listTouchedFiles(includeArchived)
     const counts = new Map<string, number>()
     for (const file of files) counts.set(pathIdentityKey(file.path), file.sessionCount)
-    this.touchedCountCache = counts
-    return counts
+    if (generation === this.touchedCountCacheGeneration) {
+      this.touchedCountCache.set(includeArchived, counts)
+      return counts
+    }
+    return this.touchedFileCounts(includeArchived)
   }
 
   invalidateTouchedFileCounts(): void {
-    this.touchedCountCache = null
+    this.touchedCountCacheGeneration += 1
+    this.touchedCountCache.clear()
   }
 
   async loadModel(options: LoadExtensionModelOptions): Promise<ExtensionSessionModel> {

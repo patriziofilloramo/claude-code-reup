@@ -221,6 +221,18 @@ describe('list command', () => {
     expect(output).not.toContain('\u001b[')
   })
 
+  it('neutralizes terminal controls and newlines embedded in list labels', () => {
+    const [session] = listedSessions()
+    const output = formatSessionTable(
+      [{ ...session!, alias: 'safe\u001b[2m hidden\nforged row' }],
+      true
+    )
+
+    expect(output).not.toContain('\u001b[2m')
+    expect(output).toContain('safe hidden forged row')
+    expect(output.split('\n')).toHaveLength(2)
+  })
+
   it('keeps human list output inside the supplied terminal width', () => {
     const sessions = listedSessions().map((session, index) => ({
       ...session,

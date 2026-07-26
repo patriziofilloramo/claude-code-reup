@@ -182,6 +182,32 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'invalid session id' })
   })
 
+  it('refuses to resume a session whose recorded project directory is unavailable', async () => {
+    await createKnownSession(join(claudeDirectory, 'missing-workspace'))
+
+    const response = await buildApp().request(`/api/resume/${SESSION_ID}`, {
+      body: JSON.stringify({ projectId: PROJECT_ID }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'project path unavailable' })
+  })
+
+  it('refuses to start a new session when the project directory is unavailable', async () => {
+    await createKnownSession(join(claudeDirectory, 'missing-workspace'))
+
+    const response = await buildApp().request('/api/new-session', {
+      body: JSON.stringify({ projectId: PROJECT_ID }),
+      headers: { 'Content-Type': 'application/json', Host: 'localhost' },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'project path unavailable' })
+  })
+
   it('returns no results for an empty search query', async () => {
     const response = await buildApp().request('/api/search?q=')
 
@@ -597,13 +623,13 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'cannot delete an active session' })
   })
 
-  async function createKnownSession(): Promise<void> {
+  async function createKnownSession(projectPath = claudeDirectory): Promise<void> {
     const projectDirectory = join(claudeDirectory, 'projects', PROJECT_ID)
     await mkdir(projectDirectory, { recursive: true })
     await writeFile(
       join(projectDirectory, `${SESSION_ID}.jsonl`),
       JSON.stringify({
-        cwd: claudeDirectory,
+        cwd: projectPath,
         message: { content: 'hello' },
         timestamp: new Date().toISOString(),
         type: 'user',

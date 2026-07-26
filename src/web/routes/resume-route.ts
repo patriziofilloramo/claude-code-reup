@@ -1,4 +1,6 @@
 import type { Hono } from 'hono'
+import { constants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
 
 import { loadProjectById } from '../../core/project/project-discovery.js'
 import { isValidSessionId } from '../../core/session/session-model.js'
@@ -29,6 +31,9 @@ export function registerResumeRoute(app: Hono): void {
 
       const project = await loadProjectById(body.projectId)
       if (!project) return context.json({ error: 'project not found' }, 404)
+      if (!(await isDirectory(project.path))) {
+        return context.json({ error: 'project path unavailable' }, 409)
+      }
 
       const result = await launchNewSession(project.path)
       if (result.launched) {
@@ -65,6 +70,13 @@ export function registerResumeRoute(app: Hono): void {
       const session = project.sessions.find((s) => s.id === sessionId)
       if (!session) return context.json({ error: 'session not found in project' }, 404)
 
+      // Discovery records path availability, but the directory can disappear
+      // before this later mutation request. Refuse the launch instead of
+      // reporting success for a terminal whose initial `cd` will fail.
+      if (!(await isDirectory(session.projectPath))) {
+        return context.json({ error: 'project path unavailable' }, 409)
+      }
+
       const result = await launchResume(sessionId, session.projectPath)
       if (result.launched) {
         log.debug('resume: launched session', sessionId)
@@ -76,4 +88,16 @@ export function registerResumeRoute(app: Hono): void {
   )
 
   log.debug('resume routes registered')
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    if (!(await stat(path)).isDirectory()) return false
+    // On POSIX, X_OK on a directory checks search/traversal permission. On
+    // Windows it degrades to the existence check already covered by stat.
+    await access(path, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }

@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { getClaudeDirectory, getReupDirectory } from '../project/claude-paths.js'
+import { withReupSettingsLock } from '../project/claude-settings-lock.js'
 import { clearAllAttentionMarkers, clearAllWorkSignalMarkers } from './attention.js'
 
 const INTEGRATION_SCHEMA_VERSION = 1
@@ -34,35 +35,40 @@ type RemoveResult = { changed: true } | { changed: false; reason: 'not-configure
  * exact entry back out — other hooks the user configured are never touched.
  */
 export async function setupAttentionHook(): Promise<SetupResult> {
-  const settings = await readJsonObject(getSettingsPath())
-  const installedCommand = captureCommand()
-  const previousIntegration = await readIntegration()
+  return withReupSettingsLock(async () => {
+    const settings = await readJsonObject(getSettingsPath())
+    const installedCommand = captureCommand()
+    const previousIntegration = await readIntegration()
 
-  let changed = false
-  for (const hookEvent of HOOK_EVENTS) {
-    const eventHooks = readEventHooks(settings, hookEvent)
-    if (findReupEntryIndex(eventHooks, installedCommand) !== -1) continue
+    let changed = false
+    for (const hookEvent of HOOK_EVENTS) {
+      const eventHooks = readEventHooks(settings, hookEvent)
+      if (findReupEntryIndex(eventHooks, installedCommand) !== -1) continue
 
-    // A stale entry from a previous install location is replaced, not stacked.
-    const withoutStaleEntries = previousIntegration
-      ? eventHooks.filter((entry) => !isReupHookEntry(entry, previousIntegration.installedCommand))
-      : eventHooks
+      // A stale entry from a previous install location is replaced, not stacked.
+      const withoutStaleEntries = previousIntegration
+        ? eventHooks.filter(
+            (entry) => !isReupHookEntry(entry, previousIntegration.installedCommand)
+          )
+        : eventHooks
 
-    const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
-    hooks[hookEvent] = [...withoutStaleEntries, createReupHookEntry(installedCommand)]
-    settings['hooks'] = hooks
-    changed = true
-  }
+      const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
+      hooks[hookEvent] = [...withoutStaleEntries, createReupHookEntry(installedCommand)]
+      settings['hooks'] = hooks
+      changed = true
+    }
 
-  await writeIntegration(installedCommand)
-  if (!changed) return { changed: false, reason: 'already-configured' }
-  try {
-    await writeJsonAtomically(getSettingsPath(), settings)
-  } catch (error) {
-    await unlink(getIntegrationPath()).catch(() => {})
-    throw error
-  }
-  return { changed: true, command: installedCommand }
+    await writeIntegration(installedCommand)
+    if (!changed) return { changed: false, reason: 'already-configured' }
+    try {
+      await writeJsonAtomically(getSettingsPath(), settings)
+    } catch (error) {
+      if (previousIntegration) await writeIntegration(previousIntegration.installedCommand)
+      else await unlink(getIntegrationPath()).catch(() => {})
+      throw error
+    }
+    return { changed: true, command: installedCommand }
+  })
 }
 
 /** True when Reup's capture command is registered for every hook event it needs. */
@@ -78,31 +84,36 @@ export async function isAttentionHookConfigured(): Promise<boolean> {
 
 /** Removes exactly Reup's hook entries and clears captured markers. */
 export async function removeAttentionHook(): Promise<RemoveResult> {
-  const integration = await readIntegration()
-  if (!integration) return { changed: false, reason: 'not-configured' }
+  const result = await withReupSettingsLock(async (): Promise<RemoveResult> => {
+    const integration = await readIntegration()
+    if (!integration) return { changed: false, reason: 'not-configured' }
 
-  const settings = await readJsonObject(getSettingsPath())
-  let settingsChanged = false
-  for (const hookEvent of HOOK_EVENTS) {
-    const eventHooks = readEventHooks(settings, hookEvent)
-    const remaining = eventHooks.filter(
-      (entry) => !isReupHookEntry(entry, integration.installedCommand)
-    )
-    if (remaining.length === eventHooks.length) continue
+    const settings = await readJsonObject(getSettingsPath())
+    let settingsChanged = false
+    for (const hookEvent of HOOK_EVENTS) {
+      const eventHooks = readEventHooks(settings, hookEvent)
+      const remaining = eventHooks.filter(
+        (entry) => !isReupHookEntry(entry, integration.installedCommand)
+      )
+      if (remaining.length === eventHooks.length) continue
 
-    const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
-    if (remaining.length > 0) hooks[hookEvent] = remaining
-    else delete hooks[hookEvent]
-    if (Object.keys(hooks).length > 0) settings['hooks'] = hooks
-    else delete settings['hooks']
-    settingsChanged = true
+      const hooks = isRecord(settings['hooks']) ? settings['hooks'] : {}
+      if (remaining.length > 0) hooks[hookEvent] = remaining
+      else delete hooks[hookEvent]
+      if (Object.keys(hooks).length > 0) settings['hooks'] = hooks
+      else delete settings['hooks']
+      settingsChanged = true
+    }
+    if (settingsChanged) await writeJsonAtomically(getSettingsPath(), settings)
+
+    await unlink(getIntegrationPath()).catch(() => {})
+    return { changed: true }
+  })
+  if (result.changed) {
+    await clearAllAttentionMarkers()
+    await clearAllWorkSignalMarkers()
   }
-  if (settingsChanged) await writeJsonAtomically(getSettingsPath(), settings)
-
-  await unlink(getIntegrationPath()).catch(() => {})
-  await clearAllAttentionMarkers()
-  await clearAllWorkSignalMarkers()
-  return { changed: true }
+  return result
 }
 
 function captureCommand(): string {

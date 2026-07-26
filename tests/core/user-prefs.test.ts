@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { readUserPrefsSync } from '../../src/core/user-prefs.js'
+import { readUserPrefsSync, writeUserPrefsSync } from '../../src/core/user-prefs.js'
 
 const LEGACY_PRIVATE_DIR = ['swo', 'op'].join('')
 
@@ -49,6 +49,21 @@ describe('user preferences', () => {
     )
 
     expect(readUserPrefsSync()).toEqual({ theme: 'dark' })
+  })
+
+  it('creates private preferences and repairs an older permissive file mode', async () => {
+    const reupDirectory = join(temporaryClaudeDirectory, 'reup')
+    const preferencesPath = join(reupDirectory, 'prefs.json')
+    await writeFile(preferencesPath, JSON.stringify({ theme: 'dark' }))
+    if (process.platform !== 'win32') await chmod(preferencesPath, 0o644)
+
+    writeUserPrefsSync({ theme: 'light' })
+
+    expect(readUserPrefsSync()).toEqual({ theme: 'light' })
+    if (process.platform !== 'win32') {
+      expect((await stat(reupDirectory)).mode & 0o777).toBe(0o700)
+      expect((await stat(preferencesPath)).mode & 0o777).toBe(0o600)
+    }
   })
 
   it('copies legacy private app data into the Reup directory on first read', async () => {

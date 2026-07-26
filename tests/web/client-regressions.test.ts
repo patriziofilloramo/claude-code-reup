@@ -26,6 +26,82 @@ describe('web client session-row invariants', () => {
     return source.slice(source.indexOf(start), source.indexOf(end))
   }
 
+  function createClaudeInstructionsHarness(
+    requestJson: (url: string, options: { body: string }) => Promise<unknown>
+  ): {
+    close: () => Promise<void>
+    edit: (value: string) => void
+    isDirty: () => boolean
+    isEditorDisabled: () => boolean
+    isOpen: () => boolean
+    save: () => Promise<boolean>
+    status: () => string
+  } {
+    const saveFlow = sourceBetween(
+      'async function saveClaudeInstructions()',
+      "elements.instructionsTag.addEventListener('click'"
+    )
+    const closeStart = source.indexOf('async function closeClaudeInstructionsDrawer()')
+    const closeEnd = source.indexOf(
+      '// ---------------------------------------------------------------------------\n// Lost & Found panel',
+      closeStart
+    )
+    const closeFlow = source.slice(closeStart, closeEnd)
+    const factory = new Function(
+      'requestJson',
+      `
+        let claudeInstructionsProjectId = 'project-1'
+        let claudeInstructionsSaveTimer = null
+        let claudeInstructionsSaveQueue = Promise.resolve()
+        let claudeInstructionsDirty = false
+        let claudeInstructionsClosing = false
+        let drawerOpen = true
+        const selectedProject = { id: 'project-1' }
+        const STRINGS = {
+          claudeMdSaveError: 'error: {message}',
+          claudeMdSaved: 'saved'
+        }
+        const elements = {
+          instructionsDrawer: {
+            classList: {
+              contains: function (name) { return name === 'open' && drawerOpen },
+              remove: function (name) { if (name === 'open') drawerOpen = false }
+            }
+          },
+          instructionsEditor: { disabled: false, value: '' },
+          instructionsSaveButton: { disabled: false },
+          instructionsSaveStatus: { className: 'save-status', textContent: '' }
+        }
+        function fmt(template, values) {
+          return template.replace('{message}', values.message)
+        }
+        ${saveFlow}
+        ${closeFlow}
+        return {
+          close: closeClaudeInstructionsDrawer,
+          edit: function (value) {
+            elements.instructionsEditor.value = value
+            claudeInstructionsDirty = true
+          },
+          isDirty: function () { return claudeInstructionsDirty },
+          isEditorDisabled: function () { return elements.instructionsEditor.disabled },
+          isOpen: function () { return drawerOpen },
+          save: saveClaudeInstructions,
+          status: function () { return elements.instructionsSaveStatus.textContent }
+        }
+      `
+    ) as (request: typeof requestJson) => {
+      close: () => Promise<void>
+      edit: (value: string) => void
+      isDirty: () => boolean
+      isEditorDisabled: () => boolean
+      isOpen: () => boolean
+      save: () => Promise<boolean>
+      status: () => string
+    }
+    return factory(requestJson)
+  }
+
   it('resolves rendered session rows by stable session ID, not visual index', () => {
     expect(source).toContain('data-session-id=')
     expect(source).toContain('function resolveSessionFromRow(row)')
@@ -406,6 +482,99 @@ describe('web client session-row invariants', () => {
     expect(openDrawer).toContain('claudeInstructionsProjectId = project.id')
   })
 
+  it('disables resume actions when the recorded project path is unavailable', () => {
+    const inspectorActions = sourceBetween(
+      'function buildInspectorActionsHtml(',
+      'function buildPreviewLabelHtml('
+    )
+    const sessionActions = sourceBetween(
+      'function sessionActionItems(',
+      '// Event delegation keeps handlers valid'
+    )
+    const resumeFlow = sourceBetween(
+      'function openResumeDialog(',
+      'elements.resumeConfirmButton.addEventListener'
+    )
+
+    expect(inspectorActions).toContain('const resumeDisabled = !session.signals.pathExists')
+    expect(inspectorActions).toContain("resumeDisabled ? ' disabled' : ''")
+    expect(sessionActions).toContain('disabled: !session.signals.pathExists')
+    expect(resumeFlow).toContain('if (!session.signals.pathExists)')
+    expect(resumeFlow).toContain('if (!selectedSession.signals.pathExists)')
+    expect(resumeFlow).toContain('elements.resumeConfirmButton.disabled = false')
+    expect(resumeFlow).toContain("showToast(STRINGS.resumePathUnavailable, 'err')")
+  })
+
+  it('serializes CLAUDE.md writes and flushes dirty content before closing', () => {
+    const saveFlow = sourceBetween(
+      'async function saveClaudeInstructions()',
+      "elements.instructionsTag.addEventListener('click'"
+    )
+    const closeFlow = sourceBetween(
+      'async function closeClaudeInstructionsDrawer()',
+      '// ---------------------------------------------------------------------------\n// Lost & Found panel'
+    )
+
+    expect(saveFlow).toContain('claudeInstructionsSaveQueue.then(')
+    expect(saveFlow).toContain('const content = elements.instructionsEditor.value')
+    expect(saveFlow).toContain('claudeInstructionsSaveQueue = result.then(')
+    expect(saveFlow).toContain('elements.instructionsEditor.value === content')
+    expect(saveFlow).toContain('if (!claudeInstructionsProjectId) return false')
+    expect(saveFlow).not.toContain('selectedProject')
+    expect(closeFlow).toContain('await saveClaudeInstructions()')
+    expect(closeFlow.indexOf('await saveClaudeInstructions()')).toBeLessThan(
+      closeFlow.indexOf("instructionsDrawer.classList.remove('open')")
+    )
+    expect(source).toContain('claudeInstructionsDirty = true')
+  })
+
+  it('keeps overlapping CLAUDE.md requests in editor order', async () => {
+    const calls: string[] = []
+    let releaseFirst!: () => void
+    const firstRequest = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const harness = createClaudeInstructionsHarness(async (_url, options) => {
+      const content = (JSON.parse(options.body) as { content: string }).content
+      calls.push(content)
+      if (calls.length === 1) await firstRequest
+      return {}
+    })
+
+    harness.edit('first')
+    const firstSave = harness.save()
+    await Promise.resolve()
+    harness.edit('second')
+    const secondSave = harness.save()
+    await Promise.resolve()
+
+    expect(calls).toEqual(['first'])
+    releaseFirst()
+    await expect(Promise.all([firstSave, secondSave])).resolves.toEqual([true, true])
+    expect(calls).toEqual(['first', 'second'])
+    expect(harness.isDirty()).toBe(false)
+    expect(harness.status()).toBe('saved')
+  })
+
+  it('waits for a dirty CLAUDE.md flush before closing the drawer', async () => {
+    let releaseSave!: () => void
+    const pendingSave = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const harness = createClaudeInstructionsHarness(async () => pendingSave)
+    harness.edit('latest')
+
+    const closing = harness.close()
+    await Promise.resolve()
+
+    expect(harness.isOpen()).toBe(true)
+    expect(harness.isEditorDisabled()).toBe(true)
+    releaseSave()
+    await closing
+    expect(harness.isOpen()).toBe(false)
+    expect(harness.isDirty()).toBe(false)
+  })
+
   it('surfaces doctor findings in Lost & Found and its issue count', () => {
     const diagnostics = sourceBetween(
       'async function renderDiagnosticsPanel()',
@@ -459,6 +628,17 @@ describe('web client session-row invariants', () => {
     expect(projectRefresh).not.toContain("requestJson('/api/usage')")
     expect(source).toContain('void refreshUsageSummary()')
     expect(source).toContain('USAGE_POLL_INTERVAL_MS')
+  })
+
+  it('does not let an older project refresh overwrite newer client state', () => {
+    const projectRefresh = sourceBetween(
+      'async function refreshProjectData()',
+      'function connectLiveUpdates()'
+    )
+
+    expect(source).toContain('let projectRefreshGeneration = 0')
+    expect(projectRefresh).toContain('const refreshGeneration = ++projectRefreshGeneration')
+    expect(projectRefresh).toContain('refreshGeneration !== projectRefreshGeneration')
   })
 
   it('refreshes both the live rail and selected inspector heartbeat', () => {

@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   isExtensionSessionVisible,
   isAttentionStatus,
   rankSessionsForWorkspace,
+  ReupDataSource,
   sessionMatchesWorkspace,
   type ExtensionSession,
 } from '../../extension/src/reup-data.js'
@@ -114,6 +115,65 @@ describe('VS Code extension data adapter helpers', () => {
     expect(
       isExtensionSessionVisible(rawSession({ archived: true }), { includeArchived: true })
     ).toBe(true)
+  })
+
+  it('caches touched-file counts by archive visibility and clears them on refresh', async () => {
+    const dataSource = new ReupDataSource({} as never)
+    const listTouchedFiles = vi
+      .spyOn(dataSource, 'listTouchedFiles')
+      .mockImplementation(async (includeArchived) => [
+        {
+          gitBranch: null,
+          lastTouchedAt: '2026-01-01T00:00:00.000Z',
+          path: includeArchived ? '/work/archived.ts' : '/work/current.ts',
+          sessionCount: includeArchived ? 2 : 1,
+        },
+      ])
+
+    expect([...(await dataSource.touchedFileCounts(false)).values()]).toEqual([1])
+    expect([...(await dataSource.touchedFileCounts(true)).values()]).toEqual([2])
+    await dataSource.touchedFileCounts(false)
+    expect(listTouchedFiles).toHaveBeenCalledTimes(2)
+
+    dataSource.invalidateTouchedFileCounts()
+    await dataSource.touchedFileCounts(false)
+    expect(listTouchedFiles).toHaveBeenCalledTimes(3)
+  })
+
+  it('retries an in-flight touched-file scan invalidated before it completes', async () => {
+    const dataSource = new ReupDataSource({} as never)
+    let releaseFirstScan!: () => void
+    const firstScanPending = new Promise<void>((resolve) => {
+      releaseFirstScan = resolve
+    })
+    const listTouchedFiles = vi
+      .spyOn(dataSource, 'listTouchedFiles')
+      .mockImplementationOnce(async () => {
+        await firstScanPending
+        return [
+          {
+            gitBranch: null,
+            lastTouchedAt: '2026-01-01T00:00:00.000Z',
+            path: '/work/stale.ts',
+            sessionCount: 1,
+          },
+        ]
+      })
+      .mockResolvedValueOnce([
+        {
+          gitBranch: null,
+          lastTouchedAt: '2026-01-01T00:00:01.000Z',
+          path: '/work/fresh.ts',
+          sessionCount: 2,
+        },
+      ])
+
+    const pendingCounts = dataSource.touchedFileCounts(false)
+    dataSource.invalidateTouchedFileCounts()
+    releaseFirstScan()
+
+    await expect(pendingCounts).resolves.toEqual(new Map([['/work/fresh.ts', 2]]))
+    expect(listTouchedFiles).toHaveBeenCalledTimes(2)
   })
 })
 

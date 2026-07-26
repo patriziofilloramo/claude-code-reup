@@ -13,7 +13,7 @@ import { registerSessionMetadataRoutes } from './routes/session-metadata-routes.
 import { registerTouchedRoute } from './routes/touched-route.js'
 import { registerThemeRoute } from './routes/theme-route.js'
 import { registerUsageRoute } from './routes/usage-route.js'
-import { buildHtml } from './ui.js'
+import { buildUiDocument } from './ui.js'
 
 /**
  * Creates the local web application.
@@ -28,7 +28,12 @@ export function buildApp(): Hono {
   // so no endpoint can be reachable without it.
   app.use('*', localHostOnly())
 
-  app.get('/', (context) => context.html(buildHtml(getStoredThemeName() ?? 'dark')))
+  app.get('/', (context) => {
+    const document = buildUiDocument(getStoredThemeName() ?? 'dark')
+    context.header('Content-Security-Policy', document.contentSecurityPolicy)
+    context.header('X-Frame-Options', 'DENY')
+    return context.html(document.html)
+  })
   registerProjectRoutes(app)
   registerOrgRoutes(app)
   registerResumeRoute(app)

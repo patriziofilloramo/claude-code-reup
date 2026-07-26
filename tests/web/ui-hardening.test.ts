@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { buildHtml } from '../../src/web/ui.js'
+import { buildApp } from '../../src/web/routes.js'
 
 const CLIENT_PATH = join(process.cwd(), 'src', 'web', 'client.js')
 const DIAGNOSTICS_DRAWER_PATH = join(
@@ -127,6 +128,19 @@ describe('web UI hardening', () => {
 
       expect(policy).toMatch(/style-src[^;]*'unsafe-inline'/)
       expect(policy).not.toMatch(/style-src[^;]*nonce-/)
+    })
+
+    it('sends the nonce policy as an anti-framing HTTP header', async () => {
+      const response = await buildApp().request('/', { headers: { Host: 'localhost:3333' } })
+      const html = await response.text()
+      const headerPolicy = response.headers.get('Content-Security-Policy') ?? ''
+
+      expect(response.status).toBe(200)
+      expect(headerPolicy).toBe(contentSecurityPolicy(html))
+      expect(headerPolicy).toContain("frame-ancestors 'none'")
+      expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+      const nonce = /script-src 'nonce-([^']+)'/.exec(headerPolicy)?.[1]
+      expect(html).toContain(`<script nonce="${String(nonce)}">`)
     })
   })
 

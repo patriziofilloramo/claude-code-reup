@@ -21,6 +21,7 @@ import {
   compactRelativeTimeLabel,
   formatSingleLineRow,
   padVisibleEnd,
+  sanitizeTerminalField,
   terminalWidthOrDefault,
   truncateVisible,
   truncateVisibleStart,
@@ -262,7 +263,9 @@ export function formatTouchedTable(
   results: TouchedResult[],
   terminalWidth?: number
 ): string {
-  if (results.length === 0) return `No sessions touched a file matching "${query}".`
+  if (results.length === 0) {
+    return `No sessions touched a file matching "${sanitizeTerminalField(query)}".`
+  }
 
   const queryKey = pathMatchKey(query)
   const showTouched = results.some(
@@ -274,10 +277,10 @@ export function formatTouchedTable(
   const rows = results.map((result) => ({
     id: result.sessionId.slice(0, 8),
     state: result.active ? SESSION_ACTIVE_MARKER : SESSION_IDLE_MARKER,
-    project: result.projectName,
-    session: result.sessionName,
-    touched: showTouched ? describeTouched(result) : '',
-    branch: showBranch ? (result.gitBranch ?? '') : '',
+    project: sanitizeTerminalField(result.projectName),
+    session: sanitizeTerminalField(result.sessionName),
+    touched: showTouched ? sanitizeTerminalField(describeTouched(result)) : '',
+    branch: showBranch ? sanitizeTerminalField(result.gitBranch ?? '') : '',
     when: compactRelativeTimeLabel(relativeTime(result.lastTouchedAt)),
   }))
   const width = terminalWidthOrDefault(terminalWidth)

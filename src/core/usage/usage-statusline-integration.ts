@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 
 import { APP } from '../../config/app.js'
 import { getReupDirectory, getClaudeDirectory } from '../project/claude-paths.js'
+import { withReupSettingsLock } from '../project/claude-settings-lock.js'
 import { clearLiveUsageSnapshots } from './live-usage.js'
 
 const INTEGRATION_SCHEMA_VERSION = 1
@@ -31,50 +32,52 @@ interface StatusLineConfiguration {
 
 /** Installs Reup as the user-level Claude Code status line. */
 export async function setupUsageStatusLine(replaceExisting = false): Promise<SetupResult> {
-  const settings = await readJsonObject(getSettingsPath())
-  const integration = await readIntegration()
-  const installedCommand = captureCommand()
-  const installedStatusLine = createInstalledStatusLine(installedCommand)
-  const currentCommand = statusLineCommand(settings['statusLine'])
-  const ownsCurrentStatusLine =
-    integration !== null && currentCommand === integration.installedCommand
+  return withReupSettingsLock(async () => {
+    const settings = await readJsonObject(getSettingsPath())
+    const integration = await readIntegration()
+    const installedCommand = captureCommand()
+    const installedStatusLine = createInstalledStatusLine(installedCommand)
+    const currentCommand = statusLineCommand(settings['statusLine'])
+    const ownsCurrentStatusLine =
+      integration !== null && currentCommand === integration.installedCommand
 
-  if (
-    ownsCurrentStatusLine &&
-    integration.installedCommand === installedCommand &&
-    isInstalledStatusLine(settings['statusLine'], installedStatusLine)
-  ) {
-    return { changed: false, reason: 'already-configured' }
-  }
-  if (!ownsCurrentStatusLine && settings['statusLine'] !== undefined && !replaceExisting) {
-    throw new Error(
-      'an existing Claude Code status line is configured; rerun with --replace to preserve and temporarily replace it'
-    )
-  }
+    if (
+      ownsCurrentStatusLine &&
+      integration.installedCommand === installedCommand &&
+      isInstalledStatusLine(settings['statusLine'], installedStatusLine)
+    ) {
+      return { changed: false, reason: 'already-configured' }
+    }
+    if (!ownsCurrentStatusLine && settings['statusLine'] !== undefined && !replaceExisting) {
+      throw new Error(
+        'an existing Claude Code status line is configured; rerun with --replace to preserve and temporarily replace it'
+      )
+    }
 
-  const hadPreviousStatusLine = ownsCurrentStatusLine
-    ? integration.hadPreviousStatusLine
-    : settings['statusLine'] !== undefined
-  const previousStatusLine = ownsCurrentStatusLine
-    ? integration.previousStatusLine
-    : settings['statusLine']
-  const nextIntegration: StatusLineIntegration = {
-    hadPreviousStatusLine,
-    installedCommand,
-    ...(hadPreviousStatusLine ? { previousStatusLine } : {}),
-    schemaVersion: INTEGRATION_SCHEMA_VERSION,
-  }
-  await writeJsonAtomically(getIntegrationPath(), nextIntegration)
+    const hadPreviousStatusLine = ownsCurrentStatusLine
+      ? integration.hadPreviousStatusLine
+      : settings['statusLine'] !== undefined
+    const previousStatusLine = ownsCurrentStatusLine
+      ? integration.previousStatusLine
+      : settings['statusLine']
+    const nextIntegration: StatusLineIntegration = {
+      hadPreviousStatusLine,
+      installedCommand,
+      ...(hadPreviousStatusLine ? { previousStatusLine } : {}),
+      schemaVersion: INTEGRATION_SCHEMA_VERSION,
+    }
+    await writeJsonAtomically(getIntegrationPath(), nextIntegration)
 
-  try {
-    settings['statusLine'] = installedStatusLine
-    await writeJsonAtomically(getSettingsPath(), settings)
-  } catch (error) {
-    if (integration) await writeJsonAtomically(getIntegrationPath(), integration)
-    else await unlink(getIntegrationPath()).catch(() => {})
-    throw error
-  }
-  return { changed: true, command: installedCommand, replacedExisting: hadPreviousStatusLine }
+    try {
+      settings['statusLine'] = installedStatusLine
+      await writeJsonAtomically(getSettingsPath(), settings)
+    } catch (error) {
+      if (integration) await writeJsonAtomically(getIntegrationPath(), integration)
+      else await unlink(getIntegrationPath()).catch(() => {})
+      throw error
+    }
+    return { changed: true, command: installedCommand, replacedExisting: hadPreviousStatusLine }
+  })
 }
 
 /** Returns true when Reup's usage capture is the active Claude Code status line. */
@@ -87,21 +90,24 @@ export async function isUsageStatusLineConfigured(): Promise<boolean> {
 
 /** Restores the exact status-line value saved during setup. */
 export async function removeUsageStatusLine(): Promise<RemoveResult> {
-  const integration = await readIntegration()
-  if (!integration) return { changed: false, reason: 'not-configured' }
+  const result = await withReupSettingsLock(async (): Promise<RemoveResult> => {
+    const integration = await readIntegration()
+    if (!integration) return { changed: false, reason: 'not-configured' }
 
-  const settings = await readJsonObject(getSettingsPath())
-  if (statusLineCommand(settings['statusLine']) !== integration.installedCommand) {
-    throw new Error('Claude Code statusLine changed after Reup setup; refusing to overwrite it')
-  }
+    const settings = await readJsonObject(getSettingsPath())
+    if (statusLineCommand(settings['statusLine']) !== integration.installedCommand) {
+      throw new Error('Claude Code statusLine changed after Reup setup; refusing to overwrite it')
+    }
 
-  if (integration.hadPreviousStatusLine) settings['statusLine'] = integration.previousStatusLine
-  else delete settings['statusLine']
+    if (integration.hadPreviousStatusLine) settings['statusLine'] = integration.previousStatusLine
+    else delete settings['statusLine']
 
-  await writeJsonAtomically(getSettingsPath(), settings)
-  await unlink(getIntegrationPath()).catch(() => {})
-  await clearLiveUsageSnapshots()
-  return { changed: true, restoredPrevious: integration.hadPreviousStatusLine }
+    await writeJsonAtomically(getSettingsPath(), settings)
+    await unlink(getIntegrationPath()).catch(() => {})
+    return { changed: true, restoredPrevious: integration.hadPreviousStatusLine }
+  })
+  if (result.changed) await clearLiveUsageSnapshots()
+  return result
 }
 
 function captureCommand(): string {

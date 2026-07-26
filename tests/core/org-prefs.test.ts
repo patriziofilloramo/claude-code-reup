@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -48,6 +48,20 @@ describe('org prefs', () => {
     expect(data.stacks).toEqual([])
     expect(data.tagPalette).toEqual([])
     expect(data.projectGroupAssignments).toEqual({})
+  })
+
+  it('creates private Reup storage before the first locked write', async () => {
+    const reupDirectory = join(temporaryClaudeDirectory, 'reup')
+    const orgPath = join(reupDirectory, 'org.json')
+    await rm(reupDirectory, { force: true, recursive: true })
+
+    await createProjectGroup('First group')
+
+    await expect(readFile(orgPath, 'utf8')).resolves.toContain('First group')
+    if (process.platform !== 'win32') {
+      expect((await stat(reupDirectory)).mode & 0o777).toBe(0o700)
+      expect((await stat(orgPath)).mode & 0o777).toBe(0o600)
+    }
   })
 
   it('degrades to empty when org.json has an unknown schema version', async () => {

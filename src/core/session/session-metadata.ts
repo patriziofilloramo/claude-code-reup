@@ -255,7 +255,33 @@ async function waitForSidecarReplaceRetry(attempt: number): Promise<void> {
 }
 
 function isMetadataObject(value: unknown): value is ProjectSidecarMetadata {
+  if (!isRecord(value)) return false
+  const projectTags = value['projectTags']
+  if (projectTags !== undefined && !isStringArray(projectTags)) return false
+
+  const sessions = value['sessions']
+  if (sessions === undefined) return true
+  return isRecord(sessions) && Object.values(sessions).every(isSessionMetadataObject)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isSessionMetadataObject(value: unknown): value is SessionSidecarMetadata {
+  if (!isRecord(value)) return false
+  const alias = value['alias']
+  const archived = value['archived']
+  const tags = value['tags']
+  return (
+    (alias === undefined || typeof alias === 'string') &&
+    (archived === undefined || typeof archived === 'boolean') &&
+    (tags === undefined || isStringArray(tags))
+  )
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
 }
 
 function sessionMetadataEntry(

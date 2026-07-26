@@ -105,6 +105,31 @@ describe('project sidecar integrity', () => {
       )
       await expect(readFile(sidecarPath, 'utf8')).resolves.toBe('["not", "an", "object"]')
     })
+
+    it('rejects an array-valued sessions collection instead of reporting a lost update', async () => {
+      const invalidSidecar = JSON.stringify({ sessions: [] })
+      await writeFile(sidecarPath, invalidSidecar, 'utf8')
+
+      await expect(setSessionArchived(PROJECT_ID, SESSION_ID, true)).rejects.toThrow(
+        ProjectSidecarUnreadableError
+      )
+      await expect(readFile(sidecarPath, 'utf8')).resolves.toBe(invalidSidecar)
+    })
+
+    it.each([
+      { projectTags: 'not-an-array' },
+      { sessions: { [SESSION_ID]: [] } },
+      { sessions: { [SESSION_ID]: { archived: 'yes' } } },
+      { sessions: { [SESSION_ID]: { tags: [42] } } },
+    ])('rejects malformed known metadata fields: %j', async (metadata) => {
+      const invalidSidecar = JSON.stringify(metadata)
+      await writeFile(sidecarPath, invalidSidecar, 'utf8')
+
+      await expect(setSessionArchived(PROJECT_ID, SESSION_ID, true)).rejects.toThrow(
+        ProjectSidecarUnreadableError
+      )
+      await expect(readFile(sidecarPath, 'utf8')).resolves.toBe(invalidSidecar)
+    })
   })
 
   describe('still treats a genuinely absent sidecar as empty metadata', () => {

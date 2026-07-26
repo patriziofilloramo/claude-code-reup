@@ -10,7 +10,7 @@ import {
   resolveProjectPath,
 } from './claude-paths.js'
 import { normalizePathForComparison, pathsReferToSameLocation } from './path-comparison.js'
-import { getCachedProjects, setCachedProjects } from './project-cache.js'
+import { getCachedProjects, getProjectCacheGeneration, setCachedProjects } from './project-cache.js'
 import { getLiveSessionRecords, type SessionLockRecord } from '../session/active-sessions.js'
 import type {
   Project,
@@ -47,6 +47,7 @@ export async function loadProjects(): Promise<Project[]> {
   const cacheKey = projectsDirectory
   const cached = getCachedProjects(cacheKey)
   if (cached) return cached
+  const cacheGeneration = getProjectCacheGeneration()
 
   log.debug('loadProjects: scanning', projectsDirectory)
 
@@ -85,7 +86,7 @@ export async function loadProjects(): Promise<Project[]> {
   // Merge group assignments from org.json into project objects.
   const finalProjects = applyOrgMetadata(assembled, orgData)
 
-  setCachedProjects(cacheKey, finalProjects)
+  setCachedProjects(cacheKey, finalProjects, cacheGeneration)
   return finalProjects
 }
 

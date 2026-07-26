@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getReupDirectory } from '../project/claude-paths.js'
@@ -102,13 +102,14 @@ let orgWriteQueue: Promise<void> = Promise.resolve()
  */
 async function enqueueOrgUpdate(updater: (data: OrgData) => void): Promise<void> {
   const previousUpdate = orgWriteQueue
-  const queuedUpdate = previousUpdate.then(() =>
-    withAdvisoryFileLock(orgLockPath(), async () => {
+  const queuedUpdate = previousUpdate.then(async () => {
+    await ensurePrivateReupDirectory()
+    return withAdvisoryFileLock(orgLockPath(), async () => {
       const currentData = (await readOrgDataFromDisk()) ?? emptyOrgData()
       updater(currentData)
       await writeOrgDataAtomically(currentData)
     })
-  )
+  })
 
   // A failed update must not poison later updates in the same process.
   orgWriteQueue = queuedUpdate.catch(() => {})
@@ -156,13 +157,23 @@ async function writeOrgDataAtomically(data: OrgData): Promise<void> {
   const targetPath = orgJsonPath()
   const tempPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
 
-  await mkdir(getReupDirectory(), { recursive: true })
+  await ensurePrivateReupDirectory()
   try {
-    await writeFile(tempPath, JSON.stringify(data, null, 2) + '\n', 'utf8')
+    await writeFile(tempPath, JSON.stringify(data, null, 2) + '\n', {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
     await rename(tempPath, targetPath)
+    await chmod(targetPath, 0o600).catch(() => {})
   } finally {
     await unlink(tempPath).catch(() => {})
   }
+}
+
+async function ensurePrivateReupDirectory(): Promise<void> {
+  const directory = getReupDirectory()
+  await mkdir(directory, { mode: 0o700, recursive: true })
+  await chmod(directory, 0o700).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------

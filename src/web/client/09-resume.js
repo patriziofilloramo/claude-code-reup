@@ -4,11 +4,17 @@
 
 /** Opens the resume confirmation dialog pre-populated with the session details. */
 function openResumeDialog(session) {
+  if (!session.signals.pathExists) {
+    showToast(STRINGS.resumePathUnavailable, 'err')
+    return
+  }
   selectSession(session)
   elements.resumeCommand.textContent = 'claude --resume ' + session.id
   elements.resumeDialogName.textContent = session.name
   elements.resumeDialogBranch.textContent = session.gitBranch ? '⎇ ' + session.gitBranch : ''
   elements.resumeDialogMessage.textContent = ''
+  elements.resumeConfirmButton.textContent = STRINGS.resumeConfirmBtn
+  elements.resumeConfirmButton.disabled = false
   elements.resumeOverlay.classList.add('open')
   elements.resumeConfirmButton.focus()
 }
@@ -49,6 +55,14 @@ function stopLaunchAnimation(launchAnimationTimer) {
  */
 async function resumeSelectedSession() {
   if (!selectedSession || !selectedProject) return
+  if (!selectedSession.signals.pathExists) {
+    elements.resumeDialogMessage.textContent = STRINGS.resumePathUnavailable
+    if (elements.resumeOverlay.classList.contains('open')) {
+      elements.resumeConfirmButton.disabled = true
+    }
+    showToast(STRINGS.resumePathUnavailable, 'err')
+    return
+  }
   const launchAnimationTimer = startLaunchAnimation()
 
   try {

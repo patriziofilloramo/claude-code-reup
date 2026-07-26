@@ -11,6 +11,7 @@ const executeFile = promisify(execFile)
 interface TerminalEmulator {
   buildLaunchCommand: (command: string, workingDirectory?: string) => string
   executable: string
+  handlesWorkingDirectory?: boolean
 }
 
 // -----------------------------------------------------------------------------
@@ -41,6 +42,7 @@ function escapeAppleScriptString(value: string): string {
 const TERMINAL_EMULATORS: TerminalEmulator[] = [
   {
     executable: 'alacritty',
+    handlesWorkingDirectory: true,
     buildLaunchCommand: (command, workingDirectory) =>
       workingDirectory
         ? `alacritty --working-directory ${quoteForPosixShell(workingDirectory)} -e sh -c ${quoteForPosixShell(command)}`
@@ -52,6 +54,7 @@ const TERMINAL_EMULATORS: TerminalEmulator[] = [
   },
   {
     executable: 'gnome-terminal',
+    handlesWorkingDirectory: true,
     buildLaunchCommand: (command, workingDirectory) =>
       workingDirectory
         ? `gnome-terminal --working-directory=${quoteForPosixShell(workingDirectory)} -- sh -c ${quoteForPosixShell(command)}`
@@ -63,6 +66,7 @@ const TERMINAL_EMULATORS: TerminalEmulator[] = [
   },
   {
     executable: 'wezterm',
+    handlesWorkingDirectory: true,
     buildLaunchCommand: (command, workingDirectory) =>
       workingDirectory
         ? `wezterm cli spawn --cwd ${quoteForPosixShell(workingDirectory)} -- sh -c ${quoteForPosixShell(command)}`
@@ -115,7 +119,12 @@ export async function launchUnix(
   for (const emulator of TERMINAL_EMULATORS) {
     try {
       await which(emulator.executable)
-      await executeShellCommand(emulator.buildLaunchCommand(command, workingDirectory))
+      // Emulators without a native cwd argument receive the same quoted
+      // `cd && command` payload used by tmux and detected terminals.
+      const emulatorCommand = emulator.handlesWorkingDirectory
+        ? command
+        : commandWithWorkingDirectory
+      await executeShellCommand(emulator.buildLaunchCommand(emulatorCommand, workingDirectory))
       return successfulLaunch()
     } catch {
       // Try the next installed emulator.

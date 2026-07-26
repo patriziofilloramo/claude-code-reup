@@ -1,5 +1,5 @@
 import { PREF_SPECS } from '../core/user-prefs.js'
-import { failCommand, writeOutput } from './output.js'
+import { failCommand, writeStyledOutput } from './output.js'
 
 const CONFIG_KEYS = Object.entries(PREF_SPECS)
   .map(([key, spec]) => `  ${key.padEnd(20)} ${spec.description} (${spec.values.join(', ')})`)
@@ -270,7 +270,7 @@ export function renderMainHelp(
 /** Handles the public `reup help [command]` interface. */
 export function runHelpCommand(commandArguments: string[]): void {
   if (commandArguments.length === 0 || isHelpRequest(commandArguments)) {
-    writeOutput(renderMainHelp())
+    writeStyledOutput(renderMainHelp())
     return
   }
 
@@ -286,5 +286,5 @@ export function runHelpCommand(commandArguments: string[]): void {
     return
   }
 
-  writeOutput(help)
+  writeStyledOutput(help)
 }

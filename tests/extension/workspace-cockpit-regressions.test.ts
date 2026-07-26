@@ -64,6 +64,7 @@ describe('workspace cockpit guardrails', () => {
     expect(treeSource).toContain('renderCurrentModel(): boolean')
     expect(treeSource).toContain('if (!this.model || !this.modelFingerprint) return false')
     expect(extensionSource).toContain('new ReupRefreshController(logger, { refresh: refreshAll })')
+    expect(extensionSource).toContain('invalidateProjectCache()')
     expect(extensionSource).toContain('treeProvider.refresh({ notifyView: treeVisible })')
     expect(extensionSource).toContain('if (changed) await dashboard?.refresh')
   })

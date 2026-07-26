@@ -4,6 +4,8 @@ import {
   clipVisible,
   formatSingleLineRow,
   padVisibleEnd,
+  sanitizeTerminalField,
+  sanitizeTerminalOutput,
   stripAnsi,
   truncateVisible,
   truncateVisibleStart,
@@ -14,6 +16,28 @@ const GREEN = '[32m'
 const RESET = '[0m'
 
 describe('terminal-text', () => {
+  it('drops hostile terminal controls while preserving Reup SGR styling and layout', () => {
+    const hostile = `safe\u001b]52;c;SGFja2Vk\u0007\u001b[2J\u001b[8m\rspoofed\u061c\u200f\u202e`
+
+    expect(sanitizeTerminalOutput(`${GREEN}${hostile}${RESET}\nnext\tcell`, true)).toBe(
+      `${GREEN}safe]52;c;SGFja2Vk[2Jspoofed${RESET}\nnext\tcell`
+    )
+  })
+
+  it('strips styling from untrusted plain output and closes preserved renderer styling', () => {
+    expect(sanitizeTerminalOutput(`${GREEN}transcript without reset`)).toBe(
+      'transcript without reset'
+    )
+    expect(sanitizeTerminalOutput(`${GREEN}trusted renderer`, true)).toBe(
+      `${GREEN}trusted renderer${RESET}`
+    )
+  })
+
+  it('turns untrusted fields into inert single-line labels', () => {
+    expect(sanitizeTerminalField(`  alias\n\u001b[2mspoof\u0007  `)).toBe('alias spoof')
+    expect(sanitizeTerminalField('C:\\My  Project')).toBe('C:\\My  Project')
+  })
+
   it('truncates plain text and appends an ellipsis once it no longer fits', () => {
     expect(truncateVisible('session about responsive layout work', 12)).toBe('session a...')
     expect(truncateVisible('short', 12)).toBe('short')

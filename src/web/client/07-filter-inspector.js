@@ -152,12 +152,15 @@ function markSessionPreviewsStale() {
 /** Returns action buttons for the selected session. These mirror the row menu and keyboard shortcuts. */
 function buildInspectorActionsHtml(session) {
   const deleteDisabled = activeSessionIds.has(session.id)
+  const resumeDisabled = !session.signals.pathExists
   const isArchived = session.signals.archived
   return (
     '<div class="insp-actions">' +
     '<button class="insp-action primary" data-inspector-action="session-resume" title="' +
-    escapeHtml(STRINGS.inspBtnResumeTooltip) +
-    '">' +
+    escapeHtml(resumeDisabled ? STRINGS.resumePathUnavailable : STRINGS.inspBtnResumeTooltip) +
+    '"' +
+    (resumeDisabled ? ' disabled' : '') +
+    '>' +
     STRINGS.inspBtnResume +
     '</button>' +
     '<button class="insp-action" data-inspector-action="session-handoff" title="' +

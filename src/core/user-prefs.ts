@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { ThemeName } from '../config/theme-tokens.js'
@@ -46,8 +46,25 @@ export async function readUserPrefs(): Promise<UserPrefs> {
 }
 
 export function writeUserPrefsSync(prefs: UserPrefs): void {
-  mkdirSync(getReupDirectory(), { recursive: true })
-  writeFileSync(prefsPath(), JSON.stringify(prefs, null, 2) + '\n', 'utf8')
+  const directory = getReupDirectory()
+  mkdirSync(directory, { mode: 0o700, recursive: true })
+  try {
+    chmodSync(directory, 0o700)
+  } catch {
+    // Some filesystems do not expose POSIX permissions. The creation mode is
+    // still applied wherever it is supported.
+  }
+  writeFileSync(prefsPath(), JSON.stringify(prefs, null, 2) + '\n', {
+    encoding: 'utf8',
+    mode: 0o600,
+  })
+  try {
+    // writeFile preserves the mode of an existing file, so repair older prefs
+    // files that predate private creation modes.
+    chmodSync(prefsPath(), 0o600)
+  } catch {
+    // Best effort for filesystems without POSIX permission support.
+  }
 }
 
 export async function writeUserPrefs(prefs: UserPrefs): Promise<void> {

@@ -13,6 +13,13 @@ const template = readFileSync(join(assetDirectory, 'ui.html'), 'utf8')
 
 /** Placeholder replaced with a fresh CSP nonce on every page render. */
 const NONCE_PLACEHOLDER = '__REUP_NONCE__'
+/** Placeholder replaced with the complete policy tied to the render nonce. */
+const CSP_PLACEHOLDER = '__REUP_CSP__'
+
+export interface UiDocument {
+  contentSecurityPolicy: string
+  html: string
+}
 
 const faviconSvg = renderReupMarkSvg({ size: 64 })
 const faviconLink = `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,${Buffer.from(faviconSvg).toString('base64')}" />`
@@ -33,12 +40,34 @@ const baseHtml = template
  * predicted from an earlier response.
  */
 export function buildHtml(themeName: string): string {
+  return buildUiDocument(themeName).html
+}
+
+/** Builds the HTML and its matching HTTP Content-Security-Policy header. */
+export function buildUiDocument(themeName: string): UiDocument {
   const nonce = randomBytes(18).toString('base64')
-  // A replacer function keeps both occurrences on the same nonce and avoids
-  // `$` pattern semantics in string replacements.
-  return baseHtml
+  const contentSecurityPolicy = buildContentSecurityPolicy(nonce)
+  // A replacer function avoids `$` pattern semantics in string replacements.
+  const html = baseHtml
     .replaceAll(NONCE_PLACEHOLDER, () => nonce)
+    .replace(CSP_PLACEHOLDER, contentSecurityPolicy)
     .replace('data-theme="dark"', `data-theme="${resolveThemeAttribute(themeName)}"`)
+
+  return { contentSecurityPolicy, html }
+}
+
+/** Keeps the document policy and the server response header in lockstep. */
+function buildContentSecurityPolicy(nonce: string): string {
+  return [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}'`,
+    "style-src 'unsafe-inline'",
+    'img-src data:',
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; ')
 }
 
 /**

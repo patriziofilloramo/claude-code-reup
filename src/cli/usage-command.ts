@@ -18,7 +18,8 @@ import {
 } from '../core/usage/usage-statusline-integration.js'
 import { APP } from '../config/app.js'
 import { relativeTime } from '../utils/time.js'
-import { failCommand, writeOutput } from './output.js'
+import { failCommand, writeOutput, writeStyledOutput } from './output.js'
+import { sanitizeTerminalField } from './terminal-text.js'
 
 /** Runs usage status, setup, removal, or the internal status-line collector. */
 export async function runUsageCommand(commandArguments: string[]): Promise<void> {
@@ -26,7 +27,7 @@ export async function runUsageCommand(commandArguments: string[]): Promise<void>
 
   switch (action) {
     case undefined:
-      writeOutput(renderUsageSummary(await readLiveUsageSummary()))
+      writeStyledOutput(renderUsageSummary(await readLiveUsageSummary()))
       return
     case '--json':
       if (actionArguments.length > 0) return failUsage()
@@ -114,7 +115,9 @@ export function renderUsageSummary(summary: LiveUsageSummary): string {
   const title = ansi(ANSI.bold + ANSI.cyan, 'reup usage')
 
   // Header line: title · optional agent · staleness note
-  const agentPart = snapshot?.agentName ? ansi(ANSI.dim, '  / ' + snapshot.agentName) : ''
+  const agentPart = snapshot?.agentName
+    ? ansi(ANSI.dim, '  / ' + sanitizeTerminalField(snapshot.agentName))
+    : ''
   const stalenessNote = formatCaptureStatusNote(summary)
   const creditsPart = summary.usageCreditsEnabled ? ansi(ANSI.green, '  credits on') : ''
   const header = INDENT + title + agentPart + creditsPart + stalenessNote
@@ -132,7 +135,7 @@ export function renderUsageSummary(summary: LiveUsageSummary): string {
 
   if (metrics.length === 0) {
     const unavailableMessage = summary.limitsIssue
-      ? `account limits unavailable: ${summary.limitsIssue}`
+      ? `account limits unavailable: ${sanitizeTerminalField(summary.limitsIssue)}`
       : 'account limits unavailable'
     return ['', header, INDENT + ansi(ANSI.dim, unavailableMessage), ''].join('\n')
   }
@@ -284,7 +287,7 @@ function formatCaptureStatusText(summary: LiveUsageSummary): string {
         : 'limits updating'
     case 'unavailable':
       return summary.limitsIssue
-        ? `account limits unavailable: ${summary.limitsIssue}`
+        ? `account limits unavailable: ${sanitizeTerminalField(summary.limitsIssue)}`
         : 'account limits unavailable'
   }
 }

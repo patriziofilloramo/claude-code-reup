@@ -373,7 +373,11 @@ function executeSessionAction(action, session) {
 /** Returns the menu/action labels for a session in a single canonical order. */
 function sessionActionItems(session) {
   return [
-    { action: 'session-resume', label: STRINGS.sessionActionResume },
+    {
+      action: 'session-resume',
+      disabled: !session.signals.pathExists,
+      label: STRINGS.sessionActionResume,
+    },
     { action: 'session-handoff', label: STRINGS.sessionActionHandoff },
     { type: 'separator' },
     { action: 'session-rename', label: STRINGS.sessionActionRename },
