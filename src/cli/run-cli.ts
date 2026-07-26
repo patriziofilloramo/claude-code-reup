@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { APP } from '../config/app.js'
 import type { ResumeTarget } from '../tui/App.js'
 import { releaseTerminalInput } from '../tui/terminal-input.js'
+import { tryChangeWorkingDirectory } from '../utils/process.js'
 import { isHelpRequest, runHelpCommand } from './help-command.js'
 import { failCommand } from './output.js'
 
@@ -200,7 +201,9 @@ async function runTerminalInterface(): Promise<void> {
   const resumeTarget = await runTUI()
   if (!resumeTarget) return
 
-  process.chdir(resumeTarget.projectPath)
+  // The picker lists sessions whose project directory is gone. Launching from
+  // the current directory beats aborting a resume the user just confirmed.
+  tryChangeWorkingDirectory(resumeTarget.projectPath)
   releaseTerminalInput()
   await launchClaudeInCurrentTerminal(resumeTarget)
 }
