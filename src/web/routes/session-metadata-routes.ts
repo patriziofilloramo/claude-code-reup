@@ -5,6 +5,7 @@ import { isValidSessionId } from '../../core/session/session-model.js'
 import {
   ActiveSessionDeletionError,
   deleteSession,
+  ProjectSidecarUnreadableError,
   setSessionAlias,
   setSessionArchived,
   setSessionTags,
@@ -14,7 +15,7 @@ import { recordTagInPalette } from '../../core/org/org-prefs.js'
 import { validateAndNormalizeTags } from '../../core/org/org-validation.js'
 import { OrgValidationError } from '../../core/org/org-validation.js'
 import { log } from '../../utils/logger.js'
-import { guardedRoute } from './route-helper.js'
+import { guardedRoute, type RouteHandler } from './route-helper.js'
 
 /**
  * Registers Reup sidecar mutation endpoints for session aliases and archive state.
@@ -30,27 +31,29 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   app.post(
     '/api/sessions/:projectId/:sessionId/archive',
-    guardedRoute(async (context) => {
-      const { projectId, sessionId } = context.req.param()
+    guardedRoute(
+      mapSidecarFailures(async (context) => {
+        const { projectId, sessionId } = context.req.param()
 
-      const idError = validateSessionIdentifiers(projectId, sessionId)
-      if (idError) return context.json({ error: idError }, 400)
+        const idError = validateSessionIdentifiers(projectId, sessionId)
+        if (idError) return context.json({ error: idError }, 400)
 
-      const project = await loadProjectById(projectId)
-      if (!project) return context.json({ error: 'project not found' }, 404)
-      if (!project.sessions.some((s) => s.id === sessionId)) {
-        return context.json({ error: 'session not found' }, 404)
-      }
+        const project = await loadProjectById(projectId)
+        if (!project) return context.json({ error: 'project not found' }, 404)
+        if (!project.sessions.some((s) => s.id === sessionId)) {
+          return context.json({ error: 'session not found' }, 404)
+        }
 
-      const body = await context.req.json<{ archived?: unknown }>()
-      if (typeof body.archived !== 'boolean') {
-        return context.json({ error: 'archived must be boolean' }, 400)
-      }
+        const body = await context.req.json<{ archived?: unknown }>()
+        if (typeof body.archived !== 'boolean') {
+          return context.json({ error: 'archived must be boolean' }, 400)
+        }
 
-      await setSessionArchived(projectId, sessionId, body.archived)
-      log.debug('archive: set session', sessionId, 'archived =', body.archived)
-      return context.json({ ok: true })
-    })
+        await setSessionArchived(projectId, sessionId, body.archived)
+        log.debug('archive: set session', sessionId, 'archived =', body.archived)
+        return context.json({ ok: true })
+      })
+    )
   )
 
   // ---------------------------------------------------------------------------
@@ -60,32 +63,34 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   app.put(
     '/api/sessions/:projectId/:sessionId/alias',
-    guardedRoute(async (context) => {
-      const { projectId, sessionId } = context.req.param()
+    guardedRoute(
+      mapSidecarFailures(async (context) => {
+        const { projectId, sessionId } = context.req.param()
 
-      const idError = validateSessionIdentifiers(projectId, sessionId)
-      if (idError) return context.json({ error: idError }, 400)
+        const idError = validateSessionIdentifiers(projectId, sessionId)
+        if (idError) return context.json({ error: idError }, 400)
 
-      const project = await loadProjectById(projectId)
-      if (!project) return context.json({ error: 'project not found' }, 404)
-      if (!project.sessions.some((s) => s.id === sessionId)) {
-        return context.json({ error: 'session not found' }, 404)
-      }
+        const project = await loadProjectById(projectId)
+        if (!project) return context.json({ error: 'project not found' }, 404)
+        if (!project.sessions.some((s) => s.id === sessionId)) {
+          return context.json({ error: 'session not found' }, 404)
+        }
 
-      const body = await context.req.json<{ alias?: unknown }>()
-      if (body.alias !== undefined && body.alias !== null && typeof body.alias !== 'string') {
-        return context.json({ error: 'alias must be a string or null' }, 400)
-      }
+        const body = await context.req.json<{ alias?: unknown }>()
+        if (body.alias !== undefined && body.alias !== null && typeof body.alias !== 'string') {
+          return context.json({ error: 'alias must be a string or null' }, 400)
+        }
 
-      // Normalise: trim whitespace, enforce 160-char cap, treat empty string as
-      // "no alias" (undefined) so the field is omitted from the sidecar JSON.
-      const normalizedAlias =
-        typeof body.alias === 'string' ? body.alias.trim().slice(0, 160) || undefined : undefined
+        // Normalise: trim whitespace, enforce 160-char cap, treat empty string as
+        // "no alias" (undefined) so the field is omitted from the sidecar JSON.
+        const normalizedAlias =
+          typeof body.alias === 'string' ? body.alias.trim().slice(0, 160) || undefined : undefined
 
-      await setSessionAlias(projectId, sessionId, normalizedAlias)
-      log.debug('alias: updated session', sessionId, '→', normalizedAlias ?? '(cleared)')
-      return context.json({ ok: true })
-    })
+        await setSessionAlias(projectId, sessionId, normalizedAlias)
+        log.debug('alias: updated session', sessionId, '→', normalizedAlias ?? '(cleared)')
+        return context.json({ ok: true })
+      })
+    )
   )
 
   // ---------------------------------------------------------------------------
@@ -95,28 +100,24 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   app.delete(
     '/api/sessions/:projectId/:sessionId',
-    guardedRoute(async (context) => {
-      const { projectId, sessionId } = context.req.param()
+    guardedRoute(
+      mapSidecarFailures(async (context) => {
+        const { projectId, sessionId } = context.req.param()
 
-      const idError = validateSessionIdentifiers(projectId, sessionId)
-      if (idError) return context.json({ error: idError }, 400)
+        const idError = validateSessionIdentifiers(projectId, sessionId)
+        if (idError) return context.json({ error: idError }, 400)
 
-      const project = await loadProjectById(projectId)
-      if (!project) return context.json({ error: 'project not found' }, 404)
-      if (!project.sessions.some((s) => s.id === sessionId)) {
-        return context.json({ error: 'session not found' }, 404)
-      }
-      try {
-        await deleteSession(projectId, sessionId)
-      } catch (error) {
-        if (error instanceof ActiveSessionDeletionError) {
-          return context.json({ error: 'cannot delete an active session' }, 409)
+        const project = await loadProjectById(projectId)
+        if (!project) return context.json({ error: 'project not found' }, 404)
+        if (!project.sessions.some((s) => s.id === sessionId)) {
+          return context.json({ error: 'session not found' }, 404)
         }
-        throw error
-      }
-      log.debug('delete: removed session', sessionId)
-      return context.json({ ok: true })
-    })
+
+        await deleteSession(projectId, sessionId)
+        log.debug('delete: removed session', sessionId)
+        return context.json({ ok: true })
+      })
+    )
   )
 
   // ---------------------------------------------------------------------------
@@ -126,38 +127,42 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   app.put(
     '/api/projects/:projectId/sessions/:sessionId/tags',
-    guardedRoute(async (context) => {
-      const { projectId, sessionId } = context.req.param()
+    guardedRoute(
+      mapSidecarFailures(async (context) => {
+        const { projectId, sessionId } = context.req.param()
 
-      const idError = validateSessionIdentifiers(projectId, sessionId)
-      if (idError) return context.json({ error: idError }, 400)
+        const idError = validateSessionIdentifiers(projectId, sessionId)
+        if (idError) return context.json({ error: idError }, 400)
 
-      const project = await loadProjectById(projectId)
-      if (!project) return context.json({ error: 'project not found' }, 404)
-      if (!project.sessions.some((s) => s.id === sessionId)) {
-        return context.json({ error: 'session not found' }, 404)
-      }
+        const project = await loadProjectById(projectId)
+        if (!project) return context.json({ error: 'project not found' }, 404)
+        if (!project.sessions.some((s) => s.id === sessionId)) {
+          return context.json({ error: 'session not found' }, 404)
+        }
 
-      const body = await context.req.json<{ tags?: unknown }>()
-      if (!Array.isArray(body.tags)) {
-        return context.json({ error: 'tags must be an array' }, 400)
-      }
+        const body = await context.req.json<{ tags?: unknown }>()
+        if (!Array.isArray(body.tags)) {
+          return context.json({ error: 'tags must be an array' }, 400)
+        }
 
-      let normalizedTags: string[]
-      try {
-        normalizedTags = validateAndNormalizeTags(body.tags)
-      } catch (error) {
-        if (error instanceof OrgValidationError) return context.json({ error: error.message }, 400)
-        throw error
-      }
+        let normalizedTags: string[]
+        try {
+          normalizedTags = validateAndNormalizeTags(body.tags)
+        } catch (error) {
+          if (error instanceof OrgValidationError) {
+            return context.json({ error: error.message }, 400)
+          }
+          throw error
+        }
 
-      await setSessionTags(projectId, sessionId, normalizedTags)
-      // Best-effort palette update; failure does not affect the tag write.
-      for (const tag of normalizedTags) void recordTagInPalette(tag)
+        await setSessionTags(projectId, sessionId, normalizedTags)
+        // Best-effort palette update; failure does not affect the tag write.
+        for (const tag of normalizedTags) void recordTagInPalette(tag)
 
-      log.debug('tags: updated session', sessionId, '→', normalizedTags)
-      return context.json({ ok: true })
-    })
+        log.debug('tags: updated session', sessionId, '→', normalizedTags)
+        return context.json({ ok: true })
+      })
+    )
   )
 
   // ---------------------------------------------------------------------------
@@ -167,32 +172,36 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 
   app.put(
     '/api/projects/:projectId/tags',
-    guardedRoute(async (context) => {
-      const { projectId } = context.req.param()
-      if (!projectId) return context.json({ error: 'projectId is required' }, 400)
+    guardedRoute(
+      mapSidecarFailures(async (context) => {
+        const { projectId } = context.req.param()
+        if (!projectId) return context.json({ error: 'projectId is required' }, 400)
 
-      const project = await loadProjectById(projectId)
-      if (!project) return context.json({ error: 'project not found' }, 404)
+        const project = await loadProjectById(projectId)
+        if (!project) return context.json({ error: 'project not found' }, 404)
 
-      const body = await context.req.json<{ tags?: unknown }>()
-      if (!Array.isArray(body.tags)) {
-        return context.json({ error: 'tags must be an array' }, 400)
-      }
+        const body = await context.req.json<{ tags?: unknown }>()
+        if (!Array.isArray(body.tags)) {
+          return context.json({ error: 'tags must be an array' }, 400)
+        }
 
-      let normalizedTags: string[]
-      try {
-        normalizedTags = validateAndNormalizeTags(body.tags)
-      } catch (error) {
-        if (error instanceof OrgValidationError) return context.json({ error: error.message }, 400)
-        throw error
-      }
+        let normalizedTags: string[]
+        try {
+          normalizedTags = validateAndNormalizeTags(body.tags)
+        } catch (error) {
+          if (error instanceof OrgValidationError) {
+            return context.json({ error: error.message }, 400)
+          }
+          throw error
+        }
 
-      await setProjectTags(projectId, normalizedTags)
-      for (const tag of normalizedTags) void recordTagInPalette(tag)
+        await setProjectTags(projectId, normalizedTags)
+        for (const tag of normalizedTags) void recordTagInPalette(tag)
 
-      log.debug('tags: updated project', projectId, '→', normalizedTags)
-      return context.json({ ok: true })
-    })
+        log.debug('tags: updated project', projectId, '→', normalizedTags)
+        return context.json({ ok: true })
+      })
+    )
   )
 
   log.debug('session metadata routes registered')
@@ -201,6 +210,34 @@ export function registerSessionMetadataRoutes(app: Hono): void {
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Maps the domain errors every endpoint in this file can raise onto responses.
+ *
+ * Deliberately not folded into {@link guardedRoute}: composing the two at each
+ * route keeps the literal guard visible at every mutating endpoint, which is
+ * what both a reader and the route-security guardrail look for.
+ *
+ * Both errors mean "the server refused, and nothing changed", which is a 409
+ * rather than a 500 — the request was well-formed, but current state blocks it
+ * and the client can surface something the user can act on.
+ */
+function mapSidecarFailures(handler: RouteHandler): RouteHandler {
+  return async (context) => {
+    try {
+      return await handler(context)
+    } catch (error) {
+      if (error instanceof ActiveSessionDeletionError) {
+        return context.json({ error: 'cannot delete an active session' }, 409)
+      }
+      if (error instanceof ProjectSidecarUnreadableError) {
+        log.error('sidecar: refused to overwrite unreadable metadata:', error)
+        return context.json({ error: error.message }, 409)
+      }
+      throw error
+    }
+  }
+}
 
 /**
  * Validates that both route parameters are well-formed before any disk access.
