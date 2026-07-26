@@ -22,7 +22,10 @@ import { apiRoute } from './route-helper.js'
  * Registers read-only endpoints for project discovery, session search,
  * transcript access, and active-session detection.
  *
- * All endpoints here are GET-only and safe to call without origin validation.
+ * These endpoints return transcript content and filesystem paths, so they are
+ * not "safe by virtue of being GET". They rely on the global loopback-host
+ * middleware registered in `buildApp`; they skip the origin check only because
+ * they change no state.
  */
 export function registerProjectRoutes(app: Hono): void {
   app.get(

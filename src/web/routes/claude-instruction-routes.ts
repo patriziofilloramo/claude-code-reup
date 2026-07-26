@@ -7,9 +7,10 @@ import { apiRoute, guardedRoute } from './route-helper.js'
 /**
  * Registers read/write access to server-resolved CLAUDE.md instruction files.
  *
- * The read endpoint is unguarded because it only surfaces content that already
- * exists on the local filesystem and originates from Claude Code itself.
- * The write endpoint is guarded because it mutates the filesystem.
+ * The read endpoint skips the origin check because it changes no state; like
+ * every route it still passes the global loopback-host middleware, which is
+ * what keeps project instructions off a rebound origin. The write endpoint is
+ * guarded because it mutates the filesystem.
  */
 export function registerClaudeInstructionRoutes(app: Hono): void {
   // ---------------------------------------------------------------------------
