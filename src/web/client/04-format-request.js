@@ -2,13 +2,19 @@
 // Shared presentation and request helpers
 // ---------------------------------------------------------------------------
 
-/** Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS. */
+/**
+ * Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS.
+ *
+ * Single quotes are escaped too, so the result stays safe if a template ever
+ * uses single-quoted attributes.
+ */
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 let floatingTooltip = null

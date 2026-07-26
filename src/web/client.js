@@ -374,6 +374,10 @@ const STRINGS = {
  * Substitutes {key} placeholders in a template with values from vars.
  * Use instead of string concatenation so strings remain translatable as
  * complete phrases.
+ *
+ * Substitution only — the result is NOT escaped. Anything that reaches
+ * innerHTML must be wrapped in escapeHtml(), because transcript-derived values
+ * such as project paths are attacker-influenceable.
  */
 function fmt(template, vars) {
   return template.replace(/\{(\w+)\}/g, function (_, key) {
@@ -841,13 +845,19 @@ showLoadingOverlay()
 // Shared presentation and request helpers
 // ---------------------------------------------------------------------------
 
-/** Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS. */
+/**
+ * Escapes a value for safe insertion into HTML attribute or text content. Prevents XSS.
+ *
+ * Single quotes are escaped too, so the result stays safe if a template ever
+ * uses single-quoted attributes.
+ */
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 let floatingTooltip = null
@@ -3134,7 +3144,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-warn">' +
-          fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
@@ -3159,7 +3169,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-err">' +
-          fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )

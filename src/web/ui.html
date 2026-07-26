@@ -2,6 +2,17 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Defence in depth behind the server-side escaping: a nonce on script-src
+      means injected markup cannot execute, neither as a <script> element nor as
+      an inline handler such as onerror. style-src stays 'unsafe-inline' with no
+      nonce on purpose — the UI renders style="" attributes, and adding a nonce
+      would make the browser ignore 'unsafe-inline' and break them.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'nonce-__REUP_NONCE__'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Reup</title>
     <!-- REUP:FAVICON -->

@@ -365,6 +365,10 @@ const STRINGS = {
  * Substitutes {key} placeholders in a template with values from vars.
  * Use instead of string concatenation so strings remain translatable as
  * complete phrases.
+ *
+ * Substitution only — the result is NOT escaped. Anything that reaches
+ * innerHTML must be wrapped in escapeHtml(), because transcript-derived values
+ * such as project paths are attacker-influenceable.
  */
 function fmt(template, vars) {
   return template.replace(/\{(\w+)\}/g, function (_, key) {

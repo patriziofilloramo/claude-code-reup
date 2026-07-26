@@ -36,7 +36,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-warn">' +
-          fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsExpiresSoon, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
@@ -61,7 +61,7 @@ async function renderDiagnosticsPanel() {
           escapeHtml(s.name || s.id) +
           '</div>' +
           '<div class="lf-item-meta lf-item-err">' +
-          fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' }) +
+          escapeHtml(fmt(STRINGS.diagnosticsPathMissing, { path: s.projectPath || '' })) +
           '</div>' +
           '</div>'
         )
