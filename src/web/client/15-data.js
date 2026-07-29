@@ -243,9 +243,9 @@ function raiseDesktopAlerts(entries) {
       // question that was never asked. The dot still shows it; only the claim
       // is withheld.
       //
-      // Turn endings are deliberately not alerted here at all: the page cannot
-      // see them while it is asleep, which is the only time they matter. That
-      // alert is raised by the local process instead (`turnEndNotifications`).
+      // A turn *ending* is alerted from the `turn-finished` event below
+      // instead of from these snapshots, because finding it here would mean
+      // witnessing both sides of a transition a throttled tab sleeps through.
       if (entry.attention.isReported === true) {
         var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
         if (!notifiedAttentionKeys.has(attentionKey)) {

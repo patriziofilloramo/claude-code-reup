@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1
+## 0.3.0
 
 ### Added
 
@@ -81,9 +81,9 @@
   Node version manager relocates the npm global root, an installer changes
   location — after which the hooks run and fail silently. Starting the TUI, the
   web UI, or the config screen repoints Reup's own entries at the running
-  install; hooks that were never set up are never added, and a command Reup did
-  not write is never touched. `reup doctor` reports the condition when repair
-  cannot act.
+  install. A command Reup did not write is never touched, and repair refuses
+  when Reup itself has no stable path to name — replacing one dead path with
+  another is not a repair. `reup doctor` reports what repair cannot fix.
 
 - `reup attention status` no longer reports dead hooks as working. Hook entries
   name a script by absolute path; if that path stops resolving (the install was
