@@ -4,6 +4,24 @@
 
 ### Added
 
+- Desktop "turn finished" notifications now survive a tab you switched away
+  from. The page used to find the boundary by diffing activity snapshots, which
+  it only receives while awake, so a throttled tab missed one side of the
+  transition and stayed silent. The server reports the boundary as its own
+  event; the page still decides whether to raise it, because `document.hidden`
+  answers the one question no local process can — whether you are looking. A
+  tab frozen for several minutes still raises nothing, by which point you have
+  been away long enough to read the state on return.
+
+  No new setting: the page's notification toggle remains the control.
+
+- Reup's Claude Code hooks are installed on first run rather than waiting for
+  `reup attention setup`, and the surface that does it says so and names the
+  command that undoes it. They feed live state and needs-input as well as turn
+  boundaries, so leaving them behind a command nobody discovers meant shipping
+  features that silently did nothing. `reup attention remove` is recorded and
+  honoured — nothing reinstalls behind your back.
+
 - The web UI now notices when the server stops. A dropped live stream triggers
   a reachability probe; if nothing answers, a full-screen "LINK LOST" panel
   appears — the boot loader's Matrix rain in a failure palette, over a terminal
@@ -57,12 +75,6 @@
 - The live strip shows a stopped session as `interrupted` rather than
   `waiting`, which reads as "between turns" and hid that the turn was cut
   short.
-
-- Desktop "turn finished" alerts survive a hidden tab. The browser used to
-  derive the boundary by diffing snapshots it only receives while awake; the
-  server now reports it as a `turn-finished` event. A fully frozen tab still
-  cannot alert — that needs a notification raised by the local process, which
-  is not in this release.
 
 - Reup now repairs its own Claude Code hooks when their path goes stale. A hook
   entry names an absolute path, and that path moves for ordinary reasons — a

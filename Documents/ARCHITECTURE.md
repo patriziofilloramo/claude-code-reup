@@ -553,108 +553,34 @@ that the web already called idle. `tests/core/session-live-state.test.ts`
 guards both the resolver and the boundary — it fails if a surface starts
 deriving liveness on its own again.
 
-### Turn Boundaries as Events (2026-07-29)
+### Turn-End Alerts (2026-07-29)
 
-The "turn finished" desktop alert used to be derived in the browser, by diffing
-consecutive activity snapshots. That only works while the page is receiving
-them: a hidden tab is throttled and eventually frozen, so it observes neither
-side of the transition and stays silent exactly when the user has looked away.
+Reup's monitoring surface is the web page: with many sessions to watch, it is
+normally open and in front of the user, and that is where everything is seen.
+A notification is only for the moments it is not.
 
-The boundary is now found server-side in `event-stream-route.ts`, which tracks
-the last working state per session and emits a `turn-finished` SSE event when a
-session leaves `working` with `stateIsReported` true. The same rule as before —
-only reported evidence may claim a turn ended — moved to the one place that
-reliably sees both sides. A fact in the stream survives; a missed diff does not.
+That framing decides the division of labour, which took two wrong turns to
+find:
 
-A fully frozen tab still cannot alert: it runs no JavaScript, and by the time
-it wakes the user is looking at it. Reliable notification therefore has to come
-from the local process rather than the page, which is tracked as follow-up
-work.
+- **The server reports what happened.** `event-stream-route.ts` tracks the last
+  working state per session and emits a `turn-finished` SSE event when one
+  leaves `working` with `stateIsReported` true. The page cannot find this
+  alone — it derives state from snapshots it only receives while awake, so a
+  throttled tab misses one side of the transition and stays silent.
+- **The page decides whether the user needs telling.** `document.hidden` is the
+  one signal only the browser has, and it answers exactly the right question:
+  are you looking at this? If the page is visible, you already saw it.
 
-### Attention System
+Both wrong turns are worth recording. Deriving the boundary in the browser by
+diffing snapshots failed because it required witnessing both sides. Moving the
+whole alert to a local process — a detached check that notified unless a new
+prompt arrived within thirty seconds — failed worse: nothing local can observe
+attention, and "no reply yet" mistakes reading a long answer for walking away.
+It also spawned a Node runtime per turn to ask one question.
 
-`reup attention setup` registers Reup's capture command as a Claude Code
-`Notification` hook. Hooks are additive lists, so setup only appends Reup's
-own entry and removal filters exactly that entry back out - hooks the user
-configured are never touched. The hook payload is validated at runtime and
-stored as one atomic marker per session under `reup/attention/`.
+The remaining gap is honest and small: a tab frozen for several minutes runs no
+JavaScript, so a very long absence raises nothing. By then the user has been
+away long enough to simply read the state on return.
 
-A marker means "this session is waiting on the user" and resolves itself: any
-lock status transition or transcript event after the marker's timestamp, or
-the death of the session's process, deactivates it (and the live-activity
-model deletes it in the background). The watcher classifies marker writes as
-`activity`, so a needs-input state reaches connected browsers on the same
-~150 ms push path as busy/idle flips. Turn completion needs no hook at all:
-clients detect running-to-idle transitions from consecutive snapshots.
-Desktop notifications are browser-local and opt-in; the TUI pulses a red
-marker and rings the terminal bell once per new attention event.
-
-The same setup also registers `UserPromptSubmit` and `Stop` hooks pointing at
-the same capture command. These provide Reup-owned turn boundaries
-(busy from prompt submit until Stop) stored as one work marker per session
-under `reup/activity/`. Detection combines lock status and work marker by
-newest transition (`combineWorkEvidence`), which covers the sessions whose
-locks omit the status field entirely - every observed VS Code entrypoint
-lock. A busy marker is corroborated by the same evidence-freshness rule as
-lock status, so a crashed turn cannot pulse forever. A submitted prompt also
-clears the session's attention marker. In the web live strip, attached
-sessions never vanish: quiet ones render dimmed as Idle instead of being
-filtered out.
-
-In the web client, `refreshLiveActivity()` gates on `activeSessionIds`, which
-only `refreshProjectData()` updates — both the bootstrap and SSE-triggered
-refresh run project data first and chain the activity fetch after it.
-
-## Terminal Launching
-
-Direct TUI resume stays in the current terminal. Web resume delegates to
-platform-specific launchers:
-
-- Unix/macOS: tmux, known terminal applications, detected emulators, then
-  clipboard fallback.
-- Windows: Windows Terminal, PowerShell, `cmd`, then clipboard fallback.
-
-Session IDs are UUID-validated. Unix paths are shell-quoted. The Windows
-launcher passes working directories and command tokens through structured
-`execFile()` / `spawn()` arguments, with clipboard fallback only after launch
-attempts fail. Clean Windows manual smoke is still required before official
-public release.
-
-Both resume paths move into the recorded project directory through
-`tryChangeWorkingDirectory()`. Recorded paths outlive the directories they name
-— Reup surfaces that as the `path-missing` status and still offers resume — so
-a missing directory degrades to launching from the current one with a warning,
-never an aborted launch.
-
-## Configuration
-
-Shared TypeScript runtime configuration lives in `src/config/app.ts`.
-Browser-only timings stay in the standalone client to avoid a frontend build
-step; domain thresholds remain next to the logic they govern.
-
-| Variable            | Purpose                               |
-| ------------------- | ------------------------------------- |
-| `CLAUDE_CONFIG_DIR` | Override Claude Code's data directory |
-| `REUP_PORT`         | Preferred web port                    |
-| `REUP_NO_OPEN`      | Prevent automatic browser opening     |
-| `REUP_DEBUG`        | Enable debug logging                  |
-
-## Verification
-
-CI runs on Ubuntu and Windows with Node.js 20:
-
-```bash
-npm run format:check
-npm run lint
-npm run build
-npm test
-```
-
-ESLint covers TypeScript, tests, and the standalone browser JavaScript. Prettier
-covers source, tests, browser HTML/CSS, scripts, workflow files, and maintained
-Markdown.
-
-Before release, also run `npm run release:local` for a local release-candidate
-bundle and `npm run release:installers` for installable RC packages, or at
-minimum run `node --check src/web/client.js`, `npm audit`, and
-`npm pack --dry-run`.
+There is no separate preference. The page's existing notification toggle is the
+control, and the browser's own permission prompt is the consent.

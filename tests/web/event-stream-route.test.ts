@@ -175,10 +175,10 @@ describe('event stream targeted pushes', () => {
   })
 
   /**
-   * The browser cannot find this boundary for itself: a hidden tab is
-   * throttled and eventually frozen, so it observes neither side of the
-   * transition and stays silent exactly when the user has looked away.
-   * Reported from real use as a missing "turn finished" alert.
+   * The page cannot find this boundary alone: it derives state from snapshots
+   * it only receives while awake, so a throttled tab misses one side of the
+   * transition and stays silent. Reporting it as a fact means the page only
+   * has to decide whether the user needs telling.
    */
   it('reports a finished turn as its own event, once per boundary', async () => {
     const stream = createFakeStream()
@@ -224,8 +224,7 @@ describe('event stream targeted pushes', () => {
           sessionId: 'abc',
           sessionName: 'demo',
           // VS Code peer locks omit `status`, so the state is a guess: a long
-          // tool call and a finished turn look identical once the transcript
-          // goes quiet.
+          // tool call and a finished turn look identical once quiet.
           stateIsReported: false,
         },
       ],

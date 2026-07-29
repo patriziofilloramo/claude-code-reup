@@ -46,11 +46,14 @@ describe('live-attention-signal', () => {
           message: 'Claude needs permission to use Bash',
         })
       )
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         hookEvent: 'Notification',
         outcome: 'attention-marker-written',
         sessionId: SESSION_ID,
       })
+      // The boundary's own timestamp travels with the capture, so the delayed
+      // turn-end check can tell this turn from a later one.
+      expect(result.occurredAt).toEqual(expect.any(String))
       const markers = await readAttentionMarkers()
       expect(markers).toHaveLength(1)
       expect(markers[0]?.message).toBe('Claude needs permission to use Bash')

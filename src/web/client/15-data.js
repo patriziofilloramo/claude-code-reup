@@ -160,11 +160,11 @@ function connectLiveUpdates() {
     }
     applyLiveActivity(snapshot.entries)
   })
-  // The server reports turn boundaries as their own event. The browser used to
-  // derive them by diffing snapshots, which a hidden tab never sees: it is
-  // throttled and eventually frozen, so it observed neither side and stayed
-  // silent exactly when the user had looked away. A fact in the stream is
-  // still there when the tab comes back.
+  // The server reports the boundary; the page decides whether the user needs
+  // telling. `document.hidden` is the one signal only the browser has, and it
+  // answers the question no local heuristic could: are you looking at this?
+  // A 30-second "did they reply" guess was tried instead and mistook reading a
+  // long answer for walking away.
   liveUpdatesSource.addEventListener('turn-finished', function (event) {
     var finished
     try {
@@ -236,12 +236,16 @@ function raiseDesktopAlerts(entries) {
     var name = entry.sessionName || entry.sessionId
 
     if (entry.attention) {
-      // Same rule as the turn-finished alert below: only a reported wait may
-      // raise one. An inferred wait keys on the tail's last event, which moves
-      // every time the transcript grows, so alerting on it produced a new
-      // notification every few seconds -- reported from real use as a storm of
-      // "needs input" alerts for a question that was never asked. The dot
-      // still shows it; only the claim is withheld.
+      // Only a reported wait may raise an alert. An inferred one keys on the
+      // tail's last event, which moves every time the transcript grows, so
+      // alerting on it produced a new notification every few seconds --
+      // reported from real use as a storm of "needs input" alerts for a
+      // question that was never asked. The dot still shows it; only the claim
+      // is withheld.
+      //
+      // Turn endings are deliberately not alerted here at all: the page cannot
+      // see them while it is asleep, which is the only time they matter. That
+      // alert is raised by the local process instead (`turnEndNotifications`).
       if (entry.attention.isReported === true) {
         var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
         if (!notifiedAttentionKeys.has(attentionKey)) {

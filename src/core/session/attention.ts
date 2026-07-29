@@ -295,6 +295,13 @@ export type HookCaptureOutcome =
 
 export interface HookCaptureResult {
   hookEvent: string | null
+  /**
+   * When the captured boundary happened, for callers that must recognise it
+   * again later — the delayed turn-end check compares it against the session's
+   * marker to tell "still the same turn" from "a newer one replaced it".
+   * Null for outcomes that record no boundary.
+   */
+  occurredAt: string | null
   outcome: HookCaptureOutcome
   sessionId: string | null
 }
@@ -316,10 +323,10 @@ export async function applyHookPayload(rawPayload: string): Promise<HookCaptureR
   try {
     payload = JSON.parse(text)
   } catch {
-    return { hookEvent: null, outcome: 'parse-failed', sessionId: null }
+    return { hookEvent: null, occurredAt: null, outcome: 'parse-failed', sessionId: null }
   }
   if (!isRecord(payload)) {
-    return { hookEvent: null, outcome: 'unrecognized-payload', sessionId: null }
+    return { hookEvent: null, occurredAt: null, outcome: 'unrecognized-payload', sessionId: null }
   }
   const hookEvent =
     typeof payload['hook_event_name'] === 'string' ? payload['hook_event_name'] : null
@@ -333,18 +340,33 @@ export async function applyHookPayload(rawPayload: string): Promise<HookCaptureR
     // A submitted prompt means the user responded; the alert is over.
     if (workSignal.state === 'busy') {
       await clearAttentionMarker(workSignal.sessionId)
-      return { hookEvent, outcome: 'attention-marker-cleared', sessionId: workSignal.sessionId }
+      return {
+        hookEvent,
+        occurredAt: workSignal.occurredAt,
+        outcome: 'attention-marker-cleared',
+        sessionId: workSignal.sessionId,
+      }
     }
-    return { hookEvent, outcome: 'work-marker-written', sessionId: workSignal.sessionId }
+    return {
+      hookEvent,
+      occurredAt: workSignal.occurredAt,
+      outcome: 'work-marker-written',
+      sessionId: workSignal.sessionId,
+    }
   }
 
   const attention = parseNotificationHookPayload(payload)
   if (attention) {
     await writeAttentionMarker(attention)
-    return { hookEvent, outcome: 'attention-marker-written', sessionId: attention.sessionId }
+    return {
+      hookEvent,
+      occurredAt: attention.occurredAt,
+      outcome: 'attention-marker-written',
+      sessionId: attention.sessionId,
+    }
   }
 
-  return { hookEvent, outcome: 'unrecognized-payload', sessionId: null }
+  return { hookEvent, occurredAt: null, outcome: 'unrecognized-payload', sessionId: null }
 }
 
 /** The capture log is halved once it crosses this size, keeping the newest entries. */

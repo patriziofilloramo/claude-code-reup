@@ -85,13 +85,11 @@ export async function runEventStream(
   /**
    * Last reported working state per session, for spotting turn boundaries.
    *
-   * The boundary has to be found here rather than in the browser: the client
-   * used to derive it by diffing consecutive snapshots, which only works while
-   * it is actually receiving them. A hidden tab is throttled and eventually
-   * frozen, so it observes neither side of the transition and stays silent --
-   * reported from real use as a missing "turn finished" alert precisely when
-   * the user had looked away. A boundary emitted as its own event survives in
-   * the stream and is still there when the tab comes back.
+   * The browser cannot find them alone: it derives state from snapshots it
+   * only receives while awake, and a throttled tab misses one side of the
+   * transition. Reporting the boundary as its own event means the page never
+   * has to witness both — it only has to decide whether the user needs telling,
+   * which is the one thing it knows and the server does not.
    */
   const lastWorkingBySession = new Map<string, boolean>()
 
@@ -102,9 +100,8 @@ export async function runEventStream(
       const isWorking = entry.liveState === 'working'
       const wasWorking = lastWorkingBySession.get(entry.sessionId)
       lastWorkingBySession.set(entry.sessionId, isWorking)
-      // Same rule the alert always had: only a source that reports turn
-      // boundaries may claim one ended. Recency alone cannot tell a long tool
-      // call from a finished turn.
+      // Only a source that reports turn boundaries may claim one ended;
+      // recency alone cannot tell a long tool call from a finished turn.
       if (wasWorking === true && !isWorking && entry.stateIsReported) {
         void stream.writeSSE({
           data: JSON.stringify({ sessionId: entry.sessionId, sessionName: entry.sessionName }),
