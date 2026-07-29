@@ -143,6 +143,44 @@ command Reup did not write — `hookScriptPath()` returns null there, and null
 means "cannot check", never "fine". `reup doctor` reports what repair cannot
 fix, which is the case where Reup itself has no stable path to name.
 
+### 8. Nothing retracts a busy flag when a turn ends badly
+
+**Wrong assumption:** a turn that stops is followed by a `Stop` hook.
+
+Claude Code fires no `Stop` hook when the user interrupts a turn, nor when the
+API fails. Confirmed in the capture log by two consecutive `UserPromptSubmit`
+entries with no `Stop` between them. The last reported work state therefore
+stays `busy` with nothing to ever retract it, and the session reads as running
+until the five-minute trust window simply ages out — observed as a pulsing
+green dot with an "interrupted" badge beside it, and as a session still
+"running" minutes after hitting a spend limit.
+
+The transcript records both endings, and that record is the retraction:
+`SessionTailActivity.turnEndedByRecord` is `user-interruption` or `api-error`.
+One field rather than a flag per case, because the reasons are mutually
+exclusive and two booleans kept in sync by hand drift apart.
+
+This is deliberately the **only** tail signal allowed to overrule a reported
+`busy`: ordinary quietness must not, since a long tool call looks exactly the
+same from outside.
+
+### 9. An API failure is an assistant event, and its stop_reason lies
+
+**Wrong assumption:** `stop_reason` distinguishes a finished turn from a
+failed one.
+
+A 429 spend limit is recorded as an ordinary-looking assistant event:
+
+```
+type: assistant   apiErrorStatus: 429   stop_reason: "stop_sequence"
+content: "You've hit your monthly spend limit ..."
+```
+
+`stop_reason` is `stop_sequence`, so trap 2's rule (`end_turn` or the turn is
+still in flight) reads a failed turn as a running one, forever. The failure is
+identified by the event's own `isApiErrorMessage` / `apiErrorStatus` fields,
+which sit at the **top level** of the event, not inside `message`.
+
 ## The one rule that holds it together
 
 Live state is resolved **once**, by `resolveSessionLiveState()` in

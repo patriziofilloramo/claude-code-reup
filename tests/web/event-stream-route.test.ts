@@ -174,6 +174,75 @@ describe('event stream targeted pushes', () => {
     vi.useRealTimers()
   })
 
+  /**
+   * The browser cannot find this boundary for itself: a hidden tab is
+   * throttled and eventually frozen, so it observes neither side of the
+   * transition and stays silent exactly when the user has looked away.
+   * Reported from real use as a missing "turn finished" alert.
+   */
+  it('reports a finished turn as its own event, once per boundary', async () => {
+    const stream = createFakeStream()
+    const { factory, emitChange } = createFakeWatcher()
+    const states = ['working', 'working', 'attached', 'attached']
+    let call = 0
+    const snapshots = async () => ({
+      activeSessionIds: ['abc'],
+      entries: [
+        {
+          liveState: states[Math.min(call++, states.length - 1)],
+          sessionId: 'abc',
+          sessionName: 'demo',
+          stateIsReported: true,
+        },
+      ],
+    })
+
+    const connection = runEventStream(stream, factory, snapshots)
+    for (let i = 0; i < states.length; i++) {
+      emitChange('data')
+      await vi.advanceTimersByTimeAsync(APP.sseActivityPushDebounceMs + 1)
+    }
+
+    const finished = stream.writes.filter((write) => write.event === 'turn-finished')
+    expect(finished).toHaveLength(1)
+    expect(JSON.parse(finished[0]!.data)).toMatchObject({ sessionId: 'abc', sessionName: 'demo' })
+
+    stream.abort()
+    await connection
+  })
+
+  it('never claims a turn ended on evidence nothing reported', async () => {
+    const stream = createFakeStream()
+    const { factory, emitChange } = createFakeWatcher()
+    const states = ['working', 'attached']
+    let call = 0
+    const snapshots = async () => ({
+      activeSessionIds: ['abc'],
+      entries: [
+        {
+          liveState: states[Math.min(call++, states.length - 1)],
+          sessionId: 'abc',
+          sessionName: 'demo',
+          // VS Code peer locks omit `status`, so the state is a guess: a long
+          // tool call and a finished turn look identical once the transcript
+          // goes quiet.
+          stateIsReported: false,
+        },
+      ],
+    })
+
+    const connection = runEventStream(stream, factory, snapshots)
+    for (let i = 0; i < states.length; i++) {
+      emitChange('data')
+      await vi.advanceTimersByTimeAsync(APP.sseActivityPushDebounceMs + 1)
+    }
+
+    expect(stream.writes.filter((write) => write.event === 'turn-finished')).toHaveLength(0)
+
+    stream.abort()
+    await connection
+  })
+
   it('pushes a computed activity snapshot without touching the project cache', async () => {
     const stream = createFakeStream()
     const { factory, emitChange } = createFakeWatcher()

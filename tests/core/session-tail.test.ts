@@ -54,6 +54,14 @@ function assistantEvent(blocks: unknown[], timestamp: string, stopReason?: strin
   })
 }
 
+function userTextEvent(text: string, timestamp: string): string {
+  return JSON.stringify({
+    message: { content: [{ text, type: 'text' }] },
+    timestamp,
+    type: 'user',
+  })
+}
+
 function isoAgo(ms: number): string {
   return new Date(Date.now() - ms).toISOString()
 }
@@ -224,6 +232,128 @@ describe('readSessionTailActivity', () => {
       )
 
       expect((await readSessionTailActivity(path))!.turnInFlight).toBe(false)
+    })
+
+    /**
+     * Reported from real use: a session showed a pulsing "running" dot with an
+     * "interrupted" badge while nothing was running. Claude Code fires no Stop
+     * hook when a turn is interrupted, so the last reported work state stays
+     * `busy` with nothing to ever retract it — confirmed in the capture log by
+     * two consecutive UserPromptSubmit events with no Stop between them.
+     *
+     * The recorded marker is the retraction, and it is the only tail signal
+     * allowed to overrule a busy flag: ordinary quietness must not, because a
+     * long tool call looks exactly the same.
+     */
+    it('records a user interruption as the last word, overruling a stale busy flag', async () => {
+      const path = join(tmpDir, 'interrupted.jsonl')
+      await writeFile(
+        path,
+        [
+          assistantEvent(
+            [{ id: 'id-t', name: 'Bash', type: 'tool_use' }],
+            isoAgo(40_000),
+            'tool_use'
+          ),
+          userTextEvent('[Request interrupted by user]', isoAgo(20_000)),
+        ].join('\n')
+      )
+
+      const result = await readSessionTailActivity(path)
+      expect(result!.turnEndedByRecord).toBe('user-interruption')
+      expect(result!.turnInFlight).toBe(false)
+      expect(resolveActivityState('busy', result, Date.now())).not.toBe('running')
+    })
+
+    it('lets Claude resuming after a stop clear the interruption', async () => {
+      const path = join(tmpDir, 'resumed.jsonl')
+      await writeFile(
+        path,
+        [
+          userTextEvent('[Request interrupted by user]', isoAgo(40_000)),
+          assistantEvent(
+            [{ id: 'id-u', name: 'Read', type: 'tool_use' }],
+            isoAgo(5_000),
+            'tool_use'
+          ),
+        ].join('\n')
+      )
+
+      const result = await readSessionTailActivity(path)
+      expect(result!.turnEndedByRecord).toBeNull()
+      expect(resolveActivityState('busy', result, Date.now())).toBe('running')
+    })
+
+    it('lets a new prompt after a stop clear the interruption', async () => {
+      const path = join(tmpDir, 'reprompted.jsonl')
+      await writeFile(
+        path,
+        [
+          userTextEvent('[Request interrupted by user]', isoAgo(40_000)),
+          userTextEvent('actually, do this instead', isoAgo(5_000)),
+        ].join('\n')
+      )
+
+      expect((await readSessionTailActivity(path))!.turnEndedByRecord).toBeNull()
+    })
+
+    /**
+     * Reported from real use: Claude stopped on "You've hit your monthly spend
+     * limit" and the session kept showing a pulsing "running" dot. Claude Code
+     * records the failure as an assistant event carrying `apiErrorStatus`, and
+     * gives it a stop_reason of `stop_sequence` -- not `end_turn` -- so reading
+     * stop_reason alone reported the turn as still in flight. No Stop hook
+     * fires for a failed turn either, so the reported state stays `busy` with
+     * nothing to ever retract it.
+     */
+    it('treats a recorded API failure as the end of the turn', async () => {
+      const path = join(tmpDir, 'api-error.jsonl')
+      await writeFile(
+        path,
+        [
+          toolUseEvent('Bash', 'id-e', isoAgo(60_000)),
+          JSON.stringify({
+            apiErrorStatus: 429,
+            isApiErrorMessage: true,
+            message: {
+              content: [{ text: "You've hit your monthly spend limit", type: 'text' }],
+              stop_reason: 'stop_sequence',
+            },
+            timestamp: isoAgo(1_000),
+            type: 'assistant',
+          }),
+        ].join('\n')
+      )
+
+      const result = await readSessionTailActivity(path)
+
+      expect(result!.turnEndedByRecord).toBe('api-error')
+      expect(result!.turnInFlight).toBe(false)
+      // Fresh recording, so the age-derived reading still says running; the
+      // record outranks it, and outranks an unretracted busy flag too.
+      expect(resolveActivityState('busy', result, Date.now())).not.toBe('running')
+    })
+
+    it('lets a retry after an API failure read as running again', async () => {
+      const path = join(tmpDir, 'api-error-retry.jsonl')
+      await writeFile(
+        path,
+        [
+          JSON.stringify({
+            apiErrorStatus: 429,
+            isApiErrorMessage: true,
+            message: { content: [{ text: 'limit', type: 'text' }], stop_reason: 'stop_sequence' },
+            timestamp: isoAgo(60_000),
+            type: 'assistant',
+          }),
+          toolUseEvent('Read', 'id-r', isoAgo(2_000)),
+        ].join('\n')
+      )
+
+      const result = await readSessionTailActivity(path)
+
+      expect(result!.turnEndedByRecord).toBeNull()
+      expect(resolveActivityState('busy', result, Date.now())).toBe('running')
     })
 
     it('falls back to block shape when stop_reason is absent', async () => {

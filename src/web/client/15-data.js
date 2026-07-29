@@ -160,6 +160,26 @@ function connectLiveUpdates() {
     }
     applyLiveActivity(snapshot.entries)
   })
+  // The server reports turn boundaries as their own event. The browser used to
+  // derive them by diffing snapshots, which a hidden tab never sees: it is
+  // throttled and eventually frozen, so it observed neither side and stayed
+  // silent exactly when the user had looked away. A fact in the stream is
+  // still there when the tab comes back.
+  liveUpdatesSource.addEventListener('turn-finished', function (event) {
+    var finished
+    try {
+      finished = JSON.parse(event.data)
+    } catch {
+      return
+    }
+    if (!finished || !finished.sessionId) return
+    if (!desktopAlertsEnabled() || !document.hidden) return
+    raiseNotification(
+      fmt(STRINGS.notifyTurnCompleteTitle, { name: finished.sessionName || finished.sessionId }),
+      '',
+      finished
+    )
+  })
   liveUpdatesSource.addEventListener('usage', function () {
     void refreshUsageSummary()
   })
@@ -210,42 +230,34 @@ function desktopAlertsEnabled() {
  */
 function raiseDesktopAlerts(entries) {
   var enabled = desktopAlertsEnabled()
-  var nextStates = new Map()
   for (var i = 0; i < entries.length; i++) {
     var entry = entries[i]
     if (!entry.sessionId) continue
-    nextStates.set(entry.sessionId, entry.activityState || 'idle')
     var name = entry.sessionName || entry.sessionId
 
     if (entry.attention) {
-      var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
-      if (!notifiedAttentionKeys.has(attentionKey)) {
-        notifiedAttentionKeys.add(attentionKey)
-        if (enabled) {
-          raiseNotification(
-            fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
-            entry.attention.message || '',
-            entry
-          )
+      // Same rule as the turn-finished alert below: only a reported wait may
+      // raise one. An inferred wait keys on the tail's last event, which moves
+      // every time the transcript grows, so alerting on it produced a new
+      // notification every few seconds -- reported from real use as a storm of
+      // "needs input" alerts for a question that was never asked. The dot
+      // still shows it; only the claim is withheld.
+      if (entry.attention.isReported === true) {
+        var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
+        if (!notifiedAttentionKeys.has(attentionKey)) {
+          notifiedAttentionKeys.add(attentionKey)
+          if (enabled) {
+            raiseNotification(
+              fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
+              entry.attention.message || '',
+              entry
+            )
+          }
         }
       }
       continue
     }
-
-    var previousState = previousActivityStates.get(entry.sessionId)
-    // Only a source that reports turn boundaries may claim a turn ended. Where
-    // the state comes from transcript recency alone, a quiet stretch during a
-    // long tool call is indistinguishable from a finished turn — and alerting
-    // on it means an alert every time Claude pauses to think.
-    var finishedTurn =
-      entry.stateIsReported === true &&
-      previousState === 'running' &&
-      (entry.activityState === 'waiting' || entry.activityState === 'idle')
-    if (finishedTurn && enabled && document.hidden) {
-      raiseNotification(fmt(STRINGS.notifyTurnCompleteTitle, { name: name }), '', entry)
-    }
   }
-  previousActivityStates = nextStates
 }
 
 function raiseNotification(title, body, entry) {

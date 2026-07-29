@@ -22,6 +22,17 @@ import { isResumeVisibleSession } from '../core/session/session-visibility.js'
 import { projectDisplayName } from './api-model.js'
 
 export interface LiveActivityAttention {
+  /**
+   * Whether Claude Code's Notification hook reported this wait, rather than it
+   * being inferred from the transcript's shape.
+   *
+   * Consumers must not raise an alert on an inferred wait. Its `since` is the
+   * tail's last event, which moves every time the transcript grows, so a
+   * notification keyed on it fires again every few seconds -- reported from
+   * real use as a storm of "needs input" alerts. Drawing it is fine; claiming
+   * it is not.
+   */
+  isReported: boolean
   message: string
   since: string
 }
@@ -37,6 +48,13 @@ export interface LiveActivityEntry {
   activityState: ActivityState
   /** Set while the session waits on the user (permission prompt, idle input). */
   attention: LiveActivityAttention | null
+  /**
+   * The user stopped the turn and nothing has happened since — recorded by
+   * Claude Code, not inferred. The strip shows this instead of "waiting",
+   * which reads as "Claude is between turns" and hides the fact that it was
+   * cut short.
+   */
+  endedByUserInterruption: boolean
   lastEventAt: string | null
   lastToolName: string | null
   /**
@@ -141,6 +159,7 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
           sessionName: sessionId.slice(0, 8),
           lastToolName: null,
           activityState: resolveActivityState(evidence.status, null, evidence.statusUpdatedAt),
+          endedByUserInterruption: false,
           attention,
           lastEventAt: null,
           liveState: resolveSessionLiveState({
@@ -170,6 +189,7 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
         sessionName: session.alias ?? session.name,
         lastToolName: tail?.lastToolName ?? null,
         activityState: resolveActivityState(evidence.status, tail, evidence.statusUpdatedAt),
+        endedByUserInterruption: tail?.turnEndedByRecord === 'user-interruption',
         attention,
         lastEventAt: tail?.lastEventAt ?? null,
         liveState: resolveSessionLiveState({
@@ -220,6 +240,6 @@ export function resolveSessionAttention(
   if (wait === null) return null
 
   return wait.kind === 'marker'
-    ? { message: wait.marker.message, since: wait.marker.occurredAt }
-    : { message: 'Waiting for your answer to continue', since: wait.since }
+    ? { isReported: true, message: wait.marker.message, since: wait.marker.occurredAt }
+    : { isReported: false, message: 'Waiting for your answer to continue', since: wait.since }
 }

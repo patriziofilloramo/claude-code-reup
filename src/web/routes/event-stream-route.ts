@@ -8,6 +8,7 @@ import { getClaudeDirectory } from '../../core/project/claude-paths.js'
 import { invalidateProjectCache } from '../../core/project/project-cache.js'
 import { log } from '../../utils/logger.js'
 import { buildLiveActivitySnapshot } from '../live-activity-model.js'
+import type { LiveActivitySnapshot } from '../live-activity-model.js'
 
 /**
  * The subset of hono's SSE stream the event loop depends on.
@@ -81,6 +82,41 @@ export async function runEventStream(
     void stream.writeSSE({ data: 'update', event: 'change' })
   }
 
+  /**
+   * Last reported working state per session, for spotting turn boundaries.
+   *
+   * The boundary has to be found here rather than in the browser: the client
+   * used to derive it by diffing consecutive snapshots, which only works while
+   * it is actually receiving them. A hidden tab is throttled and eventually
+   * frozen, so it observes neither side of the transition and stays silent --
+   * reported from real use as a missing "turn finished" alert precisely when
+   * the user had looked away. A boundary emitted as its own event survives in
+   * the stream and is still there when the tab comes back.
+   */
+  const lastWorkingBySession = new Map<string, boolean>()
+
+  const emitTurnBoundaries = (snapshot: LiveActivitySnapshot): void => {
+    const seen = new Set<string>()
+    for (const entry of snapshot.entries) {
+      seen.add(entry.sessionId)
+      const isWorking = entry.liveState === 'working'
+      const wasWorking = lastWorkingBySession.get(entry.sessionId)
+      lastWorkingBySession.set(entry.sessionId, isWorking)
+      // Same rule the alert always had: only a source that reports turn
+      // boundaries may claim one ended. Recency alone cannot tell a long tool
+      // call from a finished turn.
+      if (wasWorking === true && !isWorking && entry.stateIsReported) {
+        void stream.writeSSE({
+          data: JSON.stringify({ sessionId: entry.sessionId, sessionName: entry.sessionName }),
+          event: 'turn-finished',
+        })
+      }
+    }
+    for (const sessionId of [...lastWorkingBySession.keys()]) {
+      if (!seen.has(sessionId)) lastWorkingBySession.delete(sessionId)
+    }
+  }
+
   const pushActivitySnapshot = async (): Promise<void> => {
     activityPushTimer = null
     if (!isClientConnected()) return
@@ -88,6 +124,7 @@ export async function runEventStream(
       const snapshot = await loadActivitySnapshot()
       if (!isClientConnected()) return
       void stream.writeSSE({ data: JSON.stringify(snapshot), event: 'activity' })
+      emitTurnBoundaries(snapshot as LiveActivitySnapshot)
     } catch {
       // The client's reconciliation poll covers a failed push.
     }

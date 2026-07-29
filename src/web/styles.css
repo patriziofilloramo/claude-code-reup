@@ -572,6 +572,10 @@ body {
   animation: activity-pulse 1.4s ease-in-out infinite;
   background: var(--bucket-active);
 }
+.activity-dot.interrupted {
+  background: var(--muted2);
+  box-shadow: inset 0 0 0 1px var(--bucket-attention);
+}
 .activity-dot.waiting {
   background: var(--bucket-attention);
 }

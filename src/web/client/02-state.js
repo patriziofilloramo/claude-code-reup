@@ -48,4 +48,3 @@ let ctxRailItem = null
 // Desktop-alert bookkeeping: attention events already notified (sessionId:since)
 // and each session's last seen activity state for turn-completion detection.
 let notifiedAttentionKeys = new Set()
-let previousActivityStates = new Map()

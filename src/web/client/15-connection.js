@@ -262,8 +262,30 @@ document.addEventListener('keydown', function (event) {
   }
 })
 
-// A tab that was hidden while the server died gets an immediate answer instead
-// of waiting out a backoff that grew while nobody was looking.
+// Browsers throttle timers in a hidden tab and freeze it outright after a few
+// minutes, so nothing here runs while the user is away — not the poll, not
+// even an SSE event already on the wire. Whatever the page was showing when it
+// froze is therefore stale the moment it wakes, and waiting out the next poll
+// tick leaves a session pulsing "working" seconds after it plainly is not.
+//
+// Reported from real use: away for a long stretch, the dot stayed a blinking
+// green until the window was brought back to the front.
 document.addEventListener('visibilitychange', function () {
-  if (!document.hidden && serverLinkState === 'offline') retryServerLinkNow()
+  if (document.hidden) return
+  if (serverLinkState === 'offline') {
+    // A backoff that grew while nobody was looking gets an immediate answer.
+    retryServerLinkNow()
+    return
+  }
+  // Both halves, in the order the rest of the client uses: session rows carry
+  // status badges from the project payload, which is never polled -- it moves
+  // only on SSE pushes, and a frozen tab receives none. Refreshing activity
+  // alone realigned the live dot while leaving the badge beside it stale.
+  // Reported from real use: the server served `interrupted` for half a minute
+  // and the row never showed it.
+  //
+  // Additive only: this asks for fresh state, and never clears what is there.
+  void refreshProjectData().then(function () {
+    return refreshLiveActivity()
+  })
 })

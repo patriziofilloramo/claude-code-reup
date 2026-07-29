@@ -775,20 +775,28 @@ describe('web client session-row invariants', () => {
     expect(dotActivityState(null)).toBe('idle')
   })
 
-  it('only calls a turn finished when something actually reported the boundary', () => {
-    const alerts = sourceBetween(
-      'function raiseDesktopAlerts(entries)',
-      'function raiseNotification'
-    )
+  /**
+   * The rule is unchanged -- only a source that reports turn boundaries may
+   * claim one ended -- but it now lives on the server, which is the only place
+   * that reliably sees both sides of the transition. The browser used to diff
+   * consecutive snapshots, and a hidden tab receives none: it is throttled and
+   * eventually frozen, so it observed neither side and stayed silent exactly
+   * when the user had looked away.
+   */
+  it('takes the turn boundary from the server instead of diffing snapshots', () => {
+    const liveUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
 
-    expect(alerts).toContain('entry.stateIsReported === true')
-    expect(alerts).toContain("previousState === 'running'")
+    expect(liveUpdates).toContain("liveUpdatesSource.addEventListener('turn-finished'")
+    expect(liveUpdates).toContain('STRINGS.notifyTurnCompleteTitle')
+    // The alert still only fires while the user is looking elsewhere.
+    expect(liveUpdates).toContain('!document.hidden')
+    // The diffing this replaced must not come back.
+    expect(source).not.toContain('previousActivityStates')
   })
 
   it('raises desktop alerts for needs-input and finished turns without duplicates', () => {
     expect(source).toContain('function raiseDesktopAlerts(entries)')
     expect(source).toContain('notifiedAttentionKeys')
-    expect(source).toContain("previousState === 'running'")
     expect(source).toContain('document.hidden')
     expect(source).toContain('Notification.requestPermission()')
     expect(source).toContain('NOTIFY_PREFERENCE')

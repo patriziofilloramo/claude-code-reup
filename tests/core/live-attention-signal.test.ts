@@ -263,7 +263,31 @@ describe('live-attention-signal', () => {
         sessionId: SESSION_ID,
       }
       const attention = resolveSessionAttention(marker, null, null, 'idle')
-      expect(attention).toEqual({ message: marker.message, since: occurredAt })
+      expect(attention).toEqual({ isReported: true, message: marker.message, since: occurredAt })
+    })
+
+    /**
+     * An inferred wait carries `since` from the tail's last event, which moves
+     * every time the transcript grows. Anything keyed on it fires again every
+     * few seconds — reported from real use as a storm of "needs input" desktop
+     * alerts for a question that was never asked. Marking it unreported is what
+     * lets the client draw it without claiming it.
+     */
+    it('marks a wait inferred from the transcript as unreported', async () => {
+      const tail = {
+        turnEndedByRecord: null,
+        lastEventAt: new Date().toISOString(),
+        lastToolName: 'AskUserQuestion',
+        state: 'waiting' as const,
+        toolPending: true,
+        trailingQuestion: false,
+        turnInFlight: true,
+      }
+
+      const attention = resolveSessionAttention(undefined, null, tail, 'idle')
+
+      expect(attention?.isReported).toBe(false)
+      expect(attention?.since).toBe(tail.lastEventAt)
     })
 
     it('clears a hook marker once the session shows later activity', async () => {

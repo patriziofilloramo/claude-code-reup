@@ -107,6 +107,7 @@ const STRINGS = {
   activityRunning: 'Running',
   activityWaiting: 'Waiting',
   activityIdle: 'Idle',
+  activityInterrupted: 'interrupted',
   activityNeedsInput: 'Needs input',
   notifyEnabled: 'Desktop alerts on',
   notifyDisabled: 'Desktop alerts off',
@@ -624,7 +625,6 @@ let ctxRailItem = null
 // Desktop-alert bookkeeping: attention events already notified (sessionId:since)
 // and each session's last seen activity state for turn-completion detection.
 let notifiedAttentionKeys = new Set()
-let previousActivityStates = new Map()
 function elementById(id) {
   return document.getElementById(id)
 }
@@ -1837,12 +1837,17 @@ function dotActivityState(entry) {
   if (liveState === 'needs-input') return 'attention'
   if (liveState === 'working') return 'running'
   if (liveState === 'detached') return 'idle'
+  // A recorded stop outranks the quiet-session refinements. "Waiting" reads as
+  // "between turns" and hides that the turn was cut short; the user reported
+  // exactly that as wrong.
+  if (entry.endedByUserInterruption === true) return 'interrupted'
   if (entry.activityState === 'waiting' && entry.stateIsReported === true) return 'waiting'
   return 'attached'
 }
 
 /** The label that goes with a state from `dotActivityState`. */
 function dotActivityLabel(state) {
+  if (state === 'interrupted') return STRINGS.activityInterrupted
   if (state === 'attention') return STRINGS.activityNeedsInput
   if (state === 'running') return STRINGS.activityRunning
   if (state === 'waiting') return STRINGS.activityWaiting
@@ -4459,10 +4464,32 @@ document.addEventListener('keydown', function (event) {
   }
 })
 
-// A tab that was hidden while the server died gets an immediate answer instead
-// of waiting out a backoff that grew while nobody was looking.
+// Browsers throttle timers in a hidden tab and freeze it outright after a few
+// minutes, so nothing here runs while the user is away — not the poll, not
+// even an SSE event already on the wire. Whatever the page was showing when it
+// froze is therefore stale the moment it wakes, and waiting out the next poll
+// tick leaves a session pulsing "working" seconds after it plainly is not.
+//
+// Reported from real use: away for a long stretch, the dot stayed a blinking
+// green until the window was brought back to the front.
 document.addEventListener('visibilitychange', function () {
-  if (!document.hidden && serverLinkState === 'offline') retryServerLinkNow()
+  if (document.hidden) return
+  if (serverLinkState === 'offline') {
+    // A backoff that grew while nobody was looking gets an immediate answer.
+    retryServerLinkNow()
+    return
+  }
+  // Both halves, in the order the rest of the client uses: session rows carry
+  // status badges from the project payload, which is never polled -- it moves
+  // only on SSE pushes, and a frozen tab receives none. Refreshing activity
+  // alone realigned the live dot while leaving the badge beside it stale.
+  // Reported from real use: the server served `interrupted` for half a minute
+  // and the row never showed it.
+  //
+  // Additive only: this asks for fresh state, and never clears what is there.
+  void refreshProjectData().then(function () {
+    return refreshLiveActivity()
+  })
 })
 // ---------------------------------------------------------------------------
 // Data refresh and live updates
@@ -4626,6 +4653,26 @@ function connectLiveUpdates() {
     }
     applyLiveActivity(snapshot.entries)
   })
+  // The server reports turn boundaries as their own event. The browser used to
+  // derive them by diffing snapshots, which a hidden tab never sees: it is
+  // throttled and eventually frozen, so it observed neither side and stayed
+  // silent exactly when the user had looked away. A fact in the stream is
+  // still there when the tab comes back.
+  liveUpdatesSource.addEventListener('turn-finished', function (event) {
+    var finished
+    try {
+      finished = JSON.parse(event.data)
+    } catch {
+      return
+    }
+    if (!finished || !finished.sessionId) return
+    if (!desktopAlertsEnabled() || !document.hidden) return
+    raiseNotification(
+      fmt(STRINGS.notifyTurnCompleteTitle, { name: finished.sessionName || finished.sessionId }),
+      '',
+      finished
+    )
+  })
   liveUpdatesSource.addEventListener('usage', function () {
     void refreshUsageSummary()
   })
@@ -4676,42 +4723,34 @@ function desktopAlertsEnabled() {
  */
 function raiseDesktopAlerts(entries) {
   var enabled = desktopAlertsEnabled()
-  var nextStates = new Map()
   for (var i = 0; i < entries.length; i++) {
     var entry = entries[i]
     if (!entry.sessionId) continue
-    nextStates.set(entry.sessionId, entry.activityState || 'idle')
     var name = entry.sessionName || entry.sessionId
 
     if (entry.attention) {
-      var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
-      if (!notifiedAttentionKeys.has(attentionKey)) {
-        notifiedAttentionKeys.add(attentionKey)
-        if (enabled) {
-          raiseNotification(
-            fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
-            entry.attention.message || '',
-            entry
-          )
+      // Same rule as the turn-finished alert below: only a reported wait may
+      // raise one. An inferred wait keys on the tail's last event, which moves
+      // every time the transcript grows, so alerting on it produced a new
+      // notification every few seconds -- reported from real use as a storm of
+      // "needs input" alerts for a question that was never asked. The dot
+      // still shows it; only the claim is withheld.
+      if (entry.attention.isReported === true) {
+        var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
+        if (!notifiedAttentionKeys.has(attentionKey)) {
+          notifiedAttentionKeys.add(attentionKey)
+          if (enabled) {
+            raiseNotification(
+              fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
+              entry.attention.message || '',
+              entry
+            )
+          }
         }
       }
       continue
     }
-
-    var previousState = previousActivityStates.get(entry.sessionId)
-    // Only a source that reports turn boundaries may claim a turn ended. Where
-    // the state comes from transcript recency alone, a quiet stretch during a
-    // long tool call is indistinguishable from a finished turn — and alerting
-    // on it means an alert every time Claude pauses to think.
-    var finishedTurn =
-      entry.stateIsReported === true &&
-      previousState === 'running' &&
-      (entry.activityState === 'waiting' || entry.activityState === 'idle')
-    if (finishedTurn && enabled && document.hidden) {
-      raiseNotification(fmt(STRINGS.notifyTurnCompleteTitle, { name: name }), '', entry)
-    }
   }
-  previousActivityStates = nextStates
 }
 
 function raiseNotification(title, body, entry) {

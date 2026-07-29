@@ -45,6 +45,25 @@
 
 ### Fixed
 
+- A session the user stopped, or one the API cut short, no longer reads as
+  running. Claude Code fires no `Stop` hook for either, so the last reported
+  work state stayed `busy` with nothing to retract it — a stopped session kept
+  a pulsing green dot beside its "interrupted" badge, and hitting a spend limit
+  left a session "running" for minutes. Both endings are recorded in the
+  transcript, and that record now retracts the flag. A spend limit is recorded
+  as an assistant event whose `stop_reason` is `stop_sequence`, so reading
+  `stop_reason` alone reported it as still in flight.
+
+- The live strip shows a stopped session as `interrupted` rather than
+  `waiting`, which reads as "between turns" and hid that the turn was cut
+  short.
+
+- Desktop "turn finished" alerts survive a hidden tab. The browser used to
+  derive the boundary by diffing snapshots it only receives while awake; the
+  server now reports it as a `turn-finished` event. A fully frozen tab still
+  cannot alert — that needs a notification raised by the local process, which
+  is not in this release.
+
 - Reup now repairs its own Claude Code hooks when their path goes stale. A hook
   entry names an absolute path, and that path moves for ordinary reasons — a
   Node version manager relocates the npm global root, an installer changes

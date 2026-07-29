@@ -84,7 +84,13 @@ export function resolveSessionLiveState(
  * not done here: this stays a pure function, callable at render time.
  */
 export type UserInputWait =
+  /** Reported: Claude Code's Notification hook said so. Authoritative. */
   | { kind: 'marker'; marker: AttentionMarker }
+  /**
+   * Inferred from the transcript's shape. Good enough to draw, never good
+   * enough to claim: `since` moves with the transcript, so anything keyed on
+   * it fires again every time the file grows.
+   */
   | { kind: 'blocked-turn'; since: string }
 
 export interface UserInputWaitResult {

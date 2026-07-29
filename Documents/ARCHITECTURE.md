@@ -553,6 +553,24 @@ that the web already called idle. `tests/core/session-live-state.test.ts`
 guards both the resolver and the boundary — it fails if a surface starts
 deriving liveness on its own again.
 
+### Turn Boundaries as Events (2026-07-29)
+
+The "turn finished" desktop alert used to be derived in the browser, by diffing
+consecutive activity snapshots. That only works while the page is receiving
+them: a hidden tab is throttled and eventually frozen, so it observes neither
+side of the transition and stays silent exactly when the user has looked away.
+
+The boundary is now found server-side in `event-stream-route.ts`, which tracks
+the last working state per session and emits a `turn-finished` SSE event when a
+session leaves `working` with `stateIsReported` true. The same rule as before —
+only reported evidence may claim a turn ended — moved to the one place that
+reliably sees both sides. A fact in the stream survives; a missed diff does not.
+
+A fully frozen tab still cannot alert: it runs no JavaScript, and by the time
+it wakes the user is looking at it. Reliable notification therefore has to come
+from the local process rather than the page, which is tracked as follow-up
+work.
+
 ### Attention System
 
 `reup attention setup` registers Reup's capture command as a Claude Code

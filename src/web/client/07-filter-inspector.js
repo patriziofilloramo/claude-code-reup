@@ -80,12 +80,17 @@ function dotActivityState(entry) {
   if (liveState === 'needs-input') return 'attention'
   if (liveState === 'working') return 'running'
   if (liveState === 'detached') return 'idle'
+  // A recorded stop outranks the quiet-session refinements. "Waiting" reads as
+  // "between turns" and hides that the turn was cut short; the user reported
+  // exactly that as wrong.
+  if (entry.endedByUserInterruption === true) return 'interrupted'
   if (entry.activityState === 'waiting' && entry.stateIsReported === true) return 'waiting'
   return 'attached'
 }
 
 /** The label that goes with a state from `dotActivityState`. */
 function dotActivityLabel(state) {
+  if (state === 'interrupted') return STRINGS.activityInterrupted
   if (state === 'attention') return STRINGS.activityNeedsInput
   if (state === 'running') return STRINGS.activityRunning
   if (state === 'waiting') return STRINGS.activityWaiting

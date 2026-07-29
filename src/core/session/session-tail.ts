@@ -56,6 +56,23 @@ export interface SessionTailActivity {
    */
   trailingQuestion: boolean
   /**
+   * How the transcript records this turn ending, when nothing else will.
+   *
+   * Claude Code fires no Stop hook for a turn the user stopped or the API
+   * failed, so the last *reported* work state stays `busy` with nothing to
+   * ever retract it. The transcript records both cases explicitly, and that
+   * record is what retracts it. One field rather than a flag per case: the
+   * reasons are mutually exclusive, so they cannot drift apart.
+   *
+   * - `user-interruption` — Claude Code's own stop marker.
+   * - `api-error` — a failure it recorded as an assistant event (observed: a
+   *   429 spend limit, written with `apiErrorStatus` and a stop_reason of
+   *   `stop_sequence` rather than `end_turn`).
+   *
+   * `null` for an ordinary turn, whose ending needs no special handling.
+   */
+  turnEndedByRecord: 'user-interruption' | 'api-error' | null
+  /**
    * Whether the last conversational event leaves Claude with work to do.
    *
    * A turn ends exactly when Claude emits an assistant message carrying no
@@ -157,6 +174,17 @@ export function resolveActivityState(
   now = Date.now()
 ): ActivityState {
   const tailState = tail?.state ?? 'idle'
+  // A recorded stop outranks a busy flag, because nothing ever retracts that
+  // flag: Claude Code fires no Stop hook when a turn is interrupted, so the
+  // last reported state stays "busy" until it simply ages out. This is
+  // deliberately the only tail signal allowed to overrule busy -- ordinary
+  // quietness must not, since a long tool call looks exactly the same.
+  if (tail?.turnEndedByRecord) {
+    // The recording is fresh, so the age-derived reading still says "running".
+    // It cannot be: the turn is over by record. Same demotion the reported
+    // `idle` branch applies below.
+    return tailState === 'running' ? 'waiting' : tailState
+  }
   if (lockStatus === 'busy') {
     const lastTranscriptMs = tail?.lastEventAt ? Date.parse(tail.lastEventAt) : null
     if (isBusyEvidenceFresh(statusUpdatedAt, lastTranscriptMs, now)) return 'running'
@@ -236,6 +264,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): TailWindowRead
   let lastEventAt: string | null = null
   let trailingQuestion = false
   let turnInFlight = false
+  let turnEndedByRecord: SessionTailActivity['turnEndedByRecord'] = null
   let conversationalEvents = 0
 
   for (const line of lines) {
@@ -255,6 +284,18 @@ function parseTailActivity(text: string, isPartialRead: boolean): TailWindowRead
     if (event['type'] === 'assistant') {
       conversationalEvents++
       const message = event['message'] as Record<string, unknown> | undefined
+      // Claude Code records API failures as assistant events carrying an error
+      // status, and gives them a stop_reason that is not `end_turn` (observed:
+      // `stop_sequence` on a 429 spend limit). Reading only stop_reason there
+      // reports the turn as still running forever, because nothing follows and
+      // no Stop hook fires. The recorded error is the turn boundary.
+      if (isRecordedApiError(event)) {
+        turnInFlight = false
+        turnEndedByRecord = 'api-error'
+        trailingQuestion = false
+        toolUses.length = 0
+        continue
+      }
       const content = message?.['content']
       if (!Array.isArray(content)) continue
       const blocks = content as Record<string, unknown>[]
@@ -263,6 +304,9 @@ function parseTailActivity(text: string, isPartialRead: boolean): TailWindowRead
       // prose; any tool activity instead means Claude kept working.
       trailingQuestion = toolUseBlocks.length === 0 && endsWithQuestion(blocks)
       turnInFlight = !isFinalAssistantEvent(message, toolUseBlocks.length)
+      // Claude spoke after the stop, so neither the interruption nor the
+      // error is the last word about this session any more.
+      turnEndedByRecord = null
       for (const block of toolUseBlocks) {
         const name = typeof block['name'] === 'string' ? block['name'] : null
         const id = typeof block['id'] === 'string' ? block['id'] : null
@@ -278,6 +322,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): TailWindowRead
       trailingQuestion = false
       // A prompt or a tool result both leave Claude with work to do next.
       turnInFlight = true
+      turnEndedByRecord = null
       const content = (event['message'] as Record<string, unknown> | undefined)?.['content']
       // A user turn that is not purely tool results (an interrupt marker or a
       // new prompt) means no tool is running any more — pending tool uses must
@@ -289,7 +334,10 @@ function parseTailActivity(text: string, isPartialRead: boolean): TailWindowRead
       const blocks = content as Record<string, unknown>[]
       // A stop marker ends the turn as surely as a final assistant message:
       // the user cut it short, so nothing is running afterwards.
-      if (isUserInterruptionTurn(blocks)) turnInFlight = false
+      if (isUserInterruptionTurn(blocks)) {
+        turnInFlight = false
+        turnEndedByRecord = 'user-interruption'
+      }
       const containsOnlyToolResults =
         blocks.length > 0 && blocks.every((block) => block['type'] === 'tool_result')
       if (!containsOnlyToolResults) {
@@ -321,6 +369,7 @@ function parseTailActivity(text: string, isPartialRead: boolean): TailWindowRead
 
   return {
     conversationalEvents,
+    turnEndedByRecord,
     lastToolName,
     toolPending,
     trailingQuestion,
@@ -351,6 +400,14 @@ function isFinalAssistantEvent(
   const stopReason = message?.['stop_reason']
   if (typeof stopReason === 'string') return stopReason === 'end_turn'
   return toolUseBlockCount === 0
+}
+
+/**
+ * True when Claude Code recorded this event as an API failure rather than as
+ * Claude's own output. Both fields are written at the event's top level.
+ */
+function isRecordedApiError(event: Record<string, unknown>): boolean {
+  return event['isApiErrorMessage'] === true || typeof event['apiErrorStatus'] === 'number'
 }
 
 /** True when the last text block of an assistant message ends with a question mark. */

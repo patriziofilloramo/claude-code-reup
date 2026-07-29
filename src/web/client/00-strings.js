@@ -98,6 +98,7 @@ const STRINGS = {
   activityRunning: 'Running',
   activityWaiting: 'Waiting',
   activityIdle: 'Idle',
+  activityInterrupted: 'interrupted',
   activityNeedsInput: 'Needs input',
   notifyEnabled: 'Desktop alerts on',
   notifyDisabled: 'Desktop alerts off',
