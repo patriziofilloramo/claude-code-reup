@@ -24,25 +24,34 @@ describe('TUI session list', () => {
     ).toBe('just now · 2 msgs · 8.2k ctx')
   })
 
-  it('keeps busy sessions as filled dots while pulsing by color', () => {
+  it('keeps working sessions as filled dots while pulsing by color', () => {
     const frames = [0, 1, 2, 3].map((frame) =>
-      sessionStatusMarker(markerState({ isActive: true, isBusy: true, pulseFrame: frame }))
+      sessionStatusMarker(markerState({ liveState: 'working', pulseFrame: frame }))
     )
     expect(new Set(frames.map((frame) => frame.glyph))).toEqual(new Set(['●']))
     expect(new Set(frames.map((frame) => frame.color)).size).toBeGreaterThan(1)
   })
 
   it('lets a session waiting on the user replace the dot with an alert marker', () => {
-    const attention = sessionStatusMarker(
-      markerState({ isActive: true, isBusy: true, needsAttention: true })
-    )
-    expect(attention.glyph).toBe('!')
+    expect(sessionStatusMarker(markerState({ liveState: 'needs-input' })).glyph).toBe('!')
   })
 
   it('uses a single filled-dot marker for normal liveness states', () => {
-    expect(sessionStatusMarker(markerState({ isActive: true })).glyph).toBe('●')
+    expect(sessionStatusMarker(markerState({ liveState: 'attached' })).glyph).toBe('●')
     expect(sessionStatusMarker(markerState({ isRemotelyActive: true })).glyph).toBe('●')
     expect(sessionStatusMarker(markerState()).glyph).toBe('●')
+  })
+
+  it('separates an attached-but-quiet session from a working one by intensity', () => {
+    // The user must be able to tell "someone is here" from "something is
+    // happening" at a glance, without the two competing for attention.
+    const attached = sessionStatusMarker(markerState({ liveState: 'attached' }))
+    const working = sessionStatusMarker(markerState({ liveState: 'working' }))
+    expect(attached.dim).toBe(true)
+    expect(working.dim).toBe(false)
+    // Dimming carries the difference, so both stay on the live colour rather
+    // than hard-coding a second green that no theme defines.
+    expect(attached.color).toBe(working.color)
   })
 
   it('replaces the marker for attention-worthy health states', () => {
@@ -54,19 +63,17 @@ describe('TUI session list', () => {
     // interrupted is full-transcript triage data that can stay true forever;
     // rendering it as an alert re-creates the permanent-! bug (PROJECT_MEMORY).
     expect(sessionStatusMarker(markerState({ status: 'interrupted' })).glyph).toBe('●')
-    expect(sessionStatusMarker(markerState({ status: 'interrupted', isActive: true }))).toEqual(
-      sessionStatusMarker(markerState({ isActive: true }))
-    )
+    expect(
+      sessionStatusMarker(markerState({ liveState: 'attached', status: 'interrupted' }))
+    ).toEqual(sessionStatusMarker(markerState({ liveState: 'attached' })))
   })
 })
 
 function markerState(overrides: Partial<Parameters<typeof sessionStatusMarker>[0]> = {}) {
   return {
-    isActive: false,
     isBulkSelected: false,
-    isBusy: false,
     isRemotelyActive: false,
-    needsAttention: false,
+    liveState: 'detached' as const,
     pulseFrame: 0,
     status: 'ok' as const,
     ...overrides,

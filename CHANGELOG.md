@@ -1,5 +1,119 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- Desktop "turn finished" notifications now survive a tab you switched away
+  from. The page used to find the boundary by diffing activity snapshots, which
+  it only receives while awake, so a throttled tab missed one side of the
+  transition and stayed silent. The server reports the boundary as its own
+  event; the page still decides whether to raise it, because `document.hidden`
+  answers the one question no local process can — whether you are looking. A
+  tab frozen for several minutes still raises nothing, by which point you have
+  been away long enough to read the state on return.
+
+  No new setting: the page's notification toggle remains the control.
+
+- Reup's Claude Code hooks are installed on first run rather than waiting for
+  `reup attention setup`, and the surface that does it says so and names the
+  command that undoes it. They feed live state and needs-input as well as turn
+  boundaries, so leaving them behind a command nobody discovers meant shipping
+  features that silently did nothing. `reup attention remove` is recorded and
+  honoured — nothing reinstalls behind your back.
+
+- The web UI now notices when the server stops. A dropped live stream triggers
+  a reachability probe; if nothing answers, a full-screen "LINK LOST" panel
+  appears — the boot loader's Matrix rain in a failure palette, over a terminal
+  readout of the connection that failed, a retry countdown, and the command to
+  start the server again. Dismissing it leaves a persistent `server offline`
+  status in the footer, and the page marks itself so live dots read as unknown
+  rather than asserting a state nothing is confirming. The page reconnects and
+  reloads on its own once the server is back, and honours
+  `prefers-reduced-motion`.
+
+  The watcher is deliberately observational: it never clears the live feed and
+  never gates reconnection, because an earlier version that did both broke the
+  live feed outright.
+
+### Changed
+
+- The TUI, the web UI and the VS Code extension now read a session's live state
+  from one shared core (`resolveSessionLiveState`) instead of each deriving its
+  own. They previously disagreed in front of the user: the TUI called a session
+  busy for ten seconds after its last transcript event, the web ran the full
+  activity resolver, and the extension had no notion of activity at all, so the
+  same session could pulse in one surface and sit still in another. The shared
+  vocabulary is four states — needs-input, working, attached, detached — and a
+  surface may add detail on top but may not reinterpret them. The web's
+  reported-only "waiting" is the one such addition.
+
+- An attached-but-quiet session is now dimmed live colour rather than dead
+  grey, on every surface: dimmed green in the TUI, green at reduced opacity in
+  the web, a green outline icon in VS Code. "A process is here but idle" and
+  "no process at all" used to look identical.
+
+- The web live dot states only what is always known: the session holds a live
+  lock. running / waiting / idle became substatuses — "running" adds the pulse,
+  and nothing else repaints the dot. It used to turn amber for "waiting" and
+  grey for "idle", both of which can come from transcript recency alone, so an
+  actively working session read as needing attention and then as dead while the
+  TUI correctly showed it as live. "Needs input" stays red: it comes from
+  Claude Code's Notification hook and is authoritative.
+
+### Fixed
+
+- A session the user stopped, or one the API cut short, no longer reads as
+  running. Claude Code fires no `Stop` hook for either, so the last reported
+  work state stayed `busy` with nothing to retract it — a stopped session kept
+  a pulsing green dot beside its "interrupted" badge, and hitting a spend limit
+  left a session "running" for minutes. Both endings are recorded in the
+  transcript, and that record now retracts the flag. A spend limit is recorded
+  as an assistant event whose `stop_reason` is `stop_sequence`, so reading
+  `stop_reason` alone reported it as still in flight.
+
+- The live strip shows a stopped session as `interrupted` rather than
+  `waiting`, which reads as "between turns" and hid that the turn was cut
+  short.
+
+- Reup now repairs its own Claude Code hooks when their path goes stale. A hook
+  entry names an absolute path, and that path moves for ordinary reasons — a
+  Node version manager relocates the npm global root, an installer changes
+  location — after which the hooks run and fail silently. Starting the TUI, the
+  web UI, or the config screen repoints Reup's own entries at the running
+  install. A command Reup did not write is never touched, and repair refuses
+  when Reup itself has no stable path to name — replacing one dead path with
+  another is not a repair. `reup doctor` reports what repair cannot fix.
+
+- `reup attention status` no longer reports dead hooks as working. Hook entries
+  name a script by absolute path; if that path stops resolving (the install was
+  moved or removed, or lived on a drive that is no longer mounted) Claude Code
+  still runs the command, node fails, and nothing reports it — every turn
+  boundary and needs-input alert is silently lost while status says "on". Found
+  on a real machine, where all three hooks had been dead for three weeks. The
+  new `broken` state names the missing path and the config TUI offers to repair
+  it rather than, as before, removing the hooks when toggled.
+
+- Desktop "turn finished" alerts no longer fire on every pause. The alert now
+  requires a source that actually reports turn boundaries — a lock status field
+  or a hook marker. Sessions with neither (VS Code locks omit `status`) derive
+  their state from transcript recency, which cannot tell a long tool call from
+  a finished turn, so a quiet stretch mid-turn raised a "finished" alert.
+  `/api/live-activity` entries carry `stateIsReported` to express this.
+
+- Stopping Claude mid-turn now shows the session as interrupted. Claude Code
+  records the stop as an explicit marker turn, but Reup only ever inferred
+  interruption from an unanswered tool call — and the marker is a user turn, so
+  it cleared exactly that evidence. Stopping a session therefore made it _less_
+  likely to be reported as interrupted than simply leaving a tool call
+  dangling. Verified against real transcripts: of 40 sessions, the two that
+  were genuinely stopped and never resumed are the two now flagged.
+- A session stopped from the VS Code panel stays attached, and the web UI
+  suppresses the interrupted badge for live sessions — a deliberate correction
+  for a dangling tool call mid-turn, which is normal. That correction no longer
+  applies to a recorded stop, which is a fact about the session rather than an
+  inference about it.
+
 ## 0.2.0
 
 First version cleared for production. The security and data-integrity entries

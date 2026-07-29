@@ -1,17 +1,20 @@
 import { getLiveSessionRecords, mergeSessionLockStatuses } from './active-sessions.js'
-import {
-  combineWorkEvidence,
-  isAttentionActive,
-  readAttentionMarkers,
-  readWorkSignalMarkers,
-} from './attention.js'
+import { combineWorkEvidence, readAttentionMarkers, readWorkSignalMarkers } from './attention.js'
+import { resolveSessionLiveState, resolveUserInputWait } from './session-live-state.js'
+import type { SessionLiveState } from './session-live-state.js'
 import type { Project } from './session-model.js'
 import { sessionTranscriptPath } from './session-preview.js'
-import { isAwaitingUserReply, readSessionTailActivity } from './session-tail.js'
+import { readSessionTailActivity } from './session-tail.js'
 
 export interface LiveSessionSignals {
   /** Every session with a live Claude Code process. */
   activeSessionIds: Set<string>
+  /**
+   * The shared live reading per session, for surfaces that draw activity and
+   * not just liveness. Sessions with no live process are absent from the map
+   * and read as `detached`.
+   */
+  liveStateBySession: Map<string, SessionLiveState>
   /** The live sessions currently waiting on the user. */
   needsInputSessionIds: Set<string>
 }
@@ -23,6 +26,10 @@ export interface LiveSessionSignals {
  * unanswered tool call or trailing question counts even without a hook.
  * Consumers that only need per-session booleans (inbox, VS Code extension)
  * share this; the web strip resolves inline because it also needs messages.
+ *
+ * The same pass resolves `SessionLiveState`, because it already holds every
+ * piece of evidence that reading needs. A consumer must never rebuild it from
+ * the booleans here — that is how the surfaces drifted apart before.
  */
 export async function resolveLiveSessionSignals(projects: Project[]): Promise<LiveSessionSignals> {
   const [liveRecords, attentionMarkers, workSignals] = await Promise.all([
@@ -40,6 +47,7 @@ export async function resolveLiveSessionSignals(projects: Project[]): Promise<Li
   }
 
   const needsInputSessionIds = new Set<string>()
+  const liveStateBySession = new Map<string, SessionLiveState>()
   await Promise.all(
     [...lockStatuses].map(async ([sessionId, lockStatus]) => {
       const evidence = combineWorkEvidence(
@@ -51,21 +59,30 @@ export async function resolveLiveSessionSignals(projects: Project[]): Promise<Li
       const tail = project
         ? await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
         : null
-      const marker = attentionBySession.get(sessionId)
-      const lastActivityMs = tail?.lastEventAt ? Date.parse(tail.lastEventAt) : null
-      const markerActive =
-        marker !== undefined &&
-        isAttentionActive(marker, {
-          isLive: true,
-          lastActivityMs:
-            lastActivityMs !== null && Number.isFinite(lastActivityMs) ? lastActivityMs : null,
-          statusUpdatedAt: evidence.statusUpdatedAt,
+      const { wait } = resolveUserInputWait(
+        attentionBySession.get(sessionId),
+        evidence.status,
+        evidence.statusUpdatedAt,
+        tail
+      )
+      const needsInput = wait !== null
+      if (needsInput) needsInputSessionIds.add(sessionId)
+      liveStateBySession.set(
+        sessionId,
+        resolveSessionLiveState({
+          isAttached: true,
+          needsInput,
+          tail,
+          workStatus: evidence.status,
+          workStatusUpdatedAt: evidence.statusUpdatedAt,
         })
-      if (markerActive || isAwaitingUserReply(evidence.status, tail)) {
-        needsInputSessionIds.add(sessionId)
-      }
+      )
     })
   )
 
-  return { activeSessionIds: new Set(lockStatuses.keys()), needsInputSessionIds }
+  return {
+    activeSessionIds: new Set(lockStatuses.keys()),
+    liveStateBySession,
+    needsInputSessionIds,
+  }
 }

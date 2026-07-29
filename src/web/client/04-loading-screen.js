@@ -8,8 +8,7 @@
 // ---------------------------------------------------------------------------
 
 var loadingOverlay = null
-var loadingRaf = null
-var loadingResize = null
+var loadingRain = null
 var loadingStatusTimer = null
 var loadingBarTimer = null
 var loadingShownAt = 0
@@ -65,45 +64,66 @@ function matrixToken(name, fallback) {
   return value || fallback
 }
 
-function startLoadingRain(canvas) {
+/**
+ * Runs a Matrix rain on a canvas until the returned handle is stopped.
+ *
+ * Shared by the boot loader and the offline overlay: both want the same
+ * animation with a different palette, and one implementation means one place
+ * to fix the frame loop and the resize bookkeeping.
+ */
+function createMatrixRain(canvas, palette) {
   var ctx = canvas.getContext('2d')
-  // Read the palette from the active theme's tokens so the rain matches
-  // light/dark/terminal instead of forcing a dark field on every theme.
-  var trailFill = matrixToken('--matrix-trail', LOADING_TRAIL_FILL)
-  var brightColor = matrixToken('--matrix-primary-bright', MATRIX_RAIN_BRIGHT)
-  var primaryColor = matrixToken('--matrix-primary', MATRIX_RAIN_PRIMARY)
   var width = 0
   var height = 0
   var columns = 0
   var drops = []
+  var frameHandle = null
 
-  loadingResize = function () {
+  function resize() {
     width = canvas.width = window.innerWidth
     height = canvas.height = window.innerHeight
     columns = Math.floor(width / MATRIX_RAIN_COLUMN_WIDTH)
     drops = drops.slice(0, columns)
     while (drops.length < columns) drops.push(Math.random() * -height)
   }
-  loadingResize()
-  window.addEventListener('resize', loadingResize)
+  resize()
+  window.addEventListener('resize', resize)
 
   function draw() {
-    ctx.fillStyle = trailFill
+    ctx.fillStyle = palette.trail
     ctx.fillRect(0, 0, width, height)
     ctx.font = MATRIX_RAIN_FONT
     for (var i = 0; i < columns; i++) {
-      ctx.fillStyle = i % LOADING_BRIGHT_COLUMN_INTERVAL === 0 ? brightColor : primaryColor
+      ctx.fillStyle = i % LOADING_BRIGHT_COLUMN_INTERVAL === 0 ? palette.bright : palette.primary
       ctx.fillText(
         MATRIX_RAIN_GLYPHS[Math.floor(Math.random() * MATRIX_RAIN_GLYPHS.length)],
         i * MATRIX_RAIN_COLUMN_WIDTH,
         drops[i]
       )
       if (drops[i] > height && Math.random() > MATRIX_RAIN_RESET_THRESHOLD) drops[i] = 0
-      drops[i] += MATRIX_RAIN_COLUMN_WIDTH
+      drops[i] += MATRIX_RAIN_COLUMN_WIDTH * (palette.speed || 1)
     }
-    loadingRaf = requestAnimationFrame(draw)
+    frameHandle = requestAnimationFrame(draw)
   }
-  loadingRaf = requestAnimationFrame(draw)
+  frameHandle = requestAnimationFrame(draw)
+
+  return {
+    stop: function () {
+      if (frameHandle !== null) cancelAnimationFrame(frameHandle)
+      frameHandle = null
+      window.removeEventListener('resize', resize)
+    },
+  }
+}
+
+function startLoadingRain(canvas) {
+  // Read the palette from the active theme's tokens so the rain matches
+  // light/dark/terminal instead of forcing a dark field on every theme.
+  loadingRain = createMatrixRain(canvas, {
+    bright: matrixToken('--matrix-primary-bright', MATRIX_RAIN_BRIGHT),
+    primary: matrixToken('--matrix-primary', MATRIX_RAIN_PRIMARY),
+    trail: matrixToken('--matrix-trail', LOADING_TRAIL_FILL),
+  })
 }
 
 function startLoadingStatus(statusEl, barEl) {
@@ -153,11 +173,10 @@ function hideLoadingOverlay() {
     var overlay = loadingOverlay
     loadingOverlay = null
     overlay.style.opacity = '0'
-    if (loadingRaf) cancelAnimationFrame(loadingRaf)
+    if (loadingRain) loadingRain.stop()
     if (loadingStatusTimer) clearInterval(loadingStatusTimer)
     if (loadingBarTimer) clearInterval(loadingBarTimer)
-    if (loadingResize) window.removeEventListener('resize', loadingResize)
-    loadingRaf = loadingStatusTimer = loadingBarTimer = loadingResize = null
+    loadingRain = loadingStatusTimer = loadingBarTimer = null
     setTimeout(function () {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
     }, LOADING_REMOVE_DELAY_MS)

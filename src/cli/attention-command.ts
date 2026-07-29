@@ -7,7 +7,7 @@ import {
 } from '../core/session/attention.js'
 import type { HookCaptureResult } from '../core/session/attention.js'
 import {
-  isAttentionHookConfigured,
+  inspectAttentionHookHealth,
   removeAttentionHook,
   setupAttentionHook,
 } from '../core/session/attention-hooks-integration.js'
@@ -50,10 +50,26 @@ export async function runAttentionCommand(commandArguments: string[]): Promise<v
 }
 
 async function printAttentionStatus(): Promise<void> {
-  const configured = await isAttentionHookConfigured()
-  if (!configured) {
+  const health = await inspectAttentionHookHealth()
+  if (health.state === 'not-configured') {
     writeOutput(
       'Attention alerts are off. Run `reup attention setup` to be alerted when a session waits for your input.'
+    )
+    return
+  }
+  // Registered but pointing at nothing: Claude Code runs the command, node
+  // fails, and every turn boundary and alert is lost without a word. Saying
+  // "on" here would be the lie that hid it for three weeks.
+  if (health.state === 'broken') {
+    writeOutput(
+      [
+        'Attention alerts are registered but BROKEN: the command Claude Code runs no longer exists.',
+        `  missing: ${health.missingPath}`,
+        'Until this is fixed, needs-input alerts and turn boundaries are silently lost,',
+        'session state falls back to guessing from transcript activity, and desktop',
+        'notifications cannot fire because nothing reports when a turn ended.',
+        'Run `reup attention setup` from the current install to repoint the hooks.',
+      ].join('\n')
     )
     return
   }
@@ -98,7 +114,12 @@ async function remove(): Promise<void> {
 }
 
 async function captureFromNotificationHook(): Promise<void> {
-  let result: HookCaptureResult = { hookEvent: null, outcome: 'ignored-tty', sessionId: null }
+  let result: HookCaptureResult = {
+    hookEvent: null,
+    occurredAt: null,
+    outcome: 'ignored-tty',
+    sessionId: null,
+  }
   try {
     if (process.stdin.isTTY) return
     result = await applyHookPayload(await readStdin())

@@ -8,8 +8,17 @@ import { isValidSessionId } from './session-model.js'
 // Public types
 // -----------------------------------------------------------------------------
 
-/** Claude Code's own activity flag written into the lock file (v2.1.197+). */
-export type SessionLockStatus = 'busy' | 'idle'
+/**
+ * Whether a session is mid-turn, as *reported* by a source that knows turn
+ * boundaries — Claude Code's own lock-file flag (v2.1.197+) or one of Reup's
+ * hook markers. The two sources are interchangeable by design, so they share
+ * one type: `combineWorkEvidence` merges them and every consumer downstream
+ * treats the result identically.
+ *
+ * `null` alongside this type always means "no source reported anything", which
+ * is a common case (VS Code peer locks omit the flag), never an error.
+ */
+export type SessionWorkState = 'busy' | 'idle'
 
 export interface SessionLockRecord {
   sessionId: string
@@ -17,7 +26,7 @@ export interface SessionLockRecord {
   cwd: string | null
   startedAt: number | null
   /** Null when the running Claude Code version predates lock-status support. */
-  status: SessionLockStatus | null
+  status: SessionWorkState | null
   statusUpdatedAt: number | null
 }
 
@@ -58,7 +67,7 @@ export async function getActiveSessions(): Promise<Set<string>> {
 }
 
 export interface MergedSessionLockStatus {
-  status: SessionLockStatus | null
+  status: SessionWorkState | null
   /** Freshest transition timestamp among the locks carrying the merged status. */
   statusUpdatedAt: number | null
 }

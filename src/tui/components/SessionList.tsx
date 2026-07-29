@@ -4,6 +4,7 @@ import { Box, Text } from 'ink'
 
 import { LABELS } from '../../config/labels.js'
 import { COLORS } from '../../config/theme.js'
+import type { SessionLiveState } from '../../core/session/session-live-state.js'
 import type { Project, Session } from '../../core/session/session-model.js'
 import { primaryStatus } from '../../core/session/session-signals.js'
 import { relativeTime } from '../../utils/time.js'
@@ -16,11 +17,10 @@ import {
 } from '../session-status-marker.js'
 
 interface SessionListProps {
-  activeSessionIds: Set<string>
-  attentionSessionIds: Set<string>
   bulkSelectedIds: Set<string>
-  busySessionIds: Set<string>
   isFocused: boolean
+  /** Shared live reading per session; absent means detached. */
+  liveStateBySession: Map<string, SessionLiveState>
   layout: SessionPanelLayout
   project: Project | null
   remotelyActiveSessionIds: Set<string>
@@ -53,12 +53,10 @@ export function formatSessionSummary(session: Session): string {
 }
 
 export default function SessionList({
-  activeSessionIds,
-  attentionSessionIds,
   bulkSelectedIds,
-  busySessionIds,
   isFocused,
   layout,
+  liveStateBySession,
   project,
   remotelyActiveSessionIds,
   selectedIndex,
@@ -66,9 +64,11 @@ export default function SessionList({
   totalCount,
 }: SessionListProps) {
   const [pulseFrame, setPulseFrame] = useState(0)
-  const hasVisibleBusySession = sessions.some(
-    (session) => busySessionIds.has(session.id) || attentionSessionIds.has(session.id)
-  )
+  // Exactly the states the marker draws with a pulse.
+  const hasVisibleBusySession = sessions.some((session) => {
+    const liveState = liveStateBySession.get(session.id)
+    return liveState === 'working' || liveState === 'needs-input'
+  })
 
   useEffect(() => {
     if (!hasVisibleBusySession) return
@@ -121,11 +121,9 @@ export default function SessionList({
         const isSelected = index === selectedIndex
         const isFocusedSelected = isSelected && isFocused
         const marker = sessionStatusMarker({
-          isActive: activeSessionIds.has(session.id),
           isBulkSelected: bulkSelectedIds.has(session.id),
-          isBusy: busySessionIds.has(session.id),
           isRemotelyActive: remotelyActiveSessionIds.has(session.id),
-          needsAttention: attentionSessionIds.has(session.id),
+          liveState: liveStateBySession.get(session.id) ?? 'detached',
           pulseFrame,
           status: primaryStatus(session.signals),
         })
@@ -153,7 +151,9 @@ export default function SessionList({
         return (
           <Box key={session.id} marginBottom={0}>
             <Box flexShrink={0} width={SESSION_MARKER_WIDTH}>
-              <Text color={marker.color}>{marker.glyph} </Text>
+              <Text color={marker.color} dimColor={marker.dim}>
+                {marker.glyph}{' '}
+              </Text>
             </Box>
             <Box flexGrow={1} flexShrink={1} overflow="hidden">
               <Text bold={isSelected} color={nameColor} wrap="truncate">

@@ -57,19 +57,55 @@ function findLiveActivity(sessionId) {
 }
 
 /**
+ * The activity state every web surface displays for an entry — the one place
+ * that decides it, so the rail, the session list and the inspector can never
+ * disagree with each other.
+ *
+ * The base reading is `entry.liveState`, resolved server-side by the shared
+ * core that the TUI and the VS Code extension use too. The web then adds one
+ * refinement the other surfaces do not attempt: it splits "attached but quiet"
+ * into a plain quiet session and one that is specifically *waiting*.
+ *
+ * That refinement is gated on `stateIsReported`, because "waiting" reads as
+ * "this needs you" and is only trustworthy when something actually reported
+ * the turn boundary — a lock status field or a hook marker. Sessions with
+ * neither (VS Code peer locks omit `status`) derive their state from
+ * transcript recency, where a pause mid-tool-call is indistinguishable from a
+ * finished turn. There the session stays on the shared reading rather than
+ * claiming attention nothing can vouch for.
+ */
+function dotActivityState(entry) {
+  if (!entry) return 'idle'
+  var liveState = entry.liveState || 'attached'
+  if (liveState === 'needs-input') return 'attention'
+  if (liveState === 'working') return 'running'
+  if (liveState === 'detached') return 'idle'
+  // A recorded stop outranks the quiet-session refinements. "Waiting" reads as
+  // "between turns" and hides that the turn was cut short; the user reported
+  // exactly that as wrong.
+  if (entry.endedByUserInterruption === true) return 'interrupted'
+  if (entry.activityState === 'waiting' && entry.stateIsReported === true) return 'waiting'
+  return 'attached'
+}
+
+/** The label that goes with a state from `dotActivityState`. */
+function dotActivityLabel(state) {
+  if (state === 'interrupted') return STRINGS.activityInterrupted
+  if (state === 'attention') return STRINGS.activityNeedsInput
+  if (state === 'running') return STRINGS.activityRunning
+  if (state === 'waiting') return STRINGS.activityWaiting
+  return STRINGS.activityIdle
+}
+
+/**
  * Builds the inspector "Activity" heartbeat row for an active session.
  * Returns an empty string when the session has no live activity entry.
  */
 function buildInspectorHeartbeatHtml(session) {
   var entry = findLiveActivity(session.id)
   if (!entry) return ''
-  var state = entry.activityState || 'idle'
-  var stateLabel =
-    state === 'running'
-      ? STRINGS.activityRunning
-      : state === 'waiting'
-        ? STRINGS.activityWaiting
-        : STRINGS.activityIdle
+  var state = dotActivityState(entry)
+  var stateLabel = dotActivityLabel(state)
   var tool =
     entry.lastToolName && state === 'running'
       ? ' <span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
@@ -607,7 +643,9 @@ function renderInspector(visibleSessions) {
   const session = selectedSession
   const signals = session.signals || {}
   const descriptions = {
-    interrupted: STRINGS.statusInterruptedDesc,
+    interrupted: signals.interruptedByUser
+      ? STRINGS.statusStoppedByUserDesc
+      : STRINGS.statusInterruptedDesc,
     expiring: fmt(STRINGS.statusExpiringDesc, { days: signals.expiresInDays }),
     'path-missing': STRINGS.statusPathMissingDesc,
     'heavily-compacted': fmt(STRINGS.statusHeavilyCompactedDesc, {

@@ -8,6 +8,7 @@ import { getClaudeDirectory } from '../../core/project/claude-paths.js'
 import { invalidateProjectCache } from '../../core/project/project-cache.js'
 import { log } from '../../utils/logger.js'
 import { buildLiveActivitySnapshot } from '../live-activity-model.js'
+import type { LiveActivitySnapshot } from '../live-activity-model.js'
 
 /**
  * The subset of hono's SSE stream the event loop depends on.
@@ -81,6 +82,38 @@ export async function runEventStream(
     void stream.writeSSE({ data: 'update', event: 'change' })
   }
 
+  /**
+   * Last reported working state per session, for spotting turn boundaries.
+   *
+   * The browser cannot find them alone: it derives state from snapshots it
+   * only receives while awake, and a throttled tab misses one side of the
+   * transition. Reporting the boundary as its own event means the page never
+   * has to witness both — it only has to decide whether the user needs telling,
+   * which is the one thing it knows and the server does not.
+   */
+  const lastWorkingBySession = new Map<string, boolean>()
+
+  const emitTurnBoundaries = (snapshot: LiveActivitySnapshot): void => {
+    const seen = new Set<string>()
+    for (const entry of snapshot.entries) {
+      seen.add(entry.sessionId)
+      const isWorking = entry.liveState === 'working'
+      const wasWorking = lastWorkingBySession.get(entry.sessionId)
+      lastWorkingBySession.set(entry.sessionId, isWorking)
+      // Only a source that reports turn boundaries may claim one ended;
+      // recency alone cannot tell a long tool call from a finished turn.
+      if (wasWorking === true && !isWorking && entry.stateIsReported) {
+        void stream.writeSSE({
+          data: JSON.stringify({ sessionId: entry.sessionId, sessionName: entry.sessionName }),
+          event: 'turn-finished',
+        })
+      }
+    }
+    for (const sessionId of [...lastWorkingBySession.keys()]) {
+      if (!seen.has(sessionId)) lastWorkingBySession.delete(sessionId)
+    }
+  }
+
   const pushActivitySnapshot = async (): Promise<void> => {
     activityPushTimer = null
     if (!isClientConnected()) return
@@ -88,6 +121,7 @@ export async function runEventStream(
       const snapshot = await loadActivitySnapshot()
       if (!isClientConnected()) return
       void stream.writeSSE({ data: JSON.stringify(snapshot), event: 'activity' })
+      emitTurnBoundaries(snapshot as LiveActivitySnapshot)
     } catch {
       // The client's reconciliation poll covers a failed push.
     }

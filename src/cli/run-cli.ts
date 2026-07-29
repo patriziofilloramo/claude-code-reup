@@ -40,6 +40,27 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
     return
   }
 
+  // Reup reads turn boundaries from its own Claude Code hooks; without them
+  // every surface falls back to guessing and notifications cannot fire at all.
+  // Install them from the surfaces the user lives in -- which stay alive long
+  // enough for the write to land -- and say so, rather than leaving a feature
+  // silently inert behind a command nobody discovers. Deliberately not
+  // `doctor`, whose job is to report, nor `attention`, which owns this
+  // integration itself.
+  if (command === undefined || command === 'web' || command === 'config') {
+    const { ensureAttentionHook } = await import('../core/session/attention-hooks-integration.js')
+    void ensureAttentionHook().then((outcome) => {
+      if (outcome === 'unchanged') return
+      const what =
+        outcome === 'installed'
+          ? 'Registered Reup hooks in Claude Code so it can see turn boundaries.'
+          : 'Repaired Reup hooks in Claude Code: they pointed at an install that no longer exists.'
+      // Announced, never silent: this writes to the user's Claude Code
+      // settings, and they are told how to undo it in the same breath.
+      console.error(`[reup] ${what} Undo with \`reup attention remove\`.`)
+    })
+  }
+
   switch (command) {
     case '--version':
     case '-v':

@@ -20,6 +20,25 @@
 
 ### Medium
 
+- [ ] **A VS Code session blocked on a permission prompt is not indicated** — it renders as
+      "running" (green, pulsing) on every surface, so a session waiting on the user looks like
+      one that is working. Measured 2026-07-28: `claude-vscode` peer locks omit the `status`
+      field, and no hook work marker existed for the session despite the attention hooks being
+      installed — so `combineWorkEvidence` returns `null` and `resolveActivityState` falls back
+      to transcript recency, where a pending `tool_use` reads as `running`.
+
+      `isAwaitingUserReply()` (`session-tail.ts`) already handles the shape, but only for
+      `AskUserQuestion` / `ExitPlanMode` when the work status is unknown — a permission prompt
+      on `Bash` is not covered, and covering it needs a way to tell "tool in flight" from "tool
+      awaiting a decision" without a turn-boundary signal. Note this was never indicated
+      correctly: before the `stateIsReported` gate the amber dot shown here marked *pauses*, not
+      stalls, which is why it also fired throughout long tool calls.
+
+      Prerequisite for judging any fix: find out whether the VS Code extension fires
+      `UserPromptSubmit`/`Stop` hooks at all. If it does, the marker path already solves this and
+      the bug is really "markers are missing"; if it does not, Reup needs a transcript-only
+      signal for the blocked state.
+
 - [x] **No metadata cache / SSE debounce** — resolved: 2 s in-process cache keyed on projects
       directory path; invalidated before filesystem notifications and after sidecar mutations.
 

@@ -5,6 +5,7 @@ import { loadProjects } from '../../src/core/project/project-discovery.js'
 import { normalizePathForComparison } from '../../src/core/project/path-comparison.js'
 import { resolveLiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { LiveSessionSignals } from '../../src/core/session/live-attention.js'
+import type { SessionLiveState } from '../../src/core/session/session-live-state.js'
 import type { Project, Session, SessionStatus } from '../../src/core/session/session-model.js'
 import { isValidSessionId } from '../../src/core/session/session-model.js'
 import {
@@ -52,6 +53,12 @@ export interface ExtensionSession {
   currentBranch: string | null
   id: string
   isActive: boolean
+  /**
+   * The shared cross-surface reading, and the only thing the session icon is
+   * allowed to draw. `isActive` and `needsInput` remain for counting, sorting
+   * and filtering, where a plain boolean is what the caller actually wants.
+   */
+  liveState: SessionLiveState
   messageCount: number
   /** True for any attention-worthy state: waiting on input or a triage status. */
   needsAttention: boolean
@@ -322,6 +329,7 @@ async function createExtensionSession(
     currentBranch: session.currentBranch ?? null,
     id: session.id,
     isActive: signals.activeSessionIds.has(session.id),
+    liveState: signals.liveStateBySession.get(session.id) ?? 'detached',
     messageCount: session.messageCount,
     needsAttention: needsInput || isAttentionStatus(status),
     needsInput,

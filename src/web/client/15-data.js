@@ -60,6 +60,8 @@ async function refreshProjectData() {
       }
     }
 
+    // A completed round-trip is the strongest evidence the server is alive.
+    if (serverLinkState === 'offline') markServerOnline()
     elements.footerStatus.textContent = fmt(STRINGS.statusBarProjects, { n: projects.length })
     elements.footerStatus.className = 'ftr-status'
 
@@ -102,8 +104,13 @@ async function refreshProjectData() {
     }
   } catch (error) {
     if (refreshGeneration !== projectRefreshGeneration) return
-    elements.footerStatus.textContent = STRINGS.statusBarLoadError
-    elements.footerStatus.className = 'ftr-status err'
+    // Distinguishing "the server answered with an error" from "nothing
+    // answered" is the probe's job; a failed refresh only raises the question.
+    noteServerUnreachable()
+    if (serverLinkState !== 'offline') {
+      elements.footerStatus.textContent = STRINGS.statusBarLoadError
+      elements.footerStatus.className = 'ftr-status err'
+    }
     console.error('[reup] failed to refresh project data:', error)
     hideLoadingOverlay()
   }
@@ -153,12 +160,35 @@ function connectLiveUpdates() {
     }
     applyLiveActivity(snapshot.entries)
   })
+  // The server reports the boundary; the page decides whether the user needs
+  // telling. `document.hidden` is the one signal only the browser has, and it
+  // answers the question no local heuristic could: are you looking at this?
+  // A 30-second "did they reply" guess was tried instead and mistook reading a
+  // long answer for walking away.
+  liveUpdatesSource.addEventListener('turn-finished', function (event) {
+    var finished
+    try {
+      finished = JSON.parse(event.data)
+    } catch {
+      return
+    }
+    if (!finished || !finished.sessionId) return
+    if (!desktopAlertsEnabled() || !document.hidden) return
+    raiseNotification(
+      fmt(STRINGS.notifyTurnCompleteTitle, { name: finished.sessionName || finished.sessionId }),
+      '',
+      finished
+    )
+  })
   liveUpdatesSource.addEventListener('usage', function () {
     void refreshUsageSummary()
   })
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
     liveUpdatesSource = null
+    // Reconnection policy is unchanged and unconditional: the link watcher
+    // only observes, so a wrong verdict can never stop the stream coming back.
+    noteServerUnreachable()
     setTimeout(connectLiveUpdates, SSE_RECONNECT_DELAY_MS)
   })
 }
@@ -200,37 +230,38 @@ function desktopAlertsEnabled() {
  */
 function raiseDesktopAlerts(entries) {
   var enabled = desktopAlertsEnabled()
-  var nextStates = new Map()
   for (var i = 0; i < entries.length; i++) {
     var entry = entries[i]
     if (!entry.sessionId) continue
-    nextStates.set(entry.sessionId, entry.activityState || 'idle')
     var name = entry.sessionName || entry.sessionId
 
     if (entry.attention) {
-      var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
-      if (!notifiedAttentionKeys.has(attentionKey)) {
-        notifiedAttentionKeys.add(attentionKey)
-        if (enabled) {
-          raiseNotification(
-            fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
-            entry.attention.message || '',
-            entry
-          )
+      // Only a reported wait may raise an alert. An inferred one keys on the
+      // tail's last event, which moves every time the transcript grows, so
+      // alerting on it produced a new notification every few seconds --
+      // reported from real use as a storm of "needs input" alerts for a
+      // question that was never asked. The dot still shows it; only the claim
+      // is withheld.
+      //
+      // A turn *ending* is alerted from the `turn-finished` event below
+      // instead of from these snapshots, because finding it here would mean
+      // witnessing both sides of a transition a throttled tab sleeps through.
+      if (entry.attention.isReported === true) {
+        var attentionKey = entry.sessionId + ':' + (entry.attention.since || '')
+        if (!notifiedAttentionKeys.has(attentionKey)) {
+          notifiedAttentionKeys.add(attentionKey)
+          if (enabled) {
+            raiseNotification(
+              fmt(STRINGS.notifyNeedsInputTitle, { name: name }),
+              entry.attention.message || '',
+              entry
+            )
+          }
         }
       }
       continue
     }
-
-    var previousState = previousActivityStates.get(entry.sessionId)
-    var finishedTurn =
-      previousState === 'running' &&
-      (entry.activityState === 'waiting' || entry.activityState === 'idle')
-    if (finishedTurn && enabled && document.hidden) {
-      raiseNotification(fmt(STRINGS.notifyTurnCompleteTitle, { name: name }), '', entry)
-    }
   }
-  previousActivityStates = nextStates
 }
 
 function raiseNotification(title, body, entry) {

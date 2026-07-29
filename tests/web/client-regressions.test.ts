@@ -665,9 +665,12 @@ describe('web client session-row invariants', () => {
       '/** Re-renders the org rail.'
     )
 
-    expect(activityRail).toContain('STRINGS.activityNeedsInput')
+    // The label comes from the shared helper, so the rail cannot word an
+    // attention entry differently from the list or the inspector.
+    expect(activityRail).toContain('dotActivityLabel(stateClass)')
     expect(activityRail).toContain('activity-msg')
     expect(activityRail).toContain('activityDisplayRank(a) - activityDisplayRank(b)')
+    expect(source).toContain("if (state === 'attention') return STRINGS.activityNeedsInput")
   })
 
   it('keeps attached-but-quiet sessions visible in the strip instead of flickering out', () => {
@@ -677,16 +680,122 @@ describe('web client session-row invariants', () => {
     )
 
     // The idle filter caused sessions to vanish mid-turn whenever transcript
-    // events paused; attached sessions now render dimmed at the bottom.
+    // events paused; quiet sessions now render dimmed at the bottom.
     expect(activityRail).not.toContain("if (state === 'idle' && !needsInput) continue")
-    expect(activityRail).toContain("state === 'idle' ? ' idle' : ''")
+    expect(activityRail).toContain("stateClass === 'idle' || stateClass === 'attached'")
     expect(stylesSource).toContain('.rail-live-item.idle')
   })
 
-  it('raises desktop alerts for needs-input and finished turns without duplicates', () => {
+  /**
+   * The row recedes by dimming its text only. Putting the opacity on the row
+   * would darken the dot a second time on top of its own state colour, so the
+   * same session's dot would look different in the rail than in the session
+   * list — the surface disagreement the shared live state exists to prevent.
+   */
+  /**
+   * The live-state palette and the link-lost overlay were built separately, and
+   * meet on this selector. While the link is down every dot must read the same
+   * — nothing is confirming any of them — so the offline rule has to outrank
+   * the per-state ones rather than leaving `attached` a shade apart.
+   */
+  it('flattens every dot to one unknown reading while the link is down', () => {
+    expect(stylesSource).toMatch(/body\.link-lost \.activity-dot \{[^}]*opacity/)
+    expect(stylesSource).toMatch(/body\.link-lost \.activity-dot \{[^}]*animation: none/)
+    // Specificity check, stated as the rule it protects: an element plus two
+    // classes beats the two-class per-state selectors like `.activity-dot.attached`.
+    expect(stylesSource).toContain('body.link-lost .activity-dot')
+  })
+
+  it('dims a quiet rail row without dimming its dot twice', () => {
+    expect(stylesSource).toContain('.rail-live-item.idle .activity-copy')
+    expect(stylesSource).not.toMatch(/\.rail-live-item\.idle \{[^}]*opacity/)
+  })
+
+  /**
+   * The dot renders only for sessions holding a live lock, so "attached" is the
+   * one fact behind it that is always known. running/waiting/idle come from
+   * lock status, hook markers, or — when a session has neither, as VS Code
+   * locks do — transcript recency, which cannot tell a long tool call from a
+   * finished turn. Reported from use: an actively working session showed amber
+   * "waiting" and then grey "idle" while the TUI correctly showed it as live.
+   */
+  it('keeps the established dot palette', () => {
+    // Repainting these was itself a regression: the amber "waiting" dot is the
+    // stall indication for sessions that report their turn boundaries, and
+    // recolouring idle made the rail and the session list disagree about the
+    // same session. Only *when* waiting applies changed — see below.
+    const dot = stylesSource.slice(
+      stylesSource.indexOf('.activity-dot {'),
+      stylesSource.indexOf('.activity-state {')
+    )
+
+    expect(dot).toMatch(/\.activity-dot \{[^}]*background: var\(--muted\)/)
+    expect(dot).toMatch(/\.activity-dot\.running \{[^}]*background: var\(--bucket-active\)/)
+    expect(dot).toMatch(/\.activity-dot\.waiting \{[^}]*background: var\(--bucket-attention\)/)
+    expect(dot).toMatch(/\.activity-dot\.attention \{[^}]*background: var\(--red\)/)
+
+    // Attached is the live colour held back, matching how the TUI dims the
+    // same green. A second green here would put the surfaces back out of step.
+    expect(dot).toMatch(/\.activity-dot\.attached \{[^}]*background: var\(--bucket-active\)/)
+    expect(dot).toMatch(/\.activity-dot\.attached \{[^}]*opacity: 0\.55/)
+  })
+
+  it('draws the shared live state, refining it only where it may', () => {
+    const declaration = /^function dotActivityState\([\s\S]*?^}/m.exec(source)
+    expect(declaration).not.toBeNull()
+    const dotActivityState = new Function(
+      `${declaration?.[0] ?? ''}; return dotActivityState;`
+    )() as (entry: unknown) => string
+
+    // The three states the core decides are drawn as the core decided them,
+    // whatever the web's own finer reading says. This is what keeps the web
+    // agreeing with the TUI and the extension.
+    expect(dotActivityState({ liveState: 'working', activityState: 'idle' })).toBe('running')
+    expect(dotActivityState({ liveState: 'needs-input', activityState: 'idle' })).toBe('attention')
+    expect(dotActivityState({ liveState: 'detached', activityState: 'running' })).toBe('idle')
+
+    // Attached is the one state the web may refine, and only into waiting.
+    expect(dotActivityState({ liveState: 'attached', activityState: 'idle' })).toBe('attached')
+
+    // Reported: a finished turn with an unanswered call really is blocked on
+    // the user, and amber is the indication that says so.
+    expect(
+      dotActivityState({ liveState: 'attached', activityState: 'waiting', stateIsReported: true })
+    ).toBe('waiting')
+
+    // Inferred from transcript recency: a pause mid-tool-call looks exactly
+    // like a finished turn, so it must not claim attention. The session falls
+    // back to the shared reading rather than to grey.
+    expect(
+      dotActivityState({ liveState: 'attached', activityState: 'waiting', stateIsReported: false })
+    ).toBe('attached')
+    expect(dotActivityState({ liveState: 'attached', activityState: 'waiting' })).toBe('attached')
+
+    // A session with no entry at all is the only thing that reads as absent.
+    expect(dotActivityState(null)).toBe('idle')
+  })
+
+  /**
+   * The division of labour that took two wrong turns to find. The server
+   * reports *what* happened, because the page cannot witness both sides of a
+   * transition it may be throttled through. The page decides *whether the user
+   * needs telling*, because `document.hidden` is the one signal only it has —
+   * and a local process guessing from "did they reply within 30 seconds"
+   * mistook reading a long answer for walking away.
+   */
+  it('takes the boundary from the server and the audience question from the page', () => {
+    const liveUpdates = sourceBetween('function connectLiveUpdates()', '// Narrow-mode back button')
+
+    expect(liveUpdates).toContain("liveUpdatesSource.addEventListener('turn-finished'")
+    expect(liveUpdates).toContain('STRINGS.notifyTurnCompleteTitle')
+    expect(liveUpdates).toContain('!document.hidden')
+    // The diffing this replaced misses transitions a throttled tab slept through.
+    expect(source).not.toContain('previousActivityStates')
+  })
+
+  it('raises a needs-input desktop alert without duplicates', () => {
     expect(source).toContain('function raiseDesktopAlerts(entries)')
     expect(source).toContain('notifiedAttentionKeys')
-    expect(source).toContain("previousState === 'running'")
     expect(source).toContain('document.hidden')
     expect(source).toContain('Notification.requestPermission()')
     expect(source).toContain('NOTIFY_PREFERENCE')
@@ -727,9 +836,10 @@ describe('web client session-row invariants', () => {
       '/** Re-renders the org rail.'
     )
 
-    expect(activityRail).toContain('STRINGS.activityRunning')
-    expect(activityRail).toContain('STRINGS.activityWaiting')
-    expect(activityRail).toContain('STRINGS.activityIdle')
+    expect(activityRail).toContain('dotActivityLabel(stateClass)')
+    expect(source).toContain("if (state === 'running') return STRINGS.activityRunning")
+    expect(source).toContain("if (state === 'waiting') return STRINGS.activityWaiting")
+    expect(source).toContain('return STRINGS.activityIdle')
     expect(activityRail).toContain('activity-state')
     expect(activityRail).toContain('rail-live-item')
     expect(activityRail).toContain('activity-title')
@@ -773,17 +883,17 @@ describe('web client session-row invariants', () => {
     )
 
     // Same source of truth as the rail/inspector — findLiveActivity — and the
-    // same attention-first precedence, so the three surfaces cannot disagree.
+    // same resolver for both the state and its label, so the three surfaces
+    // cannot disagree. Neither may re-derive attention on its own.
     expect(rowState).toContain('findLiveActivity(sessionId)')
-    expect(rowState).toContain("entry && entry.attention ? 'attention'")
-    expect(rowState).toContain('STRINGS.activityRunning')
-    expect(rowState).toContain('STRINGS.activityWaiting')
-    expect(rowState).toContain('STRINGS.activityIdle')
-    expect(rowState).toContain('STRINGS.activityNeedsInput')
+    expect(rowState).toContain('dotActivityState(findLiveActivity(sessionId))')
+    expect(rowState).toContain('dotActivityLabel(state)')
+    expect(rowState).not.toContain('entry.attention')
 
     // A live session with no live-activity entry yet must not crash or show
-    // a stale/wrong state — it falls back to idle rather than throwing.
-    expect(rowState).toContain("entry ? entry.activityState || 'idle' : 'idle'")
+    // a stale/wrong state. All three surfaces get that fallback from the one
+    // shared resolver, which returns idle for a missing entry.
+    expect(source).toContain('function dotActivityState(entry)')
 
     expect(sessionRow).toContain(
       'const liveState = isLive ? liveSessionRowState(session.id) : null'
@@ -1200,6 +1310,49 @@ describe('web client org layer invariants', () => {
     expect(uiSource).toContain('id="tag-picker-input"')
     expect(uiSource).toContain('id="org-picker-overlay"')
     expect(uiSource).toContain('id="org-picker-list"')
+  })
+
+  it('keeps stream reconnection unconditional and independent of the link verdict', () => {
+    // Gating the reconnect on the offline verdict made the live feed depend on
+    // that verdict being right: one wrong "offline" and the stream never came
+    // back, so the dots froze on stale state. The watcher observes only.
+    const streamError = sourceBetween(
+      "liveUpdatesSource.addEventListener('error'",
+      'function applyLiveActivity'
+    )
+
+    expect(streamError).toContain('noteServerUnreachable()')
+    expect(streamError).toContain('setTimeout(connectLiveUpdates, SSE_RECONNECT_DELAY_MS)')
+    expect(streamError).not.toContain("serverLinkState === 'online'")
+  })
+
+  it('ships the offline overlay and its bootstrapped state', () => {
+    expect(source).toContain('function markServerOffline()')
+    expect(source).toContain('function markServerOnline()')
+    expect(source).toContain("overlay.id = 'reup-offline'")
+    // Registered in scripts/build-client.mjs — an unlisted segment would leave
+    // every caller below referencing functions that do not exist.
+    expect(source).toContain('function probeServerReachability()')
+  })
+
+  it('marks a confirmed outage without rewriting any live session state', () => {
+    const offline = sourceBetween('function markServerOffline()', 'function markServerOnline()')
+
+    // Presentation only. Clearing the active set here destroyed state the page
+    // cannot refetch while the link is down, and left the feed reading idle
+    // afterwards — the live data belongs to 15-data.js, not to this module.
+    expect(offline).toContain("classList.add('link-lost')")
+    expect(offline).toContain('STRINGS.offlineStatus')
+    expect(offline).not.toContain('activeSessionIds')
+    expect(offline).not.toContain('applyLiveActivity')
+  })
+
+  it('styles the offline overlay and honours reduced motion', () => {
+    expect(stylesSource).toContain('#reup-offline {')
+    expect(stylesSource).toContain('.ro-panel {')
+    expect(stylesSource).toContain('.ro-term-err {')
+    expect(stylesSource).toContain('--offline-rain-primary:')
+    expect(stylesSource).toContain('@media (prefers-reduced-motion: reduce)')
   })
 
   it('styles contain rail section, focus bar, and tag chip rules', () => {

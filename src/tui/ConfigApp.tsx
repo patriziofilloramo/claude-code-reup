@@ -12,10 +12,11 @@ import {
   setupUsageStatusLine,
 } from '../core/usage/usage-statusline-integration.js'
 import {
-  isAttentionHookConfigured,
+  inspectAttentionHookHealth,
   removeAttentionHook,
   setupAttentionHook,
 } from '../core/session/attention-hooks-integration.js'
+import type { AttentionHookHealth } from '../core/session/attention-hooks-integration.js'
 import { copyToClipboard } from '../utils/system.js'
 
 const TABS = ['Interface', 'Integrations'] as const
@@ -75,7 +76,9 @@ export function ConfigApp({
   const [cursor, setCursor] = useState(0)
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [usageConfigured, setUsageConfigured] = useState<boolean | null>(null)
-  const [attentionConfigured, setAttentionConfigured] = useState<boolean | null>(null)
+  // Three states, not two: hooks can be registered and still dead, and a
+  // toggle that reads that as "on" would remove them instead of repairing.
+  const [attentionHealth, setAttentionHealth] = useState<AttentionHookHealth['state'] | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [copiedShellIndex, setCopiedShellIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -85,7 +88,7 @@ export function ConfigApp({
       setTheme(prefs.theme)
     })
     void isUsageStatusLineConfigured().then(setUsageConfigured)
-    void isAttentionHookConfigured().then(setAttentionConfigured)
+    void inspectAttentionHookHealth().then((health) => setAttentionHealth(health.state))
   }, [])
 
   const currentTab = TABS[tabIndex]!
@@ -170,22 +173,27 @@ export function ConfigApp({
     }
 
     if (cursor === INTEGRATION_ATTENTION_CURSOR) {
-      if (attentionConfigured === null) return
+      if (attentionHealth === null) return
       setBusy(true)
       try {
-        if (attentionConfigured) {
+        if (attentionHealth === 'ready') {
           const result = await removeAttentionHook()
-          setAttentionConfigured(false)
+          setAttentionHealth('not-configured')
           setStatusMsg({
             ok: true,
             text: result.changed ? 'Attention alerts removed' : 'Was not configured',
           })
         } else {
+          // Covers repair as well as first setup: a broken install is
+          // repointed at the current one rather than torn out.
           await setupAttentionHook()
-          setAttentionConfigured(true)
+          setAttentionHealth('ready')
           setStatusMsg({
             ok: true,
-            text: 'Attention alerts set up; restart Claude Code sessions to activate',
+            text:
+              attentionHealth === 'broken'
+                ? 'Attention alerts repaired; restart Claude Code sessions to activate'
+                : 'Attention alerts set up; restart Claude Code sessions to activate',
           })
         }
       } catch (error) {
@@ -238,7 +246,7 @@ export function ConfigApp({
         {currentTab === 'Interface' && <InterfaceTab cursor={cursor} theme={theme} />}
         {currentTab === 'Integrations' && (
           <IntegrationsTab
-            attentionConfigured={attentionConfigured}
+            attentionHealth={attentionHealth}
             busy={busy}
             copiedShellIndex={copiedShellIndex}
             cursor={cursor}
@@ -315,13 +323,13 @@ function InterfaceTab({ cursor, theme }: { cursor: number; theme: ThemeName }) {
 }
 
 function IntegrationsTab({
-  attentionConfigured,
+  attentionHealth,
   busy,
   copiedShellIndex,
   cursor,
   usageConfigured,
 }: {
-  attentionConfigured: boolean | null
+  attentionHealth: AttentionHookHealth['state'] | null
   busy: boolean
   copiedShellIndex: number | null
   cursor: number
@@ -344,11 +352,19 @@ function IntegrationsTab({
 
       <FeatureCard focused={attentionFocused}>
         <SelectableRow
-          active={attentionConfigured === true}
+          active={attentionHealth === 'ready'}
           description={LABELS.configAttentionDesc}
           focused={attentionFocused}
           label={LABELS.configAttentionTitle}
-          status={busy ? LABELS.configWorking : attentionConfigured ? 'on' : 'off'}
+          status={
+            busy
+              ? LABELS.configWorking
+              : attentionHealth === 'ready'
+                ? 'on'
+                : attentionHealth === 'broken'
+                  ? 'broken - press to repair'
+                  : 'off'
+          }
         />
       </FeatureCard>
 

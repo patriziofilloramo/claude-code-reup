@@ -26,7 +26,8 @@ export function getReupDirectory(): string {
   return directory
 }
 
-export function getLegacyReupDirectory(): string {
+/** Only used to migrate away from the pre-rename directory. */
+function getLegacyReupDirectory(): string {
   return join(getClaudeDirectory(), LEGACY_REUP_DIRECTORY_NAME)
 }
 

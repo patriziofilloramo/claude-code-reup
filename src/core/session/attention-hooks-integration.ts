@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { getClaudeDirectory, getReupDirectory } from '../project/claude-paths.js'
@@ -18,6 +18,13 @@ const HOOK_EVENTS = ['Notification', 'Stop', 'UserPromptSubmit'] as const
 
 interface AttentionHookIntegration {
   installedCommand: string
+  /**
+   * The user ran `reup attention remove`. Recorded rather than forgotten,
+   * because hooks are otherwise installed automatically: without this, the
+   * next launch would put back what they just took out, and there would be no
+   * way to refuse. Cleared by an explicit `setup`.
+   */
+  optedOut?: boolean
   schemaVersion: typeof INTEGRATION_SCHEMA_VERSION
 }
 
@@ -71,6 +78,102 @@ export async function setupAttentionHook(): Promise<SetupResult> {
   })
 }
 
+/**
+ * How Reup's hooks actually stand, which is not the same question as whether
+ * they are registered.
+ *
+ * A hook entry names a script by absolute path. If that path stops resolving —
+ * the install was moved or removed, or it lived on a drive that is no longer
+ * mounted — Claude Code still runs the command, node still fails, and nothing
+ * anywhere reports it. Every turn boundary and every needs-input alert is then
+ * silently lost, and all surfaces fall back to guessing from transcript
+ * recency. Observed on a real machine: three weeks of hooks registered and
+ * dead, with `status` cheerfully reporting them configured.
+ */
+export type AttentionHookHealth =
+  | { state: 'not-configured' }
+  /** Registered, and the script it points at exists. */
+  | { state: 'ready'; command: string }
+  /** Registered, but the script is gone: hooks are running and failing. */
+  | { state: 'broken'; command: string; missingPath: string }
+
+/**
+ * Checks that Reup's hooks are registered *and* that what they point at is
+ * still there. Only the second half can catch a dead install.
+ */
+export async function inspectAttentionHookHealth(): Promise<AttentionHookHealth> {
+  const integration = await readIntegration()
+  if (!integration || !(await isAttentionHookConfigured())) return { state: 'not-configured' }
+
+  const scriptPath = hookScriptPath(integration.installedCommand)
+  if (scriptPath === null) return { state: 'ready', command: integration.installedCommand }
+  try {
+    await access(scriptPath)
+  } catch {
+    return {
+      command: integration.installedCommand,
+      missingPath: scriptPath,
+      state: 'broken',
+    }
+  }
+  return { state: 'ready', command: integration.installedCommand }
+}
+
+/**
+ * Makes sure Reup's hooks are registered and point at the running install.
+ *
+ * Reup reads turn boundaries from these hooks; without them every surface
+ * falls back to guessing from transcript recency, and desktop notifications
+ * cannot fire at all. Leaving that to a command the user has to discover meant
+ * shipping features that silently did nothing — so an interactive surface
+ * installs them on first run and says it did.
+ *
+ * Two reasons this is safe to do unasked: the entry is Reup's own and is
+ * appended, so hooks the user configured are never touched; and
+ * `reup attention remove` restores the previous configuration exactly.
+ *
+ * Repair is the same operation. An absolute path goes stale for ordinary
+ * reasons — a Node version manager moves the npm global root, an installer
+ * relocates — and that failure is silent, so it self-heals here too. It still
+ * refuses when Reup itself has no stable path to name: replacing one dead path
+ * with another is not a repair.
+ *
+ * Best-effort by contract. Called on ordinary startup paths, so any failure
+ * must leave the surface running rather than surfacing an error.
+ */
+export async function ensureAttentionHook(): Promise<'installed' | 'repaired' | 'unchanged'> {
+  try {
+    // An explicit removal is a decision, not a gap to fill.
+    if ((await readIntegration())?.optedOut === true) return 'unchanged'
+
+    const health = await inspectAttentionHookHealth()
+    if (health.state === 'ready') return 'unchanged'
+    // Pointless if this install cannot name itself either — a temporary or
+    // deleted path would just replace one dead entry with another.
+    const ownPath = hookScriptPath(captureCommand())
+    if (ownPath === null) return 'unchanged'
+    try {
+      await access(ownPath)
+    } catch {
+      return 'unchanged'
+    }
+    if (!(await setupAttentionHook()).changed) return 'unchanged'
+    return health.state === 'broken' ? 'repaired' : 'installed'
+  } catch {
+    return 'unchanged'
+  }
+}
+
+/**
+ * The script path inside a capture command, or null when the command does not
+ * have the shape `captureCommand()` produces. Returning null means "cannot
+ * check", never "fine": a command Reup did not write is not Reup's to judge.
+ */
+export function hookScriptPath(command: string): string | null {
+  const match = /^node\s+"([^"]+)"\s+attention\s+capture$/.exec(command.trim())
+  return match?.[1] ?? null
+}
+
 /** True when Reup's capture command is registered for every hook event it needs. */
 export async function isAttentionHookConfigured(): Promise<boolean> {
   const integration = await readIntegration()
@@ -106,7 +209,9 @@ export async function removeAttentionHook(): Promise<RemoveResult> {
     }
     if (settingsChanged) await writeJsonAtomically(getSettingsPath(), settings)
 
-    await unlink(getIntegrationPath()).catch(() => {})
+    // Kept, not deleted: the record is what tells a later launch that the
+    // absence is a decision rather than a gap to fill automatically.
+    await writeIntegration(integration.installedCommand, { optedOut: true })
     return { changed: true }
   })
   if (result.changed) {
@@ -156,10 +261,14 @@ function getIntegrationPath(): string {
   return join(getReupDirectory(), 'attention-integration.json')
 }
 
-async function writeIntegration(installedCommand: string): Promise<void> {
+async function writeIntegration(
+  installedCommand: string,
+  options: { optedOut?: boolean } = {}
+): Promise<void> {
   await writeJsonAtomically(getIntegrationPath(), {
     installedCommand,
     schemaVersion: INTEGRATION_SCHEMA_VERSION,
+    ...(options.optedOut === true ? { optedOut: true } : {}),
   } satisfies AttentionHookIntegration)
 }
 

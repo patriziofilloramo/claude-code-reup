@@ -46,11 +46,14 @@ describe('live-attention-signal', () => {
           message: 'Claude needs permission to use Bash',
         })
       )
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         hookEvent: 'Notification',
         outcome: 'attention-marker-written',
         sessionId: SESSION_ID,
       })
+      // The boundary's own timestamp travels with the capture, so the delayed
+      // turn-end check can tell this turn from a later one.
+      expect(result.occurredAt).toEqual(expect.any(String))
       const markers = await readAttentionMarkers()
       expect(markers).toHaveLength(1)
       expect(markers[0]?.message).toBe('Claude needs permission to use Bash')
@@ -263,7 +266,31 @@ describe('live-attention-signal', () => {
         sessionId: SESSION_ID,
       }
       const attention = resolveSessionAttention(marker, null, null, 'idle')
-      expect(attention).toEqual({ message: marker.message, since: occurredAt })
+      expect(attention).toEqual({ isReported: true, message: marker.message, since: occurredAt })
+    })
+
+    /**
+     * An inferred wait carries `since` from the tail's last event, which moves
+     * every time the transcript grows. Anything keyed on it fires again every
+     * few seconds — reported from real use as a storm of "needs input" desktop
+     * alerts for a question that was never asked. Marking it unreported is what
+     * lets the client draw it without claiming it.
+     */
+    it('marks a wait inferred from the transcript as unreported', async () => {
+      const tail = {
+        turnEndedByRecord: null,
+        lastEventAt: new Date().toISOString(),
+        lastToolName: 'AskUserQuestion',
+        state: 'waiting' as const,
+        toolPending: true,
+        trailingQuestion: false,
+        turnInFlight: true,
+      }
+
+      const attention = resolveSessionAttention(undefined, null, tail, 'idle')
+
+      expect(attention?.isReported).toBe(false)
+      expect(attention?.since).toBe(tail.lastEventAt)
     })
 
     it('clears a hook marker once the session shows later activity', async () => {

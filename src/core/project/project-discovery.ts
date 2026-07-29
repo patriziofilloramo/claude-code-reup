@@ -274,6 +274,7 @@ function createUnanalysedSignals(updatedAt: string): SessionSignals {
     compactionCount: null,
     expiresInDays: calculateExpiryDays(updatedAt),
     interrupted: null,
+    interruptedByUser: null,
     lastToolFailed: null,
     pathExists: true,
   }
@@ -391,6 +392,7 @@ function buildGhostSession(record: SessionLockRecord & { cwd: string }): Session
       compactionCount: null,
       expiresInDays: null,
       interrupted: null,
+      interruptedByUser: null,
       lastToolFailed: null,
       pathExists: true,
     },

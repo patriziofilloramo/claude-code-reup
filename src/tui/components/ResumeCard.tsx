@@ -10,19 +10,22 @@ import type {
   NativeTodoItem,
   NativeTodoState,
 } from '../../core/session/session-automatic-context.js'
+import type { SessionLiveState } from '../../core/session/session-live-state.js'
 import { primaryStatus } from '../../core/session/session-signals.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
 import type { SessionPreview } from '../../core/session/session-preview.js'
 import { relativeTime } from '../../utils/time.js'
 import type { ResumeCardLayout } from '../layout.js'
+import { sessionStatusMarker } from '../session-status-marker.js'
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 interface ResumeCardProps {
-  isActive: boolean
   layout: ResumeCardLayout
+  /** The shared live reading, drawn through the same marker as the list. */
+  liveState: SessionLiveState
   projectId: string
   session: Session
   onResume: () => void
@@ -30,8 +33,8 @@ interface ResumeCardProps {
 }
 
 export default function ResumeCard({
-  isActive,
   layout,
+  liveState,
   projectId,
   session,
   onResume,
@@ -40,6 +43,9 @@ export default function ResumeCard({
   const [preview, setPreview] = useState<SessionPreview | null>(null)
   const [lockInfo, setLockInfo] = useState<SessionLockInfo | null>(null)
   const [filesExpanded, setFilesExpanded] = useState(false)
+  // A live process holds the session: the lock lookup and the resume warning
+  // are about the process, not about what it is doing right now.
+  const isActive = liveState !== 'detached'
 
   useEffect(() => {
     const path = sessionTranscriptPath(projectId, session.id)
@@ -84,12 +90,24 @@ export default function ResumeCard({
     preview?.pendingToolName != null
 
   const dividerWidth = Math.max(8, layout.width - layout.paddingX * 2)
+  // The same marker the session list draws, so this card cannot contradict the
+  // row it was opened from. Triage statuses are the row's job, not the card's,
+  // and this dot never pulses — a detail view has no animation loop.
+  const liveMarker = sessionStatusMarker({
+    isBulkSelected: false,
+    isRemotelyActive: false,
+    liveState,
+    pulseFrame: 0,
+    status: 'ok',
+  })
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={layout.paddingX} paddingY={1}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Box gap={1} marginBottom={0}>
-        <Text color={isActive ? COLORS.ok : COLORS.border}>●</Text>
+        <Text color={liveMarker.color} dimColor={liveMarker.dim}>
+          {liveMarker.glyph}
+        </Text>
         <Text bold color={COLORS.text} wrap="truncate">
           {displayName}
         </Text>

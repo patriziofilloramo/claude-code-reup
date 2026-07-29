@@ -56,6 +56,16 @@ export function getResumeAdvice(session: Session, isActive: boolean): ResumeAdvi
     }
   }
 
+  if (session.signals.interruptedByUser === true) {
+    return {
+      code: 'interrupted',
+      explanation: 'You stopped Claude mid-turn and have not given it new instructions since.',
+      recommendedAction: 'resume',
+      severity: 'warning',
+      title: 'Continue interrupted work',
+    }
+  }
+
   if (session.signals.interrupted === true || session.signals.lastToolFailed === true) {
     return {
       code: 'interrupted',

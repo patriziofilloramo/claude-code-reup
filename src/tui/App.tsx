@@ -10,7 +10,6 @@ import { COLORS } from '../config/theme.js'
 import {
   getActiveSessions,
   getLiveSessionRecords,
-  isBusyEvidenceFresh,
   mergeSessionLockStatuses,
 } from '../core/session/active-sessions.js'
 import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
@@ -22,12 +21,10 @@ import {
 } from '../core/session/attention.js'
 import type { AttentionMarker, WorkSignalMarker } from '../core/session/attention.js'
 import { sessionTranscriptPath } from '../core/session/session-preview.js'
-import {
-  TRANSCRIPT_RUNNING_WINDOW_MS,
-  isAwaitingUserReply,
-  readSessionTailActivity,
-} from '../core/session/session-tail.js'
+import { isAwaitingUserReply, readSessionTailActivity } from '../core/session/session-tail.js'
 import type { SessionTailActivity } from '../core/session/session-tail.js'
+import { resolveSessionLiveState } from '../core/session/session-live-state.js'
+import type { SessionLiveState } from '../core/session/session-live-state.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
 import { readLiveUsageSummary } from '../core/usage/live-usage.js'
@@ -298,39 +295,6 @@ function App({ onResume }: AppProps) {
   // Derived view model
   // ---------------------------------------------------------------------------
 
-  // A stale busy flag (session died or was interrupted mid-turn) must not
-  // pulse forever: busy is trusted only with a fresh transition or recent
-  // transcript activity backing it. Lock files do not always carry a status
-  // field at all (VS Code peers, freshly spawned processes) - for those, a
-  // transcript written seconds ago is proof of work in itself.
-  const busySessionIds = useMemo(() => {
-    const busyIds = new Set<string>()
-    const now = Date.now()
-    for (const [sessionId, lockStatus] of sessionLockStatuses) {
-      const activityMs = transcriptActivityMs.get(sessionId) ?? null
-      // Turn-boundary hooks cover locks that omit the status field entirely.
-      const evidence = combineWorkEvidence(
-        lockStatus.status,
-        lockStatus.statusUpdatedAt,
-        workMarkers.get(sessionId)
-      )
-      if (evidence.status === 'busy') {
-        if (isBusyEvidenceFresh(evidence.statusUpdatedAt, activityMs, now)) {
-          busyIds.add(sessionId)
-        }
-        continue
-      }
-      if (
-        evidence.status === null &&
-        activityMs !== null &&
-        now - activityMs < TRANSCRIPT_RUNNING_WINDOW_MS
-      ) {
-        busyIds.add(sessionId)
-      }
-    }
-    return busyIds
-  }, [sessionLockStatuses, transcriptActivityMs, workMarkers])
-
   // Sessions currently waiting on the user, resolved against the same
   // evidence rules the web strip uses: a marker dies as soon as the session
   // shows life after the event or its process disappears. Hook markers cover
@@ -360,6 +324,38 @@ function App({ onResume }: AppProps) {
     }
     return ids
   }, [attentionMarkers, sessionLockStatuses, sessionTails, transcriptActivityMs, workMarkers])
+
+  // The shared cross-surface reading. Every liveness decision the TUI draws
+  // comes from here, so a session looks the same in `reup` as it does in the
+  // web UI and the VS Code extension: same evidence, same resolver, same four
+  // states. Sessions with no lock file are absent from the map and read as
+  // detached; the TUI never derives liveness on its own.
+  const liveStateBySession = useMemo(() => {
+    const now = Date.now()
+    const states = new Map<string, SessionLiveState>()
+    for (const [sessionId, lockStatus] of sessionLockStatuses) {
+      // Turn-boundary hooks cover locks that omit the status field entirely.
+      const evidence = combineWorkEvidence(
+        lockStatus.status,
+        lockStatus.statusUpdatedAt,
+        workMarkers.get(sessionId)
+      )
+      states.set(
+        sessionId,
+        resolveSessionLiveState(
+          {
+            isAttached: true,
+            needsInput: attentionSessionIds.has(sessionId),
+            tail: sessionTails.get(sessionId) ?? null,
+            workStatus: evidence.status,
+            workStatusUpdatedAt: evidence.statusUpdatedAt,
+          },
+          now
+        )
+      )
+    }
+    return states
+  }, [attentionSessionIds, sessionLockStatuses, sessionTails, workMarkers])
 
   // One terminal bell per new attention event; a re-render must never re-ring.
   const previousAttentionIdsRef = useRef<Set<string>>(new Set())
@@ -992,8 +988,8 @@ function App({ onResume }: AppProps) {
     const sessionPanel =
       resumeCardSession && selectedProject ? (
         <ResumeCard
-          isActive={activeSessionIds.has(resumeCardSession.id)}
           layout={viewportLayout.resumeCard}
+          liveState={liveStateBySession.get(resumeCardSession.id) ?? 'detached'}
           projectId={selectedProject.id}
           session={resumeCardSession}
           onResume={() => {
@@ -1019,12 +1015,10 @@ function App({ onResume }: AppProps) {
         />
       ) : (
         <SessionList
-          activeSessionIds={activeSessionIds}
-          attentionSessionIds={attentionSessionIds}
           bulkSelectedIds={bulkSelectedIds}
-          busySessionIds={busySessionIds}
           isFocused={focusedPanel === 'sessions'}
           layout={viewportLayout.sessionPanel}
+          liveStateBySession={liveStateBySession}
           project={selectedProject}
           remotelyActiveSessionIds={remotelyActiveSessionIds}
           selectedIndex={visibleSessionSelectionIndex}

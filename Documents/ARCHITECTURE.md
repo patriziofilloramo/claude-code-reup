@@ -205,7 +205,8 @@ restores prior settings and deletes snapshots and capture diagnostics.
 to one session simultaneously:
 
 - `archived`
-- `interrupted`
+- `interrupted` — _inferred_ from an unanswered tool call
+- `interruptedByUser` — _recorded_: the user stopped Claude mid-turn
 - `lastToolFailed`
 - `compactionCount`
 - `expiresInDays`
@@ -220,8 +221,23 @@ transcript very often ends on a dangling tool call (a tool in flight), which
 is the same condition `interrupted` reads — but for an attached session that
 is normal mid-turn state, not an abandoned one. `serializeSession` recomputes
 the displayed status with `interrupted` forced false for live sessions,
-falling through to whatever status would otherwise apply. `lastToolFailed` is
-not corrected — a real tool failure still shows regardless of liveness.
+falling through to whatever status would otherwise apply. `lastToolFailed` and
+`interruptedByUser` are not corrected — a real tool failure and a recorded stop
+are both facts about the session, true regardless of liveness afterward. The
+correction exists for the inference, not for the record.
+
+Interruption therefore has two independent sources, and conflating them was a
+bug (2026-07-28). `interrupted` is inferred from a tool call left without a
+result. `interruptedByUser` comes from the marker turn Claude Code writes when
+the user stops it — `[Request interrupted by user]` or
+`[Request interrupted by user for tool use]`, always a user turn whose sole
+text block equals the marker. Matching must be exact: the same strings appear
+inside compaction summaries quoting earlier turns and in ordinary messages
+discussing interruptions, so a substring test flags those sessions forever.
+Because the marker _is_ a user turn, it used to clear the pending tool calls
+`interrupted` reads — meaning an explicit stop erased its own evidence and read
+as a clean session. New instructions from the user clear the flag; a stop with
+no follow-up keeps it.
 
 JSONL analysis detects unresolved tool calls, the latest failed tool-result
 batch, `compact_boundary` events, titles, recorded branch, cwd, timestamps, and
@@ -341,6 +357,27 @@ State-changing routes validate localhost Origin/Host values. Project and session
 identifiers are resolved against known server-side data before filesystem or
 launch operations.
 
+### Server link state (2026-07-26)
+
+`web/client/15-connection.js` owns one question: is the server still there? It
+exists because the page previously had no answer — stopping `reup web` left the
+last known active-session set on screen indefinitely while a silent reconnect
+loop retried, so the dashboard kept asserting sessions were running after the
+process tracking them had exited.
+
+The rule is that only a reachability probe may declare an outage. A dropped SSE
+stream and a failed data refresh both merely call `noteServerUnreachable()`,
+which schedules a probe after a grace period — a server restart drops the
+stream for well under a second and recovers on its own, and the overlay must
+not flash for blips nobody noticed. `probeServerReachability()` treats a
+network-level failure as "gone" and any HTTP response as "alive".
+
+A confirmed outage clears `activeSessionIds` and the activity strip before
+anything else: the page cannot know what is running, so it must stop implying
+it does. Recovery reopens the stream and reloads projects, activity, and usage.
+The overlay is presentation on top of that state — dismissing it leaves the
+outage, and the footer, intact.
+
 ## VS Code Workspace Cockpit
 
 The optional extension bundles selected `src/core` modules directly; it does
@@ -446,90 +483,104 @@ The SSE connection lifecycle has three invariants (2026-07-01):
   lives in `web/live-activity-model.ts`, used by both the REST route and the
   SSE push.
 
-### Attention System
+### Live State Confidence (2026-07-28)
 
-`reup attention setup` registers Reup's capture command as a Claude Code
-`Notification` hook. Hooks are additive lists, so setup only appends Reup's
-own entry and removal filters exactly that entry back out - hooks the user
-configured are never touched. The hook payload is validated at runtime and
-stored as one atomic marker per session under `reup/attention/`.
+`activityState` has three possible sources, and they are not equally reliable:
+a lock `status` field, a hook work marker, or — when a session has neither —
+transcript recency. VS Code peer locks omit `status`, so recency is routinely
+the only source, and it cannot distinguish a long tool call from a finished
+turn: a quiet stretch mid-turn reads the same as a completed one.
 
-A marker means "this session is waiting on the user" and resolves itself: any
-lock status transition or transcript event after the marker's timestamp, or
-the death of the session's process, deactivates it (and the live-activity
-model deletes it in the background). The watcher classifies marker writes as
-`activity`, so a needs-input state reaches connected browsers on the same
-~150 ms push path as busy/idle flips. Turn completion needs no hook at all:
-clients detect running-to-idle transitions from consecutive snapshots.
-Desktop notifications are browser-local and opt-in; the TUI pulses a red
-marker and rings the terminal bell once per new attention event.
+`LiveActivityEntry.stateIsReported` records which kind of evidence produced the
+state. The rule it exists to enforce: **a claim about an event requires
+reported evidence; presentation may use the guess.** The desktop "turn
+finished" alert is such a claim, and firing it on recency meant an alert every
+time Claude paused to think.
 
-The same setup also registers `UserPromptSubmit` and `Stop` hooks pointing at
-the same capture command. These provide Reup-owned turn boundaries
-(busy from prompt submit until Stop) stored as one work marker per session
-under `reup/activity/`. Detection combines lock status and work marker by
-newest transition (`combineWorkEvidence`), which covers the sessions whose
-locks omit the status field entirely - every observed VS Code entrypoint
-lock. A busy marker is corroborated by the same evidence-freshness rule as
-lock status, so a crashed turn cannot pulse forever. A submitted prompt also
-clears the session's attention marker. In the web live strip, attached
-sessions never vanish: quiet ones render dimmed as Idle instead of being
-filtered out.
+The same reasoning shapes the web live dot: `waiting` is applied only when
+something reported the turn boundary. Before this, an actively working session
+turned amber and then grey while the TUI showed it correctly as live, because
+the transcript had simply gone quiet.
 
-In the web client, `refreshLiveActivity()` gates on `activeSessionIds`, which
-only `refreshProjectData()` updates — both the bootstrap and SSE-triggered
-refresh run project data first and chain the activity fetch after it.
+### Shared Live State (2026-07-29)
 
-## Terminal Launching
+> The undocumented Claude Code semantics this design rests on — and the wrong
+> assumptions that repeatedly broke it — are in
+> [`CLAUDE_CODE_DATA_MODEL.md`](CLAUDE_CODE_DATA_MODEL.md). Read it before
+> changing live-state logic.
 
-Direct TUI resume stays in the current terminal. Web resume delegates to
-platform-specific launchers:
+`core/session/session-live-state.ts` holds the one reading of "what is this
+session doing" that every surface draws. It is a pure function of evidence the
+callers already poll, so the TUI can call it at render time and the web can
+call it while building a snapshot.
 
-- Unix/macOS: tmux, known terminal applications, detected emulators, then
-  clipboard fallback.
-- Windows: Windows Terminal, PowerShell, `cmd`, then clipboard fallback.
+The vocabulary is four states, ordered by urgency:
 
-Session IDs are UUID-validated. Unix paths are shell-quoted. The Windows
-launcher passes working directories and command tokens through structured
-`execFile()` / `spawn()` arguments, with clipboard fallback only after launch
-attempts fail. Clean Windows manual smoke is still required before official
-public release.
+| state         | meaning                                           |
+| ------------- | ------------------------------------------------- |
+| `needs-input` | blocked on the user (permission or input prompt)  |
+| `working`     | producing output or running a tool right now      |
+| `attached`    | a live process holds the session, currently quiet |
+| `detached`    | no live process                                   |
 
-Both resume paths move into the recorded project directory through
-`tryChangeWorkingDirectory()`. Recorded paths outlive the directories they name
-— Reup surfaces that as the `path-missing` status and still offers resume — so
-a missing directory degrades to launching from the current one with a warning,
-never an aborted launch.
+`working` is deliberately the only state derived from activity; everything
+quieter collapses into `attached`. Distinguishing a pausing session from a
+finished one is exactly the judgement that proved unreliable for locks that
+report no turn boundaries, so a surface wanting it must opt in explicitly.
 
-## Configuration
+**Core versus special.** A surface may choose how to draw a state and may add
+detail on top, but may not add a value to the vocabulary or reinterpret one —
+that is what made the surfaces disagree. The split as it stands:
 
-Shared TypeScript runtime configuration lives in `src/config/app.ts`.
-Browser-only timings stay in the standalone client to avoid a frontend build
-step; domain thresholds remain next to the logic they govern.
+- **Core** — the four states, resolved once. The TUI reads them in `App.tsx`,
+  the web in `live-activity-model.ts` (`LiveActivityEntry.liveState`), and the
+  extension in `live-attention.ts` (`LiveSessionSignals.liveStateBySession`).
+- **Special, web** — it splits `attached` into `waiting` and plain quiet, gated
+  on `stateIsReported`, because it has room for a label explaining which. This
+  is the only sanctioned refinement, and it sits in one client function,
+  `dotActivityState()`.
+- **Special, presentation** — each surface renders in its own idiom: the TUI
+  dims Ink's colour rather than picking a second green (so it survives
+  16-colour terminals), the web lowers opacity, and VS Code has no intensity
+  for tree icons so it carries the distinction by fill, `circle-filled` against
+  `circle-outline`, on one shared green.
+- **Special, per-surface states** — bulk selection and the `reup cleanup` /
+  `doctor` triage statuses exist only in the TUI and never entered the core.
 
-| Variable            | Purpose                               |
-| ------------------- | ------------------------------------- |
-| `CLAUDE_CONFIG_DIR` | Override Claude Code's data directory |
-| `REUP_PORT`         | Preferred web port                    |
-| `REUP_NO_OPEN`      | Prevent automatic browser opening     |
-| `REUP_DEBUG`        | Enable debug logging                  |
+`TRANSCRIPT_RUNNING_WINDOW_MS` is intentionally not exported: a surface
+applying that window itself is precisely what made the TUI call a session busy
+that the web already called idle. `tests/core/session-live-state.test.ts`
+guards both the resolver and the boundary — it fails if a surface starts
+deriving liveness on its own again.
 
-## Verification
+### Turn-End Alerts (2026-07-29)
 
-CI runs on Ubuntu and Windows with Node.js 20:
+Reup's monitoring surface is the web page: with many sessions to watch, it is
+normally open and in front of the user, and that is where everything is seen.
+A notification is only for the moments it is not.
 
-```bash
-npm run format:check
-npm run lint
-npm run build
-npm test
-```
+That framing decides the division of labour, which took two wrong turns to
+find:
 
-ESLint covers TypeScript, tests, and the standalone browser JavaScript. Prettier
-covers source, tests, browser HTML/CSS, scripts, workflow files, and maintained
-Markdown.
+- **The server reports what happened.** `event-stream-route.ts` tracks the last
+  working state per session and emits a `turn-finished` SSE event when one
+  leaves `working` with `stateIsReported` true. The page cannot find this
+  alone — it derives state from snapshots it only receives while awake, so a
+  throttled tab misses one side of the transition and stays silent.
+- **The page decides whether the user needs telling.** `document.hidden` is the
+  one signal only the browser has, and it answers exactly the right question:
+  are you looking at this? If the page is visible, you already saw it.
 
-Before release, also run `npm run release:local` for a local release-candidate
-bundle and `npm run release:installers` for installable RC packages, or at
-minimum run `node --check src/web/client.js`, `npm audit`, and
-`npm pack --dry-run`.
+Both wrong turns are worth recording. Deriving the boundary in the browser by
+diffing snapshots failed because it required witnessing both sides. Moving the
+whole alert to a local process — a detached check that notified unless a new
+prompt arrived within thirty seconds — failed worse: nothing local can observe
+attention, and "no reply yet" mistakes reading a long answer for walking away.
+It also spawned a Node runtime per turn to ask one question.
+
+The remaining gap is honest and small: a tab frozen for several minutes runs no
+JavaScript, so a very long absence raises nothing. By then the user has been
+away long enough to simply read the state on return.
+
+There is no separate preference. The page's existing notification toggle is the
+control, and the browser's own permission prompt is the consent.
