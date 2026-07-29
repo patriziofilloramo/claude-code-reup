@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { getClaudeProjectsDirectory, resolveProjectPath } from '../project/claude-paths.js'
 import { loadProjects } from '../project/project-discovery.js'
 import { inspectProjectSidecarLock } from '../project/project-sidecar-lock.js'
+import { inspectAttentionHookHealth } from '../session/attention-hooks-integration.js'
 import { isValidSessionId } from '../session/session-model.js'
 import type { Project, Session, SessionStatus } from '../session/session-model.js'
 import { primaryStatus } from '../session/session-signals.js'
@@ -41,6 +42,13 @@ export interface LegacyProjectMemoryArtifact {
 }
 
 export interface DiagnosticsReport {
+  /**
+   * Set when Reup's Claude Code hooks are registered but name a script that no
+   * longer exists. They then run and fail silently, costing every turn
+   * boundary and needs-input alert, with no other symptom than live state
+   * quietly degrading to guesswork.
+   */
+  brokenAttentionHook: { command: string; missingPath: string } | null
   brokenIndices: BrokenSessionIndex[]
   expiring: DiagnosticsSession[]
   legacyProjectMemoryArtifacts: LegacyProjectMemoryArtifact[]
@@ -57,13 +65,22 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
     listProjectDirectoryNames(projectsDirectory),
   ])
   const projectsById = new Map(projects.map((project) => [project.id, project]))
+  const hookHealth = await inspectAttentionHookHealth()
   const report: DiagnosticsReport = {
+    brokenAttentionHook: null,
     brokenIndices: [],
     expiring: [],
     legacyProjectMemoryArtifacts: [],
     orphanedTranscripts: [],
     pathMissing: [],
     staleLocks: [],
+  }
+
+  if (hookHealth.state === 'broken') {
+    report.brokenAttentionHook = {
+      command: hookHealth.command,
+      missingPath: hookHealth.missingPath,
+    }
   }
 
   collectSessionDiagnostics(projects, report)

@@ -232,6 +232,9 @@ describe('web routes', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
+      // Null, not absent: the isolated config dir has no hooks registered, so
+      // there is nothing broken to report.
+      brokenAttentionHook: null,
       brokenIndices: [],
       expiring: [],
       legacyProjectMemoryArtifacts: [],
@@ -458,6 +461,48 @@ describe('web routes', () => {
       attention: unknown
     }>
     expect(resolved[0]?.attention).toBeNull()
+  })
+
+  it('marks state unreported when no source reports turn boundaries', async () => {
+    // A VS Code session with no work marker: the lock omits `status` and no
+    // hook has fired, so activityState is transcript recency alone. Consumers
+    // need to know that, because recency cannot distinguish a long tool call
+    // from a finished turn — and alerting on it fires on every pause.
+    await createKnownSession()
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'vscode-peer.json'),
+      JSON.stringify({ pid: process.pid, sessionId: SESSION_ID })
+    )
+
+    const entries = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      stateIsReported: boolean
+    }>
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.stateIsReported).toBe(false)
+  })
+
+  it('marks state reported once a lock status or hook marker exists', async () => {
+    await createKnownSession()
+    const sessionsDirectory = join(claudeDirectory, 'sessions')
+    await mkdir(sessionsDirectory, { recursive: true })
+    await writeFile(
+      join(sessionsDirectory, 'cli.json'),
+      JSON.stringify({
+        pid: process.pid,
+        sessionId: SESSION_ID,
+        status: 'busy',
+        statusUpdatedAt: Date.now(),
+      })
+    )
+
+    const entries = (await (await buildApp().request('/api/live-activity')).json()) as Array<{
+      stateIsReported: boolean
+    }>
+
+    expect(entries[0]?.stateIsReported).toBe(true)
   })
 
   it('reports running from a turn-boundary marker when the lock has no status field', async () => {

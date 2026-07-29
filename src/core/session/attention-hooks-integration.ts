@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { getClaudeDirectory, getReupDirectory } from '../project/claude-paths.js'
@@ -69,6 +69,89 @@ export async function setupAttentionHook(): Promise<SetupResult> {
     }
     return { changed: true, command: installedCommand }
   })
+}
+
+/**
+ * How Reup's hooks actually stand, which is not the same question as whether
+ * they are registered.
+ *
+ * A hook entry names a script by absolute path. If that path stops resolving —
+ * the install was moved or removed, or it lived on a drive that is no longer
+ * mounted — Claude Code still runs the command, node still fails, and nothing
+ * anywhere reports it. Every turn boundary and every needs-input alert is then
+ * silently lost, and all surfaces fall back to guessing from transcript
+ * recency. Observed on a real machine: three weeks of hooks registered and
+ * dead, with `status` cheerfully reporting them configured.
+ */
+export type AttentionHookHealth =
+  | { state: 'not-configured' }
+  /** Registered, and the script it points at exists. */
+  | { state: 'ready'; command: string }
+  /** Registered, but the script is gone: hooks are running and failing. */
+  | { state: 'broken'; command: string; missingPath: string }
+
+/**
+ * Checks that Reup's hooks are registered *and* that what they point at is
+ * still there. Only the second half can catch a dead install.
+ */
+export async function inspectAttentionHookHealth(): Promise<AttentionHookHealth> {
+  const integration = await readIntegration()
+  if (!integration || !(await isAttentionHookConfigured())) return { state: 'not-configured' }
+
+  const scriptPath = hookScriptPath(integration.installedCommand)
+  if (scriptPath === null) return { state: 'ready', command: integration.installedCommand }
+  try {
+    await access(scriptPath)
+  } catch {
+    return {
+      command: integration.installedCommand,
+      missingPath: scriptPath,
+      state: 'broken',
+    }
+  }
+  return { state: 'ready', command: integration.installedCommand }
+}
+
+/**
+ * Repoints Reup's own hook entries at the running install when the ones on
+ * disk name a script that no longer exists. Returns true only if it repaired.
+ *
+ * The absolute path in a hook entry goes stale for ordinary reasons — a Node
+ * version manager moves the npm global root, an installer changes location —
+ * and the failure is silent, so waiting for the user to notice means weeks of
+ * degraded state. This maintains an entry the user already consented to,
+ * rather than adding one: if the hooks were never set up, it does nothing.
+ *
+ * Best-effort by contract. It is called on ordinary startup paths, so any
+ * failure must leave the surface running rather than surfacing an error.
+ */
+export async function repairAttentionHookIfBroken(): Promise<boolean> {
+  try {
+    const health = await inspectAttentionHookHealth()
+    if (health.state !== 'broken') return false
+    // Pointless if this install cannot name itself either — a temporary or
+    // deleted path would just replace one dead entry with another.
+    const ownPath = hookScriptPath(captureCommand())
+    if (ownPath === null) return false
+    try {
+      await access(ownPath)
+    } catch {
+      return false
+    }
+    return (await setupAttentionHook()).changed
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The script path inside a capture command, or null when the command does not
+ * have the shape `captureCommand()` produces. Returning null means "cannot
+ * check", never "fine": a command Reup did not write is not Reup's to judge.
+ */
+export function hookScriptPath(command: string): string | null {
+  const match = /^node\s+"([^"]+)"\s+attention\s+capture$/.exec(command.trim())
+  return match?.[1] ?? null
 }
 
 /** True when Reup's capture command is registered for every hook event it needs. */

@@ -40,6 +40,18 @@ export async function runCli(commandLineArguments = process.argv.slice(2)): Prom
     return
   }
 
+  // A hook entry names an absolute path, which goes stale for ordinary reasons
+  // (a Node version manager moves the npm global root, an installer relocates)
+  // and then fails silently. Repair from the surfaces the user lives in, which
+  // stay alive long enough for the write to land. Deliberately not `doctor`,
+  // whose job is to report the problem, nor `attention`, which owns this
+  // integration itself.
+  if (command === undefined || command === 'web' || command === 'config') {
+    const { repairAttentionHookIfBroken } =
+      await import('../core/session/attention-hooks-integration.js')
+    void repairAttentionHookIfBroken()
+  }
+
   switch (command) {
     case '--version':
     case '-v':

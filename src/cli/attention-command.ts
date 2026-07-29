@@ -7,7 +7,7 @@ import {
 } from '../core/session/attention.js'
 import type { HookCaptureResult } from '../core/session/attention.js'
 import {
-  isAttentionHookConfigured,
+  inspectAttentionHookHealth,
   removeAttentionHook,
   setupAttentionHook,
 } from '../core/session/attention-hooks-integration.js'
@@ -50,10 +50,25 @@ export async function runAttentionCommand(commandArguments: string[]): Promise<v
 }
 
 async function printAttentionStatus(): Promise<void> {
-  const configured = await isAttentionHookConfigured()
-  if (!configured) {
+  const health = await inspectAttentionHookHealth()
+  if (health.state === 'not-configured') {
     writeOutput(
       'Attention alerts are off. Run `reup attention setup` to be alerted when a session waits for your input.'
+    )
+    return
+  }
+  // Registered but pointing at nothing: Claude Code runs the command, node
+  // fails, and every turn boundary and alert is lost without a word. Saying
+  // "on" here would be the lie that hid it for three weeks.
+  if (health.state === 'broken') {
+    writeOutput(
+      [
+        'Attention alerts are registered but BROKEN: the command Claude Code runs no longer exists.',
+        `  missing: ${health.missingPath}`,
+        'Until this is fixed, needs-input alerts and turn boundaries are silently lost,',
+        'and session state falls back to guessing from transcript activity.',
+        'Run `reup attention setup` from the current install to repoint the hooks.',
+      ].join('\n')
     )
     return
   }

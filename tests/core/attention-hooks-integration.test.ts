@@ -4,8 +4,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import {
+  hookScriptPath,
+  inspectAttentionHookHealth,
   isAttentionHookConfigured,
   removeAttentionHook,
+  repairAttentionHookIfBroken,
   setupAttentionHook,
 } from '../../src/core/session/attention-hooks-integration.js'
 
@@ -39,6 +42,70 @@ describe('attention hook integration', () => {
       expect(entries).toHaveLength(1)
       expect(JSON.stringify(entries[0])).toContain('attention capture')
     }
+  })
+
+  /**
+   * Observed on a real machine: the hooks pointed at an npm-linked install on
+   * a drive that was no longer mounted. Claude Code kept running the command,
+   * node kept failing, and nothing reported it for three weeks — every turn
+   * boundary and needs-input alert silently lost, while `status` reported the
+   * hooks configured. Registration alone was never proof they worked.
+   */
+  it('reports registered hooks as broken when their script no longer exists', async () => {
+    await setupAttentionHook()
+    expect(await inspectAttentionHookHealth()).toMatchObject({ state: 'ready' })
+    // Still registered by the settings check, which is exactly the blind spot.
+    expect(await isAttentionHookConfigured()).toBe(true)
+
+    const { goneCommand, gonePath } = await breakInstalledCommand()
+
+    expect(await isAttentionHookConfigured()).toBe(true)
+    expect(await inspectAttentionHookHealth()).toEqual({
+      command: goneCommand,
+      missingPath: gonePath,
+      state: 'broken',
+    })
+  })
+
+  /**
+   * The path in a hook entry goes stale for ordinary reasons — a Node version
+   * manager moves the npm global root, an installer relocates — and the
+   * failure is silent, so waiting for the user to notice cost three weeks
+   * once. Repair maintains an entry the user already consented to.
+   */
+  it('repoints its own hooks at the running install when their script is gone', async () => {
+    await setupAttentionHook()
+    await breakInstalledCommand()
+    expect(await inspectAttentionHookHealth()).toMatchObject({ state: 'broken' })
+
+    expect(await repairAttentionHookIfBroken()).toBe(true)
+    expect(await inspectAttentionHookHealth()).toMatchObject({ state: 'ready' })
+
+    // Repaired, not stacked: still exactly one Reup entry per event.
+    const settings = await readSettings()
+    for (const hookEvent of ['Notification', 'Stop', 'UserPromptSubmit']) {
+      expect(hooksOf(settings, hookEvent)).toHaveLength(1)
+    }
+  })
+
+  it('never adds hooks the user did not ask for, and never repairs healthy ones', async () => {
+    // Never configured: repair must not become a way to enable the feature.
+    expect(await repairAttentionHookIfBroken()).toBe(false)
+    expect(await inspectAttentionHookHealth()).toEqual({ state: 'not-configured' })
+
+    // Already working: nothing to do, and settings must stay untouched.
+    await setupAttentionHook()
+    const before = JSON.stringify(await readSettings())
+    expect(await repairAttentionHookIfBroken()).toBe(false)
+    expect(JSON.stringify(await readSettings())).toBe(before)
+  })
+
+  it('reads the script path only from a command Reup itself wrote', async () => {
+    expect(hookScriptPath('node "C:/a/dist/index.js" attention capture')).toBe('C:/a/dist/index.js')
+    // A command Reup did not write is not Reup's to judge: null means "cannot
+    // check", and must never be reported as a broken install.
+    expect(hookScriptPath('some-other-tool --notify')).toBeNull()
+    expect(hookScriptPath('node "C:/a/dist/index.js" something else')).toBeNull()
   })
 
   it('repairs a partially registered integration without duplicating entries', async () => {
@@ -96,6 +163,29 @@ describe('attention hook integration', () => {
 
   async function readSettings(): Promise<Record<string, unknown>> {
     return JSON.parse(await readFile(join(claudeDirectory, 'settings.json'), 'utf8'))
+  }
+
+  /** Repoints the registered hooks at a script path that does not exist. */
+  async function breakInstalledCommand(): Promise<{ goneCommand: string; gonePath: string }> {
+    const integrationPath = join(claudeDirectory, 'reup', 'attention-integration.json')
+    const integration = JSON.parse(await readFile(integrationPath, 'utf8')) as Record<
+      string,
+      unknown
+    >
+    const gonePath = join(claudeDirectory, 'gone', 'dist', 'index.js').replaceAll('\\', '/')
+    const goneCommand = `node "${gonePath}" attention capture`
+    await writeFile(
+      integrationPath,
+      JSON.stringify({ ...integration, installedCommand: goneCommand }),
+      'utf8'
+    )
+    const settings = await readSettings()
+    for (const hookEvent of ['Notification', 'Stop', 'UserPromptSubmit']) {
+      const entry = hooksOf(settings, hookEvent)[0] as { hooks: { command: string }[] }
+      entry.hooks[0]!.command = goneCommand
+    }
+    await writeSettings(settings)
+    return { goneCommand, gonePath }
   }
 
   async function writeSettings(value: unknown): Promise<void> {
