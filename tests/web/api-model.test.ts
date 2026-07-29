@@ -24,6 +24,7 @@ function session(overrides: Partial<Session> = {}): Session {
       compactionCount: 0,
       expiresInDays: 30,
       interrupted: false,
+      interruptedByUser: false,
       lastToolFailed: false,
       pathExists: true,
     },
@@ -65,6 +66,17 @@ describe('web API model serialization', () => {
     const dangling = session({ signals: { ...session().signals, interrupted: true } })
 
     expect(serializeSession(dangling, true).primaryStatus).toBe('ok')
+  })
+
+  it('keeps reporting interrupted for a live session the user explicitly stopped', () => {
+    // The mid-turn correction above applies only to the *inferred* signal. A
+    // recorded stop marker is a fact about the session, and the reported case
+    // is exactly this one: stopping from the VS Code panel leaves the session
+    // attached, so suppressing it hid the only status that was true.
+    const stopped = session({ signals: { ...session().signals, interruptedByUser: true } })
+
+    expect(serializeSession(stopped, true).primaryStatus).toBe('interrupted')
+    expect(serializeSession(stopped, false).primaryStatus).toBe('interrupted')
   })
 
   it('keeps reporting interrupted for a live session whose last tool call actually failed', () => {

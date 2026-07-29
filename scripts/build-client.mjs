@@ -36,6 +36,7 @@ const SEGMENTS = [
   '12-new-session.js', // start-new-session action
   '13-ctx-menu.js', // context menu (project and session)
   '14-search.js', // search bar, deep-search mode, keyboard shortcuts
+  '15-connection.js', // server reachability state and the offline overlay
   '15-data.js', // data refresh, SSE live updates, bootstrap
   '16-theme.js', // theme cycling, persistence, Matrix rain easter egg
   '17-rail.js', // left rail: Stacks, Groups, focus filter

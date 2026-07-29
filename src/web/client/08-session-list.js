@@ -30,24 +30,14 @@ function buildTagChipsHtml(tags) {
 }
 
 /**
- * Resolves the working/waiting/idle/attention state for a live session row,
- * matching the rail's and inspector's activityDot treatment. Falls back to
- * "idle" when the session is live but has no live-activity entry yet (a
- * brief gap right after activeSessionIds updates, before the next snapshot).
+ * Resolves the dot state for a live session row, from the same helper the rail
+ * and the inspector use. Falls back to "idle" when the session is live but has
+ * no live-activity entry yet (a brief gap right after activeSessionIds
+ * updates, before the next snapshot).
  */
 function liveSessionRowState(sessionId) {
-  const entry = findLiveActivity(sessionId)
-  const state =
-    entry && entry.attention ? 'attention' : entry ? entry.activityState || 'idle' : 'idle'
-  const label =
-    entry && entry.attention
-      ? STRINGS.activityNeedsInput
-      : state === 'running'
-        ? STRINGS.activityRunning
-        : state === 'waiting'
-          ? STRINGS.activityWaiting
-          : STRINGS.activityIdle
-  return { label, state }
+  const state = dotActivityState(findLiveActivity(sessionId))
+  return { label: dotActivityLabel(state), state }
 }
 
 /** Renders a single session row (two lines + optional deep-search snippet) as an HTML string. */

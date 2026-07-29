@@ -1,16 +1,39 @@
 ﻿import { open } from 'node:fs/promises'
 
 import { isBusyEvidenceFresh } from './active-sessions.js'
+import type { SessionWorkState } from './active-sessions.js'
+import { isUserInterruptionTurn } from './session-signals.js'
 
-/** Maximum bytes read from the end of a transcript to find recent tool activity. */
-const TAIL_BYTES = 12_000
+/**
+ * Bytes read from the end of a transcript on the first attempt.
+ *
+ * Sized against real events rather than a round number: a single assistant or
+ * user event routinely runs 1.5–5 KB, so a smaller window holds only two or
+ * three of them — and the first is always discarded as a partial line. The
+ * turn-boundary signal then depends on where the byte boundary happens to
+ * fall, which made live state flip between runs for no reason visible in the
+ * data.
+ */
+const TAIL_BYTES = 64_000
+/**
+ * Ceiling for the widened re-read. A tool result carrying a large file can
+ * exceed any fixed window on its own, so the read grows until it finds
+ * conversational events — but never scans an entire multi-megabyte transcript.
+ */
+const MAX_TAIL_BYTES = 512_000
+/** Conversational events the window should contain before its reading is trusted. */
+const MIN_TAIL_EVENTS = 3
 /**
  * A transcript written within this window (ms) is proof of work in itself:
  * Claude Code flushes events continuously while generating, so a very fresh
  * event means the session is running even with no tool pending and no lock
  * status (lock files do not always carry the status field).
+ *
+ * Deliberately not exported: a surface applying this window itself is what
+ * made the TUI call a session busy that the web already called idle. Surfaces
+ * ask resolveSessionLiveState, which reads it here once.
  */
-export const TRANSCRIPT_RUNNING_WINDOW_MS = 10_000
+const TRANSCRIPT_RUNNING_WINDOW_MS = 10_000
 /** An event within this window (ms) marks a session as waiting rather than idle. */
 const WAITING_WINDOW_MS = 30_000
 
@@ -32,6 +55,15 @@ export interface SessionTailActivity {
    * turn or assistant tool activity.
    */
   trailingQuestion: boolean
+  /**
+   * Whether the last conversational event leaves Claude with work to do.
+   *
+   * A turn ends exactly when Claude emits an assistant message carrying no
+   * tool call — the API's own stop condition — or when the user stops it. A
+   * tool call, a tool result, or a fresh prompt all mean the turn is still
+   * running, however long the clock says the transcript has been quiet.
+   */
+  turnInFlight: boolean
   /** ISO timestamp of the most recent assistant or user event in the tail. */
   lastEventAt: string | null
   /** Inferred activity state derived from tool and timestamp data. */
@@ -40,7 +72,13 @@ export interface SessionTailActivity {
 
 /**
  * Reads the tail of a JSONL transcript and returns the most recent tool
- * activity. Reads at most TAIL_BYTES from the end to stay fast.
+ * activity.
+ *
+ * The window widens until it holds enough conversational events to read a turn
+ * boundary from, because a fixed byte count says nothing about how many events
+ * it contains: real events run from a few hundred bytes to several kilobytes,
+ * so the same window can hold a dozen or barely one. Widening is bounded and
+ * rare — the first read covers the ordinary case.
  *
  * Returns null when the file cannot be read.
  */
@@ -53,17 +91,17 @@ export async function readSessionTailActivity(
     const stat = await fd.stat()
     const fileSize = stat.size
 
-    const readSize = Math.min(fileSize, TAIL_BYTES)
-    const buffer = Buffer.allocUnsafe(readSize)
-    // A short read must not expose the uninitialized remainder of the buffer,
-    // so only the bytes actually read are decoded.
-    const { bytesRead } = await fd.read(buffer, 0, readSize, fileSize - readSize)
-    const text = buffer.subarray(0, bytesRead).toString('utf8')
+    let activity = await readTailWindow(fd, fileSize, TAIL_BYTES)
+    for (
+      let windowSize = TAIL_BYTES * 4;
+      activity.conversationalEvents < MIN_TAIL_EVENTS &&
+      windowSize <= MAX_TAIL_BYTES &&
+      windowSize < fileSize;
+      windowSize *= 4
+    ) {
+      activity = await readTailWindow(fd, fileSize, windowSize)
+    }
 
-    // When the file is larger than the tail window we started mid-stream, so
-    // the first line is probably truncated and must be dropped.
-    const isPartialRead = fileSize > readSize
-    const activity = parseTailActivity(text, isPartialRead)
     if (activity.lastEventAt === null && fileSize > 0) {
       // A single event larger than the tail window leaves no parseable line,
       // which must not read as a dead session: the file's own modification
@@ -78,6 +116,29 @@ export async function readSessionTailActivity(
   }
 }
 
+/** A window's reading, plus what it took to get it — used to decide on widening. */
+interface TailWindowReading extends SessionTailActivity {
+  /** Assistant and user events found; other record types carry no turn signal. */
+  conversationalEvents: number
+}
+
+async function readTailWindow(
+  fd: Awaited<ReturnType<typeof open>>,
+  fileSize: number,
+  windowSize: number
+): Promise<TailWindowReading> {
+  const readSize = Math.min(fileSize, windowSize)
+  const buffer = Buffer.allocUnsafe(readSize)
+  // A short read must not expose the uninitialized remainder of the buffer,
+  // so only the bytes actually read are decoded.
+  const { bytesRead } = await fd.read(buffer, 0, readSize, fileSize - readSize)
+  const text = buffer.subarray(0, bytesRead).toString('utf8')
+
+  // When the file is larger than the window we started mid-stream, so the
+  // first line is probably truncated and must be dropped.
+  return parseTailActivity(text, fileSize > readSize)
+}
+
 /**
  * Combines Claude Code's own lock-file activity flag with transcript-derived
  * state. A corroborated busy lock wins: transcript appends can pause well
@@ -90,7 +151,7 @@ export async function readSessionTailActivity(
  * versions without lock status.
  */
 export function resolveActivityState(
-  lockStatus: 'busy' | 'idle' | null,
+  lockStatus: SessionWorkState | null,
   tail: SessionTailActivity | null,
   statusUpdatedAt: number | null = null,
   now = Date.now()
@@ -102,7 +163,21 @@ export function resolveActivityState(
     return tailState
   }
   if (lockStatus === 'idle') return tailState === 'running' ? 'waiting' : tailState
+
+  // Nothing reports turn boundaries for this session — VS Code peer locks omit
+  // `status`, and no hook marker exists. Here the transcript's own shape beats
+  // the clock: a turn still in flight is running however long Claude has been
+  // thinking between two tool calls, which is where the age fallback used to
+  // report a finished turn and make an active session read as idle. Bounded by
+  // the same window that limits trust in a busy flag, so a session that died
+  // mid-turn still settles instead of reading as running forever.
+  if (tail?.turnInFlight && isBusyEvidenceFresh(null, lastEventMs(tail), now)) return 'running'
   return tailState
+}
+
+function lastEventMs(tail: SessionTailActivity): number | null {
+  const parsed = tail.lastEventAt ? Date.parse(tail.lastEventAt) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 /**
@@ -124,7 +199,7 @@ const USER_REPLY_TOOL_NAMES = new Set(['AskUserQuestion', 'ExitPlanMode'])
  * resting between prompts.
  */
 export function isAwaitingUserReply(
-  workStatus: 'busy' | 'idle' | null,
+  workStatus: SessionWorkState | null,
   tail: SessionTailActivity | null
 ): boolean {
   if (!tail || tail.lastEventAt === null) return false
@@ -149,7 +224,7 @@ function stateFromLastEventAge(lastEventAt: string, now = Date.now()): ActivityS
   return ageMs < WAITING_WINDOW_MS ? 'waiting' : 'idle'
 }
 
-function parseTailActivity(text: string, isPartialRead: boolean): SessionTailActivity {
+function parseTailActivity(text: string, isPartialRead: boolean): TailWindowReading {
   // Only skip the first line when we started mid-file; reading from offset 0
   // gives a complete first line that must be kept.
   const rawLines = text.split('\n')
@@ -160,6 +235,8 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
   const resolvedToolIds = new Set<string>()
   let lastEventAt: string | null = null
   let trailingQuestion = false
+  let turnInFlight = false
+  let conversationalEvents = 0
 
   for (const line of lines) {
     const trimmed = line.trim()
@@ -176,13 +253,16 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     if (timestamp) lastEventAt = timestamp
 
     if (event['type'] === 'assistant') {
-      const content = (event['message'] as Record<string, unknown> | undefined)?.['content']
+      conversationalEvents++
+      const message = event['message'] as Record<string, unknown> | undefined
+      const content = message?.['content']
       if (!Array.isArray(content)) continue
       const blocks = content as Record<string, unknown>[]
       const toolUseBlocks = blocks.filter((block) => block['type'] === 'tool_use')
       // A text-only assistant message ending in "?" is a question asked in
       // prose; any tool activity instead means Claude kept working.
       trailingQuestion = toolUseBlocks.length === 0 && endsWithQuestion(blocks)
+      turnInFlight = !isFinalAssistantEvent(message, toolUseBlocks.length)
       for (const block of toolUseBlocks) {
         const name = typeof block['name'] === 'string' ? block['name'] : null
         const id = typeof block['id'] === 'string' ? block['id'] : null
@@ -193,8 +273,11 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     }
 
     if (event['type'] === 'user') {
+      conversationalEvents++
       // Any user turn answers a trailing question, whatever its shape.
       trailingQuestion = false
+      // A prompt or a tool result both leave Claude with work to do next.
+      turnInFlight = true
       const content = (event['message'] as Record<string, unknown> | undefined)?.['content']
       // A user turn that is not purely tool results (an interrupt marker or a
       // new prompt) means no tool is running any more — pending tool uses must
@@ -204,6 +287,9 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
         continue
       }
       const blocks = content as Record<string, unknown>[]
+      // A stop marker ends the turn as surely as a final assistant message:
+      // the user cut it short, so nothing is running afterwards.
+      if (isUserInterruptionTurn(blocks)) turnInFlight = false
       const containsOnlyToolResults =
         blocks.length > 0 && blocks.every((block) => block['type'] === 'tool_result')
       if (!containsOnlyToolResults) {
@@ -233,7 +319,38 @@ function parseTailActivity(text: string, isPartialRead: boolean): SessionTailAct
     state = 'idle'
   }
 
-  return { lastToolName, toolPending, trailingQuestion, lastEventAt, state }
+  return {
+    conversationalEvents,
+    lastToolName,
+    toolPending,
+    trailingQuestion,
+    turnInFlight,
+    lastEventAt,
+    state,
+  }
+}
+
+/**
+ * Whether an assistant event is the one that ended the turn.
+ *
+ * Claude Code splits a single assistant turn across several events — thinking,
+ * text, then tool_use — so block types alone cannot tell an intermediate
+ * message from a final one: a text event mid-turn looks exactly like the last
+ * word of a finished one. It does record the API's own `stop_reason`, and
+ * `end_turn` is the only value meaning Claude chose to stop; everything else
+ * has more of the turn still to come.
+ *
+ * Falls back to the block shape when the field is absent, so transcripts from
+ * Claude Code versions that predate it still degrade to the old reading rather
+ * than reporting every turn as unfinished.
+ */
+function isFinalAssistantEvent(
+  message: Record<string, unknown> | undefined,
+  toolUseBlockCount: number
+): boolean {
+  const stopReason = message?.['stop_reason']
+  if (typeof stopReason === 'string') return stopReason === 'end_turn'
+  return toolUseBlockCount === 0
 }
 
 /** True when the last text block of an assistant message ends with a question mark. */

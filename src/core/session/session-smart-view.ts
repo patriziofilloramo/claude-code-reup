@@ -23,7 +23,13 @@ export function primarySessionSmartView(
 ): SessionSmartViewId | null {
   if (session.signals.archived) return null
   if (activeSessionIds.has(session.id)) return 'active'
-  if (session.signals.interrupted || session.signals.lastToolFailed) return 'attention'
+  if (
+    session.signals.interrupted ||
+    session.signals.interruptedByUser ||
+    session.signals.lastToolFailed
+  ) {
+    return 'attention'
+  }
   if (session.gitBranch && session.currentBranch && session.gitBranch !== session.currentBranch) {
     return 'branch-drift'
   }

@@ -60,6 +60,8 @@ async function refreshProjectData() {
       }
     }
 
+    // A completed round-trip is the strongest evidence the server is alive.
+    if (serverLinkState === 'offline') markServerOnline()
     elements.footerStatus.textContent = fmt(STRINGS.statusBarProjects, { n: projects.length })
     elements.footerStatus.className = 'ftr-status'
 
@@ -102,8 +104,13 @@ async function refreshProjectData() {
     }
   } catch (error) {
     if (refreshGeneration !== projectRefreshGeneration) return
-    elements.footerStatus.textContent = STRINGS.statusBarLoadError
-    elements.footerStatus.className = 'ftr-status err'
+    // Distinguishing "the server answered with an error" from "nothing
+    // answered" is the probe's job; a failed refresh only raises the question.
+    noteServerUnreachable()
+    if (serverLinkState !== 'offline') {
+      elements.footerStatus.textContent = STRINGS.statusBarLoadError
+      elements.footerStatus.className = 'ftr-status err'
+    }
     console.error('[reup] failed to refresh project data:', error)
     hideLoadingOverlay()
   }
@@ -159,6 +166,9 @@ function connectLiveUpdates() {
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
     liveUpdatesSource = null
+    // Reconnection policy is unchanged and unconditional: the link watcher
+    // only observes, so a wrong verdict can never stop the stream coming back.
+    noteServerUnreachable()
     setTimeout(connectLiveUpdates, SSE_RECONNECT_DELAY_MS)
   })
 }
@@ -223,7 +233,12 @@ function raiseDesktopAlerts(entries) {
     }
 
     var previousState = previousActivityStates.get(entry.sessionId)
+    // Only a source that reports turn boundaries may claim a turn ended. Where
+    // the state comes from transcript recency alone, a quiet stretch during a
+    // long tool call is indistinguishable from a finished turn — and alerting
+    // on it means an alert every time Claude pauses to think.
     var finishedTurn =
+      entry.stateIsReported === true &&
       previousState === 'running' &&
       (entry.activityState === 'waiting' || entry.activityState === 'idle')
     if (finishedTurn && enabled && document.hidden) {

@@ -43,6 +43,17 @@ function parallelToolUseEvent(
   })
 }
 
+function assistantEvent(blocks: unknown[], timestamp: string, stopReason?: string): string {
+  return JSON.stringify({
+    message: {
+      content: blocks,
+      ...(stopReason === undefined ? {} : { stop_reason: stopReason }),
+    },
+    timestamp,
+    type: 'assistant',
+  })
+}
+
 function isoAgo(ms: number): string {
   return new Date(Date.now() - ms).toISOString()
 }
@@ -122,6 +133,142 @@ describe('readSessionTailActivity', () => {
     const result = await readSessionTailActivity(path)
     expect(result!.toolPending).toBe(false)
     expect(result!.state).toBe('running')
+  })
+
+  /**
+   * Measured on a real 6.4 MB transcript: single assistant and user events run
+   * 1.5–5 KB, so a 12 KB window held three of them and discarded the first as a
+   * partial line. Whether the turn-boundary event survived then depended on
+   * where the byte boundary fell, and live state flipped between runs with
+   * nothing in the data to explain it.
+   */
+  it('keeps the turn boundary in view when events are kilobytes each', async () => {
+    const path = join(tmpDir, 'large-events.jsonl')
+    const filler = 'x'.repeat(5_000)
+    await writeFile(
+      path,
+      [
+        ...Array.from({ length: 12 }, (_, index) =>
+          assistantEvent([{ text: `${filler}${index}`, type: 'text' }], isoAgo(120_000), 'tool_use')
+        ),
+        // The event that carries the signal, last and easily pushed out.
+        JSON.stringify({
+          message: { content: [{ text: 'carry on', type: 'text' }] },
+          timestamp: isoAgo(60_000),
+          type: 'user',
+        }),
+      ].join('\n')
+    )
+
+    const result = await readSessionTailActivity(path)
+
+    expect(result!.turnInFlight).toBe(true)
+    expect(result!.lastEventAt).not.toBeNull()
+  })
+
+  describe('turn in flight', () => {
+    it('is set while a tool result leaves Claude with work to do', async () => {
+      const path = join(tmpDir, 'in-flight.jsonl')
+      await writeFile(
+        path,
+        [
+          toolUseEvent('Bash', 'id-t', isoAgo(90_000)),
+          toolResultEvent('id-t', isoAgo(60_000)),
+        ].join('\n')
+      )
+
+      const result = await readSessionTailActivity(path)
+
+      expect(result!.turnInFlight).toBe(true)
+      // The age-derived state is unchanged; only resolveActivityState uses the
+      // new signal, and only when no source reports turn boundaries.
+      expect(result!.state).toBe('idle')
+    })
+
+    /**
+     * Claude Code splits one assistant turn across several events — thinking,
+     * then text, then tool_use — so an intermediate text event looks exactly
+     * like the last word of a finished turn. Observed live: the dot dropped to
+     * idle during a ten-second gap between a text event and the tool_use that
+     * followed it. `stop_reason` is the API's own answer and is recorded on
+     * every assistant message.
+     */
+    it('stays set through an intermediate text event that is not the end of the turn', async () => {
+      const path = join(tmpDir, 'mid-turn-text.jsonl')
+      await writeFile(
+        path,
+        [
+          toolResultEvent('id-t', isoAgo(40_000)),
+          assistantEvent([{ text: 'Now let me check…', type: 'text' }], isoAgo(20_000), 'tool_use'),
+        ].join('\n')
+      )
+
+      expect((await readSessionTailActivity(path))!.turnInFlight).toBe(true)
+    })
+
+    it('stays set while Claude is thinking', async () => {
+      const path = join(tmpDir, 'mid-turn-thinking.jsonl')
+      await writeFile(
+        path,
+        assistantEvent([{ thinking: '…', type: 'thinking' }], isoAgo(20_000), 'tool_use')
+      )
+
+      expect((await readSessionTailActivity(path))!.turnInFlight).toBe(true)
+    })
+
+    it('clears on the assistant event that actually ended the turn', async () => {
+      const path = join(tmpDir, 'end-turn.jsonl')
+      await writeFile(
+        path,
+        assistantEvent([{ text: 'All done.', type: 'text' }], isoAgo(20_000), 'end_turn')
+      )
+
+      expect((await readSessionTailActivity(path))!.turnInFlight).toBe(false)
+    })
+
+    it('falls back to block shape when stop_reason is absent', async () => {
+      // Transcripts from Claude Code versions predating the field must keep
+      // their old reading rather than reporting every turn as unfinished.
+      const path = join(tmpDir, 'no-stop-reason.jsonl')
+      await writeFile(path, assistantEvent([{ text: 'All done.', type: 'text' }], isoAgo(20_000)))
+
+      expect((await readSessionTailActivity(path))!.turnInFlight).toBe(false)
+    })
+
+    it('is clear once Claude answers without calling a tool', async () => {
+      const path = join(tmpDir, 'turn-done.jsonl')
+      await writeFile(
+        path,
+        [
+          toolUseEvent('Bash', 'id-t', isoAgo(90_000)),
+          toolResultEvent('id-t', isoAgo(60_000)),
+          JSON.stringify({
+            message: { content: [{ text: 'done.', type: 'text' }] },
+            timestamp: isoAgo(30_000),
+            type: 'assistant',
+          }),
+        ].join('\n')
+      )
+
+      expect((await readSessionTailActivity(path))!.turnInFlight).toBe(false)
+    })
+
+    it('is clear once the user stops the turn', async () => {
+      const path = join(tmpDir, 'turn-stopped.jsonl')
+      await writeFile(
+        path,
+        [
+          toolUseEvent('Bash', 'id-t', isoAgo(60_000)),
+          JSON.stringify({
+            message: { content: [{ text: '[Request interrupted by user]', type: 'text' }] },
+            timestamp: isoAgo(30_000),
+            type: 'user',
+          }),
+        ].join('\n')
+      )
+
+      expect((await readSessionTailActivity(path))!.turnInFlight).toBe(false)
+    })
   })
 
   it('reports idle state when the last event is older than 30 seconds', async () => {
@@ -286,8 +433,17 @@ describe('resolveActivityState', () => {
     lastToolName: 'Bash',
     toolPending: state === 'running',
     trailingQuestion: false,
+    turnInFlight: false,
     lastEventAt,
     state,
+  })
+
+  const midTurn = (secondsAgo: number): SessionTailActivity => ({
+    ...tail('idle', new Date(NOW - secondsAgo * 1_000).toISOString()),
+    // The shape left by a completed tool call while Claude decides what to do
+    // next: nothing pending, but the turn has not ended.
+    toolPending: false,
+    turnInFlight: true,
   })
 
   it('trusts a corroborated busy lock over a quiet transcript', () => {
@@ -323,5 +479,31 @@ describe('resolveActivityState', () => {
     expect(resolveActivityState(null, tail('running'), null, NOW)).toBe('running')
     expect(resolveActivityState(null, tail('waiting'), null, NOW)).toBe('waiting')
     expect(resolveActivityState(null, null, null, NOW)).toBe('idle')
+  })
+
+  /**
+   * Reported from use: a VS Code session read as idle while Claude was plainly
+   * working. Those locks omit `status` and no hook marker existed, so the only
+   * signal left was transcript age — and the gap between a tool finishing and
+   * the next one starting routinely exceeds it. The transcript's own shape
+   * settles it: the turn had not ended.
+   */
+  it('keeps a turn in flight running through a thinking gap when nothing reports boundaries', () => {
+    expect(resolveActivityState(null, midTurn(15), null, NOW)).toBe('running')
+    expect(resolveActivityState(null, midTurn(60), null, NOW)).toBe('running')
+    expect(resolveActivityState(null, midTurn(4 * 60), null, NOW)).toBe('running')
+  })
+
+  it('still lets a session that died mid-turn settle', () => {
+    // Bounded by the same window that limits trust in a busy flag, so an
+    // abandoned turn cannot read as running forever.
+    expect(resolveActivityState(null, midTurn(10 * 60), null, NOW)).toBe('idle')
+  })
+
+  it('never lets an in-flight turn override a source that reports boundaries', () => {
+    // A lock or hook marker saying the turn ended is authoritative; the
+    // transcript shape is the fallback for sessions that have neither.
+    expect(resolveActivityState('idle', midTurn(15), NOW - 1_000, NOW)).toBe('idle')
+    expect(resolveActivityState('busy', midTurn(15), NOW - 1_000, NOW)).toBe('running')
   })
 })

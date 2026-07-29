@@ -214,10 +214,17 @@ export interface ApiErrorResponse {
  */
 export function serializeSession(session: Session, isLive: boolean): ApiSession {
   const status = primaryStatus(session.signals)
-  const displayStatus =
-    status === 'interrupted' && isLive && !session.signals.lastToolFailed
-      ? primaryStatus({ ...session.signals, interrupted: false })
-      : status
+  // The correction applies only to the *inferred* signal. An explicit stop
+  // marker and a genuine tool failure are both recorded facts about the
+  // session, so neither is corrected away just because it is still attached.
+  const correctsInferredInterruption =
+    status === 'interrupted' &&
+    isLive &&
+    !session.signals.lastToolFailed &&
+    !session.signals.interruptedByUser
+  const displayStatus = correctsInferredInterruption
+    ? primaryStatus({ ...session.signals, interrupted: false })
+    : status
   return { ...session, primaryStatus: displayStatus }
 }
 

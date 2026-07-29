@@ -13,6 +13,7 @@ import {
 import { join } from 'node:path'
 
 import { getReupDirectory } from '../project/claude-paths.js'
+import type { SessionWorkState } from './active-sessions.js'
 import { isValidSessionId } from './session-model.js'
 import { log } from '../../utils/logger.js'
 
@@ -126,8 +127,6 @@ export function isAttentionActive(marker: AttentionMarker, evidence: AttentionEv
 // -----------------------------------------------------------------------------
 // Work-signal markers (UserPromptSubmit / Stop hooks)
 // -----------------------------------------------------------------------------
-
-export type SessionWorkState = 'busy' | 'idle'
 
 /**
  * A turn boundary captured from Claude Code's UserPromptSubmit / Stop hooks.

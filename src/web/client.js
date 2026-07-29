@@ -69,6 +69,7 @@ const STRINGS = {
 
   // ── Session status badges ─────────────────────────────────────────────────
   statusInterruptedDesc: 'Claude had pending tool calls with no result — resume to continue.',
+  statusStoppedByUserDesc: 'You stopped Claude mid-turn and have not given new instructions since.',
   statusExpiringDesc: 'Transcript expires in {days} days (Claude auto-deletes after 30).',
   statusPathMissingDesc: 'Project directory no longer exists on disk.',
   statusHeavilyCompactedDesc: 'Context was compacted {count} times.',
@@ -164,6 +165,21 @@ const STRINGS = {
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
   resumePathUnavailable: 'Project directory is unavailable. Restore it before resuming.',
+
+  // ── Server link lost ──────────────────────────────────────────────────────
+  offlineTitle: 'LINK LOST',
+  offlineProbeCommand: '$ curl -sS http://{host}/api/active',
+  offlineProbeError: 'curl: (7) failed to connect to {host}: connection refused',
+  offlineHeadline: 'The reup server stopped responding.',
+  offlineLiveness:
+    'Live session state is unknown while the link is down. Nothing on this page is being updated, and no session is shown as active.',
+  offlineRetryCountdown: 'retrying in {seconds}s · attempt {n}',
+  offlineRetryNow: 'reconnecting…',
+  offlineRetryButton: 'Retry now',
+  offlineDismissButton: 'Dismiss',
+  offlineHint: 'Start it again with `reup web`, then this page reconnects on its own.',
+  offlineStatus: 'server offline',
+  offlineRestored: 'Link restored — live state is current again.',
 
   // ── Touched-file cross-session overlap ────────────────────────────────────
   touchedOthersOne: 'touched by 1 other session',
@@ -406,6 +422,20 @@ function filterTooltip(filter) {
 const AUTO_SAVE_DELAY_MS = 1500
 /** How long to wait (ms) before attempting to reconnect a dropped SSE stream. */
 const SSE_RECONNECT_DELAY_MS = 3000
+/**
+ * Grace period (ms) between the live stream dropping and the first reachability
+ * probe. A server restart drops the stream for well under a second, so waiting
+ * keeps the offline overlay off the screen for blips the user never noticed.
+ */
+const OFFLINE_PROBE_DELAY_MS = 1200
+/** First backoff (ms) between reachability probes once the server is confirmed down. */
+const OFFLINE_RETRY_BASE_MS = 2000
+/** Ceiling (ms) for the reachability backoff, so recovery is never slow to notice. */
+const OFFLINE_RETRY_MAX_MS = 15000
+/** How often (ms) the offline overlay redraws its retry countdown. */
+const OFFLINE_COUNTDOWN_TICK_MS = 250
+/** Cell count in the offline overlay's retry progress bar. */
+const OFFLINE_BAR_WIDTH = 16
 /** Coalesces bursts of filesystem SSE events into a single full data refresh. */
 const SSE_REFRESH_DEBOUNCE_MS = 300
 /** How long (ms) a toast notification stays visible before fading out. */
@@ -562,6 +592,14 @@ let claudeInstructionsDirty = false
 let claudeInstructionsClosing = false
 let liveUpdatesSource = null
 let liveUpdatesRefreshTimer = null
+/** 'online' until a reachability probe fails, then 'offline' until one succeeds. */
+let serverLinkState = 'online'
+let offlineProbeTimer = null
+let offlineCountdownTimer = null
+let offlineProbeInFlight = false
+let offlineAttempts = 0
+let offlineNextProbeAt = 0
+let offlineOverlayDismissed = false
 let usageRefreshInProgress = false
 let projectRefreshGeneration = 0
 let deepLinkProcessed = false
@@ -666,8 +704,7 @@ const elements = {
 // ---------------------------------------------------------------------------
 
 var loadingOverlay = null
-var loadingRaf = null
-var loadingResize = null
+var loadingRain = null
 var loadingStatusTimer = null
 var loadingBarTimer = null
 var loadingShownAt = 0
@@ -723,45 +760,66 @@ function matrixToken(name, fallback) {
   return value || fallback
 }
 
-function startLoadingRain(canvas) {
+/**
+ * Runs a Matrix rain on a canvas until the returned handle is stopped.
+ *
+ * Shared by the boot loader and the offline overlay: both want the same
+ * animation with a different palette, and one implementation means one place
+ * to fix the frame loop and the resize bookkeeping.
+ */
+function createMatrixRain(canvas, palette) {
   var ctx = canvas.getContext('2d')
-  // Read the palette from the active theme's tokens so the rain matches
-  // light/dark/terminal instead of forcing a dark field on every theme.
-  var trailFill = matrixToken('--matrix-trail', LOADING_TRAIL_FILL)
-  var brightColor = matrixToken('--matrix-primary-bright', MATRIX_RAIN_BRIGHT)
-  var primaryColor = matrixToken('--matrix-primary', MATRIX_RAIN_PRIMARY)
   var width = 0
   var height = 0
   var columns = 0
   var drops = []
+  var frameHandle = null
 
-  loadingResize = function () {
+  function resize() {
     width = canvas.width = window.innerWidth
     height = canvas.height = window.innerHeight
     columns = Math.floor(width / MATRIX_RAIN_COLUMN_WIDTH)
     drops = drops.slice(0, columns)
     while (drops.length < columns) drops.push(Math.random() * -height)
   }
-  loadingResize()
-  window.addEventListener('resize', loadingResize)
+  resize()
+  window.addEventListener('resize', resize)
 
   function draw() {
-    ctx.fillStyle = trailFill
+    ctx.fillStyle = palette.trail
     ctx.fillRect(0, 0, width, height)
     ctx.font = MATRIX_RAIN_FONT
     for (var i = 0; i < columns; i++) {
-      ctx.fillStyle = i % LOADING_BRIGHT_COLUMN_INTERVAL === 0 ? brightColor : primaryColor
+      ctx.fillStyle = i % LOADING_BRIGHT_COLUMN_INTERVAL === 0 ? palette.bright : palette.primary
       ctx.fillText(
         MATRIX_RAIN_GLYPHS[Math.floor(Math.random() * MATRIX_RAIN_GLYPHS.length)],
         i * MATRIX_RAIN_COLUMN_WIDTH,
         drops[i]
       )
       if (drops[i] > height && Math.random() > MATRIX_RAIN_RESET_THRESHOLD) drops[i] = 0
-      drops[i] += MATRIX_RAIN_COLUMN_WIDTH
+      drops[i] += MATRIX_RAIN_COLUMN_WIDTH * (palette.speed || 1)
     }
-    loadingRaf = requestAnimationFrame(draw)
+    frameHandle = requestAnimationFrame(draw)
   }
-  loadingRaf = requestAnimationFrame(draw)
+  frameHandle = requestAnimationFrame(draw)
+
+  return {
+    stop: function () {
+      if (frameHandle !== null) cancelAnimationFrame(frameHandle)
+      frameHandle = null
+      window.removeEventListener('resize', resize)
+    },
+  }
+}
+
+function startLoadingRain(canvas) {
+  // Read the palette from the active theme's tokens so the rain matches
+  // light/dark/terminal instead of forcing a dark field on every theme.
+  loadingRain = createMatrixRain(canvas, {
+    bright: matrixToken('--matrix-primary-bright', MATRIX_RAIN_BRIGHT),
+    primary: matrixToken('--matrix-primary', MATRIX_RAIN_PRIMARY),
+    trail: matrixToken('--matrix-trail', LOADING_TRAIL_FILL),
+  })
 }
 
 function startLoadingStatus(statusEl, barEl) {
@@ -811,11 +869,10 @@ function hideLoadingOverlay() {
     var overlay = loadingOverlay
     loadingOverlay = null
     overlay.style.opacity = '0'
-    if (loadingRaf) cancelAnimationFrame(loadingRaf)
+    if (loadingRain) loadingRain.stop()
     if (loadingStatusTimer) clearInterval(loadingStatusTimer)
     if (loadingBarTimer) clearInterval(loadingBarTimer)
-    if (loadingResize) window.removeEventListener('resize', loadingResize)
-    loadingRaf = loadingStatusTimer = loadingBarTimer = loadingResize = null
+    loadingRain = loadingStatusTimer = loadingBarTimer = null
     setTimeout(function () {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
     }, LOADING_REMOVE_DELAY_MS)
@@ -1128,9 +1185,14 @@ function buildStatusBadgeHtml(session) {
   const status = session.primaryStatus
   const signals = session.signals || {}
   if (status === 'interrupted') {
+    // Two different facts share this badge: a stop the user performed, and a
+    // tool call left without a result. Only the tooltip can tell them apart.
+    const description = signals.interruptedByUser
+      ? STRINGS.statusStoppedByUserDesc
+      : STRINGS.statusInterruptedDesc
     return (
       '<span class="s-badge s-badge-warn" title="' +
-      escapeHtml(STRINGS.statusInterruptedDesc) +
+      escapeHtml(description) +
       '">✗ interrupted</span>'
     )
   }
@@ -1752,19 +1814,50 @@ function findLiveActivity(sessionId) {
 }
 
 /**
+ * The activity state every web surface displays for an entry — the one place
+ * that decides it, so the rail, the session list and the inspector can never
+ * disagree with each other.
+ *
+ * The base reading is `entry.liveState`, resolved server-side by the shared
+ * core that the TUI and the VS Code extension use too. The web then adds one
+ * refinement the other surfaces do not attempt: it splits "attached but quiet"
+ * into a plain quiet session and one that is specifically *waiting*.
+ *
+ * That refinement is gated on `stateIsReported`, because "waiting" reads as
+ * "this needs you" and is only trustworthy when something actually reported
+ * the turn boundary — a lock status field or a hook marker. Sessions with
+ * neither (VS Code peer locks omit `status`) derive their state from
+ * transcript recency, where a pause mid-tool-call is indistinguishable from a
+ * finished turn. There the session stays on the shared reading rather than
+ * claiming attention nothing can vouch for.
+ */
+function dotActivityState(entry) {
+  if (!entry) return 'idle'
+  var liveState = entry.liveState || 'attached'
+  if (liveState === 'needs-input') return 'attention'
+  if (liveState === 'working') return 'running'
+  if (liveState === 'detached') return 'idle'
+  if (entry.activityState === 'waiting' && entry.stateIsReported === true) return 'waiting'
+  return 'attached'
+}
+
+/** The label that goes with a state from `dotActivityState`. */
+function dotActivityLabel(state) {
+  if (state === 'attention') return STRINGS.activityNeedsInput
+  if (state === 'running') return STRINGS.activityRunning
+  if (state === 'waiting') return STRINGS.activityWaiting
+  return STRINGS.activityIdle
+}
+
+/**
  * Builds the inspector "Activity" heartbeat row for an active session.
  * Returns an empty string when the session has no live activity entry.
  */
 function buildInspectorHeartbeatHtml(session) {
   var entry = findLiveActivity(session.id)
   if (!entry) return ''
-  var state = entry.activityState || 'idle'
-  var stateLabel =
-    state === 'running'
-      ? STRINGS.activityRunning
-      : state === 'waiting'
-        ? STRINGS.activityWaiting
-        : STRINGS.activityIdle
+  var state = dotActivityState(entry)
+  var stateLabel = dotActivityLabel(state)
   var tool =
     entry.lastToolName && state === 'running'
       ? ' <span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
@@ -2302,7 +2395,9 @@ function renderInspector(visibleSessions) {
   const session = selectedSession
   const signals = session.signals || {}
   const descriptions = {
-    interrupted: STRINGS.statusInterruptedDesc,
+    interrupted: signals.interruptedByUser
+      ? STRINGS.statusStoppedByUserDesc
+      : STRINGS.statusInterruptedDesc,
     expiring: fmt(STRINGS.statusExpiringDesc, { days: signals.expiresInDays }),
     'path-missing': STRINGS.statusPathMissingDesc,
     'heavily-compacted': fmt(STRINGS.statusHeavilyCompactedDesc, {
@@ -2521,24 +2616,14 @@ function buildTagChipsHtml(tags) {
 }
 
 /**
- * Resolves the working/waiting/idle/attention state for a live session row,
- * matching the rail's and inspector's activityDot treatment. Falls back to
- * "idle" when the session is live but has no live-activity entry yet (a
- * brief gap right after activeSessionIds updates, before the next snapshot).
+ * Resolves the dot state for a live session row, from the same helper the rail
+ * and the inspector use. Falls back to "idle" when the session is live but has
+ * no live-activity entry yet (a brief gap right after activeSessionIds
+ * updates, before the next snapshot).
  */
 function liveSessionRowState(sessionId) {
-  const entry = findLiveActivity(sessionId)
-  const state =
-    entry && entry.attention ? 'attention' : entry ? entry.activityState || 'idle' : 'idle'
-  const label =
-    entry && entry.attention
-      ? STRINGS.activityNeedsInput
-      : state === 'running'
-        ? STRINGS.activityRunning
-        : state === 'waiting'
-          ? STRINGS.activityWaiting
-          : STRINGS.activityIdle
-  return { label, state }
+  const state = dotActivityState(findLiveActivity(sessionId))
+  return { label: dotActivityLabel(state), state }
 }
 
 /** Renders a single session row (two lines + optional deep-search snippet) as an HTML string. */
@@ -4111,6 +4196,275 @@ document.addEventListener('keydown', function (event) {
   }
 })
 // ---------------------------------------------------------------------------
+// Server link state
+//
+// When `reup web` stops, the page keeps whatever it last knew — including the
+// active-session dots — and quietly retries forever. That is the worst failure
+// mode this UI has: it keeps asserting sessions are running long after the
+// process that knew about them is gone.
+//
+// This module owns one question: is the server still there? A dropped live
+// stream only *suspects* an outage; a failed reachability probe confirms it.
+// While offline the page stops claiming anything about liveness and says so.
+// ---------------------------------------------------------------------------
+
+var offlineOverlay = null
+var offlineRain = null
+
+/** True when the viewer asked the browser to avoid non-essential animation. */
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+// ---------------------------------------------------------------------------
+// State machine
+// ---------------------------------------------------------------------------
+
+/**
+ * Records that the live stream dropped, or that a refresh could not reach the
+ * server. Schedules a probe rather than declaring an outage: a server restart
+ * drops the stream for a moment and recovers on its own.
+ */
+function noteServerUnreachable() {
+  if (offlineProbeTimer || offlineProbeInFlight) return
+  offlineProbeTimer = setTimeout(
+    function () {
+      offlineProbeTimer = null
+      void probeServerReachability()
+    },
+    serverLinkState === 'offline' ? 0 : OFFLINE_PROBE_DELAY_MS
+  )
+}
+
+/**
+ * Asks the server for the cheapest thing it can answer. A network-level
+ * failure means the process is gone; any HTTP response means it is alive.
+ */
+async function probeServerReachability() {
+  if (offlineProbeInFlight) return
+  offlineProbeInFlight = true
+  try {
+    await fetch('/api/active', { cache: 'no-store' })
+    markServerOnline()
+  } catch {
+    markServerOffline()
+  } finally {
+    offlineProbeInFlight = false
+  }
+}
+
+/** Confirms an outage: marks the page unconfirmed, then shows and schedules retry. */
+function markServerOffline() {
+  offlineAttempts += 1
+  if (serverLinkState !== 'offline') {
+    serverLinkState = 'offline'
+    // Deliberately presentation only. Session state stays exactly as the server
+    // last reported it: this module observes the link, it does not own live
+    // data, and rewriting that data here would make a wrong verdict destroy
+    // information the page cannot refetch while the link is down.
+    document.body.classList.add('link-lost')
+  }
+
+  elements.footerStatus.textContent = STRINGS.offlineStatus
+  elements.footerStatus.className = 'ftr-status err'
+
+  var backoff = Math.min(
+    OFFLINE_RETRY_BASE_MS * Math.pow(2, offlineAttempts - 1),
+    OFFLINE_RETRY_MAX_MS
+  )
+  offlineNextProbeAt = Date.now() + backoff
+  if (offlineProbeTimer) clearTimeout(offlineProbeTimer)
+  offlineProbeTimer = setTimeout(function () {
+    offlineProbeTimer = null
+    void probeServerReachability()
+  }, backoff)
+
+  if (!offlineOverlayDismissed) showOfflineOverlay()
+  renderOfflineCountdown()
+}
+
+/** Clears the outage and asks for one catch-up refresh. */
+function markServerOnline() {
+  var wasOffline = serverLinkState === 'offline'
+  serverLinkState = 'online'
+  offlineAttempts = 0
+  offlineNextProbeAt = 0
+  offlineOverlayDismissed = false
+  if (offlineProbeTimer) clearTimeout(offlineProbeTimer)
+  offlineProbeTimer = null
+  document.body.classList.remove('link-lost')
+  hideOfflineOverlay()
+
+  if (!wasOffline) return
+  // The stream reconnects on its own unconditional schedule; asking for one
+  // refresh here only shortens the catch-up, it is not what restores the feed.
+  showToast(STRINGS.offlineRestored)
+  void refreshProjectData()
+}
+
+/** Skips the remaining backoff when the user asks to reconnect now. */
+function retryServerLinkNow() {
+  if (offlineProbeTimer) clearTimeout(offlineProbeTimer)
+  offlineProbeTimer = null
+  offlineNextProbeAt = 0
+  renderOfflineCountdown()
+  void probeServerReachability()
+}
+
+// ---------------------------------------------------------------------------
+// Overlay
+// ---------------------------------------------------------------------------
+
+function buildOfflineOverlayHtml() {
+  var host = escapeHtml(window.location.host)
+  return (
+    '<div class="ro-panel" role="alertdialog" aria-modal="true" ' +
+    'aria-labelledby="ro-title" aria-describedby="ro-body">' +
+    '<div class="ro-title" id="ro-title" data-text="' +
+    escapeHtml(STRINGS.offlineTitle) +
+    '">' +
+    escapeHtml(STRINGS.offlineTitle) +
+    '</div>' +
+    '<div class="ro-term">' +
+    '<div class="ro-term-line">' +
+    escapeHtml(fmt(STRINGS.offlineProbeCommand, { host: host })) +
+    '</div>' +
+    '<div class="ro-term-line ro-term-err">' +
+    escapeHtml(fmt(STRINGS.offlineProbeError, { host: host })) +
+    '<span class="ro-cursor">▋</span>' +
+    '</div>' +
+    '</div>' +
+    '<div class="ro-body" id="ro-body">' +
+    '<p class="ro-headline">' +
+    escapeHtml(STRINGS.offlineHeadline) +
+    '</p>' +
+    '<p class="ro-muted">' +
+    escapeHtml(STRINGS.offlineLiveness) +
+    '</p>' +
+    '</div>' +
+    '<div class="ro-retry"><span class="ro-bar"></span><span class="ro-retry-text"></span></div>' +
+    '<div class="ro-actions">' +
+    '<button class="ro-btn ro-btn-primary" data-offline-action="retry">' +
+    escapeHtml(STRINGS.offlineRetryButton) +
+    '</button>' +
+    '<button class="ro-btn" data-offline-action="dismiss">' +
+    escapeHtml(STRINGS.offlineDismissButton) +
+    '</button>' +
+    '</div>' +
+    '<div class="ro-hint">' +
+    escapeHtml(STRINGS.offlineHint) +
+    '</div>' +
+    '</div>'
+  )
+}
+
+function showOfflineOverlay() {
+  if (offlineOverlay || !document.body) return
+
+  var overlay = document.createElement('div')
+  overlay.id = 'reup-offline'
+
+  if (!prefersReducedMotion()) {
+    var canvas = document.createElement('canvas')
+    canvas.className = 'ro-canvas'
+    overlay.appendChild(canvas)
+  }
+
+  overlay.insertAdjacentHTML('beforeend', buildOfflineOverlayHtml())
+  overlay.addEventListener('click', handleOfflineOverlayClick)
+  document.body.appendChild(overlay)
+  offlineOverlay = overlay
+
+  var canvasElement = overlay.querySelector('.ro-canvas')
+  if (canvasElement) {
+    // A dying signal, not a healthy one: the failure palette and a slower fall
+    // read as the same system losing power rather than booting up.
+    offlineRain = createMatrixRain(canvasElement, {
+      bright: matrixToken('--offline-rain-bright', '#ff8f8f'),
+      primary: matrixToken('--offline-rain-primary', '#c04545'),
+      speed: 0.45,
+      trail: matrixToken('--offline-rain-trail', 'rgba(8,4,4,0.14)'),
+    })
+  }
+
+  offlineCountdownTimer = setInterval(renderOfflineCountdown, OFFLINE_COUNTDOWN_TICK_MS)
+  renderOfflineCountdown()
+  var retryButton = overlay.querySelector('[data-offline-action="retry"]')
+  if (retryButton) retryButton.focus()
+}
+
+function hideOfflineOverlay() {
+  if (offlineCountdownTimer) clearInterval(offlineCountdownTimer)
+  offlineCountdownTimer = null
+  if (offlineRain) offlineRain.stop()
+  offlineRain = null
+  if (!offlineOverlay) return
+
+  offlineOverlay.removeEventListener('click', handleOfflineOverlayClick)
+  if (offlineOverlay.parentNode) offlineOverlay.parentNode.removeChild(offlineOverlay)
+  offlineOverlay = null
+}
+
+/** Hides the overlay for this outage; the footer keeps saying the link is down. */
+function dismissOfflineOverlay() {
+  offlineOverlayDismissed = true
+  hideOfflineOverlay()
+}
+
+function handleOfflineOverlayClick(event) {
+  var action = event.target.closest('[data-offline-action]')
+  if (!action) return
+  if (action.dataset.offlineAction === 'retry') retryServerLinkNow()
+  else dismissOfflineOverlay()
+}
+
+/** Redraws the countdown bar and its label from the pending retry deadline. */
+function renderOfflineCountdown() {
+  if (!offlineOverlay) return
+  var bar = offlineOverlay.querySelector('.ro-bar')
+  var text = offlineOverlay.querySelector('.ro-retry-text')
+  if (!bar || !text) return
+
+  var remainingMs = Math.max(0, offlineNextProbeAt - Date.now())
+  if (remainingMs === 0 || offlineProbeInFlight) {
+    bar.textContent = '[' + '█'.repeat(OFFLINE_BAR_WIDTH) + ']'
+    text.textContent = STRINGS.offlineRetryNow
+    return
+  }
+
+  var totalMs = Math.max(1, offlineNextProbeAt - offlineProbeStartedAt())
+  var filled = Math.round(OFFLINE_BAR_WIDTH * (1 - remainingMs / totalMs))
+  var blocks = ''
+  for (var i = 0; i < OFFLINE_BAR_WIDTH; i++) blocks += i < filled ? '█' : '▒'
+  bar.textContent = '[' + blocks + ']'
+  text.textContent = fmt(STRINGS.offlineRetryCountdown, {
+    n: offlineAttempts,
+    seconds: Math.ceil(remainingMs / 1000),
+  })
+}
+
+/** Start of the current backoff window, derived from its own ceiling-capped length. */
+function offlineProbeStartedAt() {
+  var backoff = Math.min(
+    OFFLINE_RETRY_BASE_MS * Math.pow(2, Math.max(0, offlineAttempts - 1)),
+    OFFLINE_RETRY_MAX_MS
+  )
+  return offlineNextProbeAt - backoff
+}
+
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape' && offlineOverlay) {
+    event.preventDefault()
+    dismissOfflineOverlay()
+  }
+})
+
+// A tab that was hidden while the server died gets an immediate answer instead
+// of waiting out a backoff that grew while nobody was looking.
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden && serverLinkState === 'offline') retryServerLinkNow()
+})
+// ---------------------------------------------------------------------------
 // Data refresh and live updates
 // ---------------------------------------------------------------------------
 
@@ -4172,6 +4526,8 @@ async function refreshProjectData() {
       }
     }
 
+    // A completed round-trip is the strongest evidence the server is alive.
+    if (serverLinkState === 'offline') markServerOnline()
     elements.footerStatus.textContent = fmt(STRINGS.statusBarProjects, { n: projects.length })
     elements.footerStatus.className = 'ftr-status'
 
@@ -4214,8 +4570,13 @@ async function refreshProjectData() {
     }
   } catch (error) {
     if (refreshGeneration !== projectRefreshGeneration) return
-    elements.footerStatus.textContent = STRINGS.statusBarLoadError
-    elements.footerStatus.className = 'ftr-status err'
+    // Distinguishing "the server answered with an error" from "nothing
+    // answered" is the probe's job; a failed refresh only raises the question.
+    noteServerUnreachable()
+    if (serverLinkState !== 'offline') {
+      elements.footerStatus.textContent = STRINGS.statusBarLoadError
+      elements.footerStatus.className = 'ftr-status err'
+    }
     console.error('[reup] failed to refresh project data:', error)
     hideLoadingOverlay()
   }
@@ -4271,6 +4632,9 @@ function connectLiveUpdates() {
   liveUpdatesSource.addEventListener('error', function () {
     if (liveUpdatesSource) liveUpdatesSource.close()
     liveUpdatesSource = null
+    // Reconnection policy is unchanged and unconditional: the link watcher
+    // only observes, so a wrong verdict can never stop the stream coming back.
+    noteServerUnreachable()
     setTimeout(connectLiveUpdates, SSE_RECONNECT_DELAY_MS)
   })
 }
@@ -4335,7 +4699,12 @@ function raiseDesktopAlerts(entries) {
     }
 
     var previousState = previousActivityStates.get(entry.sessionId)
+    // Only a source that reports turn boundaries may claim a turn ended. Where
+    // the state comes from transcript recency alone, a quiet stretch during a
+    // long tool call is indistinguishable from a finished turn — and alerting
+    // on it means an alert every time Claude pauses to think.
     var finishedTurn =
+      entry.stateIsReported === true &&
       previousState === 'running' &&
       (entry.activityState === 'waiting' || entry.activityState === 'idle')
     if (finishedTurn && enabled && document.hidden) {
@@ -4962,16 +5331,9 @@ function buildActivitySectionHtml() {
     // Fallback alert entries (session not discoverable yet) have no project
     // id; they still render, just without click-to-select navigation.
     if (!entry.sessionId) continue
-    var state = entry.activityState || 'idle'
-    var needsInput = !!entry.attention
-    var stateClass = needsInput ? 'attention' : state
-    var stateLabel = needsInput
-      ? STRINGS.activityNeedsInput
-      : state === 'running'
-        ? STRINGS.activityRunning
-        : state === 'waiting'
-          ? STRINGS.activityWaiting
-          : STRINGS.activityIdle
+    var stateClass = dotActivityState(entry)
+    var needsInput = stateClass === 'attention'
+    var stateLabel = dotActivityLabel(stateClass)
     var tool = entry.lastToolName
       ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
       : ''
@@ -4981,12 +5343,16 @@ function buildActivitySectionHtml() {
         '</span>'
       : ''
     var message =
-      needsInput && entry.attention.message
+      needsInput && entry.attention && entry.attention.message
         ? '<span class="activity-msg">' + escapeHtml(entry.attention.message) + '</span>'
         : ''
     rows +=
       '<div class="rail-item rail-live-item' +
-      (needsInput ? ' attention' : state === 'idle' ? ' idle' : '') +
+      (needsInput
+        ? ' attention'
+        : stateClass === 'idle' || stateClass === 'attached'
+          ? ' idle'
+          : '') +
       '" data-rail-action="select-session" data-project-id="' +
       escapeHtml(entry.projectId) +
       '" data-session-id="' +

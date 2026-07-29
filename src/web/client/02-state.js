@@ -16,6 +16,14 @@ let claudeInstructionsDirty = false
 let claudeInstructionsClosing = false
 let liveUpdatesSource = null
 let liveUpdatesRefreshTimer = null
+/** 'online' until a reachability probe fails, then 'offline' until one succeeds. */
+let serverLinkState = 'online'
+let offlineProbeTimer = null
+let offlineCountdownTimer = null
+let offlineProbeInFlight = false
+let offlineAttempts = 0
+let offlineNextProbeAt = 0
+let offlineOverlayDismissed = false
 let usageRefreshInProgress = false
 let projectRefreshGeneration = 0
 let deepLinkProcessed = false

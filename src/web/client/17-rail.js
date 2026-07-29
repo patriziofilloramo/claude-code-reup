@@ -374,16 +374,9 @@ function buildActivitySectionHtml() {
     // Fallback alert entries (session not discoverable yet) have no project
     // id; they still render, just without click-to-select navigation.
     if (!entry.sessionId) continue
-    var state = entry.activityState || 'idle'
-    var needsInput = !!entry.attention
-    var stateClass = needsInput ? 'attention' : state
-    var stateLabel = needsInput
-      ? STRINGS.activityNeedsInput
-      : state === 'running'
-        ? STRINGS.activityRunning
-        : state === 'waiting'
-          ? STRINGS.activityWaiting
-          : STRINGS.activityIdle
+    var stateClass = dotActivityState(entry)
+    var needsInput = stateClass === 'attention'
+    var stateLabel = dotActivityLabel(stateClass)
     var tool = entry.lastToolName
       ? '<span class="activity-tool">' + escapeHtml(entry.lastToolName) + '</span>'
       : ''
@@ -393,12 +386,16 @@ function buildActivitySectionHtml() {
         '</span>'
       : ''
     var message =
-      needsInput && entry.attention.message
+      needsInput && entry.attention && entry.attention.message
         ? '<span class="activity-msg">' + escapeHtml(entry.attention.message) + '</span>'
         : ''
     rows +=
       '<div class="rail-item rail-live-item' +
-      (needsInput ? ' attention' : state === 'idle' ? ' idle' : '') +
+      (needsInput
+        ? ' attention'
+        : stateClass === 'idle' || stateClass === 'attached'
+          ? ' idle'
+          : '') +
       '" data-rail-action="select-session" data-project-id="' +
       escapeHtml(entry.projectId) +
       '" data-session-id="' +

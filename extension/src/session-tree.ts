@@ -357,8 +357,8 @@ function sessionTreeItem(node: SessionTreeNode): vscode.TreeItem {
     tooltip.appendMarkdown(`- Current branch: \`${session.currentBranch}\`\n`)
   item.tooltip = tooltip
   item.iconPath = new vscode.ThemeIcon(
-    statusThemeIconId(session.primaryStatus, session.isActive, session.needsInput),
-    themeColor(statusThemeColorId(session.primaryStatus, session.isActive, session.needsInput))
+    statusThemeIconId(session.primaryStatus, session.liveState),
+    themeColor(statusThemeColorId(session.primaryStatus, session.liveState))
   )
   return item
 }

@@ -11,6 +11,8 @@ export interface SessionSignals {
   compactionCount: number | null
   expiresInDays: number | null
   interrupted: boolean | null
+  /** The user stopped Claude mid-turn; recorded, not inferred. See TranscriptSignals. */
+  interruptedByUser: boolean | null
   lastToolFailed: boolean | null
   pathExists: boolean
 }

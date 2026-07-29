@@ -60,6 +60,7 @@ const STRINGS = {
 
   // ── Session status badges ─────────────────────────────────────────────────
   statusInterruptedDesc: 'Claude had pending tool calls with no result — resume to continue.',
+  statusStoppedByUserDesc: 'You stopped Claude mid-turn and have not given new instructions since.',
   statusExpiringDesc: 'Transcript expires in {days} days (Claude auto-deletes after 30).',
   statusPathMissingDesc: 'Project directory no longer exists on disk.',
   statusHeavilyCompactedDesc: 'Context was compacted {count} times.',
@@ -155,6 +156,21 @@ const STRINGS = {
   resumeFallbackFailed: 'Failed to launch terminal.',
   resumeError: 'Error: {message}',
   resumePathUnavailable: 'Project directory is unavailable. Restore it before resuming.',
+
+  // ── Server link lost ──────────────────────────────────────────────────────
+  offlineTitle: 'LINK LOST',
+  offlineProbeCommand: '$ curl -sS http://{host}/api/active',
+  offlineProbeError: 'curl: (7) failed to connect to {host}: connection refused',
+  offlineHeadline: 'The reup server stopped responding.',
+  offlineLiveness:
+    'Live session state is unknown while the link is down. Nothing on this page is being updated, and no session is shown as active.',
+  offlineRetryCountdown: 'retrying in {seconds}s · attempt {n}',
+  offlineRetryNow: 'reconnecting…',
+  offlineRetryButton: 'Retry now',
+  offlineDismissButton: 'Dismiss',
+  offlineHint: 'Start it again with `reup web`, then this page reconnects on its own.',
+  offlineStatus: 'server offline',
+  offlineRestored: 'Link restored — live state is current again.',
 
   // ── Touched-file cross-session overlap ────────────────────────────────────
   touchedOthersOne: 'touched by 1 other session',

@@ -1,3 +1,4 @@
+import type { SessionLiveState } from '../../src/core/session/session-live-state.js'
 import type { SessionStatus } from '../../src/core/session/session-model.js'
 import { relativeTime } from '../../src/utils/time.js'
 
@@ -22,23 +23,25 @@ export function formatRelativeTime(isoTimestamp: string | null): string {
   return isoTimestamp ? relativeTime(isoTimestamp) : 'unknown'
 }
 
-export function statusCodicon(
-  status: SessionStatus,
-  isActive: boolean,
-  needsInput = false
-): string {
-  return `$(${statusThemeIconId(status, isActive, needsInput)})`
+export function statusCodicon(status: SessionStatus, liveState: SessionLiveState): string {
+  return `$(${statusThemeIconId(status, liveState)})`
 }
 
-export function statusThemeIconId(
-  status: SessionStatus,
-  isActive: boolean,
-  needsInput = false
-): string {
+/**
+ * Draws the shared `SessionLiveState` in VS Code's own idiom.
+ *
+ * The TUI and the web separate a working session from an attached-but-quiet
+ * one by intensity — a pulsing dot against a dimmed one. A tree icon has no
+ * intensity, so the same distinction is carried by fill: filled means work is
+ * happening, outline means someone is here. The green colour is what both
+ * share, and what tells them apart from a session with no process at all.
+ */
+export function statusThemeIconId(status: SessionStatus, liveState: SessionLiveState): string {
   // Waiting on the user outranks the live dot: an active session is exactly
   // where a needs-input alert must stay visible.
-  if (needsInput) return 'bell-dot'
-  if (isActive) return 'circle-filled'
+  if (liveState === 'needs-input') return 'bell-dot'
+  if (liveState === 'working') return 'circle-filled'
+  if (liveState === 'attached') return 'circle-outline'
   switch (status) {
     case 'expiring':
       return 'warning'
@@ -70,11 +73,12 @@ export function statusLabel(status: SessionStatus): string | null {
 
 export function statusThemeColorId(
   status: SessionStatus,
-  isActive: boolean,
-  needsInput = false
+  liveState: SessionLiveState
 ): string | undefined {
-  if (needsInput) return 'problemsWarningIcon.foreground'
-  if (isActive) return 'testing.iconPassed'
+  if (liveState === 'needs-input') return 'problemsWarningIcon.foreground'
+  // Both live states share the live colour, exactly as the TUI and the web
+  // share one green; the icon's fill is what separates them.
+  if (liveState === 'working' || liveState === 'attached') return 'testing.iconPassed'
   if (status === 'interrupted') return 'problemsWarningIcon.foreground'
   if (status === 'expiring' || status === 'path-missing') return 'problemsErrorIcon.foreground'
   if (status === 'heavily-compacted') return 'descriptionForeground'

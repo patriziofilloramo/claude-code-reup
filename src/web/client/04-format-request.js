@@ -280,9 +280,14 @@ function buildStatusBadgeHtml(session) {
   const status = session.primaryStatus
   const signals = session.signals || {}
   if (status === 'interrupted') {
+    // Two different facts share this badge: a stop the user performed, and a
+    // tool call left without a result. Only the tooltip can tell them apart.
+    const description = signals.interruptedByUser
+      ? STRINGS.statusStoppedByUserDesc
+      : STRINGS.statusInterruptedDesc
     return (
       '<span class="s-badge s-badge-warn" title="' +
-      escapeHtml(STRINGS.statusInterruptedDesc) +
+      escapeHtml(description) +
       '">✗ interrupted</span>'
     )
   }

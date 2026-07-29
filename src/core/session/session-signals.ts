@@ -11,8 +11,30 @@ export interface TranscriptSignals {
   compactionCount: number
   expiresInDays: number
   interrupted: boolean
+  /**
+   * The user stopped Claude mid-turn and has not given new instructions since.
+   *
+   * Distinct from `interrupted`, which is *inferred* from an unanswered tool
+   * call. This one is *recorded*: Claude Code writes an explicit marker turn.
+   * Surfaces treat the two differently — an inferred interruption is normal
+   * mid-turn state for a live session, a recorded one is a fact about it.
+   */
+  interruptedByUser: boolean
   lastToolFailed: boolean
 }
+
+/**
+ * Exactly the turns Claude Code writes when the user stops it.
+ *
+ * Matching is exact, and deliberately not a substring test: these same strings
+ * appear inside compaction summaries that quote earlier turns, and in ordinary
+ * messages that merely discuss interruptions. A substring test flags those
+ * sessions as interrupted forever.
+ */
+const USER_INTERRUPTION_MARKERS = new Set([
+  '[Request interrupted by user]',
+  '[Request interrupted by user for tool use]',
+])
 
 // -----------------------------------------------------------------------------
 // Display status
@@ -38,7 +60,13 @@ export function primaryStatus(signals: SessionSignals): SessionStatus {
   if (signals.expiresInDays !== null && signals.expiresInDays <= EXPIRING_THRESHOLD_DAYS) {
     return 'expiring'
   }
-  if (signals.interrupted === true || signals.lastToolFailed === true) return 'interrupted'
+  if (
+    signals.interrupted === true ||
+    signals.interruptedByUser === true ||
+    signals.lastToolFailed === true
+  ) {
+    return 'interrupted'
+  }
   if (signals.compactionCount !== null && signals.compactionCount >= HEAVY_COMPACTION_THRESHOLD) {
     return 'heavily-compacted'
   }
@@ -59,6 +87,7 @@ export function computeSignalsFromLines(lines: string[], updatedAt: string): Tra
   const pendingToolUseIds = new Set<string>()
   let compactionCount = 0
   let lastToolFailed = false
+  let interruptedByUser = false
 
   for (const line of lines) {
     try {
@@ -94,16 +123,30 @@ export function computeSignalsFromLines(lines: string[], updatedAt: string): Tra
       if (!Array.isArray(messageContent)) {
         pendingToolUseIds.clear()
         lastToolFailed = false
+        interruptedByUser = false
         continue
       }
 
       const contentBlocks = messageContent as Record<string, unknown>[]
+
+      // Checked before the generic branch below, which would otherwise read the
+      // marker as an ordinary prompt and erase the very evidence it carries.
+      if (isUserInterruptionTurn(contentBlocks)) {
+        // Calls left open by the stop were abandoned, not failed.
+        pendingToolUseIds.clear()
+        lastToolFailed = false
+        interruptedByUser = true
+        continue
+      }
+
       const containsOnlyToolResults =
         contentBlocks.length > 0 && contentBlocks.every((block) => block['type'] === 'tool_result')
 
       if (!containsOnlyToolResults) {
         pendingToolUseIds.clear()
         lastToolFailed = false
+        // Real instructions mean the user moved on from whatever they stopped.
+        interruptedByUser = false
         continue
       }
 
@@ -122,6 +165,15 @@ export function computeSignalsFromLines(lines: string[], updatedAt: string): Tra
     compactionCount,
     expiresInDays: calculateExpiryDays(updatedAt),
     interrupted: pendingToolUseIds.size > 0,
+    interruptedByUser,
     lastToolFailed,
   }
+}
+
+/** True when a user turn is nothing but one of Claude Code's stop markers. */
+export function isUserInterruptionTurn(contentBlocks: Record<string, unknown>[]): boolean {
+  if (contentBlocks.length !== 1) return false
+  const block = contentBlocks[0]
+  if (block?.['type'] !== 'text' || typeof block['text'] !== 'string') return false
+  return USER_INTERRUPTION_MARKERS.has(block['text'].trim())
 }

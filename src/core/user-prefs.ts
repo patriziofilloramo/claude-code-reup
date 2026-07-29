@@ -67,10 +67,6 @@ export function writeUserPrefsSync(prefs: UserPrefs): void {
   }
 }
 
-export async function writeUserPrefs(prefs: UserPrefs): Promise<void> {
-  writeUserPrefsSync(prefs)
-}
-
 export async function setUserPref<K extends keyof UserPrefs>(
   key: K,
   value: UserPrefs[K]

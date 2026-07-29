@@ -9,6 +9,20 @@
 const AUTO_SAVE_DELAY_MS = 1500
 /** How long to wait (ms) before attempting to reconnect a dropped SSE stream. */
 const SSE_RECONNECT_DELAY_MS = 3000
+/**
+ * Grace period (ms) between the live stream dropping and the first reachability
+ * probe. A server restart drops the stream for well under a second, so waiting
+ * keeps the offline overlay off the screen for blips the user never noticed.
+ */
+const OFFLINE_PROBE_DELAY_MS = 1200
+/** First backoff (ms) between reachability probes once the server is confirmed down. */
+const OFFLINE_RETRY_BASE_MS = 2000
+/** Ceiling (ms) for the reachability backoff, so recovery is never slow to notice. */
+const OFFLINE_RETRY_MAX_MS = 15000
+/** How often (ms) the offline overlay redraws its retry countdown. */
+const OFFLINE_COUNTDOWN_TICK_MS = 250
+/** Cell count in the offline overlay's retry progress bar. */
+const OFFLINE_BAR_WIDTH = 16
 /** Coalesces bursts of filesystem SSE events into a single full data refresh. */
 const SSE_REFRESH_DEBOUNCE_MS = 300
 /** How long (ms) a toast notification stays visible before fading out. */

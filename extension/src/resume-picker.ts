@@ -119,7 +119,7 @@ function toQuickPickItem(session: ExtensionSession): SessionQuickPickItem {
     ]
       .filter(Boolean)
       .join(' - '),
-    label: `${statusCodicon(session.primaryStatus, session.isActive, session.needsInput)} ${session.title}`,
+    label: `${statusCodicon(session.primaryStatus, session.liveState)} ${session.title}`,
     session,
   }
 }
