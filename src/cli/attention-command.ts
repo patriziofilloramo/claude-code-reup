@@ -66,7 +66,8 @@ async function printAttentionStatus(): Promise<void> {
         'Attention alerts are registered but BROKEN: the command Claude Code runs no longer exists.',
         `  missing: ${health.missingPath}`,
         'Until this is fixed, needs-input alerts and turn boundaries are silently lost,',
-        'and session state falls back to guessing from transcript activity.',
+        'session state falls back to guessing from transcript activity, and desktop',
+        'notifications cannot fire because nothing reports when a turn ended.',
         'Run `reup attention setup` from the current install to repoint the hooks.',
       ].join('\n')
     )
@@ -113,7 +114,12 @@ async function remove(): Promise<void> {
 }
 
 async function captureFromNotificationHook(): Promise<void> {
-  let result: HookCaptureResult = { hookEvent: null, outcome: 'ignored-tty', sessionId: null }
+  let result: HookCaptureResult = {
+    hookEvent: null,
+    occurredAt: null,
+    outcome: 'ignored-tty',
+    sessionId: null,
+  }
   try {
     if (process.stdin.isTTY) return
     result = await applyHookPayload(await readStdin())

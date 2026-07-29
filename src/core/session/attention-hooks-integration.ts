@@ -18,6 +18,13 @@ const HOOK_EVENTS = ['Notification', 'Stop', 'UserPromptSubmit'] as const
 
 interface AttentionHookIntegration {
   installedCommand: string
+  /**
+   * The user ran `reup attention remove`. Recorded rather than forgotten,
+   * because hooks are otherwise installed automatically: without this, the
+   * next launch would put back what they just took out, and there would be no
+   * way to refuse. Cleared by an explicit `setup`.
+   */
+  optedOut?: boolean
   schemaVersion: typeof INTEGRATION_SCHEMA_VERSION
 }
 
@@ -113,34 +120,47 @@ export async function inspectAttentionHookHealth(): Promise<AttentionHookHealth>
 }
 
 /**
- * Repoints Reup's own hook entries at the running install when the ones on
- * disk name a script that no longer exists. Returns true only if it repaired.
+ * Makes sure Reup's hooks are registered and point at the running install.
  *
- * The absolute path in a hook entry goes stale for ordinary reasons — a Node
- * version manager moves the npm global root, an installer changes location —
- * and the failure is silent, so waiting for the user to notice means weeks of
- * degraded state. This maintains an entry the user already consented to,
- * rather than adding one: if the hooks were never set up, it does nothing.
+ * Reup reads turn boundaries from these hooks; without them every surface
+ * falls back to guessing from transcript recency, and desktop notifications
+ * cannot fire at all. Leaving that to a command the user has to discover meant
+ * shipping features that silently did nothing — so an interactive surface
+ * installs them on first run and says it did.
  *
- * Best-effort by contract. It is called on ordinary startup paths, so any
- * failure must leave the surface running rather than surfacing an error.
+ * Two reasons this is safe to do unasked: the entry is Reup's own and is
+ * appended, so hooks the user configured are never touched; and
+ * `reup attention remove` restores the previous configuration exactly.
+ *
+ * Repair is the same operation. An absolute path goes stale for ordinary
+ * reasons — a Node version manager moves the npm global root, an installer
+ * relocates — and that failure is silent, so it self-heals here too. It still
+ * refuses when Reup itself has no stable path to name: replacing one dead path
+ * with another is not a repair.
+ *
+ * Best-effort by contract. Called on ordinary startup paths, so any failure
+ * must leave the surface running rather than surfacing an error.
  */
-export async function repairAttentionHookIfBroken(): Promise<boolean> {
+export async function ensureAttentionHook(): Promise<'installed' | 'repaired' | 'unchanged'> {
   try {
+    // An explicit removal is a decision, not a gap to fill.
+    if ((await readIntegration())?.optedOut === true) return 'unchanged'
+
     const health = await inspectAttentionHookHealth()
-    if (health.state !== 'broken') return false
+    if (health.state === 'ready') return 'unchanged'
     // Pointless if this install cannot name itself either — a temporary or
     // deleted path would just replace one dead entry with another.
     const ownPath = hookScriptPath(captureCommand())
-    if (ownPath === null) return false
+    if (ownPath === null) return 'unchanged'
     try {
       await access(ownPath)
     } catch {
-      return false
+      return 'unchanged'
     }
-    return (await setupAttentionHook()).changed
+    if (!(await setupAttentionHook()).changed) return 'unchanged'
+    return health.state === 'broken' ? 'repaired' : 'installed'
   } catch {
-    return false
+    return 'unchanged'
   }
 }
 
@@ -189,7 +209,9 @@ export async function removeAttentionHook(): Promise<RemoveResult> {
     }
     if (settingsChanged) await writeJsonAtomically(getSettingsPath(), settings)
 
-    await unlink(getIntegrationPath()).catch(() => {})
+    // Kept, not deleted: the record is what tells a later launch that the
+    // absence is a decision rather than a gap to fill automatically.
+    await writeIntegration(integration.installedCommand, { optedOut: true })
     return { changed: true }
   })
   if (result.changed) {
@@ -239,10 +261,14 @@ function getIntegrationPath(): string {
   return join(getReupDirectory(), 'attention-integration.json')
 }
 
-async function writeIntegration(installedCommand: string): Promise<void> {
+async function writeIntegration(
+  installedCommand: string,
+  options: { optedOut?: boolean } = {}
+): Promise<void> {
   await writeJsonAtomically(getIntegrationPath(), {
     installedCommand,
     schemaVersion: INTEGRATION_SCHEMA_VERSION,
+    ...(options.optedOut === true ? { optedOut: true } : {}),
   } satisfies AttentionHookIntegration)
 }
 

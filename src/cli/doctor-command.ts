@@ -35,7 +35,7 @@ function doctorSections(report: DiagnosticsReport): DoctorSection[] {
   return [
     {
       title: 'Attention hooks registered but broken',
-      why: 'Claude Code runs a command that no longer exists, so every turn boundary and needs-input alert is lost and session state falls back to guessing.',
+      why: 'Claude Code runs a command that no longer exists, so every turn boundary and needs-input alert is lost, desktop notifications cannot fire, and session state falls back to guessing.',
       nextStep: 'Run `reup attention setup` from the current install to repoint the hooks.',
       items: report.brokenAttentionHook
         ? [formatItem('missing', [report.brokenAttentionHook.missingPath])]

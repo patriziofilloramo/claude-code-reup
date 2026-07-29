@@ -8,7 +8,7 @@ import {
   inspectAttentionHookHealth,
   isAttentionHookConfigured,
   removeAttentionHook,
-  repairAttentionHookIfBroken,
+  ensureAttentionHook,
   setupAttentionHook,
 } from '../../src/core/session/attention-hooks-integration.js'
 
@@ -78,7 +78,7 @@ describe('attention hook integration', () => {
     await breakInstalledCommand()
     expect(await inspectAttentionHookHealth()).toMatchObject({ state: 'broken' })
 
-    expect(await repairAttentionHookIfBroken()).toBe(true)
+    expect(await ensureAttentionHook()).toBe('repaired')
     expect(await inspectAttentionHookHealth()).toMatchObject({ state: 'ready' })
 
     // Repaired, not stacked: still exactly one Reup entry per event.
@@ -88,15 +88,45 @@ describe('attention hook integration', () => {
     }
   })
 
-  it('never adds hooks the user did not ask for, and never repairs healthy ones', async () => {
-    // Never configured: repair must not become a way to enable the feature.
-    expect(await repairAttentionHookIfBroken()).toBe(false)
+  /**
+   * Installing unasked is deliberate, and replaced an earlier rule that never
+   * did. Reup reads turn boundaries from these hooks; leaving them to a command
+   * the user has to discover meant shipping features that silently did nothing,
+   * which is the failure this project keeps rediscovering. It is safe because
+   * the entry is Reup's own and appended, and `attention remove` restores the
+   * previous configuration exactly — and the surfaces that do it say so.
+   */
+  it('installs its hooks when none are configured', async () => {
     expect(await inspectAttentionHookHealth()).toEqual({ state: 'not-configured' })
 
-    // Already working: nothing to do, and settings must stay untouched.
+    expect(await ensureAttentionHook()).toBe('installed')
+    expect(await inspectAttentionHookHealth()).toMatchObject({ state: 'ready' })
+  })
+
+  /**
+   * Automatic installation must never overrule an explicit removal, or there
+   * is no way to refuse: the next launch would put back exactly what the user
+   * just took out.
+   */
+  it('respects an explicit removal instead of reinstalling', async () => {
+    await setupAttentionHook()
+    await removeAttentionHook()
+    expect(await isAttentionHookConfigured()).toBe(false)
+
+    expect(await ensureAttentionHook()).toBe('unchanged')
+    expect(await isAttentionHookConfigured()).toBe(false)
+
+    // Asking for them back is still an explicit act, and it sticks.
+    await setupAttentionHook()
+    expect(await isAttentionHookConfigured()).toBe(true)
+    expect(await ensureAttentionHook()).toBe('unchanged')
+  })
+
+  it('leaves healthy hooks and the settings file completely alone', async () => {
     await setupAttentionHook()
     const before = JSON.stringify(await readSettings())
-    expect(await repairAttentionHookIfBroken()).toBe(false)
+
+    expect(await ensureAttentionHook()).toBe('unchanged')
     expect(JSON.stringify(await readSettings())).toBe(before)
   })
 
