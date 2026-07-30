@@ -1,6 +1,6 @@
 {
   "name": "@patriziofilloramo/reup",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Local state and resume control for Claude Code work.",
   "type": "module",
   "bin": {

@@ -541,9 +541,13 @@ that is what made the surfaces disagree. The split as it stands:
   `dotActivityState()`.
 - **Special, presentation** — each surface renders in its own idiom: the TUI
   dims Ink's colour rather than picking a second green (so it survives
-  16-colour terminals), the web lowers opacity, and VS Code has no intensity
-  for tree icons so it carries the distinction by fill, `circle-filled` against
-  `circle-outline`, on one shared green.
+  16-colour terminals), the web lowers opacity, and VS Code splits by medium.
+  Its tree icons have no intensity, so they carry the distinction by fill —
+  `circle-filled` against `circle-outline` on one shared green. Its dashboard
+  and inspector are HTML and match the web exactly, pulsing while working and
+  held back when attached. All three of those places must read the shared
+  state: converting only the tree icon left the other two on a binary flag, and
+  the same session read busier there than anywhere else.
 - **Special, per-surface states** — bulk selection and the `reup cleanup` /
   `doctor` triage statuses exist only in the TUI and never entered the core.
 

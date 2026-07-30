@@ -204,6 +204,28 @@ describe('every surface draws the shared live state', () => {
     expect(sources.join('\n')).not.toContain('SessionLockStatus =')
   })
 
+  /**
+   * The extension draws liveness in three places, and checking only the tree
+   * icon let the dashboard and the inspector keep a binary `isActive` dot long
+   * after the TUI and the web had four states. Reported from real use: a
+   * session between turns showed bright green there and dimmed everywhere
+   * else. Every place that paints liveness has to read the shared state.
+   */
+  it('draws every VS Code liveness indicator from the shared state', () => {
+    const dashboard = readFileSync('extension/src/dashboard.ts', 'utf8')
+    const inspector = readFileSync('extension/src/inspector-html.ts', 'utf8')
+
+    for (const source of [dashboard, inspector]) {
+      expect(source).toContain('liveState')
+      // The binary reading that hid the distinction.
+      expect(source).not.toContain("isActive ? 'live'")
+      expect(source).not.toContain('isActive && !session.needsInput')
+    }
+    // Attached is the live colour held back, never a second colour.
+    expect(dashboard).toContain('.dot.attached')
+    expect(inspector).toContain('.pill-attached')
+  })
+
   it('resolves the VS Code icon from the core instead of a bare live flag', () => {
     const signals = readFileSync('src/core/session/live-attention.ts', 'utf8')
     const formatting = readFileSync('extension/src/formatting.ts', 'utf8')
