@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+### Changed
+
+- Documented a known limitation: a session waiting on a tool-permission prompt
+  is shown as working. Claude Code appears not to report that state — its
+  `Notification` hook was not observed firing for one, and from the local files
+  a running tool and a tool awaiting approval look identical. Reup shows what
+  it can verify rather than guessing, so the indicator is deliberately absent
+  rather than approximated.
+
 ## 0.3.0
 
 ### Added
