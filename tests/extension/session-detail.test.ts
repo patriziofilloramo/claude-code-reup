@@ -24,7 +24,7 @@ describe('VS Code Session Inspector', () => {
     expect(html).toContain('data-action="copyHandoff"')
     expect(html).toContain('data-action="editAlias"')
     expect(html).toContain('data-action="editTags"')
-    expect(html).toContain('● active')
+    expect(html).toContain('● working')
     expect(html).toContain('#important')
   })
 
@@ -38,17 +38,41 @@ describe('VS Code Session Inspector', () => {
 
   it('hides healthy status text when the session has no warning state', () => {
     const preview = extractSessionPreview([])
-    const none = renderInspectorHtml(session({ isActive: false, primaryStatus: 'ok' }), preview)
+    const none = renderInspectorHtml(
+      session({ isActive: false, liveState: 'detached', primaryStatus: 'ok' }),
+      preview
+    )
     expect(none).not.toContain('>ok<')
     expect(none).not.toContain('Project Memory')
   })
 
-  it('shows a needs-input pill instead of the active pill while waiting on the user', () => {
+  it('shows a needs-input pill instead of the liveness pill while waiting on the user', () => {
     const preview = extractSessionPreview([])
-    const waiting = renderInspectorHtml(session({ isActive: true, needsInput: true }), preview)
+    const waiting = renderInspectorHtml(
+      session({ isActive: true, liveState: 'needs-input', needsInput: true }),
+      preview
+    )
     expect(waiting).toContain('● needs input')
     expect(waiting).toContain('pill-warning')
-    expect(waiting).not.toContain('● active')
+    expect(waiting).not.toContain('● working')
+    expect(waiting).not.toContain('● attached')
+  })
+
+  /**
+   * A session that holds a live process but is between turns must not look
+   * like one that is producing output. The extension had kept a single
+   * `isActive` pill after the TUI and the web already made the distinction,
+   * so the same session read as busier here than anywhere else.
+   */
+  it('separates a working session from one that is merely attached', () => {
+    const preview = extractSessionPreview([])
+    const working = renderInspectorHtml(session({ liveState: 'working' }), preview)
+    const attached = renderInspectorHtml(session({ liveState: 'attached' }), preview)
+
+    expect(working).toContain('● working')
+    expect(working).not.toContain('● attached')
+    expect(attached).toContain('● attached')
+    expect(attached).not.toContain('● working')
   })
 
   it('renders structured plan markdown instead of flattening it into one paragraph', () => {
@@ -114,6 +138,7 @@ function session(overrides: Partial<ExtensionSession> = {}): ExtensionSession {
     currentBranch: 'main',
     id: '00000000-0000-0000-0000-000000000001',
     isActive: true,
+    liveState: 'working' as const,
     messageCount: 42,
     needsAttention: true,
     needsInput: false,

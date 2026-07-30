@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+### Fixed
+
+- The VS Code dashboard and inspector now separate a working session from one
+  that is merely attached, as the TUI and the web already did. Only the tree
+  icon had been converted; the dashboard dot and the inspector pill still read a
+  binary `isActive`, so a session between turns showed bright green there and
+  dimmed everywhere else. The dashboard dot pulses while working and is held
+  back when attached, honouring `prefers-reduced-motion`.
+
 ## 0.3.1
 
 ### Changed

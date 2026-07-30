@@ -52,6 +52,8 @@ export function renderInspectorHtml(
     .pills { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
     .pill { border: 1px solid var(--vscode-widget-border); border-radius: 10px; padding: 1px 7px; font-size: .85em; }
     .pill-active { color: var(--vscode-testing-iconPassed); border-color: var(--vscode-testing-iconPassed); }
+    /* Attached but quiet: the live colour held back, as in the TUI and the web. */
+    .pill-attached { color: var(--vscode-testing-iconPassed); border-color: var(--vscode-testing-iconPassed); opacity: 0.6; }
     .pill-warning { color: var(--vscode-editorWarning-foreground); border-color: var(--vscode-editorWarning-foreground); }
     .pill-error { color: var(--vscode-editorError-foreground); border-color: var(--vscode-editorError-foreground); }
     .pill-muted { color: var(--vscode-descriptionForeground); }
@@ -89,7 +91,8 @@ export function renderInspectorHtml(
   <div class="pills">
     ${session.needsInput ? '<span class="pill pill-warning">● needs input</span>' : ''}
     ${healthStatus ? `<span class="pill ${statusPillClass(session.primaryStatus)}">${escapeHtml(healthStatus)}</span>` : ''}
-    ${session.isActive && !session.needsInput ? '<span class="pill pill-active">● active</span>' : ''}
+    ${session.liveState === 'working' ? '<span class="pill pill-active">● working</span>' : ''}
+    ${session.liveState === 'attached' ? '<span class="pill pill-attached">● attached</span>' : ''}
     ${session.tags.map((tag) => `<span class="pill tag">#${escapeHtml(tag)}</span>`).join('')}
   </div>
   <div class="facts">
