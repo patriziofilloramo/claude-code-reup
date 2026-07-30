@@ -84,6 +84,16 @@ session ID prefixes with a minimum length of eight characters.
 Signals are inferred from local files and should be treated as guidance, not a
 guarantee that a session is safe or complete.
 
+### Known limitation: permission prompts
+
+A session waiting on a tool-permission prompt is shown as working, not as
+waiting for you. Claude Code appears not to report that state: its
+`Notification` hook fires for other waits but was not observed firing for a
+permission prompt, and from the local files a tool that is running and a tool
+awaiting your approval look identical. Reup shows what it can verify rather
+than guessing, so this stays as it is unless Claude Code starts reporting it.
+Observed on the VS Code client; not confirmed exhaustively across clients.
+
 ## Interfaces
 
 The terminal UI is the default surface. It is keyboard-first and optimized for

@@ -20,24 +20,36 @@
 
 ### Medium
 
-- [ ] **A VS Code session blocked on a permission prompt is not indicated** — it renders as
-      "running" (green, pulsing) on every surface, so a session waiting on the user looks like
-      one that is working. Measured 2026-07-28: `claude-vscode` peer locks omit the `status`
-      field, and no hook work marker existed for the session despite the attention hooks being
-      installed — so `combineWorkEvidence` returns `null` and `resolveActivityState` falls back
-      to transcript recency, where a pending `tool_use` reads as `running`.
+- [ ] **Indicate a session blocked on a permission prompt** — parked as a known limitation, not
+      a defect to fix, because the signal to fix it with does not appear to exist. Recorded in
+      `README.md` under "Known limitation: permission prompts" so users are told rather than
+      left to wonder.
 
-      `isAwaitingUserReply()` (`session-tail.ts`) already handles the shape, but only for
-      `AskUserQuestion` / `ExitPlanMode` when the work status is unknown — a permission prompt
-      on `Bash` is not covered, and covering it needs a way to tell "tool in flight" from "tool
-      awaiting a decision" without a turn-boundary signal. Note this was never indicated
-      correctly: before the `stateIsReported` gate the amber dot shown here marked *pauses*, not
-      stalls, which is why it also fired throughout long tool calls.
+      What Reup can see while a permission prompt is open, measured 2026-07-29 on the VS Code
+      client with healthy hooks: the lock carries no `status`; the work marker says `busy`,
+      written by `UserPromptSubmit` when the turn began; the transcript tail holds a `tool_use`
+      with no result. A tool that is executing and a tool awaiting approval therefore produce
+      identical data. No `Notification` hook fired while the prompt was open, and the web
+      `attention` field stayed null.
 
-      Prerequisite for judging any fix: find out whether the VS Code extension fires
-      `UserPromptSubmit`/`Stop` hooks at all. If it does, the marker path already solves this and
-      the bug is really "markers are missing"; if it does not, Reup needs a transcript-only
-      signal for the blocked state.
+      **Not established with certainty.** The prompt was answered before the ~60 s idle window
+      that Claude Code's `Notification` hook also covers, and a follow-up attempt to leave one
+      open longer could not raise a prompt at all — the session's permission mode overrode its
+      own allowlist. So "Claude Code does not report this" is the best current reading, not a
+      proven fact.
+
+      Reopen if any of these appear: a `Notification` observed during a permission prompt; a
+      Claude Code release that reports permission state in the lock file or transcript; or a
+      transcript marker distinguishing "awaiting approval" from "running". Until then the
+      standing rule applies — if Claude Code does not report it, do not invent it. An indicator
+      that guesses here would be worse than none, because it would fire through every long tool
+      call, which is exactly the failure this project spent 2026-07-29 removing.
+
+      The 2026-07-28 measurement originally behind this entry was **invalidated**: it recorded
+      that no hook work marker existed "despite the attention hooks being installed" and blamed
+      the VS Code client, when the hooks were in fact dead — registered but pointing at a path
+      that no longer resolved (`CLAUDE_CODE_DATA_MODEL.md`, trap 7). Re-measured with working
+      hooks, that client fires them normally: 71 captures in one day for a single session.
 
 - [x] **No metadata cache / SSE debounce** — resolved: 2 s in-process cache keyed on projects
       directory path; invalidated before filesystem notifications and after sidecar mutations.
