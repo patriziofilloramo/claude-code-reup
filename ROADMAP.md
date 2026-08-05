@@ -335,12 +335,15 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
       `npm run release:installers` produces a Windows `.exe` (Inno Setup) + `.zip`, and
       per-platform `.tar.gz` for macOS/Linux, all verified to build successfully with `npm audit`
       clean. Ran the full pipeline end to end: extracted the Windows zip and confirmed
-      `reup.cmd --version` and bare `reup --version` (via PATH) both work, including under
-      `-ExecutionPolicy Restricted`. Confirmed `install.sh`/`uninstall.sh`/`bin/reup` carry
+      `reup.cmd --version` and bare `reup --version` (via PATH) both work in cmd.exe,
+      PowerShell under `-ExecutionPolicy Restricted`, and Git Bash. Confirmed
+      `install.sh`/`uninstall.sh`/`bin/reup` carry
       correct `755` permissions inside both Unix tarballs despite being built on Windows
-      (GNU tar preserves the mode Node's `chmodSync` sets). Did not run `install.ps1`
-      against this machine's real environment (would touch the live user PATH and could
-      collide with the `npm link`-ed dev install already on it) or the `.sh` scripts on a
+      (GNU tar preserves the mode Node's `chmodSync` sets). The repository's local Windows
+      installer was then run against this machine's real environment in its isolated
+      `reup-dev` location: direct launch, cmd.exe, PowerShell under Restricted policy, and
+      Git Bash all resolved the exact `0.4.4` candidate while the installer safely reported
+      the competing Inno and npm-global copies. The `.sh` scripts have not yet been run on a
       real macOS/Linux box — that gap is the item below. "Self-contained" is a stretch:
       these still require Node.js 20+ preinstalled on the target machine, matching
       `Documents/INSTALLATION.md`'s documented intentional scope (portable/package shape
@@ -351,16 +354,14 @@ defined in [`Documents/INSTALLATION.md`](Documents/INSTALLATION.md).
 - [x] Install shell completion as a managed, idempotent, reversible integration;
       back up profiles before first modification and remove only Reup-owned blocks
 - [x] Ensure the Windows launcher works without weakening PowerShell execution policy —
-      resolved: `bin/reup.cmd` is the only launcher shipped; `bin/reup.ps1` was removed
-      because PowerShell's command lookup prefers a same-named `.ps1` over `.cmd` in the
-      same PATH directory, which made bare `reup` resolve to the `.ps1` and fail under the
-      Restricted execution policy (the default on many Windows machines) even though the
-      `.cmd` needs no execution-policy allowance at all. Verified by reproducing the exact
-      failure and confirming the fix under `-ExecutionPolicy Restricted`.
+      resolved: packages ship `bin/reup.cmd` for cmd.exe/PowerShell and extensionless
+      `bin/reup` for Git Bash, but never `bin/reup.ps1`. PowerShell therefore selects the
+      execution-policy-independent `.cmd`, while Bash no longer skips the new install and
+      falls through to an older npm-global shim. Behavioral tests cover both resolution paths.
 - [ ] Add upgrade, repair, and uninstall verification on clean platform environments —
       partially covered from the current dev machine. Windows launcher + PATH resolution
       tested for real (see the item above). Also found and fixed a real in-place-upgrade bug
-      while testing here: `windowsInstallScript()` copied the new `app`/`bin` into the
+      while testing here: the Windows package installer copied the new `app`/`bin` into the
       install directory without removing the old ones first, so files the new package no
       longer ships (like the `bin/reup.ps1` just removed) survived every upgrade — confirmed
       against this machine's own stale 2026-07-14 install, not just in theory. Fixed to match

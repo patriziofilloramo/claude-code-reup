@@ -47,7 +47,7 @@
     },
     {
       "label": "Install Reup CLI Locally (install.ps1)",
-      "detail": "Extracts the most recently built Windows package and runs its install.ps1. Run 'Build Reup Installer Packages' first if release/ is empty or stale.",
+      "detail": "Verifies and installs the Windows package built from the current clean commit into an isolated reup-dev directory, including cmd/PowerShell and Git Bash launchers.",
       "type": "shell",
       "command": "npm run install:cli",
       "options": {
@@ -62,7 +62,7 @@
     },
     {
       "label": "Uninstall Reup CLI Locally (uninstall.ps1)",
-      "detail": "Runs uninstall.ps1 from the last local install. Removes the installed copy and its PATH entry.",
+      "detail": "Validates the isolated reup-dev install's ownership marker, then removes only its matching runtime and PATH entry.",
       "type": "shell",
       "command": "npm run uninstall:cli",
       "options": {

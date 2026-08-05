@@ -64,6 +64,11 @@ jobs:
       - name: Verify packaged VS Code extension
         run: npm run release:extension:check
 
+      - name: Verify packaged VS Code extension from Git Bash
+        if: runner.os == 'Windows'
+        shell: bash
+        run: npm run release:extension:check
+
       - name: Verify npm package dry-run
         if: runner.os == 'Linux'
         run: npm run release:package:check

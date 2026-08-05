@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.4.4
+
+### Fixed
+
+- Windows packages now include an extensionless `reup` launcher for Git Bash as well as
+  `reup.cmd` for cmd.exe and PowerShell. Git Bash therefore no longer skips the local package and
+  falls through to an older npm-global shim elsewhere on `PATH`; `bin/reup.ps1` remains
+  intentionally absent for execution-policy compatibility.
+- Windows installers de-duplicate and prepend their own `PATH` entry. The portable installer also
+  verifies the installed version through every available supported shell and reports competing
+  Reup installations without deleting them. The development install task now accepts only the
+  checksummed package built from the current clean commit instead of selecting a release directory
+  by modification time.
+- Portable upgrades stage and verify the complete runtime before swapping it into place, with
+  rollback on failure and an ownership marker that prevents stale local uninstall tasks from
+  deleting another installer's files. Inno upgrades explicitly remove obsolete `bin/reup.ps1` and
+  portable ownership metadata.
+- The repository's local-install task uses an isolated `%LOCALAPPDATA%\Programs\reup-dev`
+  directory, and portable packages refuse to overlay a directory owned by Inno Setup. Failed local
+  upgrades also restore their previous staging/uninstaller pair.
+
+## 0.4.3
+
+### Fixed
+
+- Release-candidate verification and installer assembly no longer pass
+  drive-letter absolute paths to GNU tar. Tarball reads and extraction now run
+  from a controlled working directory with relative, slash-separated operands,
+  so `release:installers` works from Git Bash without treating `C:` as a remote
+  host.
+
+## 0.4.2
+
+### Fixed
+
+- VSIX verification now reads the ZIP archive in-process instead of invoking
+  whichever `tar` executable appears first in `PATH`. Release checks therefore
+  behave consistently in PowerShell, Git Bash, Linux, and macOS.
+- Archive inspection remains bounded and extraction-free: it preserves
+  duplicate paths, rejects encrypted or non-regular entries and unsupported
+  compression, validates decompression and per-entry CRC-32, and limits both
+  total expanded size and buffered manifest metadata.
+
+## 0.4.1
+
+### Fixed
+
+- Live Activity no longer synthesizes a non-navigable `Needs input` session
+  from an unmatched, pidless Agent View background row. Agent View-managed
+  `working`/`blocked` rows remain conservative safety evidence and are still
+  presented when Reup can anchor them to resume-visible local history or a
+  verified live lock.
+- TUI, inbox, extension, REST, and SSE now apply the same presentation boundary.
+  Orphaned hook markers and `startedAt` age cannot resurrect or expire a managed
+  task, and `/api/active` returns the same filtered IDs as the activity stream.
+- Concurrent project and active-ID reads now share one cold discovery scan, and
+  browser reachability checks use a constant-time `/api/health` endpoint rather
+  than triggering session discovery during an outage.
+
 ## 0.4.0
 
 ### Added

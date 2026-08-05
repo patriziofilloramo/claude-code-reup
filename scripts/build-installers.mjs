@@ -17,6 +17,8 @@ import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 
 import { resolveReleaseCommand } from './release-command.mjs'
+import { tarExtractInvocation } from './tar-path.mjs'
+import { windowsCmdLauncher, windowsPosixLauncher } from './windows-launchers.mjs'
 
 const allowDirty = process.argv.includes('--allow-dirty')
 const root = process.cwd()
@@ -104,7 +106,10 @@ function findNpmPackageArtifact() {
 function prepareRuntimeApp(target, packagePath) {
   const extractionRoot = join(workDir, '.npm-package')
   mkdirSync(extractionRoot, { recursive: true })
-  run('tar', ['-xzf', packagePath, '-C', extractionRoot])
+  // Keep both operands drive-free. GNU tar launched from Git Bash interprets
+  // an absolute Windows archive path such as C:\\... as a remote host reference.
+  const invocation = tarExtractInvocation(releaseRoot, packagePath, extractionRoot)
+  run('tar', invocation.args, { cwd: invocation.cwd })
 
   const extractedPackage = join(extractionRoot, 'package')
   if (!existsSync(join(extractedPackage, 'dist', 'index.js'))) {
@@ -132,21 +137,15 @@ function buildWindowsPackage(runtimeApp) {
   cpSync(runtimeApp, appDir, { recursive: true })
   mkdirSync(binDir, { recursive: true })
   mkdirSync(completionDir, { recursive: true })
-  // .cmd only — deliberately no bin/reup.ps1. PowerShell's command lookup
-  // prefers a same-named .ps1 over .cmd/.exe in the same PATH directory, so
-  // shipping both would make PowerShell resolve bare `reup` to the .ps1 and
-  // fail under the Restricted execution policy (the out-of-box default on
-  // many Windows machines), even though the .cmd works everywhere with no
-  // execution-policy dependency at all. Verified: with both files present,
-  // `reup` throws "running scripts is disabled on this system" under
-  // -ExecutionPolicy Restricted; with only reup.cmd, it runs unaffected.
-  writeFileSync(
-    join(binDir, 'reup.cmd'),
-    ['@echo off', 'node "%~dp0..\\app\\dist\\index.js" %*', ''].join('\r\n')
-  )
+  // Windows shells need two launchers. cmd.exe and PowerShell discover the
+  // .cmd through PATHEXT; Git Bash searches for the exact extensionless name.
+  // Deliberately do not ship bin/reup.ps1: PowerShell prefers it over .cmd and
+  // can reject it under the default Restricted execution policy.
+  writeFileSync(join(binDir, 'reup.cmd'), windowsCmdLauncher())
+  writeExecutable(join(binDir, 'reup'), windowsPosixLauncher())
   writeFileSync(join(completionDir, 'reup.ps1'), windowsCompletionLoader())
-  writeFileSync(join(packageRoot, 'install.ps1'), windowsInstallScript())
-  writeFileSync(join(packageRoot, 'uninstall.ps1'), windowsUninstallScript())
+  copyFileSync('scripts/install-windows-package.ps1', join(packageRoot, 'install.ps1'))
+  copyFileSync('scripts/uninstall-windows-package.ps1', join(packageRoot, 'uninstall.ps1'))
   writeFileSync(join(packageRoot, 'README-INSTALL.txt'), windowsReadme())
 
   const archive = join(installerDir, `reup-windows-x64-v${version}.zip`)
@@ -242,6 +241,10 @@ function windowsInnoScript(packageRoot) {
     'Source: "{#PackageRoot}\\completion\\*"; DestDir: "{app}\\completion"; Flags: recursesubdirs createallsubdirs ignoreversion',
     'Source: "{#PackageRoot}\\README-INSTALL.txt"; DestDir: "{app}"; Flags: ignoreversion',
     '',
+    '[InstallDelete]',
+    'Type: files; Name: "{app}\\bin\\reup.ps1"',
+    'Type: files; Name: "{app}\\.reup-portable-install.json"',
+    '',
     '[Tasks]',
     'Name: "addtopath"; Description: "Add reup to the current user PATH"; Flags: checkedonce',
     'Name: "powershellcompletion"; Description: "Enable PowerShell tab completion for Windows PowerShell and PowerShell 7"; Flags: checkedonce',
@@ -257,20 +260,44 @@ function windowsInnoScript(packageRoot) {
     "const CompletionStartMarker = '# >>> reup completion >>>';",
     "const CompletionEndMarker = '# <<< reup completion <<<';",
     '',
-    'function PathPartMatches(Value: string; Entry: string): Boolean;',
+    'function ExpandKnownPathPrefix(Value: string): string;',
+    'var',
+    '  UpperValue: string;',
     'begin',
-    '  Result := CompareText(RemoveBackslashUnlessRoot(Value), RemoveBackslashUnlessRoot(Entry)) = 0;',
+    '  Result := Value;',
+    '  UpperValue := Uppercase(Value);',
+    "  if Pos('%LOCALAPPDATA%', UpperValue) = 1 then",
+    "    Result := GetEnv('LOCALAPPDATA') + Copy(Value, Length('%LOCALAPPDATA%') + 1, Length(Value))",
+    "  else if Pos('%USERPROFILE%', UpperValue) = 1 then",
+    "    Result := GetEnv('USERPROFILE') + Copy(Value, Length('%USERPROFILE%') + 1, Length(Value))",
+    "  else if Pos('%APPDATA%', UpperValue) = 1 then",
+    "    Result := GetEnv('APPDATA') + Copy(Value, Length('%APPDATA%') + 1, Length(Value));",
     'end;',
     '',
-    'function PathContains(Entry: string): Boolean;',
+    'function NormalizePathPart(Value: string): string;',
+    'begin',
+    '  Result := Trim(Value);',
+    `  if (Length(Result) >= 2) and (Result[1] = '"') and (Result[Length(Result)] = '"') then`,
+    '    Result := Copy(Result, 2, Length(Result) - 2);',
+    '  Result := ExpandKnownPathPrefix(Result);',
+    '  Result := RemoveBackslashUnlessRoot(Result);',
+    'end;',
+    '',
+    'function PathPartMatches(Value: string; Entry: string): Boolean;',
+    'begin',
+    '  Result := CompareText(NormalizePathPart(Value), NormalizePathPart(Entry)) = 0;',
+    'end;',
+    '',
+    'procedure AddToUserPath(Entry: string);',
     'var',
     '  PathValue: string;',
+    '  NextValue: string;',
     '  Part: string;',
     '  Index: Integer;',
     'begin',
-    '  Result := False;',
     "  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', PathValue) then",
     "    PathValue := '';",
+    '  NextValue := Entry;',
     "  while PathValue <> '' do begin",
     '    Index := Pos(PathSeparator, PathValue);',
     '    if Index > 0 then begin',
@@ -280,24 +307,10 @@ function windowsInnoScript(packageRoot) {
     '      Part := PathValue;',
     "      PathValue := '';",
     '    end;',
-    '    if PathPartMatches(Part, Entry) then begin',
-    '      Result := True;',
-    '      Exit;',
-    '    end;',
+    "    if (Part <> '') and not PathPartMatches(Part, Entry) then",
+    '      NextValue := NextValue + PathSeparator + Part;',
     '  end;',
-    'end;',
-    '',
-    'procedure AddToUserPath(Entry: string);',
-    'var',
-    '  PathValue: string;',
-    'begin',
-    '  if PathContains(Entry) then',
-    '    Exit;',
-    "  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', PathValue) then",
-    "    PathValue := '';",
-    "  if (PathValue <> '') and (Copy(PathValue, Length(PathValue), 1) <> PathSeparator) then",
-    '    PathValue := PathValue + PathSeparator;',
-    "  RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', PathValue + Entry);",
+    "  RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', NextValue);",
     'end;',
     '',
     'procedure RemoveFromUserPath(Entry: string);',
@@ -455,46 +468,6 @@ function buildUnixPackage(runtimeApp, platform) {
   })
 }
 
-function windowsInstallScript() {
-  return [
-    '$ErrorActionPreference = "Stop"',
-    '$InstallDir = Join-Path $env:LOCALAPPDATA "Programs\\reup"',
-    '$Source = $PSScriptRoot',
-    'if (-not (Test-Path (Join-Path $Source "app\\dist\\index.js"))) { throw "Run this script from the extracted Reup package." }',
-    'New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null',
-    // Remove the previous app/bin before copying so an upgrade cannot leave
-    // stale files behind that the new package no longer ships (matches
-    // unixInstallScript, which already does the equivalent rm -rf).
-    'Remove-Item -LiteralPath (Join-Path $InstallDir "app") -Recurse -Force -ErrorAction SilentlyContinue',
-    'Remove-Item -LiteralPath (Join-Path $InstallDir "bin") -Recurse -Force -ErrorAction SilentlyContinue',
-    'Copy-Item -Path (Join-Path $Source "app"), (Join-Path $Source "bin") -Destination $InstallDir -Recurse -Force',
-    '$Bin = Join-Path $InstallDir "bin"',
-    '$CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")',
-    '$Parts = @($CurrentPath -split ";" | Where-Object { $_ })',
-    'if ($Parts -notcontains $Bin) {',
-    '  $NextPath = (@($Parts + $Bin) -join ";")',
-    '  [Environment]::SetEnvironmentVariable("Path", $NextPath, "User")',
-    '}',
-    'Write-Host "Reup installed to $InstallDir"',
-    'Write-Host "Open a new terminal and run: reup --version"',
-    '',
-  ].join('\r\n')
-}
-
-function windowsUninstallScript() {
-  return [
-    '$ErrorActionPreference = "Stop"',
-    '$InstallDir = Join-Path $env:LOCALAPPDATA "Programs\\reup"',
-    '$Bin = Join-Path $InstallDir "bin"',
-    '$CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")',
-    '$Parts = @($CurrentPath -split ";" | Where-Object { $_ -and $_ -ne $Bin })',
-    '[Environment]::SetEnvironmentVariable("Path", (@($Parts) -join ";"), "User")',
-    'Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue',
-    'Write-Host "Reup removed from $InstallDir"',
-    '',
-  ].join('\r\n')
-}
-
 function windowsReadme() {
   return [
     `Reup ${version} Windows x64 RC package`,
@@ -508,7 +481,14 @@ function windowsReadme() {
     'Notes:',
     '  - Requires Node.js 20 or newer on PATH.',
     '  - Installs per-user to %LOCALAPPDATA%\\Programs\\reup.',
-    '  - Adds only the Reup bin directory to the current user PATH.',
+    '  - Prepends one normalized Reup bin entry to the current user PATH.',
+    '  - Ships reup.cmd for cmd/PowerShell and extensionless reup for Git Bash.',
+    '  - Does not ship bin/reup.ps1, so PowerShell execution policy cannot shadow reup.cmd.',
+    '  - install.ps1 reports other Reup launchers but never removes a separate npm-global install.',
+    '  - Portable upgrades are staged with rollback; uninstall requires matching ownership metadata.',
+    '  - install.ps1 refuses to overlay a directory owned by Inno Setup.',
+    '  - Inno upgrades remove obsolete bin/reup.ps1 and portable ownership metadata.',
+    '  - Fully quit and reopen VS Code after PATH changes; Reload Window is not sufficient.',
     '  - The .exe installer can also add PowerShell completion through managed profile blocks.',
     '  - Does not weaken execution policy permanently.',
     '  - Unsigned RC package; not an official public installer.',
@@ -631,7 +611,8 @@ function writeInstallerNotes() {
       '',
       'For each platform, install the package and verify:',
       '',
-      '- `reup --version`',
+      '- `reup --version` in cmd.exe, PowerShell, and Git Bash when available',
+      '- the selected launcher belongs to this install even when an npm-global Reup also exists',
       '- `reup doctor`',
       '- `reup web` binds to localhost',
       '- PowerShell completion works after opening a new PowerShell session when selected',

@@ -18,6 +18,7 @@ import { resolveReleaseCommand } from './release-command.mjs'
 import { parsePackReport, validatePackageCandidate } from './check-package.mjs'
 import { releaseValidationCommands, runReleaseValidationCommands } from './release-gate.mjs'
 import { releaseTreeMutationError } from './release-tree-state.mjs'
+import { tarReadEntryInvocation } from './tar-path.mjs'
 
 const allowDirty = process.argv.includes('--allow-dirty')
 const root = process.cwd()
@@ -200,7 +201,8 @@ function assertReleaseTreeStable(stage) {
 }
 
 function readPackedText(packagePath, entryPath) {
-  return runCapture('tar', ['-xOf', packagePath, entryPath])
+  const invocation = tarReadEntryInvocation(packagePath, entryPath)
+  return runCapture('tar', invocation.args, { cwd: invocation.cwd })
 }
 
 function readPackedJson(packagePath, entryPath) {

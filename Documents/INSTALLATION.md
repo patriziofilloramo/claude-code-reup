@@ -69,8 +69,9 @@ npm run release:check
 
 That gate runs version sync, formatting, lint, build, tests, VS Code build/package checks and a
 development-host smoke, browser-client syntax validation, root and extension audits, the npm
-dry-run above, and Git whitespace validation. CI also runs the package and VSIX checks on Linux for
-every pull request.
+dry-run above, and Git whitespace validation. On every pull request, CI verifies the VSIX on
+Windows, macOS, and Linux, repeats that check from Git Bash on Windows, and runs the npm package
+check on Linux.
 
 ## Local Release Candidate
 
@@ -103,6 +104,10 @@ Before the folder is reported ready, the script:
 - includes the already packaged VSIX only after its exact archive and manifests pass the policy
   described below.
 
+For true npm `.tgz` archives, the release scripts invoke tar only with working-directory-relative,
+slash-separated paths. This avoids GNU tar's Windows drive-colon remote-host syntax when the same
+commands are launched from Git Bash.
+
 It does not publish to npm, create a GitHub Release, publish the VSIX, sign, notarize, or generate
 native installers.
 
@@ -117,7 +122,10 @@ state this limitation explicitly.
 `npm run release:extension:check` inspects the exact VSIX archive. It enforces its size and complete
 file allowlist, rejects duplicate or unsafe paths, reads the packaged `extension/package.json`, and
 checks the generated `extension.vsixmanifest` identity, version, publisher, VS Code target, and code
-manifest reference.
+manifest reference. Because VSIX is a ZIP format, the checker uses a bounded in-process ZIP reader,
+validates each entry's CRC-32 without extracting files, and does not depend on the shell's
+`tar`/`unzip` implementation. The same check therefore has identical archive semantics in
+PowerShell, Git Bash, macOS, and Linux.
 
 `npm run test:extension-host` is a separate runtime smoke: it compiles and activates the development
 checkout in a pinned VS Code Extension Host. It proves command registration and basic activation,
@@ -173,7 +181,7 @@ Install Inno Setup 6 when an unsigned Windows RC installer is specifically neede
 winget install --id JRSoftware.InnoSetup -e
 ```
 
-To test the newest Windows zip on the current development machine:
+To test the Windows zip built from the current clean commit on the development machine:
 
 ```text
 npm run install:cli
@@ -183,6 +191,29 @@ npm run uninstall:cli
 Those commands modify the current user's real PATH. They do not build artifacts; run
 `release:installers` first. The Windows `.exe` can optionally add PowerShell completion through a
 clearly marked, idempotent profile block that uninstall removes.
+
+Windows packages intentionally ship `bin/reup.cmd` for PowerShell and `cmd.exe`, plus the
+extensionless `bin/reup` launcher for Git Bash. They do not ship `bin/reup.ps1`: PowerShell would
+prefer it to the execution-policy-independent `.cmd` launcher. Installation normalizes and
+de-duplicates Reup's PATH entry, then prepends it so the selected installation wins over older
+launchers.
+
+`install:cli` validates the selected release metadata and requires the directly installed launcher
+to report that release's exact version. It also reports competing launchers, especially an older
+npm-global `@patriziofilloramo/reup`, but never removes another installation automatically. Remove
+one manually only if you intend the local package to replace it. After a PATH change, fully quit
+all VS Code windows and reopen VS Code; **Reload Window** alone retains the parent process's old
+environment.
+
+Portable upgrades preflight and stage the full runtime, then swap `app`/`bin` with rollback instead
+of merging files into an existing install. A versioned ownership marker lets `uninstall:cli` remove
+only the portable runtime it installed and refuses a mismatched/newer installation. The repository
+task installs to `%LOCALAPPDATA%\Programs\reup-dev`, separate from the normal/Inno
+`%LOCALAPPDATA%\Programs\reup` directory. A manually run portable package refuses to overlay Inno
+Setup metadata in its selected directory. Conversely, an Inno upgrade removes portable ownership
+metadata and the obsolete `bin/reup.ps1` shipped by early candidates before copying current files.
+If a local upgrade fails, the task restores the previous staging directory so its uninstaller still
+matches the runtime restored by the package transaction.
 
 ## Promotion Checklist
 
