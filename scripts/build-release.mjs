@@ -10,9 +10,14 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
+
+import { resolveReleaseCommand } from './release-command.mjs'
+import { parsePackReport, validatePackageCandidate } from './check-package.mjs'
+import { releaseValidationCommands, runReleaseValidationCommands } from './release-gate.mjs'
+import { releaseTreeMutationError } from './release-tree-state.mjs'
 
 const allowDirty = process.argv.includes('--allow-dirty')
 const root = process.cwd()
@@ -21,7 +26,8 @@ const version = manifest.version
 const branch = runCapture('git', ['branch', '--show-current']).trim()
 const commit = runCapture('git', ['rev-parse', 'HEAD']).trim()
 const shortCommit = runCapture('git', ['rev-parse', '--short=12', 'HEAD']).trim()
-const dirty = isDirty()
+const initialPorcelain = readGitPorcelain()
+const dirty = initialPorcelain.trim().length > 0
 
 if (dirty && !allowDirty) {
   fail(
@@ -35,33 +41,38 @@ if (dirty && !allowDirty) {
 const releaseRoot = resolve('release', `reup-v${version}-${shortCommit}${dirty ? '-dirty' : ''}`)
 const artifactDir = join(releaseRoot, 'artifacts')
 
+runReleaseValidationCommands(root)
+assertReleaseTreeStable('the release gate')
+
 rmSync(releaseRoot, { recursive: true, force: true })
 mkdirSync(artifactDir, { recursive: true })
 
-const validationCommands = [
-  ['npm', ['run', 'check:version']],
-  ['npm', ['run', 'format:check']],
-  ['npm', ['run', 'lint']],
-  ['npm', ['run', 'build']],
-  ['npm', ['test']],
-  ['npm', ['run', 'build:extension']],
-  ['npm', ['run', 'package:extension']],
-  ['npm', ['run', 'test:extension-host']],
-  ['node', ['--check', 'src/web/client.js']],
-  ['npm', ['audit']],
-  ['npm', ['audit', '--prefix', 'extension']],
-  ['git', ['diff', '--check']],
-]
+const packReport = parsePackReport(
+  runCapture('npm', ['pack', '--json', '--pack-destination', artifactDir])
+)
+const packedName = packReport.filename
+if (typeof packedName !== 'string') fail('npm pack did not report a .tgz filename.')
+const packagePath = resolve(artifactDir, packedName)
+if (dirname(packagePath) !== resolve(artifactDir) || !existsSync(packagePath)) {
+  fail('npm pack did not create the reported .tgz artifact inside the artifact directory.')
+}
 
-for (const [command, args] of validationCommands) run(command, args)
-
-const packedName = runCapture('npm', ['pack', '--pack-destination', artifactDir])
-  .split(/\r?\n/)
-  .map((line) => line.trim())
-  .filter(Boolean)
-  .findLast((line) => line.endsWith('.tgz'))
-
-if (!packedName) fail('npm pack did not report a .tgz artifact.')
+const packedManifest = readPackedJson(packagePath, 'package/package.json')
+const packedReadme = readPackedText(packagePath, 'package/README.md')
+const packageErrors = validatePackageCandidate(packedManifest, packReport, packedReadme)
+if (packedManifest.name !== manifest.name || packedManifest.version !== version) {
+  packageErrors.push('Packed npm manifest identity does not match the release source manifest.')
+}
+if (packageErrors.length > 0) {
+  fail(
+    [
+      'Packed npm artifact failed verification:',
+      ...packageErrors.map((error) => `- ${error}`),
+    ].join('\n')
+  )
+}
+assertReleaseTreeStable('the final npm pack')
+smokeNpmPackage(packagePath)
 
 const vsixName = `reup-vscode-${version}.vsix`
 const vsixPath = join('extension', 'dist', vsixName)
@@ -92,8 +103,8 @@ writeSbom('extension', releaseRoot, [
   '--json',
 ])
 
-const provenance = {
-  schema: 'reup.local-release.v1',
+const buildMetadata = {
+  schema: 'reup.release-candidate.v1',
   packageName: manifest.name,
   version,
   branch,
@@ -107,38 +118,54 @@ const provenance = {
     os: process.platform,
     arch: process.arch,
   },
-  validationCommands: validationCommands.map(([command, args]) => [command, ...args].join(' ')),
-  officialPublishSkipped: true,
+  environment: process.env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local',
+  validationCommands: releaseValidationCommands.map(([command, args]) =>
+    [command, ...args].join(' ')
+  ),
+  artifactChecks: [
+    'npm package policy on the exact packed tarball',
+    'npm install from packed tarball',
+    'installed reup shim --version',
+    'VSIX content and manifest policy',
+  ],
+  dependencyResolution:
+    'The tarball contains Reup code; npm resolves range-compatible runtime dependencies at install time.',
+  publication: {
+    npm: false,
+    githubRelease: false,
+    vscodeMarketplace: false,
+  },
+  attestation: false,
 }
 
 writeFileSync(
-  join(releaseRoot, 'provenance.local.json'),
-  `${JSON.stringify(provenance, null, 2)}\n`
+  join(releaseRoot, 'build-metadata.json'),
+  `${JSON.stringify(buildMetadata, null, 2)}\n`
 )
-writeReleaseNotes(releaseRoot, provenance)
+writeReleaseNotes(releaseRoot, buildMetadata)
 writeChecksums(releaseRoot)
 
 console.log(`\nLocal release candidate ready: ${releaseRoot}`)
-console.log('Official publish skipped. Upload/sign/notarize from CI in the next phase.')
+console.log('Nothing was published. Use the Beta Candidate workflow for a CI-built copy.')
 
 function run(command, args, options = {}) {
   console.log(`\n> ${[command, ...args].join(' ')}`)
-  const result = spawnSync(resolveCommand(command), args, {
+  const invocation = resolveReleaseCommand(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: root,
     stdio: 'inherit',
-    shell: commandNeedsShell(command),
     ...options,
   })
   if (result.error) throw result.error
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-function runCapture(command, args) {
-  const result = spawnSync(resolveCommand(command), args, {
-    cwd: root,
+function runCapture(command, args, options = {}) {
+  const invocation = resolveReleaseCommand(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
+    cwd: options.cwd ?? root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    shell: commandNeedsShell(command),
   })
   if (result.error) throw result.error
   if (result.status !== 0) {
@@ -155,42 +182,100 @@ function runCapture(command, args) {
   return result.stdout
 }
 
-function resolveCommand(command) {
-  return command
-}
-
-function commandNeedsShell(command) {
-  return process.platform === 'win32' && command === 'npm'
-}
-
-function isDirty() {
-  const result = spawnSync(
-    resolveCommand('git'),
-    ['status', '--porcelain=v1', '--untracked-files=normal'],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  )
+function readGitPorcelain() {
+  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=normal'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   if (result.error) throw result.error
   if (result.status !== 0) fail('Unable to determine git working-tree state.')
-  return result.stdout.trim().length > 0
+  return result.stdout
+}
+
+function assertReleaseTreeStable(stage) {
+  const error = releaseTreeMutationError(dirty, readGitPorcelain(), stage)
+  if (error) fail(error)
+}
+
+function readPackedText(packagePath, entryPath) {
+  return runCapture('tar', ['-xOf', packagePath, entryPath])
+}
+
+function readPackedJson(packagePath, entryPath) {
+  try {
+    return JSON.parse(readPackedText(packagePath, entryPath))
+  } catch (error) {
+    fail(
+      `Packed npm artifact contains invalid JSON at ${entryPath}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
 }
 
 function writeSbom(label, outputRoot, args) {
-  const result = spawnSync(resolveCommand('npm'), args, {
+  const invocation = resolveReleaseCommand('npm', args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    shell: commandNeedsShell('npm'),
   })
   if (result.error) throw result.error
   if (result.status !== 0) {
     fail(`Unable to generate ${label} SBOM:\n${result.stderr.trim()}`)
   }
   writeFileSync(join(outputRoot, `sbom.${label}.cyclonedx.json`), result.stdout)
+}
+
+function smokeNpmPackage(packagePath) {
+  const smokeRoot = join(releaseRoot, '.npm-package-smoke')
+  rmSync(smokeRoot, { recursive: true, force: true })
+  mkdirSync(smokeRoot, { recursive: true })
+
+  try {
+    run('npm', [
+      'install',
+      '--prefix',
+      smokeRoot,
+      '--omit=dev',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      packagePath,
+    ])
+
+    const installedPackageRoot = join(smokeRoot, 'node_modules', ...manifest.name.split('/'))
+    const installedManifestPath = join(installedPackageRoot, 'package.json')
+    if (!existsSync(installedManifestPath)) {
+      fail(`npm did not install the packed package at ${installedPackageRoot}`)
+    }
+
+    const installedManifest = JSON.parse(readFileSync(installedManifestPath, 'utf8'))
+    if (installedManifest.name !== manifest.name || installedManifest.version !== version) {
+      fail('Installed npm package identity does not match the release manifest.')
+    }
+
+    const shimPath = join(
+      smokeRoot,
+      'node_modules',
+      '.bin',
+      process.platform === 'win32' ? 'reup.cmd' : 'reup'
+    )
+    if (!existsSync(shimPath)) fail(`npm did not create the installed Reup shim at ${shimPath}`)
+
+    const installedVersion = runCapture(
+      'npm',
+      ['exec', '--prefix', smokeRoot, '--offline', '--', 'reup', '--version'],
+      { cwd: smokeRoot }
+    ).trim()
+    if (installedVersion !== version) {
+      fail(
+        `Installed npm package reported version ${installedVersion || '<empty>'}; expected ${version}.`
+      )
+    }
+  } finally {
+    rmSync(smokeRoot, { recursive: true, force: true })
+  }
 }
 
 function writeReleaseNotes(outputRoot, data) {
@@ -201,9 +286,9 @@ function writeReleaseNotes(outputRoot, data) {
   writeFileSync(
     join(outputRoot, 'RELEASE_NOTES.md'),
     [
-      `# Reup ${data.version} Local Release Candidate`,
+      `# Reup ${data.version} Release Candidate`,
       '',
-      'This release candidate was generated locally for validation only. It has not been published to npm, GitHub Releases, the VS Code Marketplace, or any installer channel.',
+      'This release candidate was generated for validation only. It has not been published to npm, GitHub Releases, the VS Code Marketplace, or any installer channel.',
       '',
       `Commit: \`${data.commit}\``,
       `Branch: \`${data.branch}\``,
@@ -224,9 +309,13 @@ function writeReleaseNotes(outputRoot, data) {
       '- Lint',
       '- TypeScript build',
       '- Full Vitest suite',
-      '- VS Code extension build/package/smoke',
+      '- VS Code development-host smoke test',
+      '- Exact VSIX content and manifest verification',
       '- Browser client syntax check',
       '- Root and extension npm audit',
+      '- npm package content and metadata dry-run',
+      '- Exact packed npm artifact policy check',
+      '- Install and version smoke test from the packed npm tarball',
       '- Git diff whitespace check',
       '',
       '## Not Included In This Phase',
@@ -237,6 +326,7 @@ function writeReleaseNotes(outputRoot, data) {
       '- Linux `.deb`/`.rpm` packages',
       '- Detached signatures',
       '- CI-backed provenance attestations',
+      '- A dependency-closure guarantee: npm resolves allowed runtime dependency ranges at install time',
       '',
     ].join('\n')
   )

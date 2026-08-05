@@ -101,8 +101,9 @@ export async function runEventStream(
       const wasWorking = lastWorkingBySession.get(entry.sessionId)
       lastWorkingBySession.set(entry.sessionId, isWorking)
       // Only a source that reports turn boundaries may claim one ended;
-      // recency alone cannot tell a long tool call from a finished turn.
-      if (wasWorking === true && !isWorking && entry.stateIsReported) {
+      // recency alone cannot tell a long tool call from a finished turn. A
+      // transition into needs-input is a mid-turn block, not a finished turn.
+      if (wasWorking === true && !isWorking && entry.attention === null && entry.stateIsReported) {
         void stream.writeSSE({
           data: JSON.stringify({ sessionId: entry.sessionId, sessionName: entry.sessionName }),
           event: 'turn-finished',

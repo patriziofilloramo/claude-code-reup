@@ -44,6 +44,41 @@ describe('parseNotificationHookPayload', () => {
     expect(marker?.message).toBe('Claude Code is waiting for your input')
   })
 
+  it.each(['permission_prompt', 'idle_prompt', 'elicitation_dialog', 'agent_needs_input'])(
+    'accepts needs-input notification type %s',
+    (notificationType) => {
+      expect(
+        parseNotificationHookPayload({
+          hook_event_name: 'Notification',
+          notification_type: notificationType,
+          session_id: SESSION_ID,
+        })
+      ).not.toBeNull()
+    }
+  )
+
+  it.each(['agent_completed', 'unknown_future_type'])(
+    'rejects non-attention notification type %s',
+    (notificationType) => {
+      expect(
+        parseNotificationHookPayload({
+          hook_event_name: 'Notification',
+          notification_type: notificationType,
+          session_id: SESSION_ID,
+        })
+      ).toBeNull()
+    }
+  )
+
+  it('rejects non-Notification hook events at the attention boundary', () => {
+    expect(
+      parseNotificationHookPayload({
+        hook_event_name: 'AgentCompleted',
+        session_id: SESSION_ID,
+      })
+    ).toBeNull()
+  })
+
   it('rejects payloads without a valid session id', () => {
     expect(parseNotificationHookPayload({ message: 'hello' })).toBeNull()
     expect(parseNotificationHookPayload({ session_id: '../escape', message: 'x' })).toBeNull()

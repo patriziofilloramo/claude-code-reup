@@ -2,358 +2,388 @@
 
 ## Mission
 
-> **Make Claude Code work observable, prioritised, and safe to resume —
-> with zero configuration and no Reup cloud.**
+> **Make scattered local Claude Code work easy to find, easy to triage, and
+> safe to resume.**
 
-Reup is the local control plane between your Claude Code sessions and your
-next action. It is not just a session browser, not a transcript viewer, and not
-a replacement for Claude Code's own picker. It answers the question that comes
-before resuming: _"What was happening, what needs attention, and what should I
-do next?"_
+The public expression of that mission is:
 
-The experience benchmark: a developer who closed their laptop mid-task should
-be able to open Reup, understand the state of their Claude Code work, and
-resume or clean up the right item in under ten seconds - with confidence, not
-guesswork.
+> **Remember the work, not where you started it.**
 
-## Design Constraints (non-negotiable)
+Reup is a local continuity tool for Claude Code CLI work. It helps a developer
+move through one loop:
 
-- **Zero configuration.** Works out of the box with a `reup` invocation.
-- **No Reup-operated cloud, no account, no telemetry.**
-- **Fast to open habitually** — sub-second TUI start, no loading spinners.
-- **No API key required for core features.**
-- **Light.** Adding a feature that makes the tool heavier requires a feature
-  removed or the weight justified by a clear user outcome.
+1. Find the task they remember across local projects and session history.
+2. See which session or managed background task needs attention without
+   checking every terminal.
+3. Understand the recorded context before resuming in the right directory.
+
+The product is successful when that loop feels substantially better than
+remembering paths, revisiting terminal tabs, or reopening sessions to discover
+what they contain.
+
+## Target User
+
+Reup is for an individual developer who:
+
+- uses Claude Code most days;
+- works across several repositories, worktrees, and terminal windows;
+- keeps enough session history that project location is no longer memorable;
+- revisits interrupted work after hours or days; and
+- wants local visibility without adopting a hosted Reup service.
+
+The product is intentionally less relevant to someone with one repository and
+one or two sessions. Marketing should not obscure that. A precise audience
+makes the value easier to recognise and keeps the feature set disciplined.
 
 ## Positioning
 
-Claude Code already has a capable native session picker and can search across
-projects from its resume flow. Reup should not compete by claiming "global
-session search" as its main reason to exist.
+Reup's positioning has three levels:
 
-Reup's navigator can still be better for power users: it is faster to scan,
-shows projects and sessions together, exposes IDs and aliases, supports deep
-search and filters, and works as TUI, web UI, and scriptable CLI. That is a real
-UX advantage, but it is not the primary product hook.
+| Role                               | User outcome                                                                    | Why it matters                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Wedge: finding**                 | “I can locate the task without remembering its directory or terminal.”          | Immediate, demonstrable, and easy to experience with existing history |
+| **Habit: triage**                  | “I can leave Reup open and notice which local session needs me.”                | Creates recurring daily value after discovery                         |
+| **Differentiator: resume context** | “I know where Claude stopped and whether the path and branch still make sense.” | Adds confidence beyond selecting a session ID                         |
 
-Reup's strongest role is:
+Finding is not technically exclusive: Claude Code's `/resume` picker can widen
+to every local project. Reup should still lead with finding because its
+persistent project/session map, structured search, transcript search, touched
+files, and inline state make recognition faster for the target user.
 
-> A local Claude Code control plane that shows what is running, what needs
-> attention, what is safe to resume, and what should be cleaned up next.
+Monitoring alone is also not exclusive: Claude Code Agent View is a strong
+first-party interface for background sessions. Reup's relevant boundary is
+different. It combines discovered local history with ordinary interactive
+sessions that hold a live process and locally anchored managed background
+tasks, without requiring the developer to background every session first.
 
-The product should answer:
+Use one public session-state vocabulary across interfaces. These are triage
+labels; process presence is a separate fact:
 
-1. What was I working on?
-2. Which session needs attention?
-3. Is its original project context still valid?
-4. Is it safe and useful to resume now?
-5. Am I about to hit context or account limits?
-6. Can I act without leaving my current surface (terminal, browser, VS Code, or script)?
+- **needs-input:** a matched session or managed task is blocked on a reported
+  or locally observed user action;
+- **working:** Agent View reports managed work in progress, or live evidence
+  indicates that a matched session is producing output or running a tool;
+- **attached:** a live process holds the session, but current work is not
+  established;
+- **detached:** no current live process is known.
 
-## Competitive Landscape (as of mid-2026)
+A reported PID or verified local lock is the only basis for claiming a live
+process. Agent View task state can remain `working` or `blocked` after that
+process exits, so it must not be reinterpreted as process liveness.
 
-| Tool               | Approach                     | What Reup does that they don't                         |
-| ------------------ | ---------------------------- | ------------------------------------------------------ |
-| Claude Code native | Built-in picker/resume flow  | Health signals, inbox, usage, diagnostics, automation  |
-| Blackcrab          | GUI grid, multi-session view | Health signals, usage visibility, handoff              |
-| ccresume           | Minimal CUI picker           | Everything beyond pick-and-resume                      |
-| claude-code-viewer | Web with live streaming      | Lighter, local-first, no API key, session intelligence |
+Do not substitute `waiting`, `running`, or `idle` as unexplained top-level
+states in product copy. A surface may add those words as detail only when it
+also preserves the shared state and its evidence boundary.
 
-Reup's moat is **operational intelligence plus surface choice**. Intelligence
-means session health, context drift, rate-limit state, recovery paths, and
-pre-resume summaries. Surface choice means the same local facts are useful from
-the terminal, web, scripts, and VS Code. A prettier picker alone is not
-defensible; a reliable local operations console is.
+The defensible product is therefore the complete sequence — **find → triage →
+inspect → resume** — not any isolated badge, search box, or interface.
 
-## Strategic Bets
+### One-sentence description
 
-Reup's next differentiators should be built around three reinforcing bets:
+> Reup brings your local Claude Code CLI work into one persistent view across
+> projects and ordinary terminal sessions, so you can find it, see what needs
+> you, and resume in context.
 
-1. **Web organization for many projects and sessions.** The web UI should become
-   the best place to group, tag, stack, triage, and focus Claude Code work. The
-   winning concept is not generic labels; it is work organization by intent:
-   "Launch week", "Auth migration", "Waiting on review", "High-context work".
-2. **An always-open live web panel.** Developers should be able to keep
-   `reup web` open while Claude Code runs elsewhere and immediately see active
-   sessions, changing state, latest tool activity, usage freshness, and attention
-   events. It should be calm and glanceable, not a transcript stream.
-3. **A VS Code extension that surfaces Reup intelligence natively.** The
-   shipped extension uses a resume-focused full-screen dashboard plus compact
-   editor companion views. It brings active state, usage, resume cards, search,
-   and safe actions into the editor without copying the browser administration
-   UI.
+### Messaging rules
 
-The original discovery sequence is complete: organization, the live web panel,
-and the VS Code extension now coexist as distinct surfaces over shared core
-logic. Future work should preserve that shared model and avoid surface-specific
-parsers or state.
+- Lead with the outcome, not “control plane”, “session intelligence”, or a list
+  of interfaces.
+- Say **local Claude Code CLI work**, not “every Claude session”. Claude desktop,
+  web, and remote histories are outside Reup's scope.
+- Do not claim Claude Code lacks global search or live background-session
+  monitoring.
+- Do not claim a feature is unique unless a dated, repeatable competitive audit
+  supports the exact claim. Prefer a concrete boundary over a superlative.
+- Describe source and freshness whenever a status could be inferred.
+- Keep TUI, web, VS Code, and CLI as delivery interfaces, not separate value
+  propositions.
+- Present local operation as a trust property, not the primary reason to install.
+
+## Relationship to Claude Code
+
+Reup complements, rather than replaces, Claude Code's native tools.
+
+| Tool                   | Primary job                                                                                         | Relevant boundary                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude Code `/resume`  | Switch to a saved conversation; widen from the current worktree to all local projects with `Ctrl+A` | It is a picker inside the resume flow. Selecting a session from an unrelated project copies a `cd` and resume command rather than acting as a persistent work map. |
+| Claude Code Agent View | Dispatch, monitor, reply to, and attach to background sessions                                      | Ordinary interactive sessions in other terminals are not listed until they are backgrounded. Agent View is a research preview.                                     |
+| Reup                   | Find local history and matched work together, inspect its context, and resume from the correct path | It is limited to local Claude Code CLI data and must remain compatible with an evolving first-party data model.                                                    |
+
+Canonical native references:
+
+- [Claude Code session management](https://code.claude.com/docs/en/sessions)
+- [Claude Code Agent View](https://code.claude.com/docs/en/agent-view)
+
+This comparison must be rechecked near every public release. Anthropic owns the
+upstream data and can narrow any individual feature gap quickly.
+
+## Core Product Loop
+
+### 1. Find the work
+
+The user often remembers the task, a file, or a phrase — not the originating
+directory. Reup should make all discovered local CLI work recognisable at a
+glance.
+
+Keep investing in:
+
+- a persistent project and session map;
+- fast metadata search across projects;
+- structured qualifiers for status, project, branch, activity, and archive;
+- explicit on-demand transcript search;
+- reverse lookup for paths targeted by recorded write/edit tool calls;
+- aliases and adaptive session-ID prefixes;
+- enough row context to distinguish similar sessions without opening them.
+
+Search is global by default. Interface focus may rank nearby results but must
+not silently narrow semantics.
+
+### 2. Know what needs attention
+
+The product should answer “which local work needs me now?” calmly and with a
+small number of trustworthy states.
+
+Useful outcomes include:
+
+- distinguish active work from idle history;
+- surface permission or input waits when Claude reports them;
+- keep failure and interruption evidence visible;
+- prioritise missing paths, branch drift, expiry, and high context;
+- show when a status is reported, locally observed, inferred, stale, or unknown;
+- avoid turning every old or ambiguous session into an alert.
+
+The dashboard should be glanceable, not a transcript stream or notification
+firehose.
+
+### 3. Resume in context
+
+Before resume, a compact card should answer:
+
+- What was the latest human request recorded in the transcript?
+- What was Claude's latest recorded response?
+- What remains open?
+- Which files were touched, read, or searched?
+- What directory and branch were recorded?
+- Has that path or branch changed?
+- Is the session already active?
+- Are context, compaction, or usage limits relevant?
+- What exact action will Reup take next?
+
+Prefer structured facts Claude already records over manual bookkeeping:
+
+- plan-mode artifacts and accepted plans;
+- TODO state;
+- tool calls and results;
+- changed, read, and searched files;
+- working directory, branch, entrypoint, permission mode, and version;
+- compact summaries and recent recorded prompts;
+- model, context, and usage facts.
+
+Unavailable facts stay unavailable. A plausible sentence is not a fact.
+
+## State Evidence Contract
+
+Trustworthy state is a product feature. Reup must apply evidence per field,
+rather than choosing one source for the whole session.
+
+Precedence for a particular live-state field:
+
+1. **Reported:** a present, valid field from Claude Code's documented Agent
+   View inventory, such as `pid`, `status`, `state`, or `waitingFor`.
+2. **Observed:** a valid local Claude lock or Reup/Claude hook event.
+3. **Inferred:** transcript timing and event-shape heuristics.
+4. **Unknown:** no source supports a stronger conclusion.
+
+Rules:
+
+- A missing reported field never erases valid lock or hook evidence.
+- A newer valid local report may supersede an older live-inventory snapshot.
+- Invalid or unrecognised values are ignored safely and remain diagnosable.
+- `state` describes managed background-task lifecycle; `waitingFor` refines the
+  reason when process `status` is `waiting`. Only a reported PID or verified
+  lock proves that a process is live.
+- A pidless managed row remains conservative safety evidence. It is presented
+  only when it maps to a resume-visible discovered session or a verified live
+  lock. Attention and work markers are not anchors because they can be
+  orphaned.
+- `startedAt` is not a state-transition timestamp. Managed rows are neither
+  called historical nor expired solely because they are old.
+- Reported permission/input waits take precedence over a generic working
+  inference.
+- Old Claude Code versions or an unavailable Agent View inventory must degrade
+  without breaking session discovery.
+- Every UI does not need to expose implementation detail in every row. Full
+  source and freshness are not yet visible in every shipped interface, so
+  public copy must call labels guidance rather than proof. Making provenance
+  inspectable in the inspector and diagnostics remains a P1 objective.
+- Do not say “live” when the source is only a recently written transcript.
+
+This contract replaces the earlier blanket claim that permission prompts could
+not be detected. Current Claude Code versions document `waitingFor` reasons,
+including permission prompts. Reup still cannot guarantee detection when those
+fields are unavailable or a managed row cannot be anchored to a resume-visible
+discovered session or verified live lock.
 
 ## Product Principles
 
-- Local-first, private, and useful without an account.
-- Fast enough to open habitually.
-- Read-only toward Claude-owned transcripts.
-- Useful from both an interactive UI and scripts.
-- Focused on continuity and diagnostics, not transcript browsing for its own
-  sake.
-- Cross-platform without hiding platform-specific limitations.
+- **Outcome first.** Organise features around the continuity loop.
+- **Zero configuration for core use.** `reup` should work after installation.
+- **Fast enough to become a habit.** TUI startup and common navigation should
+  feel immediate.
+- **Local and explicit.** No Reup account, hosted backend, telemetry, or hidden
+  network dependency for core discovery. Authenticated aggregate account-usage
+  requests are off until `reup usage setup`.
+- **Read-only toward Claude-owned transcripts and indices.** Reup-owned
+  metadata is separate and clearly described. The TUI, web, and configuration
+  flows automatically register or repair reversible attention hooks in Claude
+  settings, announce that write, and provide `reup attention remove` as the
+  undo command.
+- **Consent for optional network access.** `reup usage setup` is the boundary
+  for status-line changes and account-usage requests to Anthropic. The previous
+  status line is replaced only with `--replace`; `reup usage remove` restores
+  it and clears Reup's aggregate cache.
+- **Evidence over theatre.** Unknown is preferable to a confident but weak
+  status badge.
+- **Actions explain consequences.** Resume, archive, cleanup, and delete must
+  state what changes.
+- **Lightweight scope.** A feature earns its weight through a measurable user
+  outcome.
+- **Cross-platform with visible limits.** Do not hide platform or upstream
+  compatibility boundaries.
 
-## Differentiating Capabilities
+### Archive and deletion semantics
 
-### Multi-Surface Control Plane
+- **Archive** writes reversible Reup-owned metadata and hides the session from
+  default Reup views. It does not move, rename, or delete the Claude transcript.
+- **Permanent delete** is a separate explicit action in the TUI and web
+  dashboard. It requires confirmation, is blocked for active sessions, removes
+  the transcript, and cannot be undone.
+- Background maintenance may archive; it must never permanently delete.
+- The VS Code extension exposes archive/undo but no destructive delete action.
 
-Reup should make the same local session intelligence available where developers
-already work:
+## Interface Strategy
 
-- TUI for fast keyboard-first navigation
-- Web UI for an always-open dashboard
-- CLI for scripting and automation
-- VS Code extension for integrated-editor workflows
+Interfaces come after the core outcomes:
 
-The shared core should remain local-first and UI-agnostic. New surfaces should
-consume the same discovery, health, usage, and resume primitives rather than
-reimplementing session parsing.
+- **TUI:** the fastest keyboard-first find, inspect, and resume path.
+- **Web:** a calm, always-open local project/session overview and organization
+  surface.
+- **VS Code:** workspace-first discovery and pre-resume context in the editor.
+- **CLI:** composable queries and actions for scripts.
 
-### Power-User Navigator
+New interfaces should consume shared discovery, state, preview, metadata, and
+resume policy. Do not create a parser, status vocabulary, or safety policy that
+exists in only one interface.
 
-The navigator is still a product strength, even though Claude Code has native
-global resume/search. It should be positioned as a denser, more informative
-operations view rather than as "global sessions exist here and not there".
+Parity is not the goal. Each interface should expose the part of the core loop
+that fits its environment while preserving the same facts and consequences.
 
-Keep investing where it is clearly better than the native picker:
+## Current Priorities
 
-- scan many projects and sessions at once
-- show health, usage, branch, model, aliases, and active-state inline
-- support deep transcript search and structured filters
-- make IDs/prefixes, handoff, archive, cleanup, and diagnostics one action away
-- preserve a fast, keyboard-first path for daily use
+### P0 — Launch integrity
 
-### Resume Card
+1. Prefer Claude Code's documented Agent View inventory per valid field, with
+   safe local fallbacks and unknown states.
+2. Audit README, landing page, screenshots, and feature claims against shipped
+   behavior.
+3. Publish one install path that a beta user can actually complete. Until npm or
+   release artifacts exist, say that source is the current path.
+4. Keep signing status exact: unsigned and not notarized until the published
+   artifacts prove otherwise.
+5. Demonstrate the three-task loop with realistic multi-project data.
 
-Before resume, show a compact answer to "what was happening?":
+### P1 — Strengthen the loop
 
-- Last meaningful user request
-- Last meaningful assistant response
-- Pending or failed tool call
-- Native Claude plan state when present (`ExitPlanMode` / plan references / plan-mode artifacts)
-- Native Claude TODO state when present (`TodoWrite` open / in-progress / completed items)
-- Recently touched files
-- Recently read/searched files when they are useful to explain context
-- Recorded cwd and branch
-- Entrypoint, agent/subagent, and permission-mode facts when available
-- Last activity and active-session state
+1. Improve result recognition: better titles, project/path context, branch,
+   status, and last recorded activity in the list.
+2. Improve attention precision and make source/freshness inspectable.
+3. Improve resume cards and warnings without becoming a transcript viewer.
+4. Reduce steps between selecting a session and resuming it in the correct
+   directory.
 
-This is more valuable than building a full transcript viewer first.
+### P2 — Supporting depth
 
-### Zero-Effort Context
+Usage, organization, handoff, doctor, cleanup, shell completion, configuration,
+and `CLAUDE.md` editing should deepen the core workflow but not compete with it
+for homepage hierarchy.
 
-Reup should prefer facts Claude Code already records over manual user input. The user should get
-rich organization and resume context with almost no extra bookkeeping.
+Do not add a new product category until the core loop is validated with target
+users.
 
-Good automatic sources include:
+## Validation
 
-- plan-mode artifacts and `ExitPlanMode`
-- `TodoWrite` state
-- tool calls and tool results
-- changed/read/searched files
-- cwd, branch, entrypoint, permission mode, and Claude Code version
-- agent/subagent sidechain activity
-- compact summaries and last prompts
-- usage/model/token facts
-- IDE diagnostics and file-history snapshots when available
+Test with developers who have several repositories and a meaningful local
+Claude Code history. A generic developer panel will understate the problem.
 
-The rule: extract structured facts first, label freshness/source clearly, and never mutate
-Claude-owned artifacts to make Reup's view prettier.
+Measure three tasks:
 
-### Context Drift
+1. Find an old session from a remembered task clue without knowing its project.
+2. Identify which currently open session needs human attention.
+3. Resume the correct session and explain its current goal, next step, path,
+   and branch before Claude Code opens.
 
-Warn when the recorded context no longer matches the current environment:
+Useful success signals:
 
-- Missing or moved cwd
-- Recorded branch differs from the current branch
-- Worktree no longer exists
-- Session appears active elsewhere
-- Repository changed significantly since last activity
+- completion rate and median time for each task;
+- wrong-session resumes;
+- confidence in reported versus inferred state;
+- number of terminal or directory visits needed;
+- whether the developer leaves Reup open or returns to it unaided;
+- which secondary features are actually used during those tasks.
 
-Warnings should explain the issue and offer the exact safe resume action. Reup
-should not automatically switch branches or alter worktrees.
+The experience benchmark remains: after closing a laptop mid-task, a target
+user should be able to open Reup, recognise the relevant work, and choose the
+next action in roughly ten seconds. This is a product aspiration to measure,
+not a public performance guarantee.
 
-### Lost And Found
-
-Surface sessions that may be absent or unclear in normal workflows:
-
-- Sessions missing from an index
-- Malformed or partially written transcripts
-- Missing project paths
-- Stale sidecar locks
-- Sessions approaching automatic cleanup
-
-Each finding should explain why it matters and what the user can do.
-
-### Usage Awareness
-
-Make the limits that affect whether work can continue visible before they become
-a surprise. Distinguish local session-context facts from live account limits,
-show freshness, and leave unavailable values unknown rather than estimating
-them. Usage collection must remain local, supported, and opt-in where it changes
-Claude Code configuration.
-
-### Composable CLI
-
-Power-user commands can make Reup valuable beyond its interfaces:
-
-```text
-reup inbox
-reup doctor
-reup search <query>
-reup list
-reup handoff <session>
-```
-
-Commands should produce concise human output and provide machine-readable output
-where useful.
-
-Search should be global by default because users often remember the work but
-not its originating project. Explicit qualifiers may narrow results; interface
-focus must not silently change search semantics.
-
-## Explicit Non-Goals
+## Explicit Non-goals
 
 - Reup-hosted cloud synchronization, accounts, or team features
+- Aggregating Claude desktop, web, remote, or mobile histories
 - Generic support for every AI coding tool
-- Embedded terminals or an Electron wrapper
-- Full billing or cost-accounting dashboards
-- Automatic git branch/worktree modification
+- Remote control or mobile operation
+- Embedded terminals or an Electron desktop wrapper
+- Automatic branch or worktree mutation
 - Rewriting or repairing Claude-owned transcript files
-- A full transcript editor or IDE replacement
+- Full transcript editing, replay, or IDE replacement
+- Full billing or cost accounting
+- Semantic-search infrastructure before current search is validated
+- More manual organization primitives without evidence they improve the core
+  loop
 
-## Priority Order for New Work
+## Decision Filter
 
-When choosing what to build next, apply this filter in order:
+Evaluate proposed work in this order:
 
-1. **Does it help the user decide whether to resume a session?**
-   → Highest priority. This is the product's core job.
-2. **Does it surface something the user couldn't see before (health, limits, context)?**
-   → High priority. This is the intelligence moat.
-3. **Does it make an existing workflow faster without adding complexity?**
-   → Medium priority. Worth doing if the gain is clear and the surface stays clean.
-4. **Does it put existing intelligence into a surface where developers already work?**
-   → Medium priority. VS Code can qualify if it exposes Reup's signals and actions, not
-   if it only duplicates the native picker.
-5. **Is it UI polish, navigation convenience, or parity with a competitor?**
-   → Low priority. Only if it costs little and doesn't add cognitive surface.
+1. Does it make the right local work easier to find or recognise?
+2. Does it improve the accuracy or usefulness of attention state?
+3. Does it make resume context clearer or resume safer?
+4. Does it reduce friction in an existing core workflow without adding a new
+   concept?
+5. Does it expose shared intelligence in an existing interface?
+6. Is it primarily UI polish, organization, or competitor parity?
 
-The next shared capabilities should strengthen the three strategic bets:
-organization metadata, live state/freshness, and editor-ready JSON contracts.
-Nothing in the UI layer should block the shared core needed by web, TUI, CLI,
-and the VS Code extension.
+The first three can justify substantial work. The last three require a small
+cost or direct validation evidence.
 
-## Delivery Guidance
+Keep completed work and near-term implementation tasks in
+[`ROADMAP.md`](../ROADMAP.md). This document changes when the product strategy
+changes.
 
-Prefer small features that improve confidence before resume. Avoid forcing
-feature parity between TUI and web when a capability naturally belongs in one
-surface.
+## Naming and Publication
 
-For VS Code work, the Milestone 11 investigation proved that a native extension
-can beat both Claude Code's native picker and the TUI/web UI for workspace
-resume. Future extension work should keep exposing attention, usage, health,
-and resume actions inside the editor workflow rather than duplicating the
-browser administration UI.
+| Identifier                  | Value                     | Status                                     |
+| --------------------------- | ------------------------- | ------------------------------------------ |
+| Product brand               | Reup                      | Final                                      |
+| CLI command                 | `reup`                    | Final                                      |
+| npm package                 | `@patriziofilloramo/reup` | Reserved project choice; not yet published |
+| Repository                  | `claude-code-reup`        | Current                                    |
+| VS Code package             | `reup-vscode`             | Current                                    |
+| VS Code command/view prefix | `reup.*`                  | Current                                    |
 
-Keep completed work and near-term tasks in [`ROADMAP.md`](../ROADMAP.md). This
-document should change only when the product's direction changes.
+The unscoped npm name `reup` belongs to an unrelated package. Users will still
+type the `reup` binary from the scoped package when publishing begins.
 
----
-
-## Naming Decision
-
-### Current state
-
-| Identifier      | Value                     | Status                    |
-| --------------- | ------------------------- | ------------------------- |
-| Product brand   | Reup                      | Final                     |
-| CLI command     | `reup`                    | Final                     |
-| npm package     | `@patriziofilloramo/reup` | Final scoped package      |
-| Repository name | `claude-sessions-manager` | Rename before publication |
-
-The public product name is resolved. Reup is the human-facing brand and CLI
-command. The unscoped npm name `reup` is occupied by an unrelated package, so
-publishing uses `@patriziofilloramo/reup` while exposing only the `reup` binary.
-
-### What the tool is
-
-A **local-first session manager for Claude Code** (Anthropic's AI coding CLI).
-It provides:
-
-- A TUI (terminal UI) and a web UI to browse, inspect, and resume Claude Code sessions
-- Health signals for each session (interrupted, expiring, context drift)
-- Usage / rate-limit visibility before you commit to resuming
-- A composable CLI for scripting (`reup inbox`, `reup doctor`, `reup list`, etc.)
-
-Target users: individual developers who use Claude Code daily and manage multiple
-projects / sessions. The tool is never user-facing to end customers — it is a
-developer productivity tool.
-
-### Naming goals
-
-A good name for this tool should:
-
-1. **Be short** — ideally 2–8 characters or two short words. The CLI command
-   that users type daily must be fast to type (3–4 chars preferred).
-2. **Suggest session continuity or context** — not just "Claude wrapper".
-   Words or roots around: session, resume, context, handoff, pick up, inbox,
-   queue, orbit, lens, relay, trace, mark, anchor, dock, scout, helm, pilot.
-3. **Not infringe on Anthropic / Claude branding** — the name should not
-   start with "claude" (likely to conflict with Anthropic's own tooling going
-   forward). The public package is scoped under the maintainer namespace while
-   the product itself remains independently branded as Reup.
-4. **Sound like a developer tool** — lowercase, terse, Unix-flavoured.
-   Not marketing language. Examples of the right register: `tmux`, `fzf`,
-   `zoxide`, `rg`, `bat`, `gh`, `mise`, `atuin`, `navi`.
-5. **Be unique enough in the Claude / AI tooling ecosystem** that searches
-   for the name surface this tool, not something else.
-
-### Publication Checks
-
-Before publishing artifacts, re-check only for newly significant collisions:
-
-- [ ] `npm` registry: `https://www.npmjs.com/package/<name>` — available?
-- [ ] `npm` scoped: `https://www.npmjs.com/package/@<scope>/<name>` — if unscoped is taken
-- [ ] GitHub: `https://github.com/<name>` and `https://github.com/topics/<name>`
-- [ ] Homebrew: `https://formulae.brew.sh/formula/<name>` — any conflict?
-- [ ] General web search for `<name> npm` and `<name> cli` — any confusion risk?
-
-The CLI command and npm package intentionally differ: users type `reup`, while
-the package publishes as `@patriziofilloramo/reup`.
-
-### Names already in the Claude / AI tools space (avoid or note conflicts)
-
-Known npm packages to avoid clashing with:
-
-- `claude` — Anthropic SDK
-- `reup` unscoped npm package - occupied by an unrelated legacy package
-- `ccresume`, `blackcrab`, `claude-code-viewer` — competing tools
-- Anything prefixed `@anthropic-ai/` — reserved for Anthropic
-
-### Retired Candidate Notes
-
-These historical patterns are retained only as context for why Reup was selected:
-
-- **Two-letter or three-letter commands**: `csm`, `csx`, `csk`, `cpx`, `cre`
-- **Short compound words**: `sesskit`, `resumark`, `contex`, `inboxd`
-- **Single evocative words**: `handoff`, `sessio`, `pickit`, `requeue`, `orbctl`
-- **Portmanteaux**: `codemarks`, `sesslog`, `claudex` (avoid claude-prefix)
-- **Metaphor-driven**: tools that "dock", "anchor", "orbit", "helm" a session
-- **Action-first**: resume-focused words — `repick`, `recall`, `recon`, `recontext`
-
-### Final Naming State
-
-The final naming state is:
-
-1. Product brand: **Reup**
-2. CLI command: `reup`
-3. npm package: `@patriziofilloramo/reup`
-4. VS Code package: `reup-vscode`
-5. VS Code command and view prefix: `reup.*`
-
-Do not reopen the old naming shortlist unless a concrete legal or distribution blocker appears.
+Before a public release, recheck npm, GitHub, Homebrew, and general search for a
+newly significant collision. Do not reopen historical naming work without a
+concrete legal or distribution blocker.

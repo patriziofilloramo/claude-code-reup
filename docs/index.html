@@ -3,412 +3,435 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reup — Local state and resume control for Claude Code</title>
+    <title>Reup — Find, triage, and resume local Claude Code work</title>
     <meta
       name="description"
-      content="Reup shows what is active, stale, risky, archived, or ready to resume across your local Claude Code sessions. Local-only, no account, no telemetry."
+      content="Reup brings local Claude Code CLI sessions into one persistent view across projects and terminals, so you can find the work, see what needs you, and resume in context."
     />
+    <link rel="canonical" href="https://patriziofilloramo.github.io/claude-code-reup/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Reup" />
+    <meta property="og:title" content="Reup — Find, triage, and resume Claude Code work" />
+    <meta
+      property="og:description"
+      content="Find local Claude Code work across projects, identify sessions that need you, and inspect the recorded context before resuming."
+    />
+    <meta property="og:url" content="https://patriziofilloramo.github.io/claude-code-reup/" />
+    <meta
+      property="og:image"
+      content="https://patriziofilloramo.github.io/claude-code-reup/assets/screenshot-web-dashboard.png"
+    />
+    <meta property="og:image:width" content="1840" />
+    <meta property="og:image:height" content="1020" />
+    <meta
+      property="og:image:alt"
+      content="Reup dashboard showing local projects and Claude Code session history"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Reup — Find, triage, and resume Claude Code work" />
+    <meta
+      name="twitter:description"
+      content="One local view for finding Claude Code work, triaging session attention, and checking context before resume."
+    />
+    <meta
+      name="twitter:image"
+      content="https://patriziofilloramo.github.io/claude-code-reup/assets/screenshot-web-dashboard.png"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="Reup dashboard showing three projects, live session state, and a pre-resume context card"
+    />
+    <meta name="theme-color" content="#090b0c" />
     <link rel="icon" href="assets/logo.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body id="top">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="site">
-      <div class="wrap">
-        <div class="brand">
-          <img src="assets/logo.png" alt="Reup logo" width="28" height="28" />
-          Reup
-        </div>
-        <nav class="site-links">
-          <a href="#features">Features</a>
+      <div class="wrap header-inner">
+        <a class="brand" href="#top" aria-label="Reup home">
+          <img src="assets/logo.png" alt="" width="28" height="28" />
+          <span>reup</span>
+        </a>
+        <nav class="site-links" aria-label="Primary navigation">
+          <a href="#workflow">Workflow</a>
           <a href="#compare">Compare</a>
-          <a href="#download">Download</a>
+          <a href="#interfaces">Interfaces</a>
+          <a href="#install">Try the beta</a>
           <a href="https://github.com/patriziofilloramo/claude-code-reup">GitHub</a>
         </nav>
       </div>
     </header>
 
-    <section class="hero">
-      <div class="wrap">
-        <h1>Know what's happening in every Claude Code session.</h1>
-        <p class="tagline">
-          Reup is a local continuity control plane for Claude Code: it shows what's active, stale,
-          risky, archived, or ready to resume — before you commit to reopening it. No account, no
-          hosted backend, no telemetry, no transcript upload.
-        </p>
-        <div class="badges">
-          <span class="badge">Local-only</span>
-          <span class="badge">No telemetry</span>
-          <span class="badge">No account</span>
-          <span class="badge">MIT licensed</span>
-          <span class="badge">Open source</span>
-        </div>
-        <div class="cta-row">
-          <a class="btn btn-primary" href="#download">Download</a>
-          <a class="btn btn-secondary" href="https://github.com/patriziofilloramo/claude-code-reup"
-            >View on GitHub</a
-          >
-        </div>
-      </div>
-    </section>
+    <main id="main-content" tabindex="-1">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">For heavy Claude Code workflows</p>
+            <h1>Remember the work, not where you started it.</h1>
+            <p class="tagline">
+              Reup brings your local Claude Code CLI work into one persistent view across projects
+              and ordinary terminal sessions. Find the task you remember, see what needs you, and
+              resume with the latest recorded request, response, path, and branch in view.
+            </p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="#install">Build the beta</a>
+              <a
+                class="btn btn-secondary"
+                href="https://github.com/patriziofilloramo/claude-code-reup"
+                >Read the source</a
+              >
+            </div>
+            <p class="release-state">Source beta · installable artifacts are not published yet</p>
+          </div>
 
-    <section class="positioning">
-      <div class="wrap">
-        <h2 class="section-title">Not another session browser</h2>
-        <p>
-          Most tools in this space are session <em>browsers</em>: they show you a list, let you pick
-          one, and open it. Claude Code itself already has a capable native picker with global
-          search in the resume flow. Reup's role is broader — before you commit to resuming, it
-          tells you <strong>what was happening</strong>,
-          <strong>whether the context is still valid</strong>,
-          <strong>whether any session needs attention right now</strong>, and
-          <strong>which action is safest next</strong>.
-        </p>
-        <p>
-          The intelligence layer — health signals, branch drift detection, usage awareness, and a
-          recovery path for corrupt indices — is what no other tool in this space ships.
-        </p>
-      </div>
-    </section>
-
-    <section class="screenshots">
-      <div class="wrap">
-        <h2 class="section-title">See it in action</h2>
-        <p class="section-lede">
-          The web dashboard, the terminal UI, and the VS Code Workspace Cockpit all read the same
-          local session state.
-        </p>
-        <div class="gallery">
-          <figure>
-            <div class="screenshot-frame">
+          <figure class="hero-product">
+            <div class="screenshot-frame annotated-shot">
               <img
                 src="assets/screenshot-web-dashboard.png"
-                alt="Reup web dashboard showing the project list, session list with live status dots, and session inspector"
+                alt="Reup dashboard showing three projects, needs-input, working and attached sessions, and a pre-resume context card"
+                width="1840"
+                height="1020"
+                decoding="async"
               />
+              <span class="shot-marker marker-one" aria-hidden="true">1</span>
+              <span class="shot-marker marker-two" aria-hidden="true">2</span>
+              <span class="shot-marker marker-three" aria-hidden="true">3</span>
             </div>
-            <figcaption class="screenshot-caption">
-              Web dashboard — <code>reup web</code>
+            <figcaption class="shot-legend">
+              <span><b>1</b> All local projects</span>
+              <span><b>2</b> Live work at a glance</span>
+              <span><b>3</b> Resume context and safety signals</span>
             </figcaption>
+            <p class="shot-source">
+              Actual Reup web UI captured from deterministic synthetic session data.
+            </p>
           </figure>
-          <figure>
-            <div class="screenshot-frame">
-              <img
-                src="assets/screenshot-vscode-cockpit.png"
-                alt="Reup VS Code Workspace Cockpit showing the session list and inspector inside VS Code"
-              />
+        </div>
+      </section>
+
+      <section id="workflow" class="workflow">
+        <div class="wrap">
+          <p class="eyebrow centered">One continuity loop</p>
+          <h2 class="section-title">Find → know what needs you → resume in context</h2>
+          <p class="section-lede">
+            Reup is useful when your session history has outgrown your memory of directories and
+            terminal tabs.
+          </p>
+
+          <div class="outcome-grid">
+            <article class="outcome-card">
+              <span class="step-number">01</span>
+              <h3>Find the work</h3>
+              <p>
+                Search projects and sessions together. Use titles, aliases, paths, branches, and
+                structured filters first; search transcripts or paths targeted by write/edit tool
+                calls when the clue is buried deeper.
+              </p>
+              <code>reup search --deep "oauth callback"</code>
+            </article>
+            <article class="outcome-card">
+              <span class="step-number">02</span>
+              <h3>Know what needs you</h3>
+              <p>
+                See live processes and locally anchored background tasks without opening every
+                terminal. Fresh, non-superseded Claude-reported state takes precedence; only a
+                reported PID or verified lock establishes a live process.
+              </p>
+              <code>reup</code>
+            </article>
+            <article class="outcome-card">
+              <span class="step-number">03</span>
+              <h3>Resume in context</h3>
+              <p>
+                Check the latest recorded request and response, plan, TODOs, write/edit targets,
+                path, branch drift, and health signals before starting another Claude Code process.
+              </p>
+              <code>reup resume 8f3a2c10</code>
+            </article>
+          </div>
+
+          <figure class="demo">
+            <figcaption class="demo-caption">
+              <strong>Illustrative composite.</strong> Representative states from Reup's local
+              interfaces, not literal output from a single command.
+            </figcaption>
+            <div class="demo-visual" aria-hidden="true">
+              <div class="demo-bar">
+                <span class="demo-dots">● ● ●</span>
+                <span>Reup triage</span>
+                <span>40 sessions · 9 projects</span>
+              </div>
+              <div class="demo-row needs-input">
+                <span class="status-dot">!</span>
+                <strong>auth migration</strong>
+                <span>apps/api</span>
+                <span>permission prompt</span>
+                <b>needs-input</b>
+              </div>
+              <div class="demo-row working">
+                <span class="status-dot">●</span>
+                <strong>release checks</strong>
+                <span>tools/reup</span>
+                <span>running tests</span>
+                <b>working</b>
+              </div>
+              <div class="demo-row attached">
+                <span class="status-dot">○</span>
+                <strong>docs refresh</strong>
+                <span>site</span>
+                <span>live process, currently quiet</span>
+                <b>attached</b>
+              </div>
+              <p class="demo-result">
+                Select a row → inspect request, response, path, and branch → resume in the recorded
+                directory
+              </p>
             </div>
-            <figcaption class="screenshot-caption">VS Code Workspace Cockpit</figcaption>
           </figure>
-        </div>
-      </div>
-    </section>
 
-    <section id="features">
-      <div class="wrap">
-        <h2 class="section-title">What Reup shows</h2>
-        <p class="section-lede">
-          Every signal below is derived from local Claude Code files on read — never stored, never
-          stale.
-        </p>
-        <div class="feature-grid">
-          <div class="feature-card">
-            <span class="glyph">◆</span>
-            <h3>Session intelligence</h3>
-            <p>
-              Interrupted, expiring, path-missing, and heavily-compacted signals; branch drift
-              against the current git HEAD; a remote-active heuristic for sessions running
-              elsewhere; and non-destructive <code>reup doctor</code> health checks with an
-              explanation and a suggested action for every finding.
-            </p>
-          </div>
-          <div class="feature-card">
-            <span class="glyph">▣</span>
-            <h3>Web dashboard</h3>
-            <p>
-              A passive dashboard that stays open in a browser tab. Live SSE updates, a
-              working/waiting/idle/needs-input status dot per session, triage inbox, tags and work
-              stacks, and a session inspector with Resume/Handoff/Rename/Archive actions.
-            </p>
-          </div>
-          <div class="feature-card">
-            <span class="glyph">▤</span>
-            <h3>Terminal UI</h3>
-            <p>
-              Keyboard-first, optimized for quick scanning, filtering, and resuming without leaving
-              the terminal. Adaptive session-ID prefixes and ranked shell completion for PowerShell,
-              Bash, and Zsh.
-            </p>
-          </div>
-          <div class="feature-card">
-            <span class="glyph">⧉</span>
-            <h3>VS Code Workspace Cockpit</h3>
-            <p>
-              A full-screen resume dashboard inside VS Code, with workspace-native companion views,
-              a session inspector, and resume through the Claude Code extension or the integrated
-              terminal.
-            </p>
-          </div>
-          <div class="feature-card">
-            <span class="glyph">●</span>
-            <h3>Attention alerts</h3>
-            <p>
-              Know the moment a session waits on a permission decision or idle input. Sessions
-              needing attention pin to the top of the web strip and pulse in the TUI, with optional
-              desktop notifications — no webhook, no cloud relay.
-            </p>
-          </div>
-          <div class="feature-card">
-            <span class="glyph">↻</span>
-            <h3>Handoff packets</h3>
-            <p>
-              <code>reup handoff</code> compiles a compact Markdown continuation packet from
-              transcript-supported facts, so you (or a teammate) can pick a session back up without
-              reopening every transcript.
-            </p>
-          </div>
+          <p class="trust-line">
+            <strong>Local by design.</strong> Transcript analysis stays on this machine; Reup does
+            not rewrite Claude-owned transcripts, sends no telemetry, requires no Reup account, and
+            binds the web dashboard to <code>127.0.0.1</code>. The TUI, web, and configuration flows
+            automatically register or repair reversible Claude Code attention hooks and print
+            <code>reup attention remove</code> as the undo command. Account-usage requests to
+            Anthropic remain off until <code>reup usage setup</code>; remove that opt-in integration
+            with <code>reup usage remove</code>.
+          </p>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="trust">
-      <div class="wrap">
-        <h2 class="section-title">Local by default</h2>
-        <div class="trust-grid">
-          <div class="trust-item">
-            <p><span class="glyph">✓</span>All transcript analysis happens on your machine.</p>
-          </div>
-          <div class="trust-item">
-            <p><span class="glyph">✓</span>No usage metrics, crash reports, or telemetry.</p>
-          </div>
-          <div class="trust-item">
-            <p><span class="glyph">✓</span>The web server binds to 127.0.0.1 only.</p>
-          </div>
-          <div class="trust-item">
-            <p>
-              <span class="glyph">✓</span>Archiving is reversible; permanent delete is explicit and
-              blocked for active sessions.
-            </p>
-          </div>
-          <div class="trust-item">
-            <p><span class="glyph">✓</span>No account, no Reup cloud, no sync backend.</p>
-          </div>
-          <div class="trust-item">
-            <p><span class="glyph">✓</span>MIT licensed. Read the source, fork it, self-host it.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="compare">
-      <div class="wrap">
-        <h2 class="section-title">How it compares</h2>
-        <p class="section-lede">
-          Assessed against the four tools reviewed in
-          <a
-            href="https://dev.to/gonewx/i-tested-4-tools-for-browsing-claude-code-session-history-17ie"
-            >a mid-2026 survey of Claude Code session-browsing tools</a
-          >.
-        </p>
-        <div class="compare-wrap">
-          <table class="compare">
-            <thead>
-              <tr>
-                <th>Capability</th>
-                <th>Reup</th>
-                <th>Mantra</th>
-                <th>CCHV</th>
-                <th>claude-history</th>
-                <th>Built-in</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Session signals (interrupted, expiry, path-missing)</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Branch drift detection</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Lost &amp; Found (orphaned / expiring sessions)</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Index corruption recovery</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Deep transcript search</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Live account usage limits</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Handoff / continuation packet</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>TUI + Web + VS Code, all three</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-              </tr>
-              <tr>
-                <td>Zero configuration</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">partial</td>
-                <td class="no">—</td>
-                <td class="yes">✓</td>
-              </tr>
-              <tr>
-                <td>No cloud, no account, no telemetry</td>
-                <td class="yes">✓</td>
-                <td class="no">—</td>
-                <td class="no">—</td>
-                <td class="yes">✓</td>
-                <td class="yes">✓</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="compare-note">
-          Full comparison and methodology in
-          <a
-            href="https://github.com/patriziofilloramo/claude-code-reup/blob/main/Documents/FEATURES.md"
-            >Documents/FEATURES.md</a
-          >.
-        </p>
-      </div>
-    </section>
-
-    <section id="download">
-      <div class="wrap">
-        <h2 class="section-title">Download</h2>
-        <p class="section-lede">
-          Per-user installers, no admin rights required. Build from source instead if you'd rather
-          not run an unsigned binary yet.
-        </p>
-        <div class="notice">
-          <strong>Unsigned for now.</strong> These are release-candidate builds — no code-signing
-          certificate or macOS notarization yet. Windows SmartScreen and macOS Gatekeeper will warn
-          on first run; that's expected for an unsigned early release, not a sign anything is wrong.
-          Verify the SHA-256 checksum before installing. See the
-          <a href="#roadmap-signing">signing status</a> below.
-        </div>
-        <table class="downloads">
-          <thead>
-            <tr>
-              <th>Platform</th>
-              <th>Artifact</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="platform">Windows</td>
-              <td><code>reup-setup-windows-x64-v*.exe</code></td>
-              <td class="notes">
-                Per-user install, adds <code>reup</code> to PATH, optional PowerShell completion.
-                Unsigned.
-              </td>
-            </tr>
-            <tr>
-              <td class="platform">Windows (portable)</td>
-              <td><code>reup-windows-x64-v*.zip</code></td>
-              <td class="notes">Extract and run <code>install.ps1</code>. No installer UI.</td>
-            </tr>
-            <tr>
-              <td class="platform">macOS</td>
-              <td><code>reup-macos-universal-v*.tar.gz</code></td>
-              <td class="notes">Extract and run <code>install.sh</code>. Not notarized yet.</td>
-            </tr>
-            <tr>
-              <td class="platform">Linux</td>
-              <td><code>reup-linux-x64-v*.tar.gz</code></td>
-              <td class="notes">Extract and run <code>install.sh</code>.</td>
-            </tr>
-            <tr>
-              <td class="platform">VS Code</td>
-              <td><code>reup-vscode-*.vsix</code></td>
-              <td class="notes">
-                Install from the Extensions view or <code>code --install-extension</code>.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="cta-row" style="margin-top: 28px">
-          <a
-            class="btn btn-primary"
-            href="https://github.com/patriziofilloramo/claude-code-reup/releases/latest"
-            >Go to the latest release</a
+      <section id="compare" class="native-compare">
+        <div class="wrap">
+          <p class="eyebrow centered">Use the right view</p>
+          <h2 class="section-title">Reup complements Claude Code's built-in tools</h2>
+          <p class="section-lede">
+            Claude Code already has strong session features. Reup is for the continuity gap between
+            saved history, ordinary interactive terminals, and the next safe resume.
+          </p>
+          <div
+            class="compare-wrap"
+            role="region"
+            aria-label="Comparison of Reup and Claude Code session tools"
+            tabindex="0"
           >
+            <table class="compare">
+              <caption class="sr-only">
+                Workflow comparison between Claude Code resume, Agent View, and Reup
+              </caption>
+              <thead>
+                <tr>
+                  <th>Question</th>
+                  <th>Claude <code>/resume</code></th>
+                  <th>Claude Agent View</th>
+                  <th>Reup</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Primary job</th>
+                  <td>Switch to a saved conversation</td>
+                  <td>Dispatch and operate background sessions</td>
+                  <td>Find, triage, and resume local work</td>
+                </tr>
+                <tr>
+                  <th scope="row">Local scope</th>
+                  <td>Current worktree by default; <code>Ctrl+A</code> widens to all projects</td>
+                  <td>Background sessions across projects</td>
+                  <td>Discovered CLI history plus matched live processes and managed tasks</td>
+                </tr>
+                <tr>
+                  <th scope="row">Ordinary terminals</th>
+                  <td>Saved conversations are available in the picker</td>
+                  <td>Interactive sessions elsewhere appear only after they are backgrounded</td>
+                  <td>
+                    Includes live interactive sessions when Claude reports or local evidence matches
+                    them
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Before continuing</th>
+                  <td>Preview, name, branch, age, and message count</td>
+                  <td>Current activity, state, peek, reply, and attach</td>
+                  <td>
+                    Latest request and answer, tool targets, branch/path checks, health, and usage
+                    context
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Important boundary</th>
+                  <td>
+                    An unrelated project produces a copied
+                    <code>cd … &amp;&amp; claude --resume …</code> command
+                  </td>
+                  <td>Designed around the background-session workflow</td>
+                  <td>
+                    Local CLI data only; no Claude desktop, web, or remote-history aggregation
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="compare-note">
+            Native behavior summarized from Claude Code's official
+            <a href="https://code.claude.com/docs/en/sessions">session documentation</a> and
+            <a href="https://code.claude.com/docs/en/agent-view">Agent View documentation</a>. Agent
+            View is a research preview, so details may change. Its JSON inventory can retain
+            background tasks reported as working or blocked after their process exits. Reup keeps
+            those rows for safety, but presents one without a PID only when it maps to a
+            resume-visible discovered session or a verified live lock; age and orphanable markers do
+            not make that decision.
+          </p>
         </div>
-        <p class="compare-note" id="roadmap-signing">
-          Windows/macOS code signing and notarization, CI-backed provenance attestations, and Linux
-          <code>.deb</code>/<code>.rpm</code> packages are open decisions tracked in
-          <a
-            href="https://github.com/patriziofilloramo/claude-code-reup/blob/main/ROADMAP.md#to-be-discussed"
-            >ROADMAP.md</a
-          >.
-        </p>
-      </div>
-    </section>
+      </section>
 
-    <section class="build-from-source">
-      <div class="wrap">
-        <h2 class="section-title">Or build from source</h2>
-        <pre><code>git clone https://github.com/patriziofilloramo/claude-code-reup.git reup
+      <section id="interfaces" class="interfaces">
+        <div class="wrap">
+          <p class="eyebrow centered">Choose the local interface</p>
+          <h2 class="section-title">
+            Fast in the terminal. Glanceable in a tab. Native in VS Code.
+          </h2>
+          <p class="section-lede">
+            The interfaces serve different moments of the same local workflow; none is a cloud sync
+            surface.
+          </p>
+
+          <div class="interface-layout">
+            <figure>
+              <div class="screenshot-frame">
+                <img
+                  src="assets/screenshot-vscode-cockpit.png"
+                  alt="Illustrative Reup VS Code inspector showing resume advice, the latest recorded request, response, and plan"
+                  width="1280"
+                  height="720"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>VS Code session inspector — context before resume</figcaption>
+            </figure>
+
+            <div class="interface-list">
+              <article>
+                <h3>Terminal UI</h3>
+                <p>
+                  Keyboard-first scanning, filtering, preview, and resume with <code>reup</code>.
+                </p>
+              </article>
+              <article>
+                <h3>Web dashboard</h3>
+                <p>Live local updates and a persistent overview with <code>reup web</code>.</p>
+              </article>
+              <article>
+                <h3>VS Code</h3>
+                <p>Workspace-first discovery and a focused resume card inside the editor.</p>
+              </article>
+              <article>
+                <h3>CLI</h3>
+                <p>Human-readable commands and machine-readable output where supported.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="details">
+        <div class="wrap">
+          <p class="eyebrow centered">Depth when you need it</p>
+          <h2 class="section-title">More than a list of titles</h2>
+          <div class="detail-grid">
+            <article>
+              <h3>Search by the clue you remember</h3>
+              <p>
+                Metadata, qualifiers, aliases, deep transcript search, adaptive ID prefixes, and
+                reverse lookup for paths targeted by write/edit tool calls.
+              </p>
+            </article>
+            <article>
+              <h3>Evidence, not decorative badges</h3>
+              <p>
+                Reported state is applied per valid field. Locks and hooks remain useful local
+                evidence; transcript activity can supply an inferred hint. Source detail is not yet
+                equally visible in every interface, so labels remain guidance rather than proof.
+              </p>
+            </article>
+            <article>
+              <h3>Warnings with an action</h3>
+              <p>
+                Missing paths, branch drift, interrupted turns, expiry, compaction, and index
+                findings include an explanation rather than a bare risk color.
+              </p>
+            </article>
+            <article>
+              <h3>Archive and delete are different</h3>
+              <p>
+                Archive is reversible Reup metadata. Permanent deletion is separate, explicit,
+                confirmed, unavailable for active sessions, and cannot be undone.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="install" class="install">
+        <div class="wrap">
+          <div class="install-grid">
+            <div>
+              <p class="eyebrow">Current access</p>
+              <h2>Build the source beta</h2>
+              <p>
+                Reup currently requires Node.js 20 or newer, the Claude Code CLI, and local Claude
+                Code session history. It is not published to npm yet and there is no tagged public
+                release. The source path below installs the CLI and local web dashboard.
+              </p>
+              <p class="install-note">
+                Release-candidate assets will be listed on
+                <a href="https://github.com/patriziofilloramo/claude-code-reup/releases"
+                  >GitHub Releases</a
+                >
+                once published. Until stated otherwise there, treat Windows and macOS binaries as
+                unsigned and macOS builds as not notarized.
+              </p>
+            </div>
+            <pre><code>git clone https://github.com/patriziofilloramo/claude-code-reup.git reup
 cd reup
-npm install
+npm ci
 npm run build
 npm link
 reup</code></pre>
-      </div>
-    </section>
+          </div>
+
+          <div class="install-followup">
+            <article>
+              <h3>Optional VS Code extension</h3>
+              <p>
+                The CLI install does not add the extension. Build and install its local VSIX
+                separately; the script installs extension build dependencies when needed.
+              </p>
+              <pre><code>npm run install:extension</code></pre>
+            </article>
+            <article>
+              <h3>Remove a source install</h3>
+              <p>
+                Remove integrations before unlinking so Claude Code settings do not retain them.
+              </p>
+              <pre><code>reup attention remove
+reup usage remove  # only if enabled
+npm unlink --global @patriziofilloramo/reup</code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
 
     <footer class="site">
       <div class="wrap">
-        <div>© 2026 Reup. Not affiliated with, endorsed by, or maintained by Anthropic.</div>
-        <nav>
+        <div>© 2026 Reup. Independent from and not endorsed by Anthropic.</div>
+        <nav aria-label="Project links">
           <a href="https://github.com/patriziofilloramo/claude-code-reup">GitHub</a>
           <a href="https://github.com/patriziofilloramo/claude-code-reup/blob/main/README.md"
             >Docs</a
-          >
-          <a href="https://github.com/patriziofilloramo/claude-code-reup/blob/main/DISCLAIMER.md"
-            >Disclaimer</a
           >
           <a href="https://github.com/patriziofilloramo/claude-code-reup/blob/main/PRIVACY.md"
             >Privacy</a

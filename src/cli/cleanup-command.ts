@@ -31,7 +31,13 @@ export async function runCleanupCommand(args: string[]): Promise<void> {
 
   const dryRun = args.includes('--dry-run')
 
-  const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+  const [projects, activeSessionIds] = await Promise.all([
+    loadProjects(),
+    getActiveSessions({
+      officialRefresh: 'wait',
+      protectRetainedOfficialSessions: true,
+    }),
+  ])
   const candidates = findCleanupCandidates(projects, activeSessionIds)
 
   if (candidates.length === 0) {

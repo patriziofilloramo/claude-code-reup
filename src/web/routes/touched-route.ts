@@ -40,7 +40,10 @@ export function registerTouchedRoute(app: Hono): void {
       if (!path) return context.json({ matches: [] })
 
       const includeArchived = context.req.query('archived') === 'true'
-      const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+      const [projects, activeSessionIds] = await Promise.all([
+        loadProjects(),
+        getActiveSessions({ officialRefresh: 'background' }),
+      ])
       const matches = await searchTouchedFiles(path, projects, { includeArchived })
 
       const payload: ApiTouchedSession[] = matches.map((match) => ({

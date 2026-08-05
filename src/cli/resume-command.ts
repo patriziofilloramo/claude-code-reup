@@ -58,7 +58,13 @@ async function selectResumeTargetInteractively(): Promise<DirectResumeSelection 
 
   try {
     const currentDirectory = readCurrentWorkingDirectory()
-    const [projects, activeSessionIds] = await Promise.all([loadProjects(), getActiveSessions()])
+    const [projects, activeSessionIds] = await Promise.all([
+      loadProjects(),
+      getActiveSessions({
+        officialRefresh: 'wait',
+        protectRetainedOfficialSessions: true,
+      }),
+    ])
     const candidates = rankSessionCandidates(projects, activeSessionIds, currentDirectory)
     if (candidates.length === 0) return { error: 'no resumable sessions found' }
 

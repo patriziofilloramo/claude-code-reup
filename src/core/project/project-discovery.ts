@@ -10,7 +10,12 @@ import {
   resolveProjectPath,
 } from './claude-paths.js'
 import { normalizePathForComparison, pathsReferToSameLocation } from './path-comparison.js'
-import { getCachedProjects, getProjectCacheGeneration, setCachedProjects } from './project-cache.js'
+import {
+  coalesceProjectLoad,
+  getCachedProjects,
+  getProjectCacheGeneration,
+  setCachedProjects,
+} from './project-cache.js'
 import { getLiveSessionRecords, type SessionLockRecord } from '../session/active-sessions.js'
 import type {
   Project,
@@ -49,45 +54,49 @@ export async function loadProjects(): Promise<Project[]> {
   if (cached) return cached
   const cacheGeneration = getProjectCacheGeneration()
 
-  log.debug('loadProjects: scanning', projectsDirectory)
+  return coalesceProjectLoad(cacheKey, cacheGeneration, async () => {
+    log.debug('loadProjects: scanning', projectsDirectory)
 
-  const [projectDirectoryNames, liveSessions, orgData] = await Promise.all([
-    listProjectDirectoryNames(projectsDirectory),
-    getLiveSessionRecords(),
-    readOrgData(),
-  ])
+    const [projectDirectoryNames, liveSessions, orgData] = await Promise.all([
+      listProjectDirectoryNames(projectsDirectory),
+      getLiveSessionRecords(),
+      readOrgData(),
+    ])
 
-  const discoveredProjects = await Promise.all(
-    projectDirectoryNames.map((directoryName) =>
-      loadProjectDirectory(directoryName, projectsDirectory, liveSessions)
+    const discoveredProjects = await Promise.all(
+      projectDirectoryNames.map((directoryName) =>
+        loadProjectDirectory(directoryName, projectsDirectory, liveSessions)
+      )
     )
-  )
 
-  const projects = discoveredProjects
-    .filter((project): project is Project => project !== null && project.sessions.length > 0)
-    .sort(compareProjectsByRecentActivity)
+    const projects = discoveredProjects
+      .filter((project): project is Project => project !== null && project.sessions.length > 0)
+      .sort(compareProjectsByRecentActivity)
 
-  // Handle very fresh lock records whose cwd doesn't match any scanned project.
-  // Older lock-only records are live processes, not necessarily resumable sessions.
-  const now = Date.now()
-  const knownPaths = new Set(projects.map((project) => normalizePathForComparison(project.path)))
-  const orphanedRecords = liveSessions.filter(
-    (record): record is SessionLockRecord & { cwd: string } =>
-      record.cwd !== null &&
-      !knownPaths.has(normalizePathForComparison(record.cwd)) &&
-      isRecentLockRecord(record.startedAt, now)
-  )
+    // Handle very fresh lock records whose cwd doesn't match any scanned project.
+    // Older lock-only records are live processes, not necessarily resumable sessions.
+    const now = Date.now()
+    const knownPaths = new Set(projects.map((project) => normalizePathForComparison(project.path)))
+    const orphanedRecords = liveSessions.filter(
+      (record): record is SessionLockRecord & { cwd: string } =>
+        record.cwd !== null &&
+        !knownPaths.has(normalizePathForComparison(record.cwd)) &&
+        isRecentLockRecord(record.startedAt, now)
+    )
 
-  const assembled =
-    orphanedRecords.length === 0
-      ? projects
-      : [...projects, ...buildOrphanProjects(orphanedRecords)].sort(compareProjectsByRecentActivity)
+    const assembled =
+      orphanedRecords.length === 0
+        ? projects
+        : [...projects, ...buildOrphanProjects(orphanedRecords)].sort(
+            compareProjectsByRecentActivity
+          )
 
-  // Merge group assignments from org.json into project objects.
-  const finalProjects = applyOrgMetadata(assembled, orgData)
+    // Merge group assignments from org.json into project objects.
+    const finalProjects = applyOrgMetadata(assembled, orgData)
 
-  setCachedProjects(cacheKey, finalProjects, cacheGeneration)
-  return finalProjects
+    setCachedProjects(cacheKey, finalProjects, cacheGeneration)
+    return finalProjects
+  })
 }
 
 /** Resolves one project from the authoritative discovery result. */

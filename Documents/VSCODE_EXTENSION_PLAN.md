@@ -341,7 +341,9 @@ users actually need.
 ## Security and Privacy
 
 - No telemetry.
-- No network requests.
+- No extension-hosted network service or transcript upload. The shared core
+  may make aggregate account-usage requests only after explicit
+  `reup usage setup`; extension activation alone does not enable them.
 - No transcript writes.
 - No shell interpolation with untrusted strings.
 - Only full UUIDs may be passed to `claude --resume`.

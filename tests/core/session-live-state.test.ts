@@ -8,6 +8,7 @@ import {
 } from '../../src/core/session/session-live-state.js'
 import type { SessionLiveEvidence } from '../../src/core/session/session-live-state.js'
 import type { AttentionMarker } from '../../src/core/session/attention.js'
+import type { ClaudeAgentLiveReading } from '../../src/core/session/claude-agent-state.js'
 import type { SessionTailActivity } from '../../src/core/session/session-tail.js'
 
 /**
@@ -23,7 +24,7 @@ describe('shared session live state', () => {
     // Evidence can look busy after a crash; the absent process settles it.
     expect(
       resolveSessionLiveState(
-        evidence({ isAttached: false, workStatus: 'busy', workStatusUpdatedAt: NOW })
+        evidence({ hasLiveProcess: false, workStatus: 'busy', workStatusUpdatedAt: NOW })
       )
     ).toBe('detached')
   })
@@ -34,6 +35,51 @@ describe('shared session live state', () => {
         evidence({ needsInput: true, workStatus: 'busy', workStatusUpdatedAt: NOW })
       )
     ).toBe('needs-input')
+  })
+
+  it('lets a fresh official blocked state recover a session with no live lock', () => {
+    expect(
+      resolveSessionLiveState(
+        evidence({
+          claudeAgentReading: officialReading({ state: 'needs-input' }),
+          hasLiveProcess: false,
+        }),
+        NOW
+      )
+    ).toBe('needs-input')
+  })
+
+  it('lets a fresh official working state override older fallback evidence', () => {
+    expect(
+      resolveSessionLiveState(
+        evidence({
+          claudeAgentReading: officialReading({ state: 'working' }),
+          needsInput: true,
+          workStatus: 'idle',
+        }),
+        NOW
+      )
+    ).toBe('working')
+  })
+
+  it('never applies stale or locally superseded official evidence', () => {
+    const staleReading = officialReading({ isFresh: false, state: 'needs-input' })
+    const supersededReading = officialReading({ isSuperseded: true, state: 'working' })
+
+    expect(
+      resolveSessionLiveState(
+        evidence({ claudeAgentReading: staleReading, hasLiveProcess: false }),
+        NOW
+      )
+    ).toBe('detached')
+    expect(
+      resolveSessionLiveState(
+        evidence({ claudeAgentReading: supersededReading, workStatus: 'idle' }),
+        NOW
+      )
+    ).toBe('attached')
+    // Rejection does not erase the provenance a caller may need to explain.
+    expect(staleReading).toMatchObject({ source: 'claude-agents', observedAt: NOW })
   })
 
   it('reports a session as working while a reported turn is in flight', () => {
@@ -74,12 +120,19 @@ describe('shared session live state', () => {
 
   it('never reports a state outside the shared vocabulary', () => {
     const allowed = new Set(['needs-input', 'working', 'attached', 'detached'])
-    for (const isAttached of [true, false]) {
+    for (const hasLiveProcess of [true, false]) {
       for (const needsInput of [true, false]) {
         for (const workStatus of ['busy', 'idle', null] as const) {
           for (const currentTail of [null, tail({ turnInFlight: true }), tail({})]) {
             const state = resolveSessionLiveState(
-              { isAttached, needsInput, tail: currentTail, workStatus, workStatusUpdatedAt: NOW },
+              {
+                claudeAgentReading: null,
+                hasLiveProcess,
+                needsInput,
+                tail: currentTail,
+                workStatus,
+                workStatusUpdatedAt: NOW,
+              },
               NOW
             )
             expect(allowed).toContain(state)
@@ -103,6 +156,36 @@ describe('shared user-input wait', () => {
 
     expect(result.wait).toEqual({ kind: 'marker', marker })
     expect(result.staleMarkerSessionId).toBeNull()
+  })
+
+  it('uses a fresh official wait reason ahead of fallback sources', () => {
+    const result = resolveUserInputWait(
+      attentionMarker(),
+      'busy',
+      NOW,
+      tail({ turnInFlight: true }),
+      officialReading({ state: 'needs-input', waitingFor: 'sandbox request' })
+    )
+
+    expect(result.wait).toEqual({
+      kind: 'claude-agents',
+      since: NOW,
+      waitingFor: 'sandbox request',
+    })
+    expect(result.staleMarkerSessionId).toBe(attentionMarker().sessionId)
+  })
+
+  it('does not let a stale official wait suppress a current marker', () => {
+    const marker = attentionMarker()
+    const result = resolveUserInputWait(
+      marker,
+      'idle',
+      NOW,
+      null,
+      officialReading({ isFresh: false, state: 'working' })
+    )
+
+    expect(result.wait).toEqual({ kind: 'marker', marker })
   })
 
   it('reports a stale marker for deletion instead of deleting it', () => {
@@ -145,7 +228,7 @@ describe('every surface draws the shared live state', () => {
     const app = readFileSync('src/tui/App.tsx', 'utf8')
     const marker = readFileSync('src/tui/session-status-marker.ts', 'utf8')
 
-    expect(app).toContain('resolveSessionLiveState(')
+    expect(app).toContain('resolveLiveSessionSignals(')
     // The rule that made the TUI disagree with the web: a session counted as
     // busy purely because its transcript was written in the last ten seconds.
     expect(app).not.toContain('TRANSCRIPT_RUNNING_WINDOW_MS')
@@ -257,11 +340,25 @@ function attentionMarker(overrides: Partial<AttentionMarker> = {}): AttentionMar
 
 function evidence(overrides: Partial<SessionLiveEvidence> = {}): SessionLiveEvidence {
   return {
-    isAttached: true,
+    claudeAgentReading: null,
+    hasLiveProcess: true,
     needsInput: false,
     tail: null,
     workStatus: null,
     workStatusUpdatedAt: null,
+    ...overrides,
+  }
+}
+
+function officialReading(overrides: Partial<ClaudeAgentLiveReading> = {}): ClaudeAgentLiveReading {
+  return {
+    isFresh: true,
+    isSuperseded: false,
+    observedAt: NOW,
+    source: 'claude-agents',
+    state: 'working',
+    stateSince: NOW,
+    waitingFor: null,
     ...overrides,
   }
 }

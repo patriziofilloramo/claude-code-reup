@@ -169,7 +169,7 @@ const STRINGS = {
 
   // ── Server link lost ──────────────────────────────────────────────────────
   offlineTitle: 'LINK LOST',
-  offlineProbeCommand: '$ curl -sS http://{host}/api/active',
+  offlineProbeCommand: '$ curl -sS http://{host}/api/health',
   offlineProbeError: 'curl: (7) failed to connect to {host}: connection refused',
   offlineHeadline: 'The reup server stopped responding.',
   offlineLiveness:
@@ -4249,7 +4249,7 @@ async function probeServerReachability() {
   if (offlineProbeInFlight) return
   offlineProbeInFlight = true
   try {
-    await fetch('/api/active', { cache: 'no-store' })
+    await fetch('/api/health', { cache: 'no-store' })
     markServerOnline()
   } catch {
     markServerOffline()

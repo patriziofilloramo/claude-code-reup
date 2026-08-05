@@ -10,32 +10,34 @@ in [`README.md`](../README.md). Native installer behavior is specified in
 - Local-first: session data stays on the user's machine.
 - Lightweight: Node.js 20+, TypeScript, Ink, Hono, and vanilla browser assets.
 - Zero required configuration.
-- No database, daemon, cloud service, authentication, telemetry, or bundler.
+- No database, daemon, Reup account, cloud service, telemetry, or bundler. The
+  optional account-usage read uses Claude Code's existing authentication only
+  after explicit `reup usage setup` consent.
 - Claude-owned transcripts are read but never renamed or rewritten.
 
 ## Runtime Surfaces
 
 The executable entry point is `src/index.ts`.
 
-| Command                   | Behavior                                                                |
-| ------------------------- | ----------------------------------------------------------------------- |
-| `reup`                    | Starts the Ink terminal UI                                              |
-| `reup web`                | Starts the local Hono server and opens the browser UI                   |
-| `reup list [query]`       | Prints a filtered table; `--json` emits full records                    |
-| `reup search <query>`     | Opens the ranked picker pre-filtered; `--deep` scans transcript content |
-| `reup touched [path]`     | Lists sessions that edited a matching file, or opens a file picker      |
-| `reup inbox`              | Prints active and actionable sessions                                   |
-| `reup cleanup`            | Reviews stale or empty sessions for reversible archiving                |
-| `reup doctor`             | Runs non-destructive local-data diagnostics                             |
-| `reup handoff <session>`  | Prints a transcript-supported continuation packet                       |
-| `reup resume [session]`   | Opens a picker, or resumes a full ID/unique prefix                      |
-| `reup usage [action]`     | Reads observed usage or configures its local feed                       |
-| `reup attention [action]` | Manages needs-input alerts or captures Notification hooks               |
-| `reup config`             | Opens the configuration TUI or manages preferences                      |
-| `reup completion <shell>` | Prints opt-in shell completion registration                             |
-| `reup help [command]`     | Prints general or command-specific help                                 |
-| `reup --help`             | Prints supported commands                                               |
-| `reup --version`          | Prints the current version                                              |
+| Command                   | Behavior                                                                 |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `reup`                    | Starts the Ink terminal UI                                               |
+| `reup web`                | Starts the local Hono server and opens the browser UI                    |
+| `reup list [query]`       | Prints a filtered table; `--json` emits full records                     |
+| `reup search <query>`     | Opens the ranked picker pre-filtered; `--deep` scans transcript content  |
+| `reup touched [path]`     | Lists sessions whose write/edit calls targeted a path, or opens a picker |
+| `reup inbox`              | Prints active and actionable sessions                                    |
+| `reup cleanup`            | Reviews stale or empty sessions for reversible archiving                 |
+| `reup doctor`             | Runs non-destructive local-data diagnostics                              |
+| `reup handoff <session>`  | Prints a transcript-supported continuation packet                        |
+| `reup resume [session]`   | Opens a picker, or resumes a full ID/unique prefix                       |
+| `reup usage [action]`     | Reads observed usage or configures its local feed                        |
+| `reup attention [action]` | Manages needs-input alerts or captures Notification hooks                |
+| `reup config`             | Opens the configuration TUI or manages preferences                       |
+| `reup completion <shell>` | Prints opt-in shell completion registration                              |
+| `reup help [command]`     | Prints general or command-specific help                                  |
+| `reup --help`             | Prints supported commands                                                |
+| `reup --version`          | Prints the current version                                               |
 
 The `repair` command is reserved but not implemented.
 
@@ -98,31 +100,32 @@ client segments and copies the browser assets into `dist/web/`.
 
 Core responsibilities are intentionally separated:
 
-| Module                                    | Responsibility                                            |
-| ----------------------------------------- | --------------------------------------------------------- |
-| `session/session-model.ts`                | Shared session types and session-ID validation            |
-| `project/claude-paths.ts`                 | Claude data locations and encoded project-path resolution |
-| `project/project-discovery.ts`            | Project/session discovery and filesystem annotations      |
-| `project/project-cache.ts`                | Short-lived in-process discovery cache and invalidation   |
-| `project/project-sidecar-lock.ts`         | Cross-process sidecar lock protocol                       |
-| `session/session-transcript.ts`           | JSONL metadata extraction                                 |
-| `session/session-signals.ts`              | Transcript-derived signals and display status             |
-| `session/session-tail.ts`                 | Transcript-tail live-activity state and latest tool name  |
-| `session/session-metadata.ts`             | Reup sidecar reads, merges, and queued writes             |
-| `session/session-query.ts`                | Structured search-query parsing shared by all surfaces    |
-| `session/session-search.ts`               | Metadata and deep transcript search                       |
-| `session/session-file-search.ts`          | Reverse touched-file → session lookup                     |
-| `session/session-smart-view.ts`           | Exclusive priority-ordered Inbox bucket assignment        |
-| `session/resume-advice.ts`                | Deterministic pre-resume recommendation from signals      |
-| `session/cleanup.ts`                      | Heuristic stale/empty-session scoring for `reup cleanup`  |
-| `session/session-handoff.ts`              | Conservative transcript continuation-fact extraction      |
-| `session/active-sessions.ts`              | Live Claude process and lock-file detection               |
-| `health/diagnostics.ts`                   | Shared non-destructive data-health checks                 |
-| `org/org-model.ts` + `org/org-filters.ts` | Groups, stacks, tags schema and shared org filtering      |
-| `usage/live-usage.ts`                     | Aggregate status-line snapshot parsing and persistence    |
-| `usage/account-usage.ts`                  | Opt-in account-limit refresh and freshness states         |
-| `usage/usage-statusline-integration.ts`   | Reversible Claude settings integration                    |
-| `sessions.ts`                             | Compatibility re-exports only                             |
+| Module                                    | Responsibility                                              |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| `session/session-model.ts`                | Shared session types and session-ID validation              |
+| `project/claude-paths.ts`                 | Claude data locations and encoded project-path resolution   |
+| `project/project-discovery.ts`            | Project/session discovery and filesystem annotations        |
+| `project/project-cache.ts`                | Short-lived, single-flight discovery cache and invalidation |
+| `project/project-sidecar-lock.ts`         | Cross-process sidecar lock protocol                         |
+| `session/session-transcript.ts`           | JSONL metadata extraction                                   |
+| `session/session-signals.ts`              | Transcript-derived signals and display status               |
+| `session/session-tail.ts`                 | Transcript-tail live-activity state and latest tool name    |
+| `session/session-metadata.ts`             | Reup sidecar reads, merges, and queued writes               |
+| `session/session-query.ts`                | Structured search-query parsing shared by all surfaces      |
+| `session/session-search.ts`               | Metadata and deep transcript search                         |
+| `session/session-file-search.ts`          | Reverse touched-file → session lookup                       |
+| `session/session-smart-view.ts`           | Exclusive priority-ordered Inbox bucket assignment          |
+| `session/resume-advice.ts`                | Deterministic pre-resume recommendation from signals        |
+| `session/cleanup.ts`                      | Heuristic stale/empty-session scoring for `reup cleanup`    |
+| `session/session-handoff.ts`              | Conservative transcript continuation-fact extraction        |
+| `session/claude-agent-state.ts`           | Bounded official agent inventory, validation, and cache     |
+| `session/active-sessions.ts`              | Lock-file detection and active-source merging               |
+| `health/diagnostics.ts`                   | Shared non-destructive data-health checks                   |
+| `org/org-model.ts` + `org/org-filters.ts` | Groups, stacks, tags schema and shared org filtering        |
+| `usage/live-usage.ts`                     | Aggregate status-line snapshot parsing and persistence      |
+| `usage/account-usage.ts`                  | Opt-in account-limit refresh and freshness states           |
+| `usage/usage-statusline-integration.ts`   | Reversible Claude settings integration                      |
+| `sessions.ts`                             | Compatibility re-exports only                               |
 
 Internal consumers import the module that owns a responsibility. `sessions.ts`
 also re-exports the original public surface so existing callers remain
@@ -137,6 +140,10 @@ ${CLAUDE_CONFIG_DIR:-~/.claude}/
     <session-id>.jsonl
   sessions/*.json
 ```
+
+Live-state discovery may also execute Claude Code's documented, optional
+`claude agents --json` inventory. That subprocess is an observation source; it
+does not change Claude-owned state.
 
 For each project:
 
@@ -174,11 +181,14 @@ after an explicit request. Existing status lines require `--replace`; their exac
 JSON value is saved under `~/.claude/reup/statusline-integration.json` and
 restored by `reup usage remove`.
 
-After explicit setup, account limits are refreshed from Claude Code's
-authenticated read-only account usage endpoint at most once every 30 seconds.
-Reup reads the locally managed OAuth token only in memory and atomically caches
-only aggregate percentages, reset times, and the usage-credit flag under
-`~/.claude/reup/account-usage.json`.
+That setup is also the account-usage consent boundary. Before the integration
+is configured, ordinary TUI, web, extension, and `reup usage` refreshes do not
+read Claude Code's OAuth credential and do not query the authenticated account
+usage endpoint. A previously cached account snapshot does not bypass that gate.
+After explicit setup, account limits are refreshed from the read-only endpoint
+at most once every 30 seconds. Reup keeps the locally managed OAuth token in
+memory only and atomically caches only aggregate percentages, reset times, and
+the usage-credit flag under `~/.claude/reup/account-usage.json`.
 
 The status-line collector separately receives Claude Code's documented session
 JSON over stdin, keeps only aggregate model/agent/context/rate-limit fields, and
@@ -280,12 +290,69 @@ archive state while reporting success.
 
 Archiving only hides a session in Reup. It is not a transcript backup.
 
-## Active Sessions
+## Managed and Presentable Sessions
 
-`active-sessions.ts` reads Claude Code session process records under
-`~/.claude/sessions/` and verifies their PIDs. The TUI polls this state; the web
-client requests it independently. This allows separate Reup processes to observe
-the same active Claude sessions.
+Reup combines two independent observations:
+
+- `active-sessions.ts` reads process records under `~/.claude/sessions/` and
+  verifies their PIDs. `getLiveSessionRecords()` deliberately remains a
+  lock-only primitive for consumers that need lock status or process details.
+- `claude-agent-state.ts` executes the optional `claude agents --json`
+  inventory. Its default response includes live sessions plus background tasks
+  still `working` or `blocked` after their process exits; only `--all` adds
+  completed tasks. A fresh record can report task state and documented wait
+  reasons that locks and transcripts cannot distinguish reliably.
+
+Those observations intentionally produce two sets:
+
+1. **Managed/safety IDs.** `getActiveSessions()` and
+   `mergeActiveSessionIds()` merge verified locks with applicable Agent View
+   rows. Pidless `working`/`blocked` tasks remain here so cleanup, deletion, and
+   resume ranking fail safely.
+2. **Presentable activity IDs.** `isPresentableClaudeAgentSession()` filters
+   only the local UI model. An official row is presentable when it reports a
+   PID, matches a resume-visible discovered session, or has a verified live
+   lock. A hook marker alone is not an anchor because markers can outlive their
+   session. The shared resolver and web activity snapshot apply the same rule;
+   `/api/active` returns the web snapshot's filtered IDs so REST and SSE agree.
+
+Task state and process liveness are orthogonal. `pid` or a verified lock proves
+a live process; `state` describes Agent View background-task lifecycle, and
+`waitingFor` refines the reason when process `status` is `waiting`. Snapshot
+freshness proves recent observation, not a recent state transition, and
+`startedAt` must never be used as state age.
+
+The subprocess boundary is intentionally narrow: fixed executable and
+arguments, no shell, a 4-second timeout, a 1 MiB stdout limit, and at most
+10,000 records. The complete response must be a JSON array. Invalid rows are
+isolated, ambiguous duplicate session IDs are rejected, and every retained
+field is runtime-validated. Reup discards Claude's external display names and
+summaries at the boundary; it retains only session-addressing and runtime
+fields needed for state resolution. Errors are debug-logged by sanitized error
+name/code only, never with stderr or the returned payload.
+
+The in-process reader is single-flight and stale-while-revalidate. A successful
+snapshot starts a 10-second refresh interval; official state may drive managed
+task presentation for 15 seconds when the row passes the anchor rule. A failed
+refresh can retain the last successful snapshot for at most 60 seconds, but
+that stale data is never a live UI claim.
+It exists only as a conservative barrier for operations where a false negative
+could damage work.
+
+Persistent surfaces (TUI, web routes/activity stream, and VS Code) request a
+background refresh. Their cold first paint therefore remains lock-only and
+never waits for the optional process; later polls or SSE snapshots converge on
+the shared cache. One-shot reads may wait for the cold inventory. Deletion,
+cleanup, and resume ranking explicitly wait and opt into the retained-snapshot
+barrier so a transient command failure cannot make an apparently active
+session deletable or a resumable session look safely detached.
+
+The official source is optional and is still incomplete in current Claude Code
+builds: interactive rows can omit activity state, and the command may be
+unavailable, malformed, disabled, or time out. In all of those cases Reup falls
+back to verified locks, hook markers, and transcript evidence rather than
+inventing a state. Polling also means even a healthy official reading is not
+instantaneous.
 
 ## Organization Layer
 
@@ -370,11 +437,14 @@ stream and a failed data refresh both merely call `noteServerUnreachable()`,
 which schedules a probe after a grace period — a server restart drops the
 stream for well under a second and recovers on its own, and the overlay must
 not flash for blips nobody noticed. `probeServerReachability()` treats a
-network-level failure as "gone" and any HTTP response as "alive".
+network-level failure as "gone" and any HTTP response as "alive". It calls the
+constant-time `/api/health` route rather than session discovery, so repeated
+outage probes never trigger project scans.
 
-A confirmed outage clears `activeSessionIds` and the activity strip before
-anything else: the page cannot know what is running, so it must stop implying
-it does. Recovery reopens the stream and reloads projects, activity, and usage.
+A confirmed outage leaves the last server-owned session state intact and adds
+the `link-lost` presentation state, which suppresses live claims while the page
+cannot verify them. Recovery reopens the stream and reloads projects, activity,
+and usage.
 The overlay is presentation on top of that state — dismissing it leaves the
 outage, and the footer, intact.
 
@@ -459,18 +529,18 @@ The SSE connection lifecycle has three invariants (2026-07-01):
 - Change notifications are debounced with an upper bound
   (`APP.sseChangeMaxWaitMs`) so sustained transcript writes cannot postpone
   updates indefinitely.
-- Live "working" state comes primarily from Claude Code's own lock-file
-  `status` field (`busy`/`idle`, v2.1.197+), merged across a session's multiple
-  locks (CLI + editor peers) with busy winning. Transcript tail parsing is the
-  fallback for older versions and still supplies the last tool name; it is not
-  trusted over the lock because transcript appends can pause beyond any
-  freshness threshold while a long tool call or response is in flight.
-  Conversely, `busy` is only trusted with fresh evidence (a recent status
-  transition or recent transcript activity, `BUSY_STATUS_TRUST_WINDOW_MS`):
-  Claude Code rewrites the lock only on transitions, so a session that died or
-  was interrupted mid-turn leaves a zombie `busy` flag behind. A stale flag
-  falls back to transcript-derived state, which still reports genuinely
-  long-running tools via their pending tool_use blocks.
+- For a session that passes the presentation-anchor rule, a fresh,
+  non-superseded `claude agents --json` reading is the first state candidate.
+  Lock statuses (`busy`/`idle`, v2.1.197+) and hook markers remain
+  the reported fallback and are merged across a session's multiple locks (CLI
+  - editor peers) with busy winning. Transcript tail parsing is the final
+    activity fallback and still supplies the last tool name; ordinary recency
+    never outranks an applicable official reading. Conversely, a newer local
+    lock/hook transition or explicit transcript-recorded interruption/API error
+    supersedes an older official snapshot. This prevents cached `working` from
+    resurrecting a turn Claude already recorded as stopped. A lock `busy` is
+    also trusted only with fresh corroboration (`BUSY_STATUS_TRUST_WINDOW_MS`),
+    because Claude Code can leave that flag behind after an abnormal ending.
 - SSE events are typed by what changed: session-lock flips push a
   server-computed `activity` snapshot (entries plus active session IDs, no
   client refetch, no project-cache invalidation), usage-file writes emit a
@@ -485,17 +555,20 @@ The SSE connection lifecycle has three invariants (2026-07-01):
 
 ### Live State Confidence (2026-07-28)
 
-`activityState` has three possible sources, and they are not equally reliable:
-a lock `status` field, a hook work marker, or — when a session has neither —
-transcript recency. VS Code peer locks omit `status`, so recency is routinely
-the only source, and it cannot distinguish a long tool call from a finished
-turn: a quiet stretch mid-turn reads the same as a completed one.
+`activityState` has four possible sources, and they are not equally reliable:
+the optional official agent inventory, a lock `status` field, a hook work
+marker, or — when a session has none of those — transcript recency. Official
+state applies only while its snapshot is fresh and no newer local reported fact
+supersedes it. VS Code peer locks and current interactive inventory rows can
+both omit activity state, so recency remains a routine fallback; it cannot
+distinguish a long tool call from a finished turn.
 
 `LiveActivityEntry.stateIsReported` records which kind of evidence produced the
-state. The rule it exists to enforce: **a claim about an event requires
-reported evidence; presentation may use the guess.** The desktop "turn
-finished" alert is such a claim, and firing it on recency meant an alert every
-time Claude paused to think.
+state. An applicable official reading, a lock status, or a hook marker counts as
+reported; transcript recency alone does not. The rule it exists to enforce: **a
+claim about an event requires reported evidence; presentation may use the
+guess.** The desktop "turn finished" alert is such a claim, and firing it on
+recency meant an alert every time Claude paused to think.
 
 The same reasoning shapes the web live dot: `waiting` is applied only when
 something reported the turn boundary. Before this, an actively working session
@@ -510,31 +583,57 @@ the transcript had simply gone quiet.
 > changing live-state logic.
 
 `core/session/session-live-state.ts` holds the one reading of "what is this
-session doing" that every surface draws. It is a pure function of evidence the
-callers already poll, so the TUI can call it at render time and the web can
-call it while building a snapshot.
+session doing" that every surface draws. It is a pure function of evidence
+assembled by shared readers. The TUI and extension consume
+`resolveLiveSessionSignals()`; the web builds the same evidence while producing
+its richer activity snapshot. Persistent callers use background official
+refresh so rendering never waits on the optional subprocess.
 
 The vocabulary is four states, ordered by urgency:
 
-| state         | meaning                                           |
-| ------------- | ------------------------------------------------- |
-| `needs-input` | blocked on the user (permission or input prompt)  |
-| `working`     | producing output or running a tool right now      |
-| `attached`    | a live process holds the session, currently quiet |
-| `detached`    | no live process                                   |
+| state         | meaning                                                             |
+| ------------- | ------------------------------------------------------------------- |
+| `needs-input` | a presented session or managed task is blocked on the user          |
+| `working`     | a presented session or managed task reports work in progress        |
+| `attached`    | a verified live process holds the session, with no more urgent fact |
+| `detached`    | no presentable active or managed evidence                           |
+
+These labels are triage priority, not four levels of process presence. A
+pidless Agent View background task can legitimately be `needs-input` or
+`working`; only a reported PID or verified lock proves that a process is alive.
 
 `working` is deliberately the only state derived from activity; everything
 quieter collapses into `attached`. Distinguishing a pausing session from a
 finished one is exactly the judgement that proved unreliable for locks that
 report no turn boundaries, so a surface wanting it must opt in explicitly.
 
+Evidence precedence is explicit:
+
+1. A fresh, non-superseded official managed-state reading applies first after
+   the session passes the presentation-anchor rule.
+2. A newer lock status, hook attention/work marker, or live lock contradicting
+   an official `detached` record supersedes that snapshot.
+3. A newer transcript `turnEndedByRecord` (`user-interruption` or `api-error`)
+   also supersedes cached official `working`.
+4. The existing lock/hook resolver and transcript fallback decide when no
+   official state applies.
+
+Ordinary transcript recency is intentionally absent from step 2: it is useful
+for presentation, not strong enough to overrule reported evidence. Official
+provenance, observation time, freshness, supersession, wait reason, and stable
+transition start stay in the core model even when the reading cannot be used.
+Stable transition identity prevents repeated needs-input notifications for an
+unchanged wait; a gap longer than the 60-second retention window starts a new
+transition instead of carrying stale identity across an outage.
+
 **Core versus special.** A surface may choose how to draw a state and may add
 detail on top, but may not add a value to the vocabulary or reinterpret one —
 that is what made the surfaces disagree. The split as it stands:
 
-- **Core** — the four states, resolved once. The TUI reads them in `App.tsx`,
-  the web in `live-activity-model.ts` (`LiveActivityEntry.liveState`), and the
-  extension in `live-attention.ts` (`LiveSessionSignals.liveStateBySession`).
+- **Core** — the four states, resolved once. The TUI reads them through
+  `resolveLiveSessionSignals()`, the web in `live-activity-model.ts`
+  (`LiveActivityEntry.liveState`), and the extension in `live-attention.ts`
+  (`LiveSessionSignals.liveStateBySession`).
 - **Special, web** — it splits `attached` into `waiting` and plain quiet, gated
   on `stateIsReported`, because it has room for a label explaining which. This
   is the only sanctioned refinement, and it sits in one client function,
@@ -568,9 +667,11 @@ find:
 
 - **The server reports what happened.** `event-stream-route.ts` tracks the last
   working state per session and emits a `turn-finished` SSE event when one
-  leaves `working` with `stateIsReported` true. The page cannot find this
-  alone — it derives state from snapshots it only receives while awake, so a
-  throttled tab misses one side of the transition and stays silent.
+  leaves `working` with `stateIsReported` true **and no attention wait**. A
+  reported transition from working to needs-input is a mid-turn block, not a
+  finished turn. The page cannot find the real boundary alone — it derives
+  state from snapshots it only receives while awake, so a throttled tab misses
+  one side of the transition and stays silent.
 - **The page decides whether the user needs telling.** `document.hidden` is the
   one signal only the browser has, and it answers exactly the right question:
   are you looking at this? If the page is visible, you already saw it.

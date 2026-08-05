@@ -93,6 +93,30 @@ export const APP = {
    * Lower = more responsive live indicators; higher = less disk I/O.
    */
   activeSessionsPollMs: 1_000,
+  /**
+   * Minimum interval (ms) between `claude agents --json` refreshes. The
+   * command is substantially more expensive than reading lock files, so it
+   * runs on a slower, shared cache while locks and hooks keep their 1 s poll.
+   */
+  claudeAgentsRefreshMs: 10_000,
+  /**
+   * Maximum age (ms) at which an official agent-view state may still drive a
+   * live UI claim. This includes headroom for one background refresh.
+   */
+  claudeAgentsStateFreshMs: 15_000,
+  /**
+   * Maximum age (ms) at which a failed refresh may retain an official record
+   * solely to protect an apparently active session from destructive actions.
+   */
+  claudeAgentsSafetyRetentionMs: 60_000,
+  /** Maximum runtime (ms) for the optional Claude agent inventory command. */
+  claudeAgentsCommandTimeoutMs: 4_000,
+  /** Maximum stdout bytes accepted from `claude agents --json`. */
+  claudeAgentsMaxOutputBytes: 1024 * 1024,
+  /** Maximum records accepted from one official inventory response. */
+  claudeAgentsMaxRecords: 10_000,
+  /** Disables the optional subprocess boundary, primarily for hermetic runs. */
+  disableClaudeAgentsEnvVar: 'REUP_DISABLE_CLAUDE_AGENTS',
 
   // ── Usage capture ───────────────────────────────────────────────────────────
 

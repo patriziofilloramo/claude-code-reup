@@ -21,6 +21,7 @@ const marketplaceGenerator = readFileSync(
   'utf8'
 )
 const packageVsixSource = readFileSync('extension/scripts/package-vsix.mjs', 'utf8')
+const smokeRunner = readFileSync('extension/scripts/run-smoke.mjs', 'utf8')
 const extensionReadme = readFileSync('extension/README.md', 'utf8')
 const dashboardWorkflow = readFileSync('extension/media/marketplace/dashboard-workflow.gif')
 const workspaceCockpit = readFileSync('extension/media/marketplace/workspace-cockpit.png')
@@ -44,6 +45,14 @@ describe('VS Code product quality guardrails', () => {
     expect(vscodeIgnore).toContain('dist/smoke-test.cjs')
     expect(vscodeIgnore).toContain('README.md')
     expect(vscodeIgnore).toContain('media/marketplace/**')
+  })
+
+  it('isolates the Extension Host smoke from real VS Code and Claude data', () => {
+    expect(smokeRunner).toContain('--user-data-dir=')
+    expect(smokeRunner).toContain('--extensions-dir=')
+    expect(smokeRunner).toContain('smokeWorkspace')
+    expect(smokeRunner).toContain("CLAUDE_CONFIG_DIR: join(smokeRoot, 'claude')")
+    expect(smokeRunner).toContain("REUP_DISABLE_CLAUDE_AGENTS: '1'")
   })
 
   it('generates every extension icon from the canonical Reup mark', () => {

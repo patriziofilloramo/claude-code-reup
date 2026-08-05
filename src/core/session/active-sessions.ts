@@ -2,6 +2,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { getClaudeDirectory } from '../project/claude-paths.js'
+import { activeClaudeAgentSessionIds, readClaudeAgentSnapshot } from './claude-agent-state.js'
+import type { ClaudeAgentRefreshMode, ClaudeAgentSnapshot } from './claude-agent-state.js'
 import { isValidSessionId } from './session-model.js'
 
 // -----------------------------------------------------------------------------
@@ -60,10 +62,52 @@ export async function getLiveSessionRecords(): Promise<SessionLockRecord[]> {
   return records.filter((r): r is SessionLockRecord => r !== null)
 }
 
-/** Returns session IDs for every live Claude Code process. */
-export async function getActiveSessions(): Promise<Set<string>> {
-  const records = await getLiveSessionRecords()
-  return new Set(records.map((r) => r.sessionId))
+export interface ActiveSessionReadOptions {
+  /** Whether a cold/expired official inventory refresh may block this read. */
+  officialRefresh?: ClaudeAgentRefreshMode
+  /**
+   * Retain stale official activity only as a conservative safety barrier.
+   * Presentation paths must leave this false so stale data never implies live.
+   */
+  protectRetainedOfficialSessions?: boolean
+}
+
+/**
+ * Returns active session IDs from live locks plus the official Claude agent
+ * inventory. One-shot callers wait for a cold official read by default;
+ * persistent surfaces opt into background refresh and keep their first paint
+ * lock-only.
+ */
+export async function getActiveSessions(
+  options: ActiveSessionReadOptions = {}
+): Promise<Set<string>> {
+  const [records, officialSnapshot] = await Promise.all([
+    getLiveSessionRecords(),
+    readClaudeAgentSnapshot(options.officialRefresh ?? 'wait'),
+  ])
+  return mergeActiveSessionIds(
+    records,
+    officialSnapshot,
+    options.protectRetainedOfficialSessions ?? false
+  )
+}
+
+/** Merges lock and official inventory IDs without changing lock record shape. */
+export function mergeActiveSessionIds(
+  lockRecords: SessionLockRecord[],
+  officialSnapshot: ClaudeAgentSnapshot | null,
+  includeRetainedOfficialRecords = false,
+  now = Date.now()
+): Set<string> {
+  const sessionIds = new Set(lockRecords.map((record) => record.sessionId))
+  for (const sessionId of activeClaudeAgentSessionIds(
+    officialSnapshot,
+    now,
+    includeRetainedOfficialRecords
+  )) {
+    sessionIds.add(sessionId)
+  }
+  return sessionIds
 }
 
 export interface MergedSessionLockStatus {

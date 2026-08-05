@@ -1,6 +1,10 @@
 import { loadProjects } from '../core/project/project-discovery.js'
-import { getLiveSessionRecords, mergeSessionLockStatuses } from '../core/session/active-sessions.js'
-import type { SessionWorkState } from '../core/session/active-sessions.js'
+import {
+  getLiveSessionRecords,
+  mergeActiveSessionIds,
+  mergeSessionLockStatuses,
+} from '../core/session/active-sessions.js'
+import type { SessionLockRecord, SessionWorkState } from '../core/session/active-sessions.js'
 import {
   clearAttentionMarker,
   clearWorkSignalMarker,
@@ -10,6 +14,19 @@ import {
 } from '../core/session/attention.js'
 import type { AttentionMarker } from '../core/session/attention.js'
 import {
+  claudeAgentLiveReading,
+  isApplicableClaudeAgentReading,
+  isPresentableClaudeAgentSession,
+  readClaudeAgentSnapshot,
+} from '../core/session/claude-agent-state.js'
+import type {
+  ClaudeAgentLiveReading,
+  ClaudeAgentRefreshMode,
+  ClaudeAgentSnapshot,
+  ClaudeAgentWaitingFor,
+} from '../core/session/claude-agent-state.js'
+import {
+  recordedTurnEndAt,
   resolveSessionLiveState,
   resolveUserInputWait,
 } from '../core/session/session-live-state.js'
@@ -23,8 +40,8 @@ import { projectDisplayName } from './api-model.js'
 
 export interface LiveActivityAttention {
   /**
-   * Whether Claude Code's Notification hook reported this wait, rather than it
-   * being inferred from the transcript's shape.
+   * Whether Claude Code's official inventory or Notification hook reported
+   * this wait, rather than it being inferred from the transcript's shape.
    *
    * Consumers must not raise an alert on an inferred wait. Its `since` is the
    * tail's last event, which moves every time the transcript grows, so a
@@ -73,54 +90,79 @@ export interface LiveActivityEntry {
    * boundaries — a lock status field or a hook marker — rather than from
    * transcript recency.
    *
-   * False for the sessions that have neither (VS Code locks omit `status`), and
+   * Official inventory, lock status, and hook markers are reported evidence.
+   * False for the sessions that have none (VS Code locks omit `status`), and
    * there the state is a guess: a long tool call and a finished turn look
    * identical once the transcript goes quiet. Consumers must not present a
-   * guess as an event; the desktop "turn finished" alert requires this.
+   * guess as an event. A reported needs-input transition is still mid-turn,
+   * so the desktop "turn finished" alert additionally requires no attention.
    */
   stateIsReported: boolean
 }
 
 export interface LiveActivitySnapshot {
-  /** Every session with a live lock, including ones without a strip entry. */
+  /** Every locally presentable session with fresh active or managed evidence. */
   activeSessionIds: string[]
   entries: LiveActivityEntry[]
 }
 
-/**
- * Builds the per-active-session activity model shared by the REST route and
- * SSE activity pushes. Lock files are merged per session (busy wins) so one
- * session with several attached processes yields exactly one entry.
- */
-export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot> {
-  const [liveRecords, allProjects, attentionMarkers, workMarkers] = await Promise.all([
+export interface LiveActivitySnapshotOptions {
+  /** Injected by focused tests; omitted in production. */
+  claudeAgentSnapshot?: ClaudeAgentSnapshot | null
+  /** The persistent server refreshes the official cache in the background. */
+  officialRefresh?: ClaudeAgentRefreshMode
+}
+
+/** Lightweight counterpart of the full activity model used by `/api/active`. */
+export async function readPresentableActiveSessionIds(
+  options: LiveActivitySnapshotOptions = {}
+): Promise<string[]> {
+  const [liveRecords, allProjects, officialSnapshot] = await Promise.all([
     getLiveSessionRecords(),
     loadProjects(),
-    readAttentionMarkers(),
-    readWorkSignalMarkers(),
+    resolveOfficialSnapshot(options),
   ])
-  const lockStatuses = mergeSessionLockStatuses(liveRecords)
-  const activeSessionIds = [...lockStatuses.keys()]
+  const { activeSessionIdSet } = buildPresentableActivityScope(
+    liveRecords,
+    allProjects,
+    officialSnapshot
+  )
+  return [...activeSessionIdSet]
+}
+
+/**
+ * Builds the per-active-session activity model shared by the REST route and
+ * SSE activity pushes. Lock files are merged per session (busy wins), then
+ * joined with the cached official inventory, so each session yields one entry.
+ */
+export async function buildLiveActivitySnapshot(
+  options: LiveActivitySnapshotOptions = {}
+): Promise<LiveActivitySnapshot> {
+  const [liveRecords, allProjects, attentionMarkers, workMarkers, officialSnapshot] =
+    await Promise.all([
+      getLiveSessionRecords(),
+      loadProjects(),
+      readAttentionMarkers(),
+      readWorkSignalMarkers(),
+      resolveOfficialSnapshot(options),
+    ])
   const attentionBySession = new Map(
     attentionMarkers.map((marker) => [marker.sessionId, marker] as const)
   )
   const workMarkerBySession = new Map(
     workMarkers.map((marker) => [marker.sessionId, marker] as const)
   )
+  const { activeSessionIdSet, lockStatuses, managedSessionIdSet, sessionIndex } =
+    buildPresentableActivityScope(liveRecords, allProjects, officialSnapshot)
+  const activeSessionIds = [...activeSessionIdSet]
+
   // Ended sessions leave their last Stop marker behind; without cleanup the
-  // marker directory grows one file per session ever run.
+  // marker directory grows one file per session ever run. Managed Agent View
+  // tasks keep their marker protected even when Reup cannot present a card.
   for (const marker of workMarkers) {
-    if (!lockStatuses.has(marker.sessionId)) void clearWorkSignalMarker(marker.sessionId)
+    if (!managedSessionIdSet.has(marker.sessionId)) void clearWorkSignalMarker(marker.sessionId)
   }
   if (activeSessionIds.length === 0) return { activeSessionIds, entries: [] }
-
-  const sessionIndex = new Map<string, { project: Project; session: Session }>()
-  for (const project of allProjects) {
-    for (const session of project.sessions) {
-      if (!isResumeVisibleSession(session)) continue
-      sessionIndex.set(session.id, { project, session })
-    }
-  }
 
   const cwdBySession = new Map<string, string>()
   for (const record of liveRecords) {
@@ -128,9 +170,13 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
       cwdBySession.set(record.sessionId, record.cwd)
     }
   }
+  for (const record of officialSnapshot?.records.values() ?? []) {
+    if (!cwdBySession.has(record.sessionId)) cwdBySession.set(record.sessionId, record.cwd)
+  }
 
   const entries = await Promise.all(
-    [...lockStatuses].map(async ([sessionId, lockStatus]) => {
+    activeSessionIds.map(async (sessionId) => {
+      const lockStatus = lockStatuses.get(sessionId) ?? { status: null, statusUpdatedAt: null }
       const found = sessionIndex.get(sessionId)
       // Turn-boundary hooks cover the sessions whose locks omit the status
       // field entirely (VS Code peers); the newer transition wins.
@@ -139,48 +185,83 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
         lockStatus.statusUpdatedAt,
         workMarkerBySession.get(sessionId)
       )
+      const attentionMarker = attentionBySession.get(sessionId)
+      const officialReadingForTail = (tail: SessionTailActivity | null) =>
+        claudeAgentLiveReading(
+          officialSnapshot,
+          sessionId,
+          latestTimestamp(
+            evidence.statusUpdatedAt,
+            attentionMarker ? Date.parse(attentionMarker.occurredAt) : null,
+            recordedTurnEndAt(tail)
+          ),
+          lockStatuses.has(sessionId)
+        )
 
       if (!found) {
-        // A session outside discovery (brand-new, no transcript yet) must
-        // still surface its alert: an attention event is never dropped just
-        // because the session is not resume-visible.
+        const officialReading = officialReadingForTail(null)
+        // A verified process outside discovery (brand-new, no transcript yet)
+        // must still surface its alert. Pidless official-only tasks were
+        // removed by the presentation scope before reaching this branch.
         const attention = resolveSessionAttention(
-          attentionBySession.get(sessionId),
+          attentionMarker,
           evidence.statusUpdatedAt,
           null,
-          evidence.status
+          evidence.status,
+          officialReading
         )
         if (!attention) return null
         const cwd = cwdBySession.get(sessionId)
+        const liveState = resolveSessionLiveState({
+          claudeAgentReading: officialReading,
+          hasLiveProcess:
+            lockStatuses.has(sessionId) ||
+            (officialSnapshot?.records.get(sessionId)?.pid ?? null) !== null,
+          needsInput: attention !== null,
+          tail: null,
+          workStatus: evidence.status,
+          workStatusUpdatedAt: evidence.statusUpdatedAt,
+        })
         return {
           sessionId,
           projectId: '',
           projectName: cwd ? (cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd) : 'new session',
           sessionName: sessionId.slice(0, 8),
           lastToolName: null,
-          activityState: resolveActivityState(evidence.status, null, evidence.statusUpdatedAt),
+          activityState: activityStateForLiveState(
+            liveState,
+            resolveActivityState(evidence.status, null, evidence.statusUpdatedAt)
+          ),
           endedByUserInterruption: false,
           attention,
           lastEventAt: null,
-          liveState: resolveSessionLiveState({
-            isAttached: true,
-            needsInput: true,
-            tail: null,
-            workStatus: evidence.status,
-            workStatusUpdatedAt: evidence.statusUpdatedAt,
-          }),
-          stateIsReported: evidence.status !== null,
+          liveState,
+          stateIsReported:
+            isApplicableClaudeAgentReading(officialReading) || evidence.status !== null,
         }
       }
 
       const { project, session } = found
       const tail = await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
+      const officialReading = officialReadingForTail(tail)
       const attention = resolveSessionAttention(
-        attentionBySession.get(sessionId),
+        attentionMarker,
         evidence.statusUpdatedAt,
         tail,
-        evidence.status
+        evidence.status,
+        officialReading
       )
+
+      const liveState = resolveSessionLiveState({
+        claudeAgentReading: officialReading,
+        hasLiveProcess:
+          lockStatuses.has(sessionId) ||
+          (officialSnapshot?.records.get(sessionId)?.pid ?? null) !== null,
+        needsInput: attention !== null,
+        tail,
+        workStatus: evidence.status,
+        workStatusUpdatedAt: evidence.statusUpdatedAt,
+      })
 
       return {
         sessionId,
@@ -188,18 +269,16 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
         projectName: projectDisplayName(project),
         sessionName: session.alias ?? session.name,
         lastToolName: tail?.lastToolName ?? null,
-        activityState: resolveActivityState(evidence.status, tail, evidence.statusUpdatedAt),
+        activityState: activityStateForLiveState(
+          liveState,
+          resolveActivityState(evidence.status, tail, evidence.statusUpdatedAt)
+        ),
         endedByUserInterruption: tail?.turnEndedByRecord === 'user-interruption',
         attention,
         lastEventAt: tail?.lastEventAt ?? null,
-        liveState: resolveSessionLiveState({
-          isAttached: true,
-          needsInput: attention !== null,
-          tail,
-          workStatus: evidence.status,
-          workStatusUpdatedAt: evidence.statusUpdatedAt,
-        }),
-        stateIsReported: evidence.status !== null,
+        liveState,
+        stateIsReported:
+          isApplicableClaudeAgentReading(officialReading) || evidence.status !== null,
       }
     })
   )
@@ -210,10 +289,45 @@ export async function buildLiveActivitySnapshot(): Promise<LiveActivitySnapshot>
   }
 }
 
+function resolveOfficialSnapshot(
+  options: LiveActivitySnapshotOptions
+): Promise<ClaudeAgentSnapshot | null> {
+  return Object.hasOwn(options, 'claudeAgentSnapshot')
+    ? Promise.resolve(options.claudeAgentSnapshot ?? null)
+    : readClaudeAgentSnapshot(options.officialRefresh ?? 'background')
+}
+
+function buildPresentableActivityScope(
+  liveRecords: SessionLockRecord[],
+  allProjects: Project[],
+  officialSnapshot: ClaudeAgentSnapshot | null
+) {
+  const sessionIndex = new Map<string, { project: Project; session: Session }>()
+  for (const project of allProjects) {
+    for (const session of project.sessions) {
+      if (!isResumeVisibleSession(session)) continue
+      sessionIndex.set(session.id, { project, session })
+    }
+  }
+
+  const lockStatuses = mergeSessionLockStatuses(liveRecords)
+  const managedSessionIdSet = mergeActiveSessionIds(liveRecords, officialSnapshot)
+  const activeSessionIdSet = new Set(
+    [...managedSessionIdSet].filter((sessionId) =>
+      isPresentableClaudeAgentSession(officialSnapshot?.records.get(sessionId), {
+        hasLiveLock: lockStatuses.has(sessionId),
+        hasResumeVisibleSession: sessionIndex.has(sessionId),
+      })
+    )
+  )
+  return { activeSessionIdSet, lockStatuses, managedSessionIdSet, sessionIndex }
+}
+
 /**
  * Returns the still-active attention for a session, or null.
  *
- * Two independent sources feed it: a Notification-hook marker (permission or
+ * Fresh official inventory is consulted first. Two fallback sources feed it:
+ * a Notification-hook marker (permission or
  * input prompt — the hook told us directly), and a blocked turn the hook
  * cannot see: the lock says the turn ended (`idle`) while the transcript tail
  * still has an unanswered tool call. The tail parser already clears pending
@@ -226,20 +340,59 @@ export function resolveSessionAttention(
   marker: AttentionMarker | undefined,
   statusUpdatedAt: number | null,
   tail: SessionTailActivity | null,
-  lockStatus: SessionWorkState | null
+  lockStatus: SessionWorkState | null,
+  claudeAgentReading: ClaudeAgentLiveReading | null = null
 ): LiveActivityAttention | null {
   const { staleMarkerSessionId, wait } = resolveUserInputWait(
     marker,
     lockStatus,
     statusUpdatedAt,
-    tail
+    tail,
+    claudeAgentReading
   )
   // The core reports a resolved or orphaned marker; deleting it is this
   // layer's job, because the core stays pure and callable at render time.
   if (staleMarkerSessionId !== null) void clearAttentionMarker(staleMarkerSessionId)
   if (wait === null) return null
 
+  if (wait.kind === 'claude-agents') {
+    return {
+      isReported: true,
+      message: claudeAgentWaitMessage(wait.waitingFor),
+      since: new Date(wait.since).toISOString(),
+    }
+  }
   return wait.kind === 'marker'
     ? { isReported: true, message: wait.marker.message, since: wait.marker.occurredAt }
     : { isReported: false, message: 'Waiting for your answer to continue', since: wait.since }
+}
+
+function activityStateForLiveState(
+  liveState: SessionLiveState,
+  fallback: ActivityState
+): ActivityState {
+  if (liveState === 'working') return 'running'
+  if (liveState === 'needs-input') return 'waiting'
+  return fallback === 'running' ? 'idle' : fallback
+}
+
+function claudeAgentWaitMessage(waitingFor: ClaudeAgentWaitingFor | null): string {
+  switch (waitingFor) {
+    case 'permission prompt':
+      return 'Waiting for your permission'
+    case 'sandbox request':
+      return 'Waiting for sandbox approval'
+    case 'dialog open':
+      return 'Waiting for you to complete a dialog'
+    case 'worker request':
+      return 'Waiting for a worker request'
+    case 'input needed':
+    default:
+      return 'Waiting for your input'
+  }
+}
+
+function latestTimestamp(...values: Array<number | null>): number | null {
+  const finiteValues = values.filter((value): value is number => Number.isFinite(value))
+  return finiteValues.length === 0 ? null : Math.max(...finiteValues)
 }

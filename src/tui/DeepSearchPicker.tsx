@@ -68,7 +68,7 @@ function DeepSearchPicker({
         searchTranscripts(query, projects, (scanned, total) => {
           if (!cancelled) setProgress({ scanned, total })
         }),
-        getActiveSessions(),
+        getActiveSessions({ officialRefresh: 'background' }),
       ])
       if (!cancelled) {
         setResults(matches)

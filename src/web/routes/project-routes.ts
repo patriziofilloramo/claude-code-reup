@@ -9,7 +9,10 @@ import { formatHandoff, readTranscriptHandoffContext } from '../../core/session/
 import { isValidSessionId } from '../../core/session/session-model.js'
 import type { Project, Session } from '../../core/session/session-model.js'
 import { loadSessionPreview, sessionTranscriptPath } from '../../core/session/session-preview.js'
-import { buildLiveActivitySnapshot } from '../live-activity-model.js'
+import {
+  buildLiveActivitySnapshot,
+  readPresentableActiveSessionIds,
+} from '../live-activity-model.js'
 import { isResumeVisibleSession } from '../../core/session/session-visibility.js'
 import { filterProjectsByOrg, type OrgProjectFilter } from '../../core/org/org-filters.js'
 import { readOrgData } from '../../core/org/org-prefs.js'
@@ -34,7 +37,7 @@ export function registerProjectRoutes(app: Hono): void {
       const orgFilter = orgProjectFilterFromQuery(context)
       const [projects, activeSessionIds] = await Promise.all([
         loadProjectsMatchingOrgFilter(orgFilter),
-        getActiveSessions(),
+        getActiveSessions({ officialRefresh: 'background' }),
       ])
       return context.json(projects.map((project) => serializeProject(project, activeSessionIds)))
     })
@@ -50,7 +53,7 @@ export function registerProjectRoutes(app: Hono): void {
 
       const [projects, activeSessionIds] = await Promise.all([
         loadProjectsMatchingOrgFilter(orgFilter),
-        getActiveSessions(),
+        getActiveSessions({ officialRefresh: 'background' }),
       ])
 
       const hits: Array<ApiSession & { projectName: string }> = []
@@ -143,8 +146,8 @@ export function registerProjectRoutes(app: Hono): void {
   app.get(
     '/api/active',
     apiRoute(async (context) => {
-      const activeIds = await getActiveSessions()
-      return context.json({ sessionIds: [...activeIds] })
+      const sessionIds = await readPresentableActiveSessionIds({ officialRefresh: 'background' })
+      return context.json({ sessionIds })
     })
   )
 

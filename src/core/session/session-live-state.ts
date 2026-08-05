@@ -1,14 +1,16 @@
 import type { SessionWorkState } from './active-sessions.js'
 import { isAttentionActive } from './attention.js'
 import type { AttentionMarker } from './attention.js'
+import type { ClaudeAgentLiveReading, ClaudeAgentWaitingFor } from './claude-agent-state.js'
+import { isApplicableClaudeAgentReading } from './claude-agent-state.js'
 import { isAwaitingUserReply, resolveActivityState } from './session-tail.js'
 import type { SessionTailActivity } from './session-tail.js'
 
 /**
- * What a session is doing right now, in the one vocabulary every surface
- * shares. This is the base live experience: the TUI, the web UI, and the VS
- * Code extension must all answer this question the same way, from the same
- * evidence, and differ only in how they draw the answer.
+ * The triage state of a presentable session or Agent View-managed task, in the
+ * one vocabulary every surface shares. Process presence is independent: a
+ * pidless managed task can still be `working` or `needs-input` when Claude
+ * reports that lifecycle state.
  *
  * Ordered by urgency, most urgent first. A surface may render extra detail on
  * top — the web additionally separates a reported "waiting" from a quiet
@@ -16,13 +18,13 @@ import type { SessionTailActivity } from './session-tail.js'
  * one, because that is what makes the surfaces disagree.
  */
 export type SessionLiveState =
-  /** Blocked on the user: a permission prompt, or a tool that exists to ask. */
+  /** A presented session or managed task is blocked on the user. */
   | 'needs-input'
-  /** Producing output or running a tool right now. */
+  /** A presented session or managed task reports work in progress. */
   | 'working'
-  /** A live process holds the session, currently quiet. */
+  /** A verified live process holds the session, currently quiet. */
   | 'attached'
-  /** No live process. */
+  /** No applicable managed state and no verified live process. */
   | 'detached'
 
 /**
@@ -31,10 +33,16 @@ export type SessionLiveState =
  * function that surfaces can call at render time.
  */
 export interface SessionLiveEvidence {
+  /**
+   * Claude Code's official agent-view reading, including freshness and
+   * provenance. Stale/superseded candidates are deliberately retained here so
+   * callers cannot accidentally erase why they were rejected.
+   */
+  claudeAgentReading: ClaudeAgentLiveReading | null
   /** Resolved by the shared attention signal, not by a surface's own guess. */
   needsInput: boolean
-  /** Whether a live lock file names this session. */
-  isAttached: boolean
+  /** Whether a verified lock or fresh official PID reports a live process. */
+  hasLiveProcess: boolean
   /** Merged lock status and hook marker; null when neither reports boundaries. */
   workStatus: SessionWorkState | null
   /** When that status last changed, for judging how far to trust it. */
@@ -50,13 +58,17 @@ export interface SessionLiveEvidence {
  * quieter collapses into "attached", because the difference between a session
  * pausing and a session finished is exactly the judgement that proved
  * unreliable for sessions whose locks report no turn boundaries. A surface
- * that wants that distinction must opt into it explicitly.
+ * that wants that distinction must opt into it explicitly. A fresh,
+ * non-superseded `claudeAgentReading` is the authoritative exception: Claude
+ * Code itself has already resolved that state.
  */
 export function resolveSessionLiveState(
   evidence: SessionLiveEvidence,
   now = Date.now()
 ): SessionLiveState {
-  if (!evidence.isAttached) return 'detached'
+  const officialState = applicableClaudeAgentState(evidence.claudeAgentReading)
+  if (officialState !== null) return officialState
+  if (!evidence.hasLiveProcess) return 'detached'
   if (evidence.needsInput) return 'needs-input'
 
   const activity = resolveActivityState(
@@ -71,8 +83,10 @@ export function resolveSessionLiveState(
 /**
  * Why a session is blocked on the user, or null when it is not.
  *
- * Two independent sources answer this, and both must be consulted:
+ * Three independent sources answer this, in precedence order:
  *
+ * - `claude-agents` — Claude Code's official inventory reports the blocked
+ *   state and, when present, its documented wait reason.
  * - `marker` — Claude Code's Notification hook told us directly (a permission
  *   prompt, or input idle). Authoritative while still active.
  * - `blocked-turn` — no hook fired, but the turn ended with an unanswered tool
@@ -84,6 +98,12 @@ export function resolveSessionLiveState(
  * not done here: this stays a pure function, callable at render time.
  */
 export type UserInputWait =
+  /** Reported by Claude Code's official agent inventory. */
+  | {
+      kind: 'claude-agents'
+      since: number
+      waitingFor: ClaudeAgentWaitingFor | null
+    }
   /** Reported: Claude Code's Notification hook said so. Authoritative. */
   | { kind: 'marker'; marker: AttentionMarker }
   /**
@@ -99,6 +119,17 @@ export interface UserInputWaitResult {
 }
 
 /**
+ * Timestamp of an explicit transcript-recorded turn ending, or null. Unlike
+ * ordinary transcript recency, this is reported evidence that may supersede
+ * an older official `working` snapshot.
+ */
+export function recordedTurnEndAt(tail: SessionTailActivity | null): number | null {
+  if (tail?.turnEndedByRecord === null || !tail?.lastEventAt) return null
+  const parsed = Date.parse(tail.lastEventAt)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
  * Resolves whether a live session is waiting on the user.
  *
  * One implementation for every surface. It previously existed twice — once for
@@ -110,8 +141,24 @@ export function resolveUserInputWait(
   marker: AttentionMarker | undefined,
   workStatus: SessionWorkState | null,
   workStatusUpdatedAt: number | null,
-  tail: SessionTailActivity | null
+  tail: SessionTailActivity | null,
+  claudeAgentReading: ClaudeAgentLiveReading | null = null
 ): UserInputWaitResult {
+  const officialState = applicableClaudeAgentState(claudeAgentReading)
+  if (officialState !== null) {
+    return {
+      staleMarkerSessionId: marker ? marker.sessionId : null,
+      wait:
+        officialState === 'needs-input' && claudeAgentReading !== null
+          ? {
+              kind: 'claude-agents',
+              since: claudeAgentReading.stateSince,
+              waitingFor: claudeAgentReading.waitingFor,
+            }
+          : null,
+    }
+  }
+
   if (marker) {
     const active = isAttentionActive(marker, {
       isLive: true,
@@ -130,6 +177,13 @@ export function resolveUserInputWait(
   }
 
   return { staleMarkerSessionId: null, wait: null }
+}
+
+/** An official candidate applies only while fresh and not superseded locally. */
+function applicableClaudeAgentState(
+  reading: ClaudeAgentLiveReading | null
+): SessionLiveState | null {
+  return isApplicableClaudeAgentReading(reading) && reading !== null ? reading.state : null
 }
 
 /** The tail's last event as epoch ms, or null when absent or unparseable. */

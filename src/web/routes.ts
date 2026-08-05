@@ -34,6 +34,7 @@ export function buildApp(): Hono {
     context.header('X-Frame-Options', 'DENY')
     return context.html(document.html)
   })
+  app.get('/api/health', (context) => context.json({ status: 'ok' }))
   registerProjectRoutes(app)
   registerOrgRoutes(app)
   registerResumeRoute(app)

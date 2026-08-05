@@ -174,7 +174,13 @@ export async function readLiveUsageSummary(now = Date.now()): Promise<LiveUsageS
     readUsageCaptureError(),
     readUsageCreditsEnabled(),
   ])
-  const accountUsage = await readAccountUsage(now)
+  // The account endpoint uses Claude Code's locally managed OAuth credential
+  // and is intentionally opt-in. `reup usage setup` is the consent boundary:
+  // ordinary TUI, web, and extension refreshes must remain local-only until
+  // that integration is configured.
+  const accountUsage = integration.configured
+    ? await readAccountUsage(now)
+    : { issue: null, snapshot: null, status: 'unavailable' as const }
   const selection = selectNewestSnapshot(snapshots)
   const snapshot = selection?.snapshot ?? null
   const freshness = snapshot

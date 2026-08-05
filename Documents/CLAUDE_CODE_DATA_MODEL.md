@@ -1,8 +1,9 @@
 # Claude Code Data Model
 
-Reup infers what a session is doing from data Claude Code writes for its own
-purposes. That data is not an API: it is undocumented, it varies by client, and
-several of its shapes mean the opposite of what they look like.
+Reup combines Claude Code's documented `claude agents --json` inventory with
+local files Claude Code writes for its own purposes. The inventory is optional
+and can omit fields; the local formats are not a stable API, vary by client,
+and contain several shapes that mean the opposite of what they look like.
 
 **Read this before changing anything that decides whether a session is running,
 waiting, idle, or interrupted.** Every trap below is one that was actually hit,
@@ -11,13 +12,15 @@ first, because that is the form an agent arrives with.
 
 ## What Reup reads
 
-| Source                          | Written by                | Reup's use                     |
-| ------------------------------- | ------------------------- | ------------------------------ |
-| `~/.claude/sessions/*.json`     | Claude Code (lock files)  | Which sessions hold a process  |
-| `~/.claude/projects/**/*.jsonl` | Claude Code (transcripts) | Turn boundaries, tools, timing |
-| `reup/attention/`, work markers | Reup's own hooks          | Reported turn boundaries       |
+| Source                          | Written/reported by      | Reup's use                            |
+| ------------------------------- | ------------------------ | ------------------------------------- |
+| `claude agents --json`          | Claude Code official CLI | Managed IDs, task state, wait reasons |
+| `~/.claude/sessions/*.json`     | Claude Code lock files   | Which sessions hold a process         |
+| `~/.claude/projects/**/*.jsonl` | Claude Code transcripts  | Turn boundaries, tools, timing        |
+| `reup/attention/`, work markers | Reup-owned Claude hooks  | Reported turn boundaries              |
 
-Claude-owned files are read and never written.
+Claude-owned files are read and never written. The inventory subprocess uses a
+fixed executable and argument list and is an observation only.
 
 ## The traps
 
@@ -26,8 +29,9 @@ Claude-owned files are read and never written.
 **Wrong assumption:** every live session reports `busy` or `idle`.
 
 VS Code peer locks omit the `status` field entirely, and so do freshly spawned
-processes. Measured on a real VS Code session: no `status`, and no work marker
-either, despite hooks being installed.
+processes. Interactive rows in the official inventory may also omit activity
+state. A live process can therefore be known while its current turn state is
+unknown.
 
 Any rule shaped `if (status === 'idle')` silently never fires for those
 sessions. This is the single most common wrong assumption in this codebase, and
@@ -92,9 +96,10 @@ interruptions. A substring test flags those sessions as interrupted forever.
 **Wrong assumption:** a state is a state; where it came from is an
 implementation detail.
 
-`stateIsReported` is true only when a lock `status` field or a hook marker
-reported the turn boundary — false when the state came from transcript recency
-alone, which cannot distinguish a long tool call from a finished turn.
+`stateIsReported` is true when an applicable official inventory field, a lock
+`status` field, or a hook marker reported the turn boundary. It is false when
+the state came from transcript recency alone, which cannot distinguish a long
+tool call from a finished turn.
 
 > **A claim about an event requires reported evidence; presentation may use the
 > guess.**
@@ -104,11 +109,14 @@ meant an alert every time Claude paused to think.
 
 ### 6. Freshness windows, and what each is for
 
-| Constant                       | Value | Meaning                                         |
-| ------------------------------ | ----- | ----------------------------------------------- |
-| `BUSY_STATUS_TRUST_WINDOW_MS`  | 5 min | How long a reported `busy` stays believable     |
-| `TRANSCRIPT_RUNNING_WINDOW_MS` | 10 s  | Transcript activity as proof of work itself     |
-| `WAITING_WINDOW_MS`            | 30 s  | Below this a quiet session is waiting, not idle |
+| Constant                        | Value | Meaning                                                    |
+| ------------------------------- | ----- | ---------------------------------------------------------- |
+| `BUSY_STATUS_TRUST_WINDOW_MS`   | 5 min | How long a reported lock/hook `busy` stays believable      |
+| `TRANSCRIPT_RUNNING_WINDOW_MS`  | 10 s  | Transcript activity as proof of work itself                |
+| `WAITING_WINDOW_MS`             | 30 s  | Below this a quiet session is waiting, not idle            |
+| `claudeAgentsRefreshMs`         | 10 s  | Minimum interval between official inventory refreshes      |
+| `claudeAgentsStateFreshMs`      | 15 s  | Maximum age for official state to drive presentation       |
+| `claudeAgentsSafetyRetentionMs` | 60 s  | Stale retention only for conservative destructive barriers |
 
 `TRANSCRIPT_RUNNING_WINDOW_MS` is deliberately **not exported**. A surface
 applying it itself is exactly what made the TUI call a session busy that the
@@ -135,11 +143,11 @@ live-state fragility chased during that period was this, not inference bugs.
 client "does not fire hooks", check this first — the earlier conclusion that
 VS Code never fires them was drawn while every client was equally dead.
 
-`repairAttentionHookIfBroken()` repoints Reup's own entries at the running
-install on TUI/web/config startup, so the ordinary causes self-heal. It points
-at whichever install is running: launching a dev checkout moves the hooks to
-it. It never adds hooks that were not already set up, and never touches a
-command Reup did not write — `hookScriptPath()` returns null there, and null
+`ensureAttentionHook()` runs on TUI/web/config startup. It installs missing
+Reup-owned entries unless the user previously opted out, or repairs their path
+to the running install when it moved. The write is announced together with
+`reup attention remove`; explicit removal records the opt-out. It never touches
+a command Reup did not write — `hookScriptPath()` returns null there, and null
 means "cannot check", never "fine". `reup doctor` reports what repair cannot
 fix, which is the case where Reup itself has no stable path to name.
 
@@ -181,11 +189,64 @@ still in flight) reads a failed turn as a running one, forever. The failure is
 identified by the event's own `isApiErrorMessage` / `apiErrorStatus` fields,
 which sit at the **top level** of the event, not inside `message`.
 
+### 10. Official does not mean timeless or complete
+
+**Wrong assumption:** once `claude agents --json` reports a state, it should
+override every local observation until the next successful command.
+
+The inventory is sampled and its fields can be absent. Reup accepts an
+official state for presentation only while the snapshot is at most 15 seconds
+old and no newer local reported fact contradicts it. A newer lock/hook
+transition, a live lock contradicting official `detached`, or a
+transcript-recorded `user-interruption`/`api-error` supersedes an older
+snapshot. Ordinary transcript recency does not: it is not strong enough to
+overrule a reported event.
+
+The reader is single-flight and stale-while-revalidate. Persistent surfaces
+paint from locks immediately and refresh the inventory in the background;
+one-shot and safety-sensitive operations may wait. A failed refresh retains
+the previous snapshot for at most 60 seconds only to prevent destructive false
+negatives. Stale data must never be presented as live.
+
+The process boundary is also a privacy boundary. Reup validates at most 10,000
+rows within a 1 MiB response, rejects duplicate session IDs, and discards
+Claude's display names and summaries. Logs contain only a sanitized error
+name/code, never the command payload or stderr.
+
+### 11. Agent View task state is not process liveness
+
+**Wrong assumption:** a background row without a PID is either a live process
+or harmless old history, depending only on its age.
+
+The default `claude agents --json` inventory contains every live session **plus**
+background tasks still reported as `working` or `blocked` after their process
+has exited. Only `--all` adds completed background tasks. `pid` and `status`
+are present only while the process is alive; `state` describes the background
+task lifecycle, while `waitingFor` refines the reason when `status` is
+`waiting`. These axes are related, but they are not interchangeable.
+
+Snapshot freshness means Reup observed the row recently. It does not mean the
+task changed recently, and `startedAt` is not a state-transition timestamp.
+Never expire a pidless `working`/`blocked` task, or relabel it historical, from
+age alone.
+
+Reup therefore keeps these rows in the managed set used by conservative safety
+checks. Presentation is narrower: `isPresentableClaudeAgentSession()` admits a
+pidless official row only when Reup can anchor it to a resume-visible discovered
+session or a verified live lock. Hook markers are reported turn evidence, but
+they can outlive a session and are not presentation anchors by themselves. This
+prevents a non-navigable Agent View task from appearing as a local live session
+without discarding valid managed state.
+
 ## The one rule that holds it together
 
-Live state is resolved **once**, by `resolveSessionLiveState()` in
-`core/session/session-live-state.ts`, into four states: `needs-input`,
-`working`, `attached`, `detached`. Every surface draws that answer.
+Managed inventory and presentable activity are resolved **once** from shared
+evidence.
+`resolveLiveSessionSignals()` assembles official inventory, locks, hooks, and
+transcript tails; `resolveSessionLiveState()` maps that evidence into four
+states: `needs-input`, `working`, `attached`, `detached`. Every surface draws
+that answer. Persistent callers request official refresh in the background so
+an optional subprocess cannot block first paint.
 
 A surface may choose how to render a state, and may add detail on top — the web
 splits `attached` into a reported `waiting` and plain quiet. A surface may
@@ -217,6 +278,10 @@ that existed at the time. The failures were in _measurement_, so:
 - **Cross-check the surfaces.** Run the TUI, web, and extension resolution
   paths over the same live data and assert they agree, rather than checking one
   and assuming.
+- **Cross-check the official aggregate without exposing content.** Classify
+  PID-bearing rows separately from pidless managed background tasks, then
+  explain every presentation difference using the anchor rule above. Do not
+  paste names, paths, summaries, or transcript text into diagnostics or reports.
 
 ## Related documents
 

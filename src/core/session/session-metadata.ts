@@ -360,7 +360,14 @@ export function normalizeSessionAlias(alias: unknown): string | undefined {
  * The `.jsonl` file is owned by Claude Code — this is a destructive operation.
  */
 export async function deleteSession(projectId: string, sessionId: string): Promise<void> {
-  if ((await getActiveSessions()).has(sessionId)) {
+  if (
+    (
+      await getActiveSessions({
+        officialRefresh: 'wait',
+        protectRetainedOfficialSessions: true,
+      })
+    ).has(sessionId)
+  ) {
     throw new ActiveSessionDeletionError(sessionId)
   }
 

@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
+- Reup now reads Claude Code's documented `claude agents --json` inventory as
+  an optional official live-state source. Valid fresh fields can identify
+  background and interactive sessions, working/blocked state, and documented
+  wait reasons such as permission prompts. The process boundary is fixed-argv,
+  no-shell, timeout/output/row bounded, runtime-validated, and discards external
+  display names and summaries.
+- The shared official reader is single-flight and stale-while-revalidate.
+  Persistent TUI, web, and VS Code surfaces keep a lock-only first paint and
+  refresh in the background; one-shot and safety-sensitive operations may wait.
+  Official state drives presentation for at most 15 seconds, with a separate
+  60-second retention window used only to prevent destructive false negatives.
+- A review-only beta-candidate workflow and local release builder now produce
+  an exact npm tarball, VSIX, source archive for clean commits, checksums,
+  dependency snapshots, release notes, and explicit build metadata. The build
+  publishes nothing and has read-only CI permissions.
+- Release policy checks now inspect the exact packed npm manifest/README and
+  VSIX manifests/archive paths, install the tarball into an isolated prefix,
+  verify npm's generated `reup` shim, and reject source leakage, unsafe paths,
+  duplicate entries, unexpected files, or identity drift.
+- Added a task-based beta validation protocol, contribution and issue/PR
+  templates, and deterministic synthetic demo tooling. The public dashboard
+  screenshot is captured from the real app without maintainer data.
+
+### Changed
+
+- Public positioning now leads with the workflow Reup is strongest at: find
+  local Claude Code work scattered across projects, triage what needs attention,
+  then inspect recorded context before resume. Documentation compares this
+  honestly with Claude Code `/resume` and Agent View and separates source beta,
+  npm beta, extension, signing, notarization, and publication claims.
+- TUI, web, CLI inbox, cleanup/resume safety, and the VS Code extension now
+  consume the same merged live evidence and four-state vocabulary:
+  `needs-input`, `working`, `attached`, and `detached`.
+- Touched-file documentation now describes recorded Edit/Write targets rather
+  than claiming every tool call successfully edited a file.
+
+### Fixed
+
+- Account-limit refresh no longer reads Claude Code's OAuth credential or calls
+  Anthropic's authenticated usage endpoint before explicit
+  `reup usage setup`, even when an older aggregate cache exists.
+- A newer lock/hook transition, a live lock contradicting official `detached`,
+  or a transcript-recorded user interruption/API error now supersedes an older
+  official snapshot. Ordinary transcript recency remains a fallback and cannot
+  overrule reported evidence.
+- Stable official state identity prevents repeated needs-input notifications;
+  a gap beyond the retention window starts a new transition. A reported
+  working-to-needs-input change no longer emits a false turn-finished event.
+- Notification hook capture now ignores completion and unknown notification
+  subtypes; only permission/input/dialog waits create attention markers.
+
 ## 0.3.2
 
 ### Fixed

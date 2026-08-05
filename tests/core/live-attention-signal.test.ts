@@ -11,13 +11,18 @@ import {
   readWorkSignalMarkers,
 } from '../../src/core/session/attention.js'
 import { getLiveSessionRecords } from '../../src/core/session/active-sessions.js'
+import { parseClaudeAgentSnapshot } from '../../src/core/session/claude-agent-state.js'
 import { resolveLiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { Project } from '../../src/core/session/session-model.js'
 import {
   isAwaitingUserReply,
   readSessionTailActivity,
 } from '../../src/core/session/session-tail.js'
-import { resolveSessionAttention } from '../../src/web/live-activity-model.js'
+import {
+  buildLiveActivitySnapshot,
+  readPresentableActiveSessionIds,
+  resolveSessionAttention,
+} from '../../src/web/live-activity-model.js'
 
 const SESSION_ID = '22222222-2222-4222-8222-222222222222'
 
@@ -102,6 +107,20 @@ describe('live-attention-signal', () => {
       )
       expect(await readAttentionMarkers()).toHaveLength(0)
       expect(await readWorkSignalMarkers()).toHaveLength(0)
+    })
+
+    it('does not turn agent_completed into a needs-input marker', async () => {
+      const result = await applyHookPayload(
+        JSON.stringify({
+          hook_event_name: 'Notification',
+          message: 'Agent completed',
+          notification_type: 'agent_completed',
+          session_id: SESSION_ID,
+        })
+      )
+
+      expect(result.outcome).toBe('unrecognized-payload')
+      expect(await readAttentionMarkers()).toHaveLength(0)
     })
   })
 
@@ -269,6 +288,49 @@ describe('live-attention-signal', () => {
       expect(attention).toEqual({ isReported: true, message: marker.message, since: occurredAt })
     })
 
+    it('reports an official sandbox wait with a non-sensitive reason', () => {
+      const observedAt = Date.now()
+      const attention = resolveSessionAttention(undefined, null, null, null, {
+        isFresh: true,
+        isSuperseded: false,
+        observedAt,
+        source: 'claude-agents',
+        state: 'needs-input',
+        stateSince: observedAt,
+        waitingFor: 'sandbox request',
+      })
+
+      expect(attention).toMatchObject({
+        isReported: true,
+        message: 'Waiting for sandbox approval',
+      })
+    })
+
+    it('keeps the notification identity stable across unchanged official refreshes', () => {
+      const stateSince = Date.now() - 20_000
+      const reading = (observedAt: number) => ({
+        isFresh: true,
+        isSuperseded: false,
+        observedAt,
+        source: 'claude-agents' as const,
+        state: 'needs-input' as const,
+        stateSince,
+        waitingFor: 'permission prompt' as const,
+      })
+
+      const first = resolveSessionAttention(undefined, null, null, null, reading(Date.now()))
+      const refreshed = resolveSessionAttention(
+        undefined,
+        null,
+        null,
+        null,
+        reading(Date.now() + 10_000)
+      )
+
+      expect(first?.since).toBe(new Date(stateSince).toISOString())
+      expect(refreshed?.since).toBe(first?.since)
+    })
+
     /**
      * An inferred wait carries `since` from the tail's last event, which moves
      * every time the transcript grows. Anything keyed on it fires again every
@@ -306,6 +368,182 @@ describe('live-attention-signal', () => {
   })
 
   describe('resolveLiveSessionSignals (shared by inbox and the VS Code extension)', () => {
+    it('omits a pidless official-only background task from local live activity', async () => {
+      const snapshot = officialSnapshot({
+        cwd: '/workspace/unmatched-project',
+        kind: 'background',
+        pid: undefined,
+        startedAt: Date.now() - 30 * 24 * 60 * 60_000,
+        state: 'blocked',
+      })
+
+      const signals = await resolveLiveSessionSignals([], { claudeAgentSnapshot: snapshot })
+
+      expect(signals.activeSessionIds).toEqual(new Set())
+      expect(signals.needsInputSessionIds).toEqual(new Set())
+      expect(signals.liveStateBySession).toEqual(new Map())
+    })
+
+    it('omits the same official-only task from the web snapshot', async () => {
+      const snapshot = officialSnapshot({
+        cwd: '/workspace/unmatched-project',
+        kind: 'background',
+        pid: undefined,
+        startedAt: Date.now() - 30 * 24 * 60 * 60_000,
+        state: 'blocked',
+      })
+
+      await expect(
+        readPresentableActiveSessionIds({ claudeAgentSnapshot: snapshot })
+      ).resolves.toEqual([])
+      await expect(buildLiveActivitySnapshot({ claudeAgentSnapshot: snapshot })).resolves.toEqual({
+        activeSessionIds: [],
+        entries: [],
+      })
+    })
+
+    it('does not let an orphaned attention marker anchor a pidless official-only task', async () => {
+      await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'Notification', message: 'x' })
+      )
+      const snapshot = officialSnapshot({ kind: 'background', pid: undefined, state: 'blocked' })
+
+      const signals = await resolveLiveSessionSignals([], { claudeAgentSnapshot: snapshot })
+      const webSnapshot = await buildLiveActivitySnapshot({ claudeAgentSnapshot: snapshot })
+
+      expect(signals.activeSessionIds).toEqual(new Set())
+      expect(signals.needsInputSessionIds).toEqual(new Set())
+      expect(webSnapshot).toEqual({ activeSessionIds: [], entries: [] })
+    })
+
+    it('keeps a locally discovered background task officially reported as blocked', async () => {
+      await writeProjectTranscript('proj', SESSION_ID, transcriptWithTextMessage('working on it.'))
+      const snapshot = officialSnapshot({ kind: 'background', pid: undefined, state: 'blocked' })
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)], {
+        claudeAgentSnapshot: snapshot,
+      })
+
+      expect(signals.activeSessionIds).toEqual(new Set([SESSION_ID]))
+      expect(signals.needsInputSessionIds).toEqual(new Set([SESSION_ID]))
+      expect(signals.liveStateBySession.get(SESSION_ID)).toBe('needs-input')
+    })
+
+    it('keeps a pidless managed task when a verified live lock anchors it', async () => {
+      await createFakeLiveSession(SESSION_ID, 'idle')
+      const snapshot = officialSnapshot({ kind: 'background', pid: undefined, state: 'blocked' })
+
+      const signals = await resolveLiveSessionSignals([], { claudeAgentSnapshot: snapshot })
+      const webSnapshot = await buildLiveActivitySnapshot({ claudeAgentSnapshot: snapshot })
+
+      expect(signals.activeSessionIds).toEqual(new Set([SESSION_ID]))
+      expect(signals.needsInputSessionIds).toEqual(new Set([SESSION_ID]))
+      expect(webSnapshot.activeSessionIds).toEqual([SESSION_ID])
+      expect(webSnapshot.entries).toEqual([
+        expect.objectContaining({ liveState: 'needs-input', sessionId: SESSION_ID }),
+      ])
+    })
+
+    it('does not treat a zero-message local shell as a resume-visible anchor', async () => {
+      const project = fakeProject('proj', SESSION_ID)
+      project.sessions[0]!.messageCount = 0
+      const snapshot = officialSnapshot({ kind: 'background', pid: undefined, state: 'blocked' })
+
+      const signals = await resolveLiveSessionSignals([project], { claudeAgentSnapshot: snapshot })
+
+      expect(signals.activeSessionIds).toEqual(new Set())
+      expect(signals.needsInputSessionIds).toEqual(new Set())
+    })
+
+    it('uses a fresh official working state without a lock', async () => {
+      await writeProjectTranscript('proj', SESSION_ID, transcriptWithTextMessage('older output.'))
+      const snapshot = officialSnapshot({ kind: 'background', state: 'working' })
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)], {
+        claudeAgentSnapshot: snapshot,
+      })
+
+      expect(signals.activeSessionIds).toEqual(new Set([SESSION_ID]))
+      expect(signals.needsInputSessionIds.size).toBe(0)
+      expect(signals.liveStateBySession.get(SESSION_ID)).toBe('working')
+    })
+
+    it.each(['user-interruption', 'api-error'] as const)(
+      'lets a newer recorded %s supersede cached official working',
+      async (turnEnd) => {
+        const officialObservedAt = Date.now() - 2_000
+        await writeProjectTranscript(
+          'proj',
+          SESSION_ID,
+          transcriptWithRecordedTurnEnd(turnEnd, officialObservedAt + 1_000)
+        )
+        const snapshot = officialSnapshot(
+          { kind: 'background', state: 'working' },
+          officialObservedAt
+        )
+
+        const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)], {
+          claudeAgentSnapshot: snapshot,
+        })
+
+        expect(signals.liveStateBySession.get(SESSION_ID)).toBe('detached')
+        expect(signals.needsInputSessionIds.size).toBe(0)
+      }
+    )
+
+    it('applies the same recorded-turn-end precedence in the web snapshot', async () => {
+      const officialObservedAt = Date.now() - 2_000
+      await writeProjectTranscript(
+        'proj',
+        SESSION_ID,
+        transcriptWithRecordedTurnEnd('user-interruption', officialObservedAt + 1_000)
+      )
+      const snapshot = officialSnapshot(
+        { kind: 'background', state: 'working' },
+        officialObservedAt
+      )
+
+      const webSnapshot = await buildLiveActivitySnapshot({ claudeAgentSnapshot: snapshot })
+
+      expect(webSnapshot.entries).toEqual([
+        expect.objectContaining({ liveState: 'detached', sessionId: SESSION_ID }),
+      ])
+    })
+
+    it('does not present an expired official working state as live', async () => {
+      const snapshot = officialSnapshot(
+        { kind: 'background', state: 'working' },
+        Date.now() - 60_001
+      )
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)], {
+        claudeAgentSnapshot: snapshot,
+      })
+
+      expect(signals.activeSessionIds.size).toBe(0)
+      expect(signals.needsInputSessionIds.size).toBe(0)
+      expect(signals.liveStateBySession.has(SESSION_ID)).toBe(false)
+    })
+
+    it('lets a newer local attention marker supersede official working', async () => {
+      await createFakeLiveSession(SESSION_ID, 'idle')
+      await writeProjectTranscript('proj', SESSION_ID, transcriptWithTextMessage('working on it.'))
+      const snapshot = officialSnapshot(
+        { kind: 'background', pid: process.pid, state: 'working' },
+        Date.now() - 1_000
+      )
+      await applyHookPayload(
+        JSON.stringify({ session_id: SESSION_ID, hook_event_name: 'Notification', message: 'x' })
+      )
+
+      const signals = await resolveLiveSessionSignals([fakeProject('proj', SESSION_ID)], {
+        claudeAgentSnapshot: snapshot,
+      })
+
+      expect(signals.needsInputSessionIds).toEqual(new Set([SESSION_ID]))
+      expect(signals.liveStateBySession.get(SESSION_ID)).toBe('needs-input')
+    })
+
     it('flags a live session blocked on a plain-text question', async () => {
       await createFakeLiveSession(SESSION_ID, 'idle')
       await writeProjectTranscript('proj', SESSION_ID, transcriptWithTextMessage('Continue?'))
@@ -406,6 +644,22 @@ describe('live-attention-signal', () => {
     }
   }
 
+  function officialSnapshot(overrides: Record<string, unknown>, observedAt = Date.now()) {
+    const snapshot = parseClaudeAgentSnapshot(
+      JSON.stringify([
+        {
+          cwd: '/workspace',
+          sessionId: SESSION_ID,
+          startedAt: observedAt - 1_000,
+          ...overrides,
+        },
+      ]),
+      observedAt
+    )
+    if (snapshot === null) throw new Error('test fixture must be a valid official snapshot')
+    return snapshot
+  }
+
   function isoAgo(milliseconds: number): string {
     return new Date(Date.now() - milliseconds).toISOString()
   }
@@ -445,5 +699,37 @@ describe('live-attention-signal', () => {
         },
       }),
     ].join('\n')
+  }
+
+  function transcriptWithRecordedTurnEnd(
+    turnEnd: 'user-interruption' | 'api-error',
+    endedAt: number
+  ): string {
+    const toolUse = JSON.stringify({
+      message: {
+        content: [{ id: 'tool-recorded-end', input: {}, name: 'Bash', type: 'tool_use' }],
+        stop_reason: 'tool_use',
+      },
+      timestamp: new Date(endedAt - 1_000).toISOString(),
+      type: 'assistant',
+    })
+    const ending =
+      turnEnd === 'user-interruption'
+        ? JSON.stringify({
+            message: { content: [{ text: '[Request interrupted by user]', type: 'text' }] },
+            timestamp: new Date(endedAt).toISOString(),
+            type: 'user',
+          })
+        : JSON.stringify({
+            apiErrorStatus: 429,
+            isApiErrorMessage: true,
+            message: {
+              content: [{ text: 'Request failed', type: 'text' }],
+              stop_reason: 'stop_sequence',
+            },
+            timestamp: new Date(endedAt).toISOString(),
+            type: 'assistant',
+          })
+    return `${toolUse}\n${ending}`
   }
 })

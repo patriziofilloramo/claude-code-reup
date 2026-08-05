@@ -1,29 +1,50 @@
-import { getLiveSessionRecords, mergeSessionLockStatuses } from './active-sessions.js'
+import {
+  getLiveSessionRecords,
+  mergeActiveSessionIds,
+  mergeSessionLockStatuses,
+} from './active-sessions.js'
 import { combineWorkEvidence, readAttentionMarkers, readWorkSignalMarkers } from './attention.js'
-import { resolveSessionLiveState, resolveUserInputWait } from './session-live-state.js'
+import {
+  claudeAgentLiveReading,
+  isPresentableClaudeAgentSession,
+  readClaudeAgentSnapshot,
+} from './claude-agent-state.js'
+import type { ClaudeAgentRefreshMode, ClaudeAgentSnapshot } from './claude-agent-state.js'
+import {
+  recordedTurnEndAt,
+  resolveSessionLiveState,
+  resolveUserInputWait,
+} from './session-live-state.js'
 import type { SessionLiveState } from './session-live-state.js'
 import type { Project } from './session-model.js'
 import { sessionTranscriptPath } from './session-preview.js'
 import { readSessionTailActivity } from './session-tail.js'
+import { isResumeVisibleSession } from './session-visibility.js'
 
 export interface LiveSessionSignals {
-  /** Every session with a live Claude Code process. */
+  /** Active or managed sessions that Reup can anchor to a local session or process. */
   activeSessionIds: Set<string>
   /**
-   * The shared live reading per session, for surfaces that draw activity and
-   * not just liveness. Sessions with no live process are absent from the map
-   * and read as `detached`.
+   * The shared state reading per presentable session, for surfaces that draw
+   * activity and not just process liveness. Sessions outside the presentable
+   * set are absent from the map and read as `detached`.
    */
   liveStateBySession: Map<string, SessionLiveState>
-  /** The live sessions currently waiting on the user. */
+  /** The presentable sessions or managed tasks currently waiting on the user. */
   needsInputSessionIds: Set<string>
 }
 
+export interface LiveSessionSignalOptions {
+  /** Injected by focused tests; omitted in production. */
+  claudeAgentSnapshot?: ClaudeAgentSnapshot | null
+  /** Persistent surfaces use background refresh; one-shot callers wait. */
+  officialRefresh?: ClaudeAgentRefreshMode
+}
+
 /**
- * Resolves the unified "needs your input" signal for every live session, the
- * same way the TUI and the web activity strip do: a Notification-hook marker
- * counts until the session shows life after it, and a turn blocked on an
- * unanswered tool call or trailing question counts even without a hook.
+ * Resolves the unified "needs your input" signal for every presentable session.
+ * Official inventory and Notification hooks are reported evidence; a turn
+ * blocked on an unanswered tool or trailing question remains the fallback.
  * Consumers that only need per-session booleans (inbox, VS Code extension)
  * share this; the web strip resolves inline because it also needs messages.
  *
@@ -31,11 +52,18 @@ export interface LiveSessionSignals {
  * piece of evidence that reading needs. A consumer must never rebuild it from
  * the booleans here — that is how the surfaces drifted apart before.
  */
-export async function resolveLiveSessionSignals(projects: Project[]): Promise<LiveSessionSignals> {
-  const [liveRecords, attentionMarkers, workSignals] = await Promise.all([
+export async function resolveLiveSessionSignals(
+  projects: Project[],
+  options: LiveSessionSignalOptions = {}
+): Promise<LiveSessionSignals> {
+  const officialSnapshotPromise = Object.hasOwn(options, 'claudeAgentSnapshot')
+    ? Promise.resolve(options.claudeAgentSnapshot ?? null)
+    : readClaudeAgentSnapshot(options.officialRefresh ?? 'wait')
+  const [liveRecords, attentionMarkers, workSignals, officialSnapshot] = await Promise.all([
     getLiveSessionRecords(),
     readAttentionMarkers(),
     readWorkSignalMarkers(),
+    officialSnapshotPromise,
   ])
   const lockStatuses = mergeSessionLockStatuses(liveRecords)
   const workMarkerBySession = new Map(workSignals.map((marker) => [marker.sessionId, marker]))
@@ -43,13 +71,25 @@ export async function resolveLiveSessionSignals(projects: Project[]): Promise<Li
 
   const projectBySessionId = new Map<string, Project>()
   for (const project of projects) {
-    for (const session of project.sessions) projectBySessionId.set(session.id, project)
+    for (const session of project.sessions) {
+      if (isResumeVisibleSession(session)) projectBySessionId.set(session.id, project)
+    }
   }
+  const managedSessionIds = mergeActiveSessionIds(liveRecords, officialSnapshot)
+  const activeSessionIds = new Set(
+    [...managedSessionIds].filter((sessionId) =>
+      isPresentableClaudeAgentSession(officialSnapshot?.records.get(sessionId), {
+        hasLiveLock: lockStatuses.has(sessionId),
+        hasResumeVisibleSession: projectBySessionId.has(sessionId),
+      })
+    )
+  )
 
   const needsInputSessionIds = new Set<string>()
   const liveStateBySession = new Map<string, SessionLiveState>()
   await Promise.all(
-    [...lockStatuses].map(async ([sessionId, lockStatus]) => {
+    [...activeSessionIds].map(async (sessionId) => {
+      const lockStatus = lockStatuses.get(sessionId) ?? { status: null, statusUpdatedAt: null }
       const evidence = combineWorkEvidence(
         lockStatus.status,
         lockStatus.statusUpdatedAt,
@@ -59,18 +99,34 @@ export async function resolveLiveSessionSignals(projects: Project[]): Promise<Li
       const tail = project
         ? await readSessionTailActivity(sessionTranscriptPath(project.id, sessionId))
         : null
+      const attentionMarker = attentionBySession.get(sessionId)
+      const latestLocalReportedAt = latestTimestamp(
+        evidence.statusUpdatedAt,
+        attentionMarker ? Date.parse(attentionMarker.occurredAt) : null,
+        recordedTurnEndAt(tail)
+      )
+      const officialReading = claudeAgentLiveReading(
+        officialSnapshot,
+        sessionId,
+        latestLocalReportedAt,
+        lockStatuses.has(sessionId)
+      )
       const { wait } = resolveUserInputWait(
-        attentionBySession.get(sessionId),
+        attentionMarker,
         evidence.status,
         evidence.statusUpdatedAt,
-        tail
+        tail,
+        officialReading
       )
       const needsInput = wait !== null
       if (needsInput) needsInputSessionIds.add(sessionId)
       liveStateBySession.set(
         sessionId,
         resolveSessionLiveState({
-          isAttached: true,
+          claudeAgentReading: officialReading,
+          hasLiveProcess:
+            lockStatuses.has(sessionId) ||
+            (officialSnapshot?.records.get(sessionId)?.pid ?? null) !== null,
           needsInput,
           tail,
           workStatus: evidence.status,
@@ -81,8 +137,13 @@ export async function resolveLiveSessionSignals(projects: Project[]): Promise<Li
   )
 
   return {
-    activeSessionIds: new Set(lockStatuses.keys()),
+    activeSessionIds,
     liveStateBySession,
     needsInputSessionIds,
   }
+}
+
+function latestTimestamp(...values: Array<number | null>): number | null {
+  const finiteValues = values.filter((value): value is number => Number.isFinite(value))
+  return finiteValues.length === 0 ? null : Math.max(...finiteValues)
 }

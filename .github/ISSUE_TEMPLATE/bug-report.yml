@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible Reup failure without sharing private session data.
+title: '[bug] '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include transcripts, credentials, private code, repository names, session titles, or local paths.
+        Report security vulnerabilities through SECURITY.md instead of a public issue.
+  - type: input
+    id: versions
+    attributes:
+      label: Reup and Claude Code versions
+      placeholder: 'Reup 0.x.y; Claude Code 2.x.y'
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Terminal UI
+        - CLI command
+        - Web dashboard
+        - VS Code extension
+        - Installer or packaging
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use synthetic IDs and paths. Include exact commands only after removing private values.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked existing issues for the same problem.
+          required: true
+        - label: I removed transcripts, credentials, private code, repository names, session titles, and local paths.
+          required: true

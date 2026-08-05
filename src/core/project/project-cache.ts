@@ -6,6 +6,12 @@ interface ProjectCacheEntry {
   timestamp: number
 }
 
+interface ProjectLoadEntry {
+  cacheGeneration: number
+  cacheKey: string
+  promise: Promise<Project[]>
+}
+
 /**
  * Short-lived in-process cache for loaded project data.
  *
@@ -18,6 +24,7 @@ const CACHE_TTL_MS = 2_000
 
 let cachedEntry: ProjectCacheEntry | null = null
 let cacheGeneration = 0
+let inFlightEntry: ProjectLoadEntry | null = null
 
 export function getCachedProjects(cacheKey: string): Project[] | null {
   if (!cachedEntry) return null
@@ -52,7 +59,34 @@ export function setCachedProjects(
   return true
 }
 
+/**
+ * Shares one cold discovery pass across concurrent routes. Cache invalidation
+ * changes the generation, so a request arriving after a filesystem change
+ * starts a new scan instead of joining an obsolete one.
+ */
+export function coalesceProjectLoad(
+  cacheKey: string,
+  expectedGeneration: number,
+  load: () => Promise<Project[]>
+): Promise<Project[]> {
+  if (
+    inFlightEntry?.cacheKey === cacheKey &&
+    inFlightEntry.cacheGeneration === expectedGeneration
+  ) {
+    return inFlightEntry.promise
+  }
+
+  const sharedPromise = Promise.resolve()
+    .then(load)
+    .finally(() => {
+      if (inFlightEntry?.promise === sharedPromise) inFlightEntry = null
+    })
+  inFlightEntry = { cacheGeneration: expectedGeneration, cacheKey, promise: sharedPromise }
+  return sharedPromise
+}
+
 export function invalidateProjectCache(): void {
   cacheGeneration += 1
   cachedEntry = null
+  inFlightEntry = null
 }

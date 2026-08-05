@@ -45,9 +45,12 @@ may degrade to "no metadata" so a single damaged file cannot hide a project.
 
 ## Release Expectations
 
-Public release artifacts should include SHA-256 checksums, signatures, SBOM,
-and provenance attestations where the release pipeline supports them. Verify
-artifacts before installing.
+The beta-candidate pipeline produces SHA-256 checksums, root and extension
+SBOM snapshots, explicit build metadata, and exact npm/VSIX policy checks. It
+does not yet produce signatures, notarization, or CI-backed provenance
+attestations. A public beta may promote only the exact reviewed candidate
+artifact; it must not be rebuilt after validation. See
+`Documents/INSTALLATION.md` for the release and verification policy.
 
 ## Data Handling
 

@@ -20,6 +20,14 @@ import { log } from '../../utils/logger.js'
 /** Bump when the marker JSON shape changes in a backwards-incompatible way. */
 const ATTENTION_SCHEMA_VERSION = 1
 
+/** Notification subtypes that actually mean the session is waiting on a user. */
+const NEEDS_INPUT_NOTIFICATION_TYPES = new Set([
+  'permission_prompt',
+  'idle_prompt',
+  'elicitation_dialog',
+  'agent_needs_input',
+])
+
 /**
  * One "this session needs the user" fact, captured from Claude Code's
  * Notification hook. Claude Code fires that hook when a session is waiting on
@@ -58,6 +66,16 @@ export function parseNotificationHookPayload(
     }
   }
   if (!isRecord(payload)) return null
+
+  const hookEvent = payload['hook_event_name']
+  if (hookEvent !== undefined && hookEvent !== 'Notification') return null
+  const notificationType = payload['notification_type']
+  if (
+    notificationType !== undefined &&
+    (typeof notificationType !== 'string' || !NEEDS_INPUT_NOTIFICATION_TYPES.has(notificationType))
+  ) {
+    return null
+  }
 
   const sessionId = payload['session_id']
   if (typeof sessionId !== 'string' || !isValidSessionId(sessionId)) return null
@@ -332,8 +350,8 @@ export async function applyHookPayload(rawPayload: string): Promise<HookCaptureR
     typeof payload['hook_event_name'] === 'string' ? payload['hook_event_name'] : null
 
   // One capture endpoint serves every registered hook event: turn boundaries
-  // (UserPromptSubmit/Stop) become work markers, everything else is treated
-  // as a needs-input notification.
+  // become work markers, while the Notification parser admits only subtypes
+  // that actually require the user (and legacy payloads with no subtype).
   const workSignal = parseWorkSignalHookPayload(payload)
   if (workSignal) {
     await writeWorkSignalMarker(workSignal)

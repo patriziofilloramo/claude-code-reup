@@ -136,7 +136,7 @@ export class ReupDataSource {
 
   async loadModel(options: LoadExtensionModelOptions): Promise<ExtensionSessionModel> {
     const projects = await loadProjects()
-    const signals = await resolveLiveSessionSignals(projects)
+    const signals = await resolveLiveSessionSignals(projects, { officialRefresh: 'background' })
     const sessions = await createExtensionSessions(projects, signals, options)
     const visibleProjectIds = new Set(sessions.map((session) => session.projectId))
     const extensionProjects = projects
@@ -157,7 +157,7 @@ export class ReupDataSource {
 
   async loadCockpitModel(context: CockpitContext): Promise<ExtensionCockpitModel> {
     const projects = await loadProjects()
-    const signals = await resolveLiveSessionSignals(projects)
+    const signals = await resolveLiveSessionSignals(projects, { officialRefresh: 'background' })
     const sessions = await createExtensionSessions(projects, signals, {
       includeArchived: context.includeArchived ?? false,
       includePreviewHints: false,
@@ -179,7 +179,7 @@ export class ReupDataSource {
 
   async resolveSession(projectId: string, sessionId: string): Promise<ExtensionSession | null> {
     const projects = await loadProjects()
-    const signals = await resolveLiveSessionSignals(projects)
+    const signals = await resolveLiveSessionSignals(projects, { officialRefresh: 'background' })
     const project = projects.find((candidate) => candidate.id === projectId)
     const session = project?.sessions.find((candidate) => candidate.id === sessionId)
     if (!project || !session || !isResumeVisibleSession(session)) return null
@@ -198,7 +198,7 @@ export class ReupDataSource {
     onProgress?: (scanned: number, total: number) => void
   ): Promise<ExtensionContentMatch[]> {
     const projects = await loadProjects()
-    const signals = await resolveLiveSessionSignals(projects)
+    const signals = await resolveLiveSessionSignals(projects, { officialRefresh: 'background' })
     const searchableProjects = projects.map((project) => ({
       ...project,
       sessions: project.sessions.filter((session) =>
@@ -229,7 +229,7 @@ export class ReupDataSource {
     includeArchived: boolean
   ): Promise<ExtensionTouchedMatch[]> {
     const projects = await loadProjects()
-    const signals = await resolveLiveSessionSignals(projects)
+    const signals = await resolveLiveSessionSignals(projects, { officialRefresh: 'background' })
     const matches = await searchTouchedFiles(path, projects, { includeArchived })
     return Promise.all(
       matches.map(async (match) => ({

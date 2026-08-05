@@ -20,39 +20,21 @@
 
 ### Medium
 
-- [ ] **Indicate a session blocked on a permission prompt** — parked as a known limitation, not
-      a defect to fix, because the signal to fix it with does not appear to exist. Recorded in
-      `README.md` under "Known limitation: permission prompts" so users are told rather than
-      left to wonder.
-
-      What Reup can see while a permission prompt is open, measured 2026-07-29 on the VS Code
-      client with healthy hooks: the lock carries no `status`; the work marker says `busy`,
-      written by `UserPromptSubmit` when the turn began; the transcript tail holds a `tool_use`
-      with no result. A tool that is executing and a tool awaiting approval therefore produce
-      identical data. No `Notification` hook fired while the prompt was open, and the web
-      `attention` field stayed null.
-
-      **Not established with certainty.** The prompt was answered before the ~60 s idle window
-      that Claude Code's `Notification` hook also covers, and a follow-up attempt to leave one
-      open longer could not raise a prompt at all — the session's permission mode overrode its
-      own allowlist. So "Claude Code does not report this" is the best current reading, not a
-      proven fact.
-
-      Reopen if any of these appear: a `Notification` observed during a permission prompt; a
-      Claude Code release that reports permission state in the lock file or transcript; or a
-      transcript marker distinguishing "awaiting approval" from "running". Until then the
-      standing rule applies — if Claude Code does not report it, do not invent it. An indicator
-      that guesses here would be worse than none, because it would fire through every long tool
-      call, which is exactly the failure this project spent 2026-07-29 removing.
-
-      The 2026-07-28 measurement originally behind this entry was **invalidated**: it recorded
-      that no hook work marker existed "despite the attention hooks being installed" and blamed
-      the VS Code client, when the hooks were in fact dead — registered but pointing at a path
-      that no longer resolved (`CLAUDE_CODE_DATA_MODEL.md`, trap 7). Re-measured with working
-      hooks, that client fires them normally: 71 captures in one day for a single session.
+- [x] **Indicate a session blocked on a permission prompt when Claude reports it** — Reup now
+      reads the documented `waitingFor` values from `claude agents --json`; `permission prompt`,
+      `input needed`, `sandbox request`, `worker request`, and `dialog open` can drive a reported
+      `needs-input` state. Locks, hooks, and transcript evidence remain bounded fallbacks when the
+      command or a specific field is unavailable. The public limitation is now precise: detection
+      is supported, but not guaranteed for every client/version or unmatched session.
 
 - [x] **No metadata cache / SSE debounce** — resolved: 2 s in-process cache keyed on projects
       directory path; invalidated before filesystem notifications and after sidecar mutations.
+
+- [x] **Separate Agent View managed state from process liveness** — the default official
+      inventory can retain pidless background tasks that are still `working` or `blocked` after
+      process exit. Reup keeps those records for conservative safety, but an official-only row
+      enters local activity only with a reported PID, a resume-visible discovered session, or a
+      verified live lock. Orphaned hook markers and `startedAt` age cannot anchor or expire it.
 
 ### Won't fix
 
@@ -71,10 +53,12 @@ Core milestones are closed:
   meters shipped and unit-tested; config toggle + attention feed archived to protect zero-config.
 - **Milestone 11 — VS Code Workspace Cockpit**: shipped (smoke on clean Windows/macOS pending).
 
-**Current release focus:** Milestone 9 public-release hardening. Keep the first
-public surface lightweight, local-only, installer-first, and easy to support.
-Blocked items (M10 / Phase 4 / AI renaming) stay parked until the release is
-ready.
+**Current release focus:** Milestone 9 public-release hardening plus product
+validation. Keep the first public surface lightweight, local-only, centered on
+find → triage → resume, and easy to support. The canonical prepared beta channel
+is a reviewed npm tarball; native-shaped installers remain optional validation
+artifacts. Blocked items (M10 / Phase 4 / AI renaming) stay parked until the
+release is ready.
 
 - **Milestone 14 — Attention system**: ✓ shipped (2026-07-02). `reup attention`
   registers a reversible Claude Code Notification hook; sessions waiting on a
@@ -99,10 +83,10 @@ each item stays parked until explicitly decided.
 - **Linux `.deb`/`.rpm` packages** — `Documents/INSTALLATION.md` documents these as intentional
   later-phase work; only the portable `.tar.gz` exists today. Needs a decision on whether
   package-manager-native installers are worth building before or independently of signing.
-- **CI-backed provenance vs. local-only** — `release:local` already generates
-  `provenance.local.json` and CycloneDX SBOMs locally; whether to wire actual CI-attested
-  provenance (e.g. SLSA-style) is unscoped and tied to whether/when this project gets a real CI
-  release pipeline instead of local RC builds.
+- **CI-backed provenance vs. build metadata** — `release:local` generates explicit
+  `build-metadata.json` plus CycloneDX build-environment snapshots, neither of which is an
+  attestation. Whether to wire actual CI-attested provenance (for example SLSA-style) remains
+  unscoped and distinct from the artifact-only Beta Candidate workflow.
 - **Clean-VM installer verification** — upgrade, repair, and uninstall have only been verified
   from this dev machine (see Milestone 9's "Add upgrade, repair, and uninstall verification"
   item for what was and wasn't covered). Needs actual clean Windows/macOS/Linux VMs; not
@@ -188,15 +172,15 @@ Anthropic API (plan name, credit spending detail, routine allowances) are tracke
       percentages/reset times, keeps credentials in memory only, and uses status-line observations
       as a fallback without silently replacing an existing status line
 - [x] **Persistent usage summary** in the web header and TUI chrome:
-      current-session usage, weekly usage, and monthly/credit-period usage where available
+      current-session context plus supported 5-hour and 7-day account windows
 - [x] Show supported percentage used, reset countdown, and last-updated time
 - [x] Show a best-effort positive badge when Claude Code local state explicitly reports usage credits
       enabled; never infer activation from spend or limit data
 - [x] Sort web sessions by latest observed context size; sessions without analysed context sort last
 - [x] Use consistent limit colours everywhere: cyan normally, yellow at 80%, orange at 90%, and
       red at 100%
-- [x] Gracefully handle plan differences and unavailable fields. Pro, Max, Team, Enterprise, credits,
-      weekly/monthly windows, and routine allowances may expose different data
+- [x] Gracefully handle plan differences and unavailable fields. Supported account windows and the
+      usage-credits-enabled flag may be absent; Reup leaves unsupported values unavailable
 - [x] Keep usage data local, avoid telemetry, and document exactly what is read and retained
 
 ---
@@ -424,8 +408,8 @@ required. All go/no-go criteria were met.
       project, relative time, active/attention flags, TODO/plan hints
 - [x] `Reup: Search Sessions` — structured query search via shared core query
       parser (`session-query.ts`)
-- [x] CSP-restricted Session Inspector webview: goal, progress, plan, TODOs,
-      context, branches, file links, and tags
+- [x] CSP-restricted Session Inspector webview: latest recorded request and assistant response,
+      plan, TODOs, context, branches, file links, and tags
 - [x] Deterministic Resume Advice for missing paths, active sessions, branch
       drift, interrupted work, expiry, compaction, and safe resume
 - [x] Compact active/attention status bar; live usage via shared usage cache
@@ -535,7 +519,11 @@ awareness while working**. A developer should glance at Reup and know:
 - whether the active project/session changed underneath them
 - which session deserves attention next
 
-### Product direction
+### Product direction (historical planning checklist)
+
+The authoritative shipped slice is recorded under **MVP slice** below. Items
+left unchecked here were either deliberately dropped or folded into a smaller
+implementation; they are not current launch blockers.
 
 - [ ] **Live Activity Strip** — a top or right-side strip showing active sessions with state:
       running, recently changed, waiting, interrupted, remote-active, or stale
@@ -543,8 +531,8 @@ awareness while working**. A developer should glance at Reup and know:
       latest event type, latest tool name, and whether output is still moving
 - [ ] **Tool trace** — compact last-tool display: `Edit`, `Read`, `Bash`, `Write`, failed tool,
       or pending tool. No transcript streaming; just operational state.
-- [ ] **Context/limit meters** — persistent current-session and weekly/monthly account limit bars,
-      with freshness and reset time visible. Never show stale data as live.
+- [ ] **Context/limit meters** — persistent current-session plus supported 5-hour and 7-day
+      account-limit bars, with freshness and reset time visible. Never show stale data as live.
 - [ ] **Attention feed** — small chronological feed of actionable events: session became active,
       tool failed, path missing, branch drift, high context, session expiring, orphan found.
 - [ ] **Live Resume Card refresh** — refresh the selected session's Resume Card when transcript
@@ -599,10 +587,10 @@ awareness while working**. A developer should glance at Reup and know:
 
 ### Product guardrails
 
-- [ ] Do not build a transcript viewer or chat clone
-- [ ] Do not imply "live" when the source has not updated recently
-- [ ] Do not add noisy notifications by default; this is a glanceable dashboard, not an alarm system
-- [ ] Prefer "calm useful state" over animation-heavy monitoring UI
+- [x] Do not build a transcript viewer or chat clone
+- [x] Do not imply "live" when the source has not updated recently
+- [x] Do not add noisy notifications by default; this is a glanceable dashboard, not an alarm system
+- [x] Prefer "calm useful state" over animation-heavy monitoring UI
 
 ---
 
@@ -617,15 +605,15 @@ awareness while working**. A developer should glance at Reup and know:
       transcript content. Competes directly with Mantra's credential-redaction feature but stays
       read-only and local-first. Maps to "Is it safe to share this?" — priority filter #2.
 
-- [x] **Files-touched list in resume card** — done, and extended well past the original
-      idea. Touched files are extracted from `tool_use` write events
+- [x] **Write/edit-target list in resume card** — done, and extended well past the original
+      idea. Target paths are extracted from recorded `tool_use` write/edit calls
       (`session-automatic-context.ts`) and shown in every surface. On top of that, a full
       **reverse file→session lookup** shipped (`session-file-search.ts`:
-      `searchTouchedFiles` / `collectTouchedFiles`): "which sessions edited this file?".
+      `searchTouchedFiles` / `collectTouchedFiles`): "which sessions targeted this file?".
       Exposed as `reup touched <path>` (CLI), a TUI finder (`t`), and — the elegant,
       almost-hidden form — a "touched by N other sessions" affordance on each touched file
-      in the web inspector and the VS Code inspector + dashboard. Reads only the immutable
-      recorded write events; never diffs or replays.
+      in the web inspector and the VS Code inspector + dashboard. Reads only recorded tool calls,
+      does not claim each call succeeded, and never diffs or replays.
 
 ### Advanced — requires API key / opt-in
 
@@ -640,29 +628,22 @@ must never activate automatically or affect the default experience.
 
 ---
 
-## To Be Checked Yet
+## Resolved investigations
 
-Ideas that need more investigation before committing to a milestone. May be promoted, deferred,
-or dropped after evaluation.
-
-### VS Code implementation
-
-Promote from Milestone 11 discovery only after the extension has a clear MVP
-that beats a simple native picker workflow. See the Milestone 11 go/no-go
-criteria.
-
-### Live web control panel
-
-Promoted to [Milestone 13](#milestone-13--live-web-control-panel).
+- The VS Code implementation passed its go/no-go criteria and shipped in
+  Milestone 11.
+- The live web control panel shipped as the lean Milestone 13 slice; the
+  chronological attention feed and configuration toggle were deliberately
+  dropped.
 
 ---
 
 ## What is explicitly out of scope
 
-| Item                             | Reason                                            |
-| -------------------------------- | ------------------------------------------------- |
-| npm publish                      | Local stable version first; package name selected |
-| Reup-hosted cloud sync / auth    | Local-first, no account, no hosted sync service   |
-| Required/free-form config files  | Zero-config remains a design constraint           |
-| Support for non-Claude-Code CLIs | Claude Code only                                  |
-| Backup / restore of transcripts  | Out of scope; archive = hide only                 |
+| Item                                 | Reason                                                |
+| ------------------------------------ | ----------------------------------------------------- |
+| Automatic package or release publish | Promotion stays a deliberate owner action             |
+| Reup-hosted cloud sync / auth        | Local-first, no account, no hosted sync service       |
+| Required/free-form config files      | Zero-config remains a design constraint               |
+| Support for non-Claude-Code CLIs     | Claude Code only                                      |
+| Backup / restore of transcripts      | Out of scope; archive = reversible Reup metadata only |

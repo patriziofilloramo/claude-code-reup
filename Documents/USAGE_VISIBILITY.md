@@ -19,7 +19,7 @@ Every value must make its scope and freshness obvious:
 | Local session transcripts                                             | Model IDs and latest input/cache/output token counts                        | Historical local snapshot; unavailable on the index fast path                             | Implemented                                       |
 | Claude account usage endpoint                                         | Current 5-hour and 7-day percentages/reset times; usage-credit enabled flag | Authenticated internal endpoint used by Claude Code; not a documented public API          | Primary opt-in account-limit source               |
 | [Claude Code status line](https://code.claude.com/docs/en/statusline) | Current model/agent, context percentage, and occasional account limits      | Supported session source; fields may be absent and are only emitted after an API response | Session details and account-limit fallback        |
-| [Claude Code hooks](https://code.claude.com/docs/en/hooks)            | Session-start model/agent and subagent lifecycle facts                      | Requires explicit user configuration; model may change after session start                | Candidate for agent visibility                    |
+| [Claude Code hooks](https://code.claude.com/docs/en/hooks)            | Prompt submission, stop, and needs-input notifications                      | Reup-owned attention hooks are announced, reversible, and respect a recorded opt-out      | Implemented turn-boundary fallback                |
 | [`/usage`](https://code.claude.com/docs/en/costs)                     | Interactive plan usage, activity, and cost information                      | Human-facing command with no documented machine-readable invocation                       | Never run automatically                           |
 | [OpenTelemetry](https://code.claude.com/docs/en/monitoring-usage)     | Detailed token, model, cost, and agent telemetry                            | Powerful but opt-in and substantially heavier than Reup's default design                  | Optional future integration only                  |
 | Claude account Usage page                                             | Credits, billing period, and feature allowances                             | No documented local or public personal-account API                                        | Show only if Anthropic exposes a supported source |
@@ -94,7 +94,10 @@ unknown; Reup never infers activation from cost or rate-limit data.
   in memory only for the authenticated read-only request, and never log or cache it.
 - Never read browser cookies.
 - Never invoke Claude merely to refresh usage; that would consume usage.
-- Never enable telemetry or hooks without explicit consent.
+- Never enable telemetry. Reup's attention hooks may be registered or repaired
+  automatically on first TUI, web, or configuration launch, but the write is
+  announced, reversible with `reup attention remove`, and not repeated after
+  the user opts out.
 - Never retain prompt, response, or tool content in a usage cache.
 - Never retain transcript paths, session names, cost data, or credentials.
 - Read only the usage-credit-enabled boolean from Claude Code application state; never retain it.

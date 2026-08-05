@@ -1,29 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 
-import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP } from '../config/app.js'
 import { LABELS } from '../config/labels.js'
 import { COLORS } from '../config/theme.js'
-import {
-  getActiveSessions,
-  getLiveSessionRecords,
-  mergeSessionLockStatuses,
-} from '../core/session/active-sessions.js'
-import type { MergedSessionLockStatus } from '../core/session/active-sessions.js'
-import {
-  combineWorkEvidence,
-  isAttentionActive,
-  readAttentionMarkers,
-  readWorkSignalMarkers,
-} from '../core/session/attention.js'
-import type { AttentionMarker, WorkSignalMarker } from '../core/session/attention.js'
-import { sessionTranscriptPath } from '../core/session/session-preview.js'
-import { isAwaitingUserReply, readSessionTailActivity } from '../core/session/session-tail.js'
-import type { SessionTailActivity } from '../core/session/session-tail.js'
-import { resolveSessionLiveState } from '../core/session/session-live-state.js'
+import { resolveLiveSessionSignals } from '../core/session/live-attention.js'
 import type { SessionLiveState } from '../core/session/session-live-state.js'
 import { getProjectDirectory } from '../core/project/claude-paths.js'
 import { formatHandoff, readTranscriptHandoffContext } from '../core/session/session-handoff.js'
@@ -95,13 +78,10 @@ function App({ onResume }: AppProps) {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [activeSessionIds, setActiveSessionIds] = useState<Set<string>>(new Set())
-  const [sessionLockStatuses, setSessionLockStatuses] = useState<
-    Map<string, MergedSessionLockStatus>
-  >(new Map())
-  const [attentionMarkers, setAttentionMarkers] = useState<AttentionMarker[]>([])
-  const [workMarkers, setWorkMarkers] = useState<Map<string, WorkSignalMarker>>(new Map())
-  const [transcriptActivityMs, setTranscriptActivityMs] = useState<Map<string, number>>(new Map())
-  const [sessionTails, setSessionTails] = useState<Map<string, SessionTailActivity>>(new Map())
+  const [attentionSessionIds, setAttentionSessionIds] = useState<Set<string>>(new Set())
+  const [liveStateBySession, setLiveStateBySession] = useState<Map<string, SessionLiveState>>(
+    new Map()
+  )
   const [liveUsage, setLiveUsage] = useState<LiveUsageSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -140,10 +120,15 @@ function App({ onResume }: AppProps) {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    Promise.all([loadProjects(), getActiveSessions()])
-      .then(([loadedProjects, activeIds]) => {
+    loadProjects()
+      .then(async (loadedProjects) => {
+        const signals = await resolveLiveSessionSignals(loadedProjects, {
+          officialRefresh: 'background',
+        })
         setProjects(loadedProjects)
-        setActiveSessionIds(activeIds)
+        setActiveSessionIds(signals.activeSessionIds)
+        setAttentionSessionIds(signals.needsInputSessionIds)
+        setLiveStateBySession(signals.liveStateBySession)
         setIsLoading(false)
       })
       .catch((error) => {
@@ -183,46 +168,13 @@ function App({ onResume }: AppProps) {
       if (refreshInProgress) return
       refreshInProgress = true
       try {
-        const [liveRecords, markers, workSignals] = await Promise.all([
-          getLiveSessionRecords(),
-          readAttentionMarkers(),
-          readWorkSignalMarkers(),
-        ])
+        const signals = await resolveLiveSessionSignals(projectsRef.current, {
+          officialRefresh: 'background',
+        })
         if (disposed) return
-        const lockStatuses = mergeSessionLockStatuses(liveRecords)
-
-        // Transcript modification times are the freshest work evidence the
-        // TUI can get: lock files do not always carry a status field, and the
-        // slow project refresh leaves session.updated too stale for liveness.
-        // The tail is read alongside so a turn that ended on an unanswered
-        // tool call (a question with no Notification hook) can raise attention.
-        const activityBySession = new Map<string, number>()
-        const tailBySession = new Map<string, SessionTailActivity>()
-        await Promise.all(
-          [...lockStatuses.keys()].map(async (sessionId) => {
-            const project = projectsRef.current.find((candidate) =>
-              candidate.sessions.some((session) => session.id === sessionId)
-            )
-            if (!project) return
-            const transcriptPath = sessionTranscriptPath(project.id, sessionId)
-            try {
-              const stats = await stat(transcriptPath)
-              activityBySession.set(sessionId, stats.mtimeMs)
-            } catch {
-              // A brand-new session may not have a transcript yet.
-            }
-            const tail = await readSessionTailActivity(transcriptPath)
-            if (tail) tailBySession.set(sessionId, tail)
-          })
-        )
-        if (disposed) return
-
-        setActiveSessionIds(new Set(lockStatuses.keys()))
-        setSessionLockStatuses(lockStatuses)
-        setAttentionMarkers(markers)
-        setWorkMarkers(new Map(workSignals.map((marker) => [marker.sessionId, marker])))
-        setTranscriptActivityMs(activityBySession)
-        setSessionTails(tailBySession)
+        setActiveSessionIds(signals.activeSessionIds)
+        setAttentionSessionIds(signals.needsInputSessionIds)
+        setLiveStateBySession(signals.liveStateBySession)
       } finally {
         refreshInProgress = false
       }
@@ -294,68 +246,6 @@ function App({ onResume }: AppProps) {
   // ---------------------------------------------------------------------------
   // Derived view model
   // ---------------------------------------------------------------------------
-
-  // Sessions currently waiting on the user, resolved against the same
-  // evidence rules the web strip uses: a marker dies as soon as the session
-  // shows life after the event or its process disappears. Hook markers cover
-  // permission and input prompts; the tail check covers a turn that ended on
-  // an unanswered tool call, where no Notification hook ever fires.
-  const attentionSessionIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const marker of attentionMarkers) {
-      const lockStatus = sessionLockStatuses.get(marker.sessionId)
-      const active = isAttentionActive(marker, {
-        isLive: lockStatus !== undefined,
-        lastActivityMs: transcriptActivityMs.get(marker.sessionId) ?? null,
-        statusUpdatedAt: lockStatus?.statusUpdatedAt ?? null,
-      })
-      if (active) ids.add(marker.sessionId)
-    }
-    for (const [sessionId, lockStatus] of sessionLockStatuses) {
-      if (ids.has(sessionId)) continue
-      const evidence = combineWorkEvidence(
-        lockStatus.status,
-        lockStatus.statusUpdatedAt,
-        workMarkers.get(sessionId)
-      )
-      if (isAwaitingUserReply(evidence.status, sessionTails.get(sessionId) ?? null)) {
-        ids.add(sessionId)
-      }
-    }
-    return ids
-  }, [attentionMarkers, sessionLockStatuses, sessionTails, transcriptActivityMs, workMarkers])
-
-  // The shared cross-surface reading. Every liveness decision the TUI draws
-  // comes from here, so a session looks the same in `reup` as it does in the
-  // web UI and the VS Code extension: same evidence, same resolver, same four
-  // states. Sessions with no lock file are absent from the map and read as
-  // detached; the TUI never derives liveness on its own.
-  const liveStateBySession = useMemo(() => {
-    const now = Date.now()
-    const states = new Map<string, SessionLiveState>()
-    for (const [sessionId, lockStatus] of sessionLockStatuses) {
-      // Turn-boundary hooks cover locks that omit the status field entirely.
-      const evidence = combineWorkEvidence(
-        lockStatus.status,
-        lockStatus.statusUpdatedAt,
-        workMarkers.get(sessionId)
-      )
-      states.set(
-        sessionId,
-        resolveSessionLiveState(
-          {
-            isAttached: true,
-            needsInput: attentionSessionIds.has(sessionId),
-            tail: sessionTails.get(sessionId) ?? null,
-            workStatus: evidence.status,
-            workStatusUpdatedAt: evidence.statusUpdatedAt,
-          },
-          now
-        )
-      )
-    }
-    return states
-  }, [attentionSessionIds, sessionLockStatuses, sessionTails, workMarkers])
 
   // One terminal bell per new attention event; a re-render must never re-ring.
   const previousAttentionIdsRef = useRef<Set<string>>(new Set())

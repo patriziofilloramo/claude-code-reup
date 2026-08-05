@@ -1,7 +1,7 @@
 {
   "name": "@patriziofilloramo/reup",
-  "version": "0.3.2",
-  "description": "Local state and resume control for Claude Code work.",
+  "version": "0.4.0",
+  "description": "Find, monitor, and resume local Claude Code sessions across projects.",
   "type": "module",
   "bin": {
     "reup": "./dist/index.js"
@@ -10,10 +10,40 @@
     "node": ">=20"
   },
   "license": "MIT",
+  "author": {
+    "name": "Patrizio Filloramo",
+    "url": "https://github.com/patriziofilloramo"
+  },
+  "homepage": "https://github.com/patriziofilloramo/claude-code-reup#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patriziofilloramo/claude-code-reup.git"
+  },
+  "bugs": {
+    "url": "https://github.com/patriziofilloramo/claude-code-reup/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "session-manager",
+    "developer-tools",
+    "cli",
+    "terminal",
+    "productivity",
+    "local-first"
+  ],
   "files": [
     "dist/",
-    "README.md"
+    "DISCLAIMER.md",
+    "LICENSE",
+    "PRIVACY.md",
+    "README.md",
+    "SECURITY.md",
+    "SUPPORT.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsc",
     "build:client": "node scripts/build-client.mjs",
@@ -32,8 +62,11 @@
     "lint:fix": "eslint src tests extension/src extension/*.mjs --fix",
     "start": "node dist/index.js",
     "pretest": "npm run build:client",
+    "release:check": "node scripts/release-gate.mjs",
+    "release:extension:check": "node scripts/check-vsix.mjs",
     "release:installers": "node scripts/build-installers.mjs",
     "release:local": "node scripts/build-release.mjs",
+    "release:package:check": "node scripts/check-package.mjs",
     "sync:version": "node scripts/sync-version.mjs",
     "test": "vitest run",
     "test:extension-host": "npm run smoke:host --prefix extension",
@@ -71,6 +104,7 @@
     "prettier": "^3.8.3",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.60.1",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "ws": "^8.21.0"
   }
 }

@@ -137,7 +137,8 @@ function createHarness(): Harness {
     clearTimeout: (id: number) => timers.delete(id),
     clearInterval: (id: number) => timers.delete(id),
     Date: { now: () => currentTime },
-    fetch: async () => {
+    fetch: async (input: unknown) => {
+      calls.push(`fetch:${String(input)}`)
       if (!reachable) throw new TypeError('Failed to fetch')
       return { ok: true }
     },
@@ -159,7 +160,7 @@ function createHarness(): Harness {
 
     STRINGS: {
       offlineTitle: 'LINK LOST',
-      offlineProbeCommand: '$ curl -sS http://{host}/api/active',
+      offlineProbeCommand: '$ curl -sS http://{host}/api/health',
       offlineProbeError: 'curl: (7) failed to connect to {host}: connection refused',
       offlineHeadline: 'The reup server stopped responding.',
       offlineLiveness: 'Live session state is unknown.',
@@ -270,6 +271,14 @@ describe('server link state', () => {
       expect(harness.module.read().serverLinkState).toBe('online')
       expect(harness.module.read().offlineOverlay).toBeNull()
       expect(harness.calls).not.toContain('applyLiveActivity:0')
+    })
+
+    it('uses the dedicated lightweight health route', async () => {
+      harness.setServerReachable(true)
+      harness.module.noteServerUnreachable()
+      await harness.advance(1500)
+
+      expect(harness.calls).toContain('fetch:/api/health')
     })
   })
 

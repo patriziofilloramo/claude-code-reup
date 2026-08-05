@@ -32,6 +32,13 @@ describe('web routes', () => {
     await expect(response.json()).resolves.toEqual([])
   })
 
+  it('answers the lightweight server-health probe without loading session data', async () => {
+    const response = await buildApp().request('/api/health')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ status: 'ok' })
+  })
+
   // A page on an attacker's domain that rebinds its name to 127.0.0.1 talks to
   // this server same-origin, so the same-origin policy stops protecting the
   // response body. The Host header still names the attacker's domain, and reads
@@ -45,6 +52,7 @@ describe('web routes', () => {
 
       const readEndpoints = [
         '/',
+        '/api/health',
         '/api/projects',
         `/api/search?q=${PROJECT_ID}`,
         '/api/search/deep?q=hello',

@@ -189,6 +189,7 @@ describe('event stream targeted pushes', () => {
       activeSessionIds: ['abc'],
       entries: [
         {
+          attention: null,
           liveState: states[Math.min(call++, states.length - 1)],
           sessionId: 'abc',
           sessionName: 'demo',
@@ -220,6 +221,7 @@ describe('event stream targeted pushes', () => {
       activeSessionIds: ['abc'],
       entries: [
         {
+          attention: null,
           liveState: states[Math.min(call++, states.length - 1)],
           sessionId: 'abc',
           sessionName: 'demo',
@@ -229,6 +231,42 @@ describe('event stream targeted pushes', () => {
         },
       ],
     })
+
+    const connection = runEventStream(stream, factory, snapshots)
+    for (let i = 0; i < states.length; i++) {
+      emitChange('data')
+      await vi.advanceTimersByTimeAsync(APP.sseActivityPushDebounceMs + 1)
+    }
+
+    expect(stream.writes.filter((write) => write.event === 'turn-finished')).toHaveLength(0)
+
+    stream.abort()
+    await connection
+  })
+
+  it('does not call a working-to-needs-input block a finished turn', async () => {
+    const stream = createFakeStream()
+    const { factory, emitChange } = createFakeWatcher()
+    const states = ['working', 'needs-input']
+    let call = 0
+    const snapshots = async () => {
+      const liveState = states[Math.min(call++, states.length - 1)]
+      return {
+        activeSessionIds: ['abc'],
+        entries: [
+          {
+            attention:
+              liveState === 'needs-input'
+                ? { isReported: true, message: 'Waiting for input', since: 'stable' }
+                : null,
+            liveState,
+            sessionId: 'abc',
+            sessionName: 'demo',
+            stateIsReported: true,
+          },
+        ],
+      }
+    }
 
     const connection = runEventStream(stream, factory, snapshots)
     for (let i = 0; i < states.length; i++) {

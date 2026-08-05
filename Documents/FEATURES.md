@@ -5,39 +5,47 @@ marketing copy, competitive comparisons, and prioritisation discussions.
 
 ---
 
-## What makes Reup different
+## Product story
 
-Most tools in this space are session _browsers_: they show you a list, let you
-pick one, and open it. Claude Code itself also has a capable native picker with
-global search in the resume flow. Reup's role is broader: it is a local
-continuity control plane. Before you commit to resuming, it tells you what was
-happening, whether the context is still valid, whether any session needs
-attention right now, and which action is safest next. The intelligence layer -
-health signals, branch drift detection, usage awareness, and a recovery path for
-corrupt indices - is what no other tool in this space ships.
+Reup is for developers whose local Claude Code work is spread across enough
+projects, worktrees, terminal windows, and history that location is no longer a
+useful memory aid. It supports one continuity loop:
+
+1. **Find the work** from the task, phrase, branch, path, or file you remember.
+2. **Know what needs you** without visiting every terminal.
+3. **Resume in context** after checking the latest recorded request and answer,
+   write/edit targets, path, branch, and health evidence.
+
+Claude Code already provides a capable global `/resume` picker and Agent View
+for background sessions. Reup complements both by keeping discovered local CLI
+history, matched live processes, and managed background work in a persistent,
+information-dense view, then adding structured search and pre-resume context.
+Its value is the complete find → triage → inspect → resume workflow, not a claim
+that any one primitive is exclusive.
 
 ---
 
 ## Feature categories
 
-### Session intelligence
+### Session state and health
 
-The highest-signal area. No other tool in the Claude Code ecosystem surfaces
-session health — they show you titles and dates; Reup shows you _state_.
+Reup separates reported, observed, and inferred evidence. State is useful only
+when its source and limits are honest.
 
-| Feature                       | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Health signals**            | Six independent signals derived from transcript metadata: `interrupted`, `lastToolFailed`, `compactionCount`, `expiresInDays`, `pathExists`, `analysisComplete`. Each is independently computable at the data layer, which is what `reup doctor`/`cleanup` read. The web session list corrects the display for live sessions: a dangling tool call reads as normal mid-turn work, not an interruption, unless the tool actually failed. |
-| **Derived status display**    | `primaryStatus` is computed fresh from signals on every read, never stored. This prevents the stale badges and phantom states that indexed tools show when the transcript changes without an index sync.                                                                                                                                                                                                                                |
-| **Branch drift detection**    | Compares the branch recorded in the transcript against the current git HEAD in the session's working directory. Warns before you resume into the wrong branch. Shown in both TUI and web.                                                                                                                                                                                                                                               |
-| **Remote-active heuristic**   | Sessions with no local lock file but a transcript written within the last 5 minutes show a hollow dot `◌` instead of `●`. Catches sessions running in another terminal or on another machine — without any network access.                                                                                                                                                                                                              |
-| **Lost & Found**              | Automatically surfaces three categories: sessions approaching Claude Code's cleanup window (expiring), sessions whose recorded path no longer exists (path-missing), and transcripts present on disk but absent from any project index (orphaned). Available in the web UI panel and via `reup doctor`.                                                                                                                                 |
-| **reup doctor**               | Non-destructive, local-only diagnosis command. Checks for stale sidecar locks, broken or absent indices, orphaned transcripts, missing project paths, and sessions nearing Claude cleanup. Every finding includes an explanation and a suggested action.                                                                                                                                                                                |
-| **Index corruption recovery** | When `sessions-index.json` is absent or corrupt, Reup walks the transcript directory and reconstructs session metadata from raw JSONL events. Index corruption does not hide sessions — they surface automatically. _This is a gap across all tools reviewed in the 2026 competitive survey._                                                                                                                                           |
+| Feature                        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Shared live-state resolver** | TUI, web, CLI inbox, and VS Code consume the same `needs-input`, `working`, `attached`, and `detached` decision. Fresh, non-superseded Agent View task state takes precedence per field, but only a reported PID or verified lock establishes a live process. Pidless managed rows remain safety evidence and are presented only when anchored to a resume-visible discovered session or live lock; orphanable hook/work markers cannot provide that anchor. Transcript activity remains an inferred hint. |
+| **Health signals**             | Six independent signals derived from transcript metadata: `interrupted`, `lastToolFailed`, `compactionCount`, `expiresInDays`, `pathExists`, `analysisComplete`. Each is independently computable at the data layer, which is what `reup doctor`/`cleanup` read. The web session list corrects the display for live sessions: a dangling tool call reads as normal mid-turn work, not an interruption, unless the tool actually failed.                                                                    |
+| **Derived status display**     | `primaryStatus` is recomputed from the available evidence on each discovery pass rather than persisted as a final label. Inputs can still have different freshness, so the UI must not imply that every derived value is current.                                                                                                                                                                                                                                                                          |
+| **Branch drift detection**     | Compares the branch recorded in the transcript against the current git HEAD in the session's working directory. Warns before you resume into the wrong branch. Shown in both TUI and web.                                                                                                                                                                                                                                                                                                                  |
+| **Recently active heuristic**  | Sessions with no reported PID or verified local lock but a transcript written within the last 5 minutes show a hollow dot `◌` instead of `●`. This is recency evidence, not proof that a process is still running.                                                                                                                                                                                                                                                                                         |
+| **Lost & Found**               | Automatically surfaces three categories: sessions approaching Claude Code's cleanup window (expiring), sessions whose recorded path no longer exists (path-missing), and transcripts present on disk but absent from any project index (orphaned). Available in the web UI panel and via `reup doctor`.                                                                                                                                                                                                    |
+| **reup doctor**                | Non-destructive local diagnosis command. Checks for stale sidecar locks, broken or absent indices, orphaned transcripts, missing project paths, and sessions nearing Claude cleanup. Every finding includes an explanation and a suggested action.                                                                                                                                                                                                                                                         |
+| **Index corruption recovery**  | When `sessions-index.json` is absent or corrupt, Reup walks the transcript directory and reconstructs session metadata from raw JSONL events. Index corruption does not hide sessions.                                                                                                                                                                                                                                                                                                                     |
 
-**Unique to Reup:** all of the above. Branch drift detection, the remote-active
-heuristic, Lost & Found, and silent index recovery are absent from every
-reviewed competitor.
+Together these signals make the list useful before resume. Competitive copy
+should describe this outcome and the evidence model rather than present an
+unmaintained “unique” claim.
 
 ---
 
@@ -49,49 +57,47 @@ around that search: global project/session context, structured filters, deep
 transcript search, aliases, adaptive ID prefixes, shell completion, and health
 signals shown inline.
 
-| Feature                         | Detail                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Global view and search**      | Search spans all projects from any directory and keeps projects and sessions visible together. No need to know which project a session belongs to before scanning the work.                                                                                                                                                                                                                                             |
-| **Scope qualifiers**            | `project:`, `branch:`, `status:`, `is:active`, `is:archived` narrow any free-text query. Qualifiers combine with AND semantics. Plain text queries are unaffected.                                                                                                                                                                                                                                                      |
-| **Alias search**                | User-assigned session aliases are indexed alongside the session name, ID, and path. Renaming a session for readability also makes it findable.                                                                                                                                                                                                                                                                          |
-| **Deep transcript search**      | Scans the full content of every session transcript, not just metadata. Available via `reup search --deep`, the TUI `tab` key while searching, and the web UI ⌕ button.                                                                                                                                                                                                                                                  |
-| **Touched-file reverse lookup** | "Which sessions edited this file?" — a reverse index over the immutable `tool_use` write events each transcript records. Exposed as `reup touched <path>` (CLI), a TUI finder (`t` / command palette), and — almost-hidden — a "touched by N other sessions" link on each touched file in the web inspector and the VS Code inspector + dashboard. Read-only; surfaces only paths and sessions, never diffs or replays. |
-| **Ranked shell completion**     | Session-ID completion for `reup resume` and `reup handoff` across PowerShell, Bash, and Zsh. Completions are ranked: current-project sessions first, then active sessions, then recent activity. No session titles or transcript content are exposed to the shell.                                                                                                                                                      |
-| **Adaptive ID prefixes**        | `reup list` shows the shortest globally unambiguous session-ID prefix for each session (minimum 8 chars). Any prefix from this column can be passed directly to `reup resume` or `reup handoff`; ambiguous prefixes are refused.                                                                                                                                                                                        |
+| Feature                         | Detail                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Global view and search**      | Search spans all projects from any directory and keeps projects and sessions visible together. No need to know which project a session belongs to before scanning the work.                                                                                                                                                                                                                        |
+| **Scope qualifiers**            | `project:`, `branch:`, `status:`, `is:active`, `is:archived` narrow any free-text query. Qualifiers combine with AND semantics. Plain text queries are unaffected.                                                                                                                                                                                                                                 |
+| **Alias search**                | User-assigned session aliases are indexed alongside the session name, ID, and path. Renaming a session for readability also makes it findable.                                                                                                                                                                                                                                                     |
+| **Deep transcript search**      | Scans the content of discovered local session transcripts, not just metadata. Available via `reup search --deep`, the TUI `tab` key while searching, and the web UI ⌕ button.                                                                                                                                                                                                                      |
+| **Touched-file reverse lookup** | "Which sessions targeted this path with a write/edit tool call?" — a reverse index over recorded `tool_use` events. Exposed as `reup touched <path>` (CLI), a TUI finder (`t` / command palette), and a "touched by N other sessions" link in the web and VS Code inspectors. It does not verify that every attempted tool call succeeded; it surfaces paths and sessions, never diffs or replays. |
+| **Ranked shell completion**     | Session-ID completion for `reup resume` and `reup handoff` across PowerShell, Bash, and Zsh. Completions are ranked: current-project sessions first, then active sessions, then recent activity. No session titles or transcript content are exposed to the shell.                                                                                                                                 |
+| **Adaptive ID prefixes**        | `reup list` shows the shortest globally unambiguous session-ID prefix for each session (minimum 8 chars). Any prefix from this column can be passed directly to `reup resume` or `reup handoff`; ambiguous prefixes are refused.                                                                                                                                                                   |
 
-**Unique to Reup:** qualifier-based scoping, alias search, ranked shell
-completion with privacy guarantees, adaptive ID prefixes, and search results
-combined with health/usage context. `claude-history` has fast fuzzy search but
-no qualifiers, no aliases, no shell completion, and no operational state layer.
+The positioning advantage is recognition: search results retain project,
+branch, status, and health context instead of becoming a separate list of
+matching transcript lines.
 
 ---
 
 ### Usage visibility
 
-Deeper than any competitor. No other tool surfaces live account limits
-alongside per-session context size in the same view.
+Usage is supporting context for the resume decision, not a primary product
+pillar. Report freshness and unavailable values explicitly.
 
-| Feature                      | Detail                                                                                                                                                                                                                       |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Per-session context size** | Latest context-input token count extracted from each analysed transcript. Shown in session rows; web view sorts by context size descending so the most expensive work rises to the top.                                      |
-| **Account limits**           | 5-hour and 7-day usage percentages and reset times. Refreshed from Claude Code's local authenticated usage endpoint at most once every 30 seconds.                                                                           |
-| **Status-line integration**  | Reads the Claude Code terminal status line as a secondary source for model, agent, and live context detail. Never silently replaces an existing status line; `reup usage setup --replace` is required for that.              |
-| **Always visible**           | Usage summary is persistent in both the TUI header and web page header — not hidden in a secondary panel or behind a command. Includes current-session usage, weekly usage, and monthly/credit-period usage where available. |
-| **Colour-coded thresholds**  | Cyan normally, yellow at 80%, orange at 90%, red at 100%. Applied consistently across TUI, web, and `reup usage`.                                                                                                            |
-| **Freshness transparency**   | Every displayed value shows its last-updated time. Stale or unavailable values are shown as stale/unknown rather than hidden or estimated.                                                                                   |
-| **Opt-in, fully reversible** | Usage capture is off by default. `reup usage setup` enables it; `reup usage remove` reverses all changes and deletes the local cache. The OAuth token is held in memory only — never logged or written to disk.              |
+| Feature                      | Detail                                                                                                                                                                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Per-session context size** | Latest context-input token count extracted from each analysed transcript. Shown in session rows; web view sorts by context size descending so the most expensive work rises to the top.                                                                                                     |
+| **Account limits**           | 5-hour and 7-day usage percentages and reset times. After explicit `reup usage setup`, Reup may query Anthropic's authenticated usage endpoint at most once every 30 seconds using Claude Code's locally managed OAuth credential. No account request is made while the integration is off. |
+| **Status-line integration**  | Reads the Claude Code terminal status line as a secondary source for model, agent, and live context detail. Never silently replaces an existing status line; `reup usage setup --replace` is required for that.                                                                             |
+| **Header placement**         | TUI, web, and VS Code reserve a compact usage area. It shows `off`/unavailable while the integration is disabled and, when configured, can show current-session context plus the supported 5-hour and 7-day account windows.                                                                |
+| **Colour-coded thresholds**  | Cyan normally, yellow at 80%, orange at 90%, red at 100%. Applied consistently across TUI, web, and `reup usage`.                                                                                                                                                                           |
+| **Freshness transparency**   | The usage feed exposes its last-updated time and fresh/stale/unavailable state. Missing values remain unavailable rather than being estimated.                                                                                                                                              |
+| **Opt-in, fully reversible** | Usage capture and account requests are off by default. `reup usage setup` is the consent boundary; `reup usage remove` restores the previous status-line setting and deletes Reup's aggregate cache. The OAuth token is held in memory only — never logged or written by Reup.              |
 
-**Unique to Reup:** account limits + per-session context in the same always-on
-view, with an opt-in architecture that includes explicit reversal. CCHV has
-token analytics for browsing; no competitor surfaces live account limits.
+Account limits and per-session context appear together so a developer can judge
+whether continuing expensive work is practical. This is a secondary benefit,
+not the homepage hook.
 
 ---
 
 ### TUI (terminal interface)
 
-Keyboard-first, sub-second startup. Designed for habitual daily use: open,
-find, resume, done. No tool in the reviewed landscape combines a TUI with
-session intelligence.
+Keyboard-first and designed for habitual daily use: open, find, inspect,
+resume, done.
 
 | Feature                           | Detail                                                                                                                                                                  |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -111,26 +117,25 @@ session intelligence.
 ### Web UI
 
 A passive dashboard designed to stay open in a browser tab while you work.
-SSE live updates mean the page never needs a manual refresh. The only tool in
-the reviewed landscape that ships both a web UI and session intelligence.
+SSE updates refresh the page as local session data changes.
 
-| Feature                            | Detail                                                                                                                                                                                       |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Filter pills**                   | All · Needs Attention · Active · Archived — one-click filter.                                                                                                                                |
-| **Sort controls**                  | Recent (default) or Risk (attention-status sessions first). Project sort: recent activity or project name.                                                                                   |
-| **Session Inspector card**         | Right-panel operations panel: visible Resume/Handoff/Rename/Archive/Delete actions, shortcut hints, Resume Card preview, status explanation, usage/context facts, session ID, and full path. |
-| **SSE live updates**               | Server-sent events push changes when the transcript directory changes. No polling or manual refresh.                                                                                         |
-| **Session context sort**           | Sessions sorted by latest observed context-input size descending. Sessions without analysed context sort last.                                                                               |
-| **Full keyboard navigation**       | `j`/`k` navigate sessions; `[`/`]` or `h`/`l` navigate projects; `a` archives; `/` opens search. Guards prevent firing inside input fields.                                                  |
-| **Deep-linkable sessions**         | The URL hash resolves to a specific project and session on load. Share or bookmark any session directly.                                                                                     |
-| **Context menus**                  | The visible `...` row button and right-click on project/session rows open Reup's custom action menu instead of relying on browser defaults.                                                  |
-| **Triage Inbox**                   | Exclusive, priority-ordered smart buckets surface active work, failures, branch drift, missing paths, high context, expiry, and recently touched sessions.                                   |
-| **Organization rail**              | Collapsible Inbox, Stack, and Group sections filter the project and session panels without a server-side query.                                                                              |
-| **Tags and work stacks**           | Keyboard and context-menu flows tag sessions/projects, assign groups, toggle stack membership, and save the current search/focus as a reusable stack.                                        |
-| **CLAUDE.md editor**               | View and edit each project's instruction file from the web UI. Shown as a tag in the project header when the file exists.                                                                    |
-| **Start new session from project** | `+ new` button launches a new Claude Code session in the project directory.                                                                                                                  |
-| **Branch drift badge**             | Shown inline on session rows when the recorded branch differs from current git HEAD.                                                                                                         |
-| **Status badges**                  | Each session row shows its derived `primaryStatus` badge.                                                                                                                                    |
+| Feature                            | Detail                                                                                                                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Filter pills**                   | All · Needs Attention · Active · Archived — one-click filter.                                                                                                                                  |
+| **Sort controls**                  | Recent (default) or Risk (attention-status sessions first). Project sort: recent activity or project name.                                                                                     |
+| **Session Inspector card**         | Right-panel operations panel: visible Resume/Handoff/Rename/Archive/Delete actions, shortcut hints, Resume Card preview, status explanation, usage/context facts, session ID, and full path.   |
+| **SSE live updates**               | Server-sent events push filesystem and activity changes promptly. Periodic server refresh and client reconciliation polling cover missed watcher/SSE events; manual refresh remains available. |
+| **Session context sort**           | Sessions sorted by latest observed context-input size descending. Sessions without analysed context sort last.                                                                                 |
+| **Full keyboard navigation**       | `j`/`k` navigate sessions; `[`/`]` or `h`/`l` navigate projects; `a` archives; `/` opens search. Guards prevent firing inside input fields.                                                    |
+| **Deep-linkable sessions**         | The URL hash resolves to a specific project and session on load. Share or bookmark any session directly.                                                                                       |
+| **Context menus**                  | The visible `...` row button and right-click on project/session rows open Reup's custom action menu instead of relying on browser defaults.                                                    |
+| **Triage Inbox**                   | Mutually exclusive, priority-ordered smart buckets surface active work, failures, branch drift, missing paths, high context, expiry, and recently touched sessions.                            |
+| **Organization rail**              | Collapsible Inbox, Stack, and Group sections filter the project and session panels without a server-side query.                                                                                |
+| **Tags and work stacks**           | Keyboard and context-menu flows tag sessions/projects, assign groups, toggle stack membership, and save the current search/focus as a reusable stack.                                          |
+| **CLAUDE.md editor**               | View and edit each project's instruction file from the web UI. Shown as a tag in the project header when the file exists.                                                                      |
+| **Start new session from project** | `+ new` button launches a new Claude Code session in the project directory.                                                                                                                    |
+| **Branch drift badge**             | Shown inline on session rows when the recorded branch differs from current git HEAD.                                                                                                           |
+| **Status and live markers**        | Non-`ok` health states render a `primaryStatus` badge. Live-state markers are separate, so a healthy session is not given a decorative `ok` badge.                                             |
 
 ---
 
@@ -140,15 +145,15 @@ The installable VS Code extension combines a focused full-screen resume
 dashboard with workspace-native companion views:
 
 - Full-screen project/session discovery with progressive detail loading,
-  structured metadata search, explicit transcript search, live usage, and
-  context menus.
+  structured metadata search, explicit transcript search, opt-in usage
+  visibility, and context menus.
 - Current-workspace, external-attention, and recent-global sections.
 - Deterministic Resume Advice for missing paths, active sessions, branch drift,
   interrupted work, expiry, compaction, and safe resume.
 - Live refresh only while the Reup view is visible, including Claude locks,
   multi-root workspaces, active editor affinity, and Git worktrees.
-- A CSP-restricted Session Inspector with goal, progress, plan, TODOs, context,
-  branches, file links, and tags.
+- A CSP-restricted Session Inspector with the latest recorded request and
+  answer, plan, TODOs, context, branches, file links, and tags.
 - Safe local actions: resume, handoff, alias, archive/undo, tags, and reveal.
 - Compact active/attention status bar and global/workspace Quick Picks.
 - One centralized resume policy across all surfaces, choosing the Claude Code
@@ -156,8 +161,10 @@ dashboard with workspace-native companion views:
   preference and safe fallback.
 
 The extension reuses Reup core discovery, health, preview, metadata, and
-handoff logic. It has no telemetry, network service, transcript writes,
-automatic branch changes, or destructive delete action.
+handoff logic. It hosts no network service and has no telemetry, transcript
+writes, automatic branch changes, or destructive delete action. When the user
+has explicitly configured usage capture, the shared core may query Anthropic's
+account-usage endpoint for aggregate limits; it never sends transcripts.
 
 ---
 
@@ -166,34 +173,33 @@ automatic branch changes, or destructive delete action.
 All commands produce concise human output and machine-readable output where
 useful. Designed to be scriptable and composable with standard shell tools.
 
-| Command                              | Purpose                                                                                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `reup`                               | Open TUI                                                                                                                                            |
-| `reup web`                           | Open browser UI                                                                                                                                     |
-| `reup resume [id]`                   | Interactive global picker, or resume by ID or unambiguous prefix                                                                                    |
-| `reup search <query>`                | Interactive picker with pre-filled search                                                                                                           |
-| `reup search --deep <q>`             | Full-content transcript search with interactive picker                                                                                              |
-| `reup touched [path]`                | Reverse lookup: which sessions edited a file. Interactive picker without a path; `--json` for scripts                                               |
-| `reup list [query]`                  | Compact human table, globally filtered. `--json` for machine-readable output                                                                        |
-| `reup inbox`                         | Attention-sorted summary of active and at-risk sessions                                                                                             |
-| `reup handoff [session]`             | Compact Markdown continuation packet: last goal, transcript summary, edited files, open todos. Unavailable facts marked explicitly, never inferred. |
-| `reup cleanup`                       | Review stale, empty, orphaned, or expired sessions and archive them reversibly                                                                      |
-| `reup doctor`                        | Non-destructive local health check                                                                                                                  |
-| `reup usage`                         | Show observed usage and data freshness                                                                                                              |
-| `reup usage setup / remove / toggle` | Manage usage capture integration                                                                                                                    |
-| `reup attention setup / remove`      | Reversible Notification-hook alerts when a session waits for user input                                                                             |
-| `reup config get/set/reset <key>`    | Read and write persistent user preferences                                                                                                          |
-| `reup completion <shell>`            | Print PowerShell, Bash, or Zsh completion setup                                                                                                     |
-| `reup help [command]`                | Show general or command-specific CLI help                                                                                                           |
-| `reup --help / --version`            | Help and version                                                                                                                                    |
+| Command                           | Purpose                                                                                                                                                         |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reup`                            | Open TUI                                                                                                                                                        |
+| `reup web`                        | Open browser UI                                                                                                                                                 |
+| `reup resume [id]`                | Interactive global picker, or resume by ID or unambiguous prefix                                                                                                |
+| `reup search <query>`             | Interactive picker with pre-filled search                                                                                                                       |
+| `reup search --deep <q>`          | Full-content transcript search with interactive picker                                                                                                          |
+| `reup touched [path]`             | Reverse lookup for sessions whose transcripts recorded a write/edit tool call targeting a path. Interactive picker without a path; `--json` for scripts         |
+| `reup list [query]`               | Compact human table, globally filtered. `--json` for machine-readable output                                                                                    |
+| `reup inbox`                      | Attention-sorted summary of active and at-risk sessions                                                                                                         |
+| `reup handoff [session]`          | Compact Markdown continuation packet: latest recorded request, transcript summary, write/edit targets, and open TODOs. Unavailable facts are marked explicitly. |
+| `reup cleanup`                    | Review stale, empty, orphaned, or expired sessions and archive them reversibly                                                                                  |
+| `reup doctor`                     | Non-destructive local health check                                                                                                                              |
+| `reup usage`                      | Show observed usage and data freshness                                                                                                                          |
+| `reup usage setup / remove`       | Opt in to or remove status-line capture and authenticated aggregate account-usage refresh                                                                       |
+| `reup attention setup / remove`   | Manage reversible local Notification-hook alerts                                                                                                                |
+| `reup config get/set/reset <key>` | Read and write persistent user preferences                                                                                                                      |
+| `reup completion <shell>`         | Print PowerShell, Bash, or Zsh completion setup                                                                                                                 |
+| `reup help [command]`             | Show general or command-specific CLI help                                                                                                                       |
+| `reup --help / --version`         | Help and version                                                                                                                                                |
 
 `reup list` filters combine with AND semantics. `--active`, `--attention`,
 `--archived`, `--project`, `--status`, `--limit`, `--json` are all composable.
 
-**Unique to Reup:** `reup handoff` (continuation packet), `reup inbox`
-(attention-sorted summary), and `reup doctor` (structured health check). No
-other reviewed tool ships any of these. Shell completion with ranked suggestions
-and adaptive ID prefixes are also absent from all competitors.
+These commands expose the same continuity loop to scripts: find with `list`,
+`search`, or `touched`; triage with `inbox` and `doctor`; continue with `resume`
+or `handoff`.
 
 ---
 
@@ -221,75 +227,56 @@ feature is not shipped, advertised, or kept dormant in the codebase.
 
 ### Safety & privacy
 
-| Guarantee                                     | Detail                                                                                                                                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Local-only analysis**                       | All transcript parsing happens on the local machine. No content is ever sent to a remote service.                                                                                     |
-| **No telemetry**                              | Reup collects no usage metrics, crash reports, or any other data.                                                                                                                     |
-| **Localhost web server**                      | The web server binds to `127.0.0.1` only. Not reachable from other machines.                                                                                                          |
-| **Safe transcript handling**                  | Automated cleanup only archives through Reup sidecar metadata. Permanent deletion is an explicit action, is blocked for active sessions, and is never used by background maintenance. |
-| **OAuth token in memory only**                | The local Claude Code token used for usage requests is held in memory during the request and never logged or written to disk.                                                         |
-| **Credential warning in handoff** _(roadmap)_ | Before emitting a handoff packet, scan for secret patterns (API keys, tokens, env assignments). Warn and require `--force` to proceed. The transcript is never modified.              |
+| Guarantee                                     | Detail                                                                                                                                                                                                                             |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local analysis**                            | All transcript parsing happens on the local machine. No content is sent to a Reup-operated remote service.                                                                                                                         |
+| **No Reup telemetry**                         | Reup sends no product analytics, crash reports, or session content to a Reup-operated service.                                                                                                                                     |
+| **Localhost web server**                      | The web server binds to `127.0.0.1` only. Not reachable from other machines.                                                                                                                                                       |
+| **Safe transcript handling**                  | Automated cleanup only archives through Reup sidecar metadata. Permanent deletion is an explicit action, is blocked for active sessions, and is never used by background maintenance.                                              |
+| **Visible, reversible hook write**            | The first TUI, web, or configuration launch registers Reup-owned attention hooks in Claude settings and announces `reup attention remove`. An explicit removal records the opt-out; extension activation alone does not add hooks. |
+| **OAuth token in memory only**                | After explicit usage setup, the local Claude Code token used for aggregate account requests is held in memory during the request and never logged or written by Reup.                                                              |
+| **Credential warning in handoff** _(roadmap)_ | Before emitting a handoff packet, scan for secret patterns (API keys, tokens, env assignments). Warn and require `--force` to proceed. The transcript is never modified.                                                           |
 
 ---
 
-## Competitive snapshot
+## Relationship to Claude Code's native tools
 
-Assessed against the four tools reviewed in the mid-2026 article
-[_I tested 4 tools for browsing Claude Code session history_](https://dev.to/gonewx/i-tested-4-tools-for-browsing-claude-code-session-history-17ie).
+The useful comparison is by workflow boundary, not by accumulating checkmarks.
 
-| Capability                                          |      reup      | Mantra |  CCHV   | claude-history | Built-in |
-| --------------------------------------------------- | :------------: | :----: | :-----: | :------------: | :------: |
-| Session signals (interrupted, expiry, path-missing) |       ✓        |   —    |    —    |       —        |    —     |
-| Branch drift detection                              |       ✓        |   —    |    —    |       —        |    —     |
-| Remote-active heuristic                             |       ✓        |   —    |    —    |       —        |    —     |
-| Lost & Found (orphaned / expiring sessions)         |       ✓        |   —    |    —    |       —        |    —     |
-| Doctor / health check command                       |       ✓        |   —    |    —    |       —        |    —     |
-| Index corruption recovery (JSONL fallback)          |       ✓        |   —    |    —    |       —        |    —     |
-| Non-destructive toward transcripts                  |       ✓        |   —    |    ?    |       ✓        |    ✓     |
-| Global search with qualifiers                       |       ✓        |   —    |    —    |       —        |    —     |
-| Deep transcript search                              |       ✓        |   —    |    —    |       ✓        |    —     |
-| Project auto-organization                           |       ✓        |   —    |    —    |       —        |    —     |
-| Usage: context window per session                   |       ✓        |   —    |    ✓    |       —        |    —     |
-| Usage: live account limits (5h / 7d)                |       ✓        |   —    |    —    |       —        |    —     |
-| Usage: always visible in all views                  |       ✓        |   —    |    —    |       —        |    —     |
-| Handoff / continuation packet                       |       ✓        |   —    |    —    |       —        |    —     |
-| Inbox (attention-sorted summary)                    |       ✓        |   —    |    —    |       —        |    —     |
-| Ranked shell completion                             |       ✓        |   —    |    —    |       —        |    —     |
-| CLAUDE.md editor                                    |       ✓        |   —    |    —    |       —        |    —     |
-| TUI interface                                       |       ✓        |   —    |    —    |       ✓        |    ✓     |
-| Web interface                                       |       ✓        |   —    |    ✓    |       —        |    —     |
-| VS Code extension                                   |       ✓        |   —    |    —    |       —        |    —     |
-| Credential / secret warning before share            |  _(roadmap)_   |   ✓    |    —    |       —        |    —     |
-| Files-touched list + reverse "who edited this file" |       ✓        |   ✓    |    —    |       —        |    —     |
-| Timeline replay / step-by-step code diff            | ✗ out of scope |   ✓    |    —    |       —        |    —     |
-| Cross-tool (Cursor, Codex, OpenCode)                | ✗ out of scope |   ✓    |    ✓    |       —        |    —     |
-| Zero configuration                                  |       ✓        |   —    | partial |       —        |    ✓     |
-| No API key required for core features               |       ✓        |   ?    |    ?    |       ✓        |    ✓     |
-| No Reup cloud, no account, no telemetry             |       ✓        |   —    |    —    |       ✓        |    ✓     |
+| Question                                    | Claude Code `/resume`                                                      | Claude Code Agent View                                         | Reup                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Primary job**                             | Switch to a saved conversation                                             | Dispatch and operate background sessions                       | Find, triage, inspect, and resume local CLI work                                                  |
+| **Scope**                                   | Current worktree by default; `Ctrl+A` widens to all local projects         | Background sessions across local projects                      | Discovered local transcripts plus matched live processes and managed tasks                        |
+| **Interactive sessions in other terminals** | Saved conversations remain available in the picker                         | Not listed until backgrounded                                  | Included when Claude reports them or valid local evidence matches them                            |
+| **Search and recognition**                  | Search, preview, name, branch, age, and message count                      | Filter by state, agent, or pull request                        | Metadata qualifiers, explicit transcript search, touched files, branch, state, and health context |
+| **Live operation**                          | Resume/switch flow                                                         | State, peek, reply, attach, stop, and dispatch                 | At-a-glance triage and resume; not a background-agent supervisor                                  |
+| **Boundary**                                | An unrelated project produces a copied `cd … && claude --resume …` command | Built around background sessions; currently a research preview | Local CLI data only; no Claude desktop, web, or remote-history aggregation                        |
 
-`✓` = shipped · `—` = absent · `?` = unknown · `*(roadmap)*` = planned · `✗` = intentionally out of scope
+Native behavior is based on Claude Code's official
+[session documentation](https://code.claude.com/docs/en/sessions) and
+[Agent View documentation](https://code.claude.com/docs/en/agent-view). Recheck
+this table for each public release because first-party behavior evolves quickly.
+
+Agent View can retain pidless background tasks reported as `working` or
+`blocked` after their process exits. Reup does not call those rows historical
+or expire them by age: it keeps them for conservative safety checks, while
+presentation requires either a resume-visible discovered session or a verified
+live lock. Attention and work markers may refine state but cannot establish
+that anchor because they can be orphaned.
 
 ---
 
 ## What we are intentionally not building
 
-Documented in `Documents/PRODUCT_DIRECTION.md`. Key exclusions relevant to
-competitive positioning:
+Documented in `Documents/PRODUCT_DIRECTION.md`. The important boundaries are:
 
-- **Timeline replay / step-by-step code diff** — Mantra's differentiator. Too
-  heavy for our light/local mission and does not answer the question Reup is
-  built around ("should I resume this session?").
-
-- **Cross-tool support** — CCHV and Mantra support Cursor, Codex, etc. Claude
-  Code focus is intentional: it lets us go deeper on Claude-specific signals
-  (compaction events, context windows, branch recordings) that don't exist in
-  other tools' data formats.
-
-- **Embedded terminal or Electron desktop app** — deliberately unnecessary.
-  Reup opens in a terminal or browser tab you already have, starts in under a
-  second, and requires no Electron overhead or separate app install. Mantra
-  requires a dedicated desktop install.
-
-- **Reup-hosted cloud sync / accounts / team features** — Local-first is a
-  design constraint, not a gap. Project Memory sync is deferred until it can be
-  supported as a separate explicit milestone.
+- **Timeline replay or step-by-step code diffs.** Reup is a continuity and
+  resume tool, not a transcript replay environment.
+- **Cross-tool support.** Claude Code focus allows deeper use of its local
+  session facts and documented Agent View inventory.
+- **Embedded terminals or an Electron desktop app.** Reup uses the terminal,
+  browser, and editor the developer already has.
+- **Claude desktop, web, remote, or mobile history aggregation.** Reup is scoped
+  to local Claude Code CLI data.
+- **Reup-hosted sync, accounts, or team features.** Project Memory sync remains
+  deferred and is not shipped or advertised.

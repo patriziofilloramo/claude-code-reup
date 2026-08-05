@@ -47,7 +47,7 @@ async function probeServerReachability() {
   if (offlineProbeInFlight) return
   offlineProbeInFlight = true
   try {
-    await fetch('/api/active', { cache: 'no-store' })
+    await fetch('/api/health', { cache: 'no-store' })
     markServerOnline()
   } catch {
     markServerOffline()

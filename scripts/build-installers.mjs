@@ -16,6 +16,8 @@ import { join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 
+import { resolveReleaseCommand } from './release-command.mjs'
+
 const allowDirty = process.argv.includes('--allow-dirty')
 const root = process.cwd()
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
@@ -45,20 +47,11 @@ removeTree(workDir)
 mkdirSync(installerDir, { recursive: true })
 mkdirSync(workDir, { recursive: true })
 
+const npmPackagePath = findNpmPackageArtifact()
 const runtimeApp = join(workDir, 'app')
-prepareRuntimeApp(runtimeApp)
+prepareRuntimeApp(runtimeApp, npmPackagePath)
 
-buildWindowsPackage(runtimeApp)
-buildUnixPackage(runtimeApp, {
-  id: 'linux-x64',
-  archiveName: `reup-linux-x64-v${version}.tar.gz`,
-  installRootExpression: '"${XDG_DATA_HOME:-$HOME/.local/share}/reup"',
-})
-buildUnixPackage(runtimeApp, {
-  id: 'macos-universal',
-  archiveName: `reup-macos-universal-v${version}.tar.gz`,
-  installRootExpression: '"$HOME/Library/Application Support/reup"',
-})
+buildCurrentPlatformPackage(runtimeApp)
 
 removeTree(workDir)
 writeInstallerNotes()
@@ -67,24 +60,67 @@ writeChecksums(releaseRoot)
 console.log(`\nLocal installable release packages ready: ${installerDir}`)
 console.log('These are unsigned RC packages. Official native installers remain a later phase.')
 
-function prepareRuntimeApp(target) {
-  mkdirSync(target, { recursive: true })
-
-  for (const file of [
-    'package.json',
-    'package-lock.json',
-    'README.md',
-    'LICENSE',
-    'DISCLAIMER.md',
-    'PRIVACY.md',
-    'SECURITY.md',
-    'SUPPORT.md',
-  ]) {
-    copyFileSync(file, join(target, file))
+function buildCurrentPlatformPackage(runtimeApp) {
+  if (process.platform === 'win32') {
+    if (process.arch !== 'x64') {
+      fail(`Windows installer packaging currently supports x64 hosts, not ${process.arch}.`)
+    }
+    buildWindowsPackage(runtimeApp)
+    return
   }
 
-  cpSync('dist', join(target, 'dist'), { recursive: true })
+  if (process.platform === 'linux') {
+    buildUnixPackage(runtimeApp, {
+      id: `linux-${process.arch}`,
+      archiveName: `reup-linux-${process.arch}-v${version}.tar.gz`,
+      installRootExpression: '"${XDG_DATA_HOME:-$HOME/.local/share}/reup"',
+    })
+    return
+  }
+
+  if (process.platform === 'darwin') {
+    buildUnixPackage(runtimeApp, {
+      id: `macos-${process.arch}`,
+      archiveName: `reup-macos-${process.arch}-v${version}.tar.gz`,
+      installRootExpression: '"$HOME/Library/Application Support/reup"',
+    })
+    return
+  }
+
+  fail(`Installable package generation is not supported on ${process.platform}.`)
+}
+
+function findNpmPackageArtifact() {
+  const artifactDir = join(releaseRoot, 'artifacts')
+  const candidates = existsSync(artifactDir)
+    ? readdirSync(artifactDir).filter((file) => file.endsWith('.tgz'))
+    : []
+  if (candidates.length !== 1) {
+    fail(`Expected one npm package tarball in ${artifactDir}; found ${candidates.length}.`)
+  }
+  return join(artifactDir, candidates[0])
+}
+
+function prepareRuntimeApp(target, packagePath) {
+  const extractionRoot = join(workDir, '.npm-package')
+  mkdirSync(extractionRoot, { recursive: true })
+  run('tar', ['-xzf', packagePath, '-C', extractionRoot])
+
+  const extractedPackage = join(extractionRoot, 'package')
+  if (!existsSync(join(extractedPackage, 'dist', 'index.js'))) {
+    fail(`Packed npm artifact is missing dist/index.js: ${packagePath}`)
+  }
+
+  cpSync(extractedPackage, target, { recursive: true })
+  copyFileSync('package-lock.json', join(target, 'package-lock.json'))
+
+  const packedManifest = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'))
+  if (packedManifest.name !== manifest.name || packedManifest.version !== version) {
+    fail('Packed npm artifact identity does not match package.json.')
+  }
+
   run('npm', ['ci', '--omit=dev', '--ignore-scripts'], { cwd: target })
+  removeTree(extractionRoot)
 }
 
 function buildWindowsPackage(runtimeApp) {
@@ -551,6 +587,11 @@ function unixReadme(platformId) {
 }
 
 function writeInstallerNotes() {
+  const packages = readdirSync(installerDir)
+    .filter((file) => !file.endsWith('_SKIPPED.txt'))
+    .sort((a, b) => a.localeCompare(b))
+    .map((file) => `- \`installers/${file}\``)
+
   writeFileSync(
     join(releaseRoot, 'INSTALLERS.md'),
     [
@@ -560,14 +601,14 @@ function writeInstallerNotes() {
       '',
       '## Packages',
       '',
-      `- \`installers/reup-setup-windows-x64-v${version}.exe\` when Inno Setup is available`,
-      `- \`installers/reup-windows-x64-v${version}.zip\``,
-      `- \`installers/reup-macos-universal-v${version}.tar.gz\``,
-      `- \`installers/reup-linux-x64-v${version}.tar.gz\``,
+      ...(packages.length > 0 ? packages : ['- No installable package was generated.']),
       '',
       '## Scope',
       '',
       '- Includes the built Reup app plus production `node_modules`.',
+      '- The app files are extracted from the npm tarball in `artifacts/`; installers do not rebuild them.',
+      `- Built for the current host only: \`${process.platform}-${process.arch}\`.`,
+      '- Build separately on each target platform; packages are never cross-built with host-specific dependencies.',
       '- Requires Node.js 20 or newer on the target machine.',
       '- Installs per-user only.',
       '- Does not publish to npm, GitHub Releases, or the VS Code Marketplace.',
@@ -611,21 +652,23 @@ function removeTree(path) {
 
 function run(command, args, options = {}) {
   console.log(`\n> ${[command, ...args].join(' ')}`)
-  const result = spawnSync(resolveCommand(command), args, {
+  const invocation = resolveReleaseCommand(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: options.cwd ?? root,
     stdio: 'inherit',
-    shell: commandNeedsShell(command),
+    shell: false,
   })
   if (result.error) throw result.error
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
 function runCapture(command, args) {
-  const result = spawnSync(resolveCommand(command), args, {
+  const invocation = resolveReleaseCommand(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    shell: commandNeedsShell(command),
+    shell: false,
   })
   if (result.error) throw result.error
   if (result.status !== 0) {
@@ -642,25 +685,13 @@ function runCapture(command, args) {
   return result.stdout
 }
 
-function resolveCommand(command) {
-  return command
-}
-
-function commandNeedsShell(command) {
-  return process.platform === 'win32' && command === 'npm'
-}
-
 function isDirty() {
-  const result = spawnSync(
-    resolveCommand('git'),
-    ['status', '--porcelain=v1', '--untracked-files=normal'],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  )
+  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=normal'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   if (result.error) throw result.error
   if (result.status !== 0) fail('Unable to determine git working-tree state.')
   return result.stdout.trim().length > 0
