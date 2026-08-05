@@ -27,6 +27,15 @@
 - Changing `reup.sessionScope` or `reup.includeArchived`, or adding and removing workspace
   folders, now refreshes the extension's views instead of waiting for the next unrelated refresh.
 
+### Security
+
+- Resolved every open advisory in both dependency trees. The runtime picks up `hono` 4.13.0
+  (ReDoS in the CORS middleware, which Reup does not mount) and `brace-expansion` 5.0.9
+  (unbounded intermediate arrays). The extension's build tooling picks up `undici` 7.29.0
+  (response desynchronization, cache-directive disclosure, CRLF and cookie injection) and
+  `fast-uri` 3.1.5 (host confusion via a backslash authority introducer). All four land inside
+  the existing semver ranges, so no manifest changed.
+
 ## 0.4.4
 
 ### Fixed
