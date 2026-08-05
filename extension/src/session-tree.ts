@@ -7,7 +7,7 @@ import {
   statusThemeIconId,
 } from './formatting.js'
 import type { CockpitProjectGroup, ExtensionCockpitModel } from './cockpit-model.js'
-import { getReupConfigurationValue } from './configuration.js'
+import { getReupConfigurationValue, getSessionScopeSetting } from './configuration.js'
 import type { ReupLogger } from './logger.js'
 import type { ExtensionSession, ReupDataSource } from './reup-data.js'
 
@@ -76,6 +76,7 @@ export class ReupSessionTreeProvider
       const model = await this.dataSource.loadCockpitModel({
         activeEditorPath: vscode.window.activeTextEditor?.document.uri.fsPath,
         includeArchived: getReupConfigurationValue<boolean>('includeArchived', false),
+        sessionScope: getSessionScopeSetting(),
         workspaceRoots: (vscode.workspace.workspaceFolders ?? []).map(
           (folder) => folder.uri.fsPath
         ),
@@ -103,6 +104,12 @@ export class ReupSessionTreeProvider
             'reup.hasWorkspaceSessions',
             model.summary.workspaceSessionCount > 0
           ),
+          vscode.commands.executeCommand(
+            'setContext',
+            'reup.hasWorkspaceRoots',
+            model.workspaceRoots.length > 0
+          ),
+          vscode.commands.executeCommand('setContext', 'reup.sessionScope', model.resolvedScope),
           vscode.commands.executeCommand('setContext', 'reup.hasLoadError', false),
         ])
       }
@@ -117,6 +124,7 @@ export class ReupSessionTreeProvider
         attention: model.summary.attentionCount,
         changed,
         projects: model.projects.length,
+        scope: model.resolvedScope,
         sessions: model.sessions.length,
         workspaceSessions: model.summary.workspaceSessionCount,
       })
@@ -157,6 +165,10 @@ export class ReupSessionTreeProvider
   getChildren(node?: TreeNode): TreeNode[] {
     if (!this.model) return []
     if (!node) {
+      // Workspace scope answers for the open folder only, so the elsewhere
+      // sections are absent rather than empty. buildCockpitModel already
+      // cleared them; this keeps the tree from drawing two dead headers.
+      if (this.model.resolvedScope === 'workspace') return [SECTIONS.workspace]
       return [
         SECTIONS.workspace,
         ...(this.model.attentionElsewhere.length > 0 ? [SECTIONS.attention] : []),
@@ -257,13 +269,18 @@ export class ReupSessionTreeProvider
     )
   }
 
+  /**
+   * Badges the view with the attention count *inside the resolved scope*. A
+   * badge on this window must never be about a session in another repository.
+   */
   private updateViewBadge(model: ExtensionCockpitModel): void {
     if (!this.treeView) return
+    const attention = model.summary.scopedAttentionCount
     this.treeView.badge =
-      model.summary.attentionCount > 0
+      attention > 0
         ? {
-            tooltip: `${model.summary.attentionCount} session${model.summary.attentionCount === 1 ? '' : 's'} need attention`,
-            value: model.summary.attentionCount,
+            tooltip: `${attention} session${attention === 1 ? '' : 's'} need attention`,
+            value: attention,
           }
         : undefined
   }

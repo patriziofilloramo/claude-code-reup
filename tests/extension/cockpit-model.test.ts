@@ -15,6 +15,7 @@ describe('buildCockpitModel', () => {
 
     const model = buildCockpitModel(projects, sessions, {
       activeEditorPath: '/work/b/packages/app/src/index.ts',
+      sessionScope: 'all',
       workspaceRoots: ['/work/a', '/work/b'],
     })
 
@@ -83,6 +84,88 @@ describe('buildCockpitModel', () => {
     expect(model.workspaceProjects[0]?.sessions.map((item) => item.id)).toEqual(['local', 'remote'])
     expect(model.recentElsewhere).toEqual([])
     expect(model.summary.workspaceSessionCount).toBe(2)
+  })
+
+  it('excludes ancestors of the workspace root instead of treating containment as symmetric', () => {
+    // Opening a project must not adopt the sessions of a home directory or a
+    // monorepo parent merely because the open folder sits inside them.
+    const home = session('home', '/users/dev')
+    const parent = session('parent', '/users/dev/projects')
+    const own = session('own', '/users/dev/projects/demo')
+    const nested = session('nested', '/users/dev/projects/demo/packages/app')
+    const sessions = [home, parent, own, nested]
+
+    const model = buildCockpitModel(sessions.map(projectFor), sessions, {
+      sessionScope: 'all',
+      workspaceRoots: ['/users/dev/projects/demo'],
+    })
+
+    expect(
+      model.workspaceProjects
+        .flatMap((group) => group.sessions)
+        .map((item) => item.id)
+        .sort()
+    ).toEqual(['nested', 'own'])
+    expect(
+      model.recentElsewhere
+        .flatMap((group) => group.sessions)
+        .map((item) => item.id)
+        .sort()
+    ).toEqual(['home', 'parent'])
+    expect(model.summary.elsewhereSessionCount).toBe(2)
+  })
+
+  it('hides other projects under workspace scope and counts badges within it', () => {
+    const own = session('own', '/work/demo', { needsAttention: true })
+    const elsewhereActive = session('elsewhere-active', '/other', { isActive: true })
+    const elsewhereBlocked = session('elsewhere-blocked', '/other', { needsAttention: true })
+    const sessions = [own, elsewhereActive, elsewhereBlocked]
+
+    const model = buildCockpitModel(sessions.map(projectFor), sessions, {
+      sessionScope: 'workspace',
+      workspaceRoots: ['/work/demo'],
+    })
+
+    expect(model.resolvedScope).toBe('workspace')
+    expect(model.attentionElsewhere).toEqual([])
+    expect(model.recentElsewhere).toEqual([])
+    // The status bar and the view badge must not demand attention for work the
+    // user cannot act on from this window.
+    expect(model.summary.scopedAttentionCount).toBe(1)
+    expect(model.summary.scopedActiveCount).toBe(0)
+    expect(model.summary.attentionCount).toBe(2)
+    expect(model.summary.activeCount).toBe(1)
+    expect(model.summary.elsewhereSessionCount).toBe(2)
+    // The full session list stays intact: deep search resolves its hits there.
+    expect(model.sessions).toHaveLength(3)
+  })
+
+  it('degrades workspace scope to all projects when no folder is open', () => {
+    const sessions = [session('anywhere', '/work/demo')]
+
+    const model = buildCockpitModel(sessions.map(projectFor), sessions, {
+      sessionScope: 'workspace',
+      workspaceRoots: [],
+    })
+
+    expect(model.resolvedScope).toBe('all')
+    expect(model.recentElsewhere.flatMap((group) => group.sessions).map((item) => item.id)).toEqual(
+      ['anywhere']
+    )
+    expect(model.summary.scopedActiveCount).toBe(model.summary.activeCount)
+  })
+
+  it('defaults to workspace scope when the caller states none', () => {
+    const own = session('own', '/work/demo')
+    const elsewhere = session('elsewhere', '/other')
+    const sessions = [own, elsewhere]
+
+    const model = buildCockpitModel(sessions.map(projectFor), sessions, {
+      workspaceRoots: ['/work/demo'],
+    })
+
+    expect(model.resolvedScope).toBe('workspace')
+    expect(model.recentElsewhere).toEqual([])
   })
 
   it('maps one thousand sessions within the interactive performance budget', () => {

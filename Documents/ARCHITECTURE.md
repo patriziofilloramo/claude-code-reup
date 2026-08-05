@@ -455,12 +455,24 @@ not require the Reup CLI binary or web server. Its adapter builds one
 workspace-first cockpit model from shared project discovery, active-session
 state, health signals, Resume Advice, previews, and metadata.
 
+Scope is resolved once, in `buildCockpitModel`, and every surface draws that
+answer. `reup.sessionScope` defaults to `workspace`: the tree, dashboard, and
+status indicator cover only the open folder, and a requested workspace scope
+degrades to `all` when no folder is open. `model.sessions` stays complete under
+either scope because it is the table deep search resolves its hits against;
+what changes is the classification and the scoped counts that badges draw.
+Workspace membership goes through `extension/src/workspace-paths.ts` and
+nothing else — it is case-normalized, because VS Code's `Uri.fsPath` always
+lower-cases the Windows drive letter while Claude Code records the shell's
+casing, and one-directional, because an ancestor of the open folder is not part
+of the workspace.
+
 The full-screen dashboard is the primary discovery and resume surface. It loads
 metadata first, requests previews only for the selected session, uses the shared
 core query parser for structured search, and performs transcript search only on
-explicit request. The Activity Bar tree remains a compact companion that
-separates current-workspace sessions, attention elsewhere, and recent global
-history. Refresh watchers exist only while either the dashboard or tree is
+explicit request. The Activity Bar tree remains a compact companion showing the
+current workspace, plus attention elsewhere and recent global history once
+widened. Refresh watchers exist only while either the dashboard or tree is
 visible and observe
 Claude project data, live-session locks, workspace changes, active editors, and
 normal/worktree Git metadata.
@@ -482,8 +494,9 @@ revalidated in the extension host; only reversible metadata mutations are
 available. Resume destination is centralized across dashboard, Inspector, tree,
 and Quick Picks, with an optional remembered choice between Anthropic's Claude
 Code extension and the integrated terminal. The status bar uses
-transcript-backed context and active/attention counts; the dashboard separately
-shows the shared live-usage cache with freshness handling.
+transcript-backed context and the resolved scope's active/attention counts,
+never the device-wide totals; the dashboard separately shows the shared
+live-usage cache with freshness handling.
 
 ## Web Server and Live Updates
 

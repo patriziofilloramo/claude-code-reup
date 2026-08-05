@@ -31,8 +31,9 @@ continuity workflow.
 - **Reup Dashboard** — full-screen project and session discovery with metadata
   search, explicit transcript search, observed usage, handoff, archive, tags,
   aliases, and resume actions.
-- **Sessions Activity Bar** — a compact, workspace-first tree with Current
-  Workspace, Needs Attention Elsewhere, and Recent Elsewhere sections.
+- **Sessions Activity Bar** — a compact tree scoped to the open workspace.
+  Widened to all projects it adds Needs Attention Elsewhere and Recent
+  Elsewhere sections beneath Current Workspace.
 - **Session Inspector** — a focused pre-resume card with the latest recorded
   human request and assistant response, plan, TODOs, files, branch/path checks,
   context, and safety advice. Those fields are recorded text, not a semantic
@@ -66,11 +67,30 @@ are exposed.
 
 ## Settings
 
-| Setting                | Default | Description                                          |
-| ---------------------- | ------- | ---------------------------------------------------- |
-| `reup.includeArchived` | `false` | Include locally archived sessions in extension views |
-| `reup.refreshMode`     | `watch` | Use `watch`, `interval`, or `manual` refresh mode    |
-| `reup.showStatusBar`   | `true`  | Show the compact active/attention status item        |
+| Setting                | Default     | Description                                          |
+| ---------------------- | ----------- | ---------------------------------------------------- |
+| `reup.includeArchived` | `false`     | Include locally archived sessions in extension views |
+| `reup.refreshMode`     | `watch`     | Use `watch`, `interval`, or `manual` refresh mode    |
+| `reup.sessionScope`    | `workspace` | Cover only this workspace, or `all` local projects   |
+| `reup.showStatusBar`   | `true`      | Show the compact active/attention status item        |
+
+## Session scope
+
+A VS Code window answers for the folder it has open. By default the Sessions
+view, the dashboard, and the status indicator cover only sessions recorded in
+this window's workspace folders, and the status badge never counts work in a
+repository you cannot act on from here.
+
+Widening is an explicit gesture: **Reup: Show Sessions from All Projects** in
+the view title bar, the dashboard's "All sessions" focus row, or setting
+`reup.sessionScope` to `all`. `Reup: Resume Session`, Deep search, and
+touched-file lookup stay global under either scope. With no folder open there
+is nothing to scope to, so Reup shows every local project.
+
+Workspace membership means the folder itself or anything beneath it. A session
+recorded in a _parent_ of the open folder — a home directory, a monorepo root
+when you opened one package — is deliberately out of scope; reach it with
+`Reup: Resume Session`.
 
 Pre-production settings are read as a silent migration fallback only when the
 corresponding `reup.*` key is unset. New writes use `reup.*`.

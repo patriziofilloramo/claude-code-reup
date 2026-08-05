@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0
+
+### Changed
+
+- The VS Code extension now answers for the folder you have open. The Sessions view, the
+  dashboard, and the status indicator cover only sessions recorded in this window's workspace
+  folders, and the status badge no longer counts work in repositories you cannot act on from
+  here. Widen with **Reup: Show Sessions from All Projects** in the view title bar, the
+  dashboard's "All sessions" row, or `reup.sessionScope: all`. `Reup: Resume Session`, Deep
+  search, and touched-file lookup stay global under either scope; with no folder open Reup shows
+  every local project. The previous device-wide default was left over from the removed shared
+  memory store.
+
+### Fixed
+
+- The extension's workspace section could be completely empty on Windows. VS Code always reports
+  a lower-cased drive letter while Claude Code records the casing the shell had, and the
+  membership test compared the two case-sensitively — so every session started in the workspace
+  root fell through to "Recent Elsewhere". Membership is now case-normalized through one shared
+  comparison, which `Reup: Resume Here` uses as well.
+- The extension no longer adopts sessions recorded in a _parent_ of the open folder. Containment
+  was symmetric, so opening a project pulled in the sessions of its home directory and any
+  ancestor directory Claude had run in. Membership means the workspace folder itself or anything
+  beneath it; reach a monorepo-root session with `Reup: Resume Session`.
+- Changing `reup.sessionScope` or `reup.includeArchived`, or adding and removing workspace
+  folders, now refreshes the extension's views instead of waiting for the next unrelated refresh.
+
 ## 0.4.4
 
 ### Fixed

@@ -1,8 +1,7 @@
 import { access } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
 
 import { loadProjects } from '../../src/core/project/project-discovery.js'
-import { normalizePathForComparison } from '../../src/core/project/path-comparison.js'
+import { pathsReferToSameLocation } from '../../src/core/project/path-comparison.js'
 import { resolveLiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { LiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { SessionLiveState } from '../../src/core/session/session-live-state.js'
@@ -32,6 +31,7 @@ import {
   type ExtensionCockpitModel,
 } from './cockpit-model.js'
 import { compactProjectName, compactText } from './formatting.js'
+import { isSameOrInside } from './workspace-paths.js'
 import type { ReupLogger } from './logger.js'
 
 const PREVIEW_HINT_LIMIT = 80
@@ -171,6 +171,7 @@ export class ReupDataSource {
     this.logger.debug('loaded Reup cockpit model', {
       attention: model.summary.attentionCount,
       projects: extensionProjects.length,
+      scope: model.resolvedScope,
       sessions: sessions.length,
       workspaceSessions: model.summary.workspaceSessionCount,
     })
@@ -385,23 +386,16 @@ async function loadPreviewHints(
   }
 }
 
+/**
+ * Ranks a session against one workspace folder: exact folder, then a folder
+ * beneath it. Membership follows the same one-directional rule the cockpit
+ * uses, so `Resume Here` and the workspace view never disagree about which
+ * sessions belong to the open folder.
+ */
 function workspaceScore(session: ExtensionSession, workspacePath: string | undefined): number {
   if (!workspacePath) return 0
-
-  const workspace = normalizePathForComparison(resolve(workspacePath))
-  const project = normalizePathForComparison(resolve(session.projectPath))
-  if (workspace === project) return 100
-  if (isPathInside(project, workspace) || isPathInside(workspace, project)) return 70
-  return 0
-}
-
-function isPathInside(candidatePath: string, parentPath: string): boolean {
-  try {
-    const relativePath = relative(parentPath, candidatePath)
-    return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath)
-  } catch {
-    return false
-  }
+  if (pathsReferToSameLocation(session.projectPath, workspacePath)) return 100
+  return isSameOrInside(session.projectPath, workspacePath) ? 70 : 0
 }
 
 function branchMatchesCurrentWorkspace(session: ExtensionSession): boolean {

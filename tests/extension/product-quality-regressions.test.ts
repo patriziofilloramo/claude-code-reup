@@ -29,7 +29,13 @@ const workspaceCockpit = readFileSync('extension/media/marketplace/workspace-coc
 describe('VS Code product quality guardrails', () => {
   it('keeps the status bar contextual and transcript-backed', () => {
     expect(statusBarSource).toContain('this.visible')
-    expect(statusBarSource).toContain('summary.activeCount === 0 && summary.attentionCount === 0')
+    // Scoped counts, never the device-wide totals: an indicator in this window
+    // must not demand attention for a session in another repository.
+    expect(statusBarSource).toContain(
+      'summary.scopedActiveCount === 0 && summary.scopedAttentionCount === 0'
+    )
+    expect(statusBarSource).not.toContain('summary.activeCount')
+    expect(statusBarSource).not.toContain('summary.attentionCount')
     expect(statusBarSource).toContain('formatContextTokens')
     expect(statusBarSource).not.toContain('accountUsage')
     expect(extensionSource).toContain('statusBar.setVisible(event.visible)')

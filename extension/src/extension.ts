@@ -16,7 +16,12 @@ import {
 import { asProjectTreeNode, asSessionTreeNode, ReupSessionTreeProvider } from './session-tree.js'
 import { ReupDataSource } from './reup-data.js'
 import { CockpitStatusBar } from './status-bar.js'
-import { getMigratedGlobalState, getReupConfigurationValue } from './configuration.js'
+import {
+  affectsReupConfiguration,
+  getMigratedGlobalState,
+  getReupConfigurationValue,
+  setSessionScopeSetting,
+} from './configuration.js'
 import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -96,6 +101,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('reup.refreshSessions', async () => {
       await refreshAll()
+    }),
+    // Scope is a stored setting, so both commands write it and let the
+    // configuration listener below repaint every surface from one model.
+    vscode.commands.registerCommand('reup.showAllProjects', async () => {
+      await setSessionScopeSetting('all')
+    }),
+    vscode.commands.registerCommand('reup.showWorkspaceOnly', async () => {
+      if ((vscode.workspace.workspaceFolders ?? []).length === 0) {
+        void vscode.window.showInformationMessage(
+          'Open a folder to scope Reup to a workspace. Without one there is nothing to scope to.'
+        )
+        return
+      }
+      await setSessionScopeSetting('workspace')
+    }),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        affectsReupConfiguration(event, 'sessionScope') ||
+        affectsReupConfiguration(event, 'includeArchived')
+      ) {
+        void refreshAll()
+      }
+    }),
+    // Adding or removing a folder changes what "this workspace" means.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void refreshAll()
     }),
     vscode.commands.registerCommand('reup.openDashboard', async () => {
       await dashboard?.open()

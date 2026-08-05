@@ -23,13 +23,22 @@ export interface DashboardModel {
 export function buildDashboardModel(
   projects: ExtensionProject[],
   sessions: ExtensionSession[],
-  activeEditorPath: string | null
+  activeEditorPath: string | null,
+  /**
+   * Sessions the "Continue now" hero may propose. Under workspace scope this
+   * is the workspace's own sessions: the primary call to action must not send
+   * the user into a repository this window has not opened. `sessions` stays
+   * complete regardless, because deep search resolves its hits against it.
+   */
+  continueNowCandidates: ExtensionSession[] = sessions
 ): DashboardModel {
   const ranked = [...sessions].sort((left, right) =>
     compareCockpitSessions(left, right, activeEditorPath)
   )
+  const candidateIds = new Set(continueNowCandidates.map((session) => session.id))
   return {
-    continueNow: ranked.find((session) => !session.archived) ?? null,
+    continueNow:
+      ranked.find((session) => !session.archived && candidateIds.has(session.id)) ?? null,
     projects: [...projects].sort((left, right) =>
       (right.updated ?? '').localeCompare(left.updated ?? '')
     ),

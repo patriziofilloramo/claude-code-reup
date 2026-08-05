@@ -7,6 +7,15 @@ current implementation has moved beyond this document: see
 shipped dashboard, Inspector, search, live usage, actions, and resume-target
 behavior.
 
+Superseded on 2026-08-05: this document's "workspace-aware but still global"
+framing described the Phase 1 Quick Picks and stayed accurate for them
+(`Resume Here` is scoped, `Resume Session` is global). It was wrongly carried
+into the tree, dashboard, and status badge, which shipped device-wide. That
+default belonged to the removed shared memory store, not to the editor
+workflow. The scoping rule is now `reup.sessionScope`, default `workspace`, as
+described in [`ARCHITECTURE.md`](ARCHITECTURE.md) and
+[`extension/README.md`](../extension/README.md).
+
 The earlier “not a dashboard clone” constraint remains useful as design
 history, but it is no longer a literal product restriction. The implemented
 full-screen dashboard is an editor-native, resume-focused surface backed by the

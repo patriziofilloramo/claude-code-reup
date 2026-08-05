@@ -32,6 +32,11 @@ export class CockpitStatusBar implements vscode.Disposable {
     this.statusBar.dispose()
   }
 
+  /**
+   * Draws the counts for the resolved scope, never the device-wide totals. An
+   * indicator in this window that counts another repository's sessions reads
+   * as a demand for attention the user cannot act on from here.
+   */
   private render(): void {
     const enabled = getReupConfigurationValue<boolean>('showStatusBar', true)
     const summary = this.model?.summary
@@ -39,15 +44,15 @@ export class CockpitStatusBar implements vscode.Disposable {
       !enabled ||
       !this.visible ||
       !summary ||
-      (summary.activeCount === 0 && summary.attentionCount === 0)
+      (summary.scopedActiveCount === 0 && summary.scopedAttentionCount === 0)
     ) {
       this.statusBar.hide()
       return
     }
 
     const parts = [
-      summary.activeCount > 0 ? `$(pulse) ${summary.activeCount}` : null,
-      summary.attentionCount > 0 ? `$(warning) ${summary.attentionCount}` : null,
+      summary.scopedActiveCount > 0 ? `$(pulse) ${summary.scopedActiveCount}` : null,
+      summary.scopedAttentionCount > 0 ? `$(warning) ${summary.scopedAttentionCount}` : null,
     ].filter(Boolean)
     this.statusBar.text = `Reup ${parts.join(' · ')}`
     this.statusBar.tooltip = statusTooltip(this.model!)
@@ -56,12 +61,22 @@ export class CockpitStatusBar implements vscode.Disposable {
 }
 
 function statusTooltip(model: ExtensionCockpitModel): vscode.MarkdownString {
+  const workspaceScoped = model.resolvedScope === 'workspace'
   const tooltip = new vscode.MarkdownString(undefined, true)
   tooltip.appendMarkdown('**Reup Workspace Cockpit**\n\n')
-  tooltip.appendMarkdown(`- Active sessions: ${model.summary.activeCount}\n`)
-  tooltip.appendMarkdown(`- Need attention: ${model.summary.attentionCount}\n`)
+  tooltip.appendMarkdown(
+    `- Showing: ${workspaceScoped ? 'this workspace only' : 'all local projects'}\n`
+  )
+  tooltip.appendMarkdown(`- Active sessions: ${model.summary.scopedActiveCount}\n`)
+  tooltip.appendMarkdown(`- Need attention: ${model.summary.scopedAttentionCount}\n`)
   tooltip.appendMarkdown(`- In current workspace: ${model.summary.workspaceSessionCount}\n`)
-  const largestContext = model.sessions.reduce<number | null>((largest, session) => {
+  if (workspaceScoped && model.summary.elsewhereSessionCount > 0) {
+    tooltip.appendMarkdown(`- Hidden in other projects: ${model.summary.elsewhereSessionCount}\n`)
+  }
+  const scopedSessions = workspaceScoped
+    ? model.workspaceProjects.flatMap((group) => group.sessions)
+    : model.sessions
+  const largestContext = scopedSessions.reduce<number | null>((largest, session) => {
     if (session.contextTokens === null) return largest
     return largest === null ? session.contextTokens : Math.max(largest, session.contextTokens)
   }, null)

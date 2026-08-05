@@ -44,13 +44,19 @@ function session(overrides: Partial<ExtensionSession>): ExtensionSession {
 }
 
 describe('VS Code extension data adapter helpers', () => {
-  it('matches sessions whose project path contains the current workspace', () => {
+  it('matches the workspace folder and what lies beneath it, never its ancestors', () => {
     expect(
       sessionMatchesWorkspace(session({ projectPath: '/work/project' }), '/work/project')
     ).toBe(true)
     expect(
-      sessionMatchesWorkspace(session({ projectPath: '/work/project' }), '/work/project/packages/a')
+      sessionMatchesWorkspace(session({ projectPath: '/work/project/packages/a' }), '/work/project')
     ).toBe(true)
+    // Deliberate: a session recorded in a parent of the open folder is not part
+    // of this workspace. Symmetric containment adopted home directories and
+    // monorepo parents; `Reup: Resume Session` stays the global escape hatch.
+    expect(
+      sessionMatchesWorkspace(session({ projectPath: '/work/project' }), '/work/project/packages/a')
+    ).toBe(false)
     expect(sessionMatchesWorkspace(session({ projectPath: '/work/project' }), '/other')).toBe(false)
   })
 

@@ -2,7 +2,7 @@
   "name": "reup-vscode",
   "displayName": "Reup for Claude Code",
   "description": "Find, understand, and safely resume Claude Code sessions across every project.",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "reup-local",
   "private": true,
   "icon": "media/reup-brand.png",
@@ -42,6 +42,8 @@
     "onCommand:reup.resumeSession",
     "onCommand:reup.searchSessions",
     "onCommand:reup.findTouchedFile",
+    "onCommand:reup.showAllProjects",
+    "onCommand:reup.showWorkspaceOnly",
     "onCommand:reup.tree.copyHandoff",
     "onCommand:reup.tree.copySessionId",
     "onCommand:reup.tree.editAlias",
@@ -93,6 +95,16 @@
         "icon": "$(references)"
       },
       {
+        "command": "reup.showAllProjects",
+        "title": "Reup: Show Sessions from All Projects",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "reup.showWorkspaceOnly",
+        "title": "Reup: Show Only This Workspace",
+        "icon": "$(folder-active)"
+      },
+      {
         "command": "reup.openSessionDetail",
         "title": "Open Resume Card",
         "icon": "$(preview)"
@@ -141,6 +153,19 @@
           "default": false,
           "description": "Include archived sessions in Reup's VS Code views."
         },
+        "reup.sessionScope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Show only sessions recorded in this window's workspace folders.",
+            "Show sessions from every local project, grouped by workspace and elsewhere."
+          ],
+          "default": "workspace",
+          "description": "Which sessions Reup's Sessions view, dashboard, and status indicator cover. 'Reup: Resume Session' and Deep search stay global either way. With no folder open, Reup shows all projects."
+        },
         "reup.refreshMode": {
           "type": "string",
           "enum": [
@@ -166,29 +191,39 @@
           "group": "navigation@0"
         },
         {
-          "command": "reup.resumeHere",
-          "when": "view == reup.sessions",
+          "command": "reup.showAllProjects",
+          "when": "view == reup.sessions && reup.hasWorkspaceRoots && reup.sessionScope == workspace",
           "group": "navigation@1"
         },
         {
-          "command": "reup.resumeSession",
+          "command": "reup.showWorkspaceOnly",
+          "when": "view == reup.sessions && reup.hasWorkspaceRoots && reup.sessionScope == all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "reup.resumeHere",
           "when": "view == reup.sessions",
           "group": "navigation@2"
         },
         {
-          "command": "reup.searchSessions",
+          "command": "reup.resumeSession",
           "when": "view == reup.sessions",
           "group": "navigation@3"
         },
         {
-          "command": "reup.findTouchedFile",
+          "command": "reup.searchSessions",
           "when": "view == reup.sessions",
           "group": "navigation@4"
         },
         {
-          "command": "reup.refreshSessions",
+          "command": "reup.findTouchedFile",
           "when": "view == reup.sessions",
           "group": "navigation@5"
+        },
+        {
+          "command": "reup.refreshSessions",
+          "when": "view == reup.sessions",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
@@ -254,6 +289,11 @@
         "view": "reup.sessions",
         "contents": "[Open Reup Dashboard](command:reup.openDashboard)\\n\\nNo Claude Code sessions were found.\\n[Refresh Reup](command:reup.refreshSessions)",
         "when": "!reup.hasSessions && !reup.hasLoadError"
+      },
+      {
+        "view": "reup.sessions",
+        "contents": "No Claude Code sessions were recorded in this workspace.\\n[Show sessions from all projects](command:reup.showAllProjects)\\n[Resume any session](command:reup.resumeSession)",
+        "when": "reup.hasSessions && !reup.hasWorkspaceSessions && reup.sessionScope == workspace && !reup.hasLoadError"
       },
       {
         "view": "reup.sessions",

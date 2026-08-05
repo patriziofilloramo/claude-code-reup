@@ -1,11 +1,22 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { resolve } from 'node:path'
 
 import type { ExtensionProject, ExtensionSession } from './reup-data.js'
+import { isInsideAnyWorkspaceRoot, isSameOrInside } from './workspace-paths.js'
 
 export interface CockpitProjectGroup {
   project: ExtensionProject
   sessions: ExtensionSession[]
 }
+
+/**
+ * Which locally discovered sessions a cockpit surface may show.
+ *
+ * `workspace` is the product default: a VS Code window answers for the folder
+ * it has open. `all` is the explicit widening for cross-project work. The
+ * device-wide default this replaced came from the removed shared memory store
+ * (`Documents/DEFERRED_PROJECT_MEMORY_SYNC.md`) and no longer has a rationale.
+ */
+export type SessionScope = 'all' | 'workspace'
 
 export interface ExtensionCockpitModel {
   activeEditorPath: string | null
@@ -13,10 +24,22 @@ export interface ExtensionCockpitModel {
   generatedAt: string
   projects: ExtensionProject[]
   recentElsewhere: CockpitProjectGroup[]
+  /**
+   * The scope actually applied. A requested `workspace` scope collapses to
+   * `all` when no folder is open, because there is then nothing to scope to.
+   * Surfaces draw this answer; they never re-derive it.
+   */
+  resolvedScope: SessionScope
   sessions: ExtensionSession[]
   summary: {
+    /** Counts over every locally discovered session, whatever the scope. */
     activeCount: number
     attentionCount: number
+    /** Sessions outside the workspace, counted even while they stay hidden. */
+    elsewhereSessionCount: number
+    /** Counts over the resolved scope — what badges and the status bar draw. */
+    scopedActiveCount: number
+    scopedAttentionCount: number
     workspaceSessionCount: number
   }
   workspaceProjects: CockpitProjectGroup[]
@@ -26,6 +49,7 @@ export interface ExtensionCockpitModel {
 export interface CockpitContext {
   activeEditorPath?: string
   includeArchived?: boolean
+  sessionScope?: SessionScope
   workspaceRoots: string[]
 }
 
@@ -39,9 +63,11 @@ export function buildCockpitModel(
 ): ExtensionCockpitModel {
   const workspaceRoots = context.workspaceRoots.map((root) => resolve(root))
   const activeEditorPath = context.activeEditorPath ? resolve(context.activeEditorPath) : null
+  const resolvedScope = resolveSessionScope(context.sessionScope, workspaceRoots)
+
   const workspaceProjectIds = new Set(
     projects
-      .filter((project) => workspaceRoots.some((root) => pathsOverlap(project.path, root)))
+      .filter((project) => isInsideAnyWorkspaceRoot(project.path, workspaceRoots))
       .map((project) => project.id)
   )
   const workspaceSessions = sessions
@@ -52,12 +78,22 @@ export function buildCockpitModel(
     )
     .sort((left, right) => compareCockpitSessions(left, right, activeEditorPath))
   const workspaceIds = new Set(workspaceSessions.map((session) => session.id))
+  const sessionsElsewhere = sessions.filter((session) => !workspaceIds.has(session.id))
 
-  const attentionElsewhere = sessions
-    .filter((session) => !workspaceIds.has(session.id) && session.needsAttention)
-    .sort((left, right) => compareCockpitSessions(left, right, activeEditorPath))
-  const claimedIds = new Set([...workspaceIds, ...attentionElsewhere.map((session) => session.id)])
-  const recentElsewhereSessions = sessions.filter((session) => !claimedIds.has(session.id))
+  // Workspace scope answers for the open folder only. The elsewhere sections
+  // stay computed but empty so every surface reads one classification.
+  const attentionElsewhere =
+    resolvedScope === 'workspace'
+      ? []
+      : sessionsElsewhere
+          .filter((session) => session.needsAttention)
+          .sort((left, right) => compareCockpitSessions(left, right, activeEditorPath))
+  const attentionIds = new Set(attentionElsewhere.map((session) => session.id))
+  const recentElsewhereSessions =
+    resolvedScope === 'workspace'
+      ? []
+      : sessionsElsewhere.filter((session) => !attentionIds.has(session.id))
+  const scopedSessions = resolvedScope === 'workspace' ? workspaceSessions : sessions
 
   return {
     activeEditorPath,
@@ -67,10 +103,14 @@ export function buildCockpitModel(
     recentElsewhere: groupSessionsByProject(projects, recentElsewhereSessions)
       .sort(compareProjectGroups)
       .slice(0, RECENT_PROJECT_LIMIT),
+    resolvedScope,
     sessions,
     summary: {
       activeCount: sessions.filter((session) => session.isActive).length,
       attentionCount: sessions.filter((session) => session.needsAttention).length,
+      elsewhereSessionCount: sessionsElsewhere.length,
+      scopedActiveCount: scopedSessions.filter((session) => session.isActive).length,
+      scopedAttentionCount: scopedSessions.filter((session) => session.needsAttention).length,
       workspaceSessionCount: workspaceSessions.length,
     },
     workspaceProjects: groupSessionsByProject(projects, workspaceSessions).sort((left, right) => {
@@ -81,6 +121,20 @@ export function buildCockpitModel(
     }),
     workspaceRoots,
   }
+}
+
+/**
+ * Resolves the requested scope against what the window can actually answer for.
+ * Without an open folder there is no workspace to scope to, so the request
+ * degrades to `all` rather than producing a permanently empty view.
+ */
+function resolveSessionScope(
+  requestedScope: SessionScope | undefined,
+  workspaceRoots: readonly string[]
+): SessionScope {
+  return (requestedScope ?? 'workspace') === 'workspace' && workspaceRoots.length > 0
+    ? 'workspace'
+    : 'all'
 }
 
 export function compareCockpitSessions(
@@ -107,7 +161,7 @@ export function sessionMatchesAnyWorkspace(
   session: ExtensionSession,
   workspaceRoots: readonly string[]
 ): boolean {
-  return workspaceRoots.some((root) => pathsOverlap(session.projectPath, root))
+  return isInsideAnyWorkspaceRoot(session.projectPath, workspaceRoots)
 }
 
 function groupSessionsByProject(
@@ -161,27 +215,5 @@ function branchMatches(session: ExtensionSession): boolean {
 }
 
 function projectContainsPath(projectPath: string, candidatePath: string | null): boolean {
-  return (
-    candidatePath !== null &&
-    (projectPath === candidatePath || isPathInside(candidatePath, projectPath))
-  )
-}
-
-function pathsOverlap(left: string, right: string): boolean {
-  const resolvedLeft = resolve(left)
-  const resolvedRight = resolve(right)
-  return (
-    resolvedLeft === resolvedRight ||
-    isPathInside(resolvedLeft, resolvedRight) ||
-    isPathInside(resolvedRight, resolvedLeft)
-  )
-}
-
-function isPathInside(candidatePath: string, parentPath: string): boolean {
-  try {
-    const relativePath = relative(parentPath, candidatePath)
-    return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath)
-  } catch {
-    return false
-  }
+  return candidatePath !== null && isSameOrInside(candidatePath, projectPath)
 }
