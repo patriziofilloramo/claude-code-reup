@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -196,6 +196,32 @@ describe('release candidate integrity policy', () => {
         'extension/package.json must be at most 262144 bytes'
       )
     })
+  })
+
+  it('releases the archive file descriptor before settling', async () => {
+    // yauzl's close() only unrefs its reader: it flips isOpen to false and
+    // returns while the descriptor is closed asynchronously. POSIX lets a
+    // caller unlink an open file, so a leak here is invisible outside Windows
+    // — where it failed CI cleanup with ENOTEMPTY, on the rejection path where
+    // an entry stream had already been opened.
+    const directory = mkdtempSync(join(tmpdir(), 'reup-vsix-handle-'))
+    try {
+      const path = join(directory, 'fixture.vsix')
+      const contents = 'crc-fixture-contents'
+      const corrupted = createStoredZip([['extension/package.json', contents]])
+      corrupted[corrupted.indexOf(Buffer.from(contents))] ^= 0xff
+      writeFileSync(path, corrupted)
+
+      await expect(inspectVsixArchive(path)).rejects.toThrow(
+        'extension/package.json failed CRC-32 validation'
+      )
+
+      // Renaming observes the handle without depending on the caller's cleanup:
+      // Windows refuses it while a descriptor is open, POSIX does not care.
+      expect(() => renameSync(path, join(directory, 'released.vsix'))).not.toThrow()
+    } finally {
+      rmSync(directory, { force: true, recursive: true })
+    }
   })
 
   it('rejects same-length archive corruption through per-entry CRC-32 validation', async () => {

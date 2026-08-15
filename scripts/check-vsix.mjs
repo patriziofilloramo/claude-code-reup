@@ -228,10 +228,35 @@ export async function inspectVsixArchive(vsixPath) {
   } catch (error) {
     throw archiveInspectionError(vsixPath, error)
   } finally {
-    archive.close()
+    await closeArchive(archive)
   }
 
   return { capturedText, entries, totalUncompressedBytes }
+}
+
+/**
+ * Closes the archive and waits for its file descriptor to actually be released.
+ *
+ * yauzl's `close()` only unrefs its reader: it flips `isOpen` to false and
+ * returns, while the descriptor is closed asynchronously once every read stream
+ * has ended. The archive forwards that as a `close` event.
+ *
+ * Returning before then leaves the caller holding an open handle on a file it
+ * believes it has finished with. POSIX hides this completely — a file can be
+ * unlinked while open — so it surfaced only on Windows, where a caller that
+ * removed its temporary directory next failed with `ENOTEMPTY`.
+ *
+ * `error` also settles the wait: a reader that fails to close never emits
+ * `close`, and a release check must not hang on cleanup.
+ */
+function closeArchive(archive) {
+  if (!archive.isOpen) return Promise.resolve()
+
+  return new Promise((resolve) => {
+    archive.once('close', resolve)
+    archive.once('error', resolve)
+    archive.close()
+  })
 }
 
 async function readArchiveEntry(archive, entry, captureLimit) {
