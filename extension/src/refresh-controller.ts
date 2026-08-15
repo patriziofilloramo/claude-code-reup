@@ -8,7 +8,7 @@ import {
   getReupDirectory,
 } from '../../src/core/project/claude-paths.js'
 import { affectsReupConfiguration, getReupConfigurationValue } from './configuration.js'
-import { resolveGitDirectory } from './git-workspace.js'
+import { resolveGitDirectory, resolveRepositoryRoot } from './git-workspace.js'
 import type { ReupLogger } from './logger.js'
 
 const SAFETY_REFRESH_MS = 20_000
@@ -194,17 +194,22 @@ export class ReupRefreshController implements vscode.Disposable {
 
   private startGitWatchers(): void {
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      void resolveGitDirectory(folder.uri.fsPath).then((gitDirectory) => {
-        if (
-          !gitDirectory ||
-          this.scope !== 'full' ||
-          this.disposed ||
-          readRefreshMode() !== 'watch'
-        )
-          return
-        this.addWatcher(gitDirectory, 'HEAD', 'Git HEAD')
-        this.addWatcher(gitDirectory, 'refs/heads/**', 'Git branch')
-      })
+      // Resolve the repository first: a workspace opened on a subfolder holds
+      // no `.git` of its own, so watching the folder alone silently never
+      // noticed a branch change.
+      void resolveRepositoryRoot(folder.uri.fsPath)
+        .then(resolveGitDirectory)
+        .then((gitDirectory) => {
+          if (
+            !gitDirectory ||
+            this.scope !== 'full' ||
+            this.disposed ||
+            readRefreshMode() !== 'watch'
+          )
+            return
+          this.addWatcher(gitDirectory, 'HEAD', 'Git HEAD')
+          this.addWatcher(gitDirectory, 'refs/heads/**', 'Git branch')
+        })
     }
   }
 

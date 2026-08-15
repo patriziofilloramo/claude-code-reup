@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+
+- The Sessions view gains a **Rest of Repository** group. When the folder you opened sits inside a
+  larger repository — one package of a monorepo, one service of a checkout — sessions recorded at
+  the repository root or in sibling packages appear there instead of disappearing. They are never
+  folded into Current Workspace, which keeps meaning exactly the folder you opened, and
+  `Reup: Resume Here` lists them below a separator that says where they come from. The dashboard
+  mirrors the group as a focus row. Opening a repository root, the ordinary case, leaves the group
+  empty and it is not drawn.
+- `reup.countRepositorySessions` (default `true`) controls whether that group feeds the Sessions
+  badge and the status indicator. Turn it off to narrow the indicator to the open folder; the
+  group stays visible either way. A home directory or a shared parent folder is not a repository,
+  so it never reaches either place.
+
+### Fixed
+
+- Branch changes are noticed again for a workspace opened on a subfolder. The `HEAD` watcher
+  resolved Git metadata from the opened folder alone, which holds no `.git` in that case, so it
+  silently never started and branch-drift indicators went stale in watch mode.
+
 ## 0.5.0
 
 ### Changed

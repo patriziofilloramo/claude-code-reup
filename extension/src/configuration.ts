@@ -47,6 +47,15 @@ export async function setSessionScopeSetting(scope: SessionScope): Promise<void>
   await configuration.update(SESSION_SCOPE_KEY, scope, target)
 }
 
+/**
+ * Whether the repository group feeds the badge and status counts. It is the
+ * same codebase, so it does by default; turning it off narrows the indicator
+ * to the open folder without hiding the group itself.
+ */
+export function getCountRepositorySessionsSetting(): boolean {
+  return getReupConfigurationValue<boolean>('countRepositorySessions', true)
+}
+
 export function affectsReupConfiguration(
   event: vscode.ConfigurationChangeEvent,
   key: string

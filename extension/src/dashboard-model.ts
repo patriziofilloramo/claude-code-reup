@@ -5,7 +5,13 @@ import {
 import { compareCockpitSessions } from './cockpit-model.js'
 import type { ExtensionProject, ExtensionSession } from './reup-data.js'
 
-export type DashboardFilter = 'active' | 'all' | 'archived' | 'attention' | 'workspace'
+export type DashboardFilter =
+  | 'active'
+  | 'all'
+  | 'archived'
+  | 'attention'
+  | 'repository'
+  | 'workspace'
 
 export interface DashboardModel {
   continueNow: ExtensionSession | null
@@ -58,7 +64,8 @@ export function filterDashboardSessions(
   queryText: string,
   filter: DashboardFilter,
   projectId: string | null,
-  workspaceProjectIds: ReadonlySet<string>
+  workspaceProjectIds: ReadonlySet<string>,
+  repositoryProjectIds: ReadonlySet<string> = new Set()
 ): ExtensionSession[] {
   const query = parseSessionQuery(queryText)
   return sessions.filter((session) => {
@@ -68,6 +75,7 @@ export function filterDashboardSessions(
     if (filter === 'active' && !session.isActive) return false
     if (filter === 'attention' && !session.needsAttention) return false
     if (filter === 'workspace' && !workspaceProjectIds.has(session.projectId)) return false
+    if (filter === 'repository' && !repositoryProjectIds.has(session.projectId)) return false
     return sessionMatchesParsedQuery(
       {
         active: session.isActive,

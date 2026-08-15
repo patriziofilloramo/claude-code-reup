@@ -7,11 +7,15 @@ import {
   statusThemeIconId,
 } from './formatting.js'
 import type { CockpitProjectGroup, ExtensionCockpitModel } from './cockpit-model.js'
-import { getReupConfigurationValue, getSessionScopeSetting } from './configuration.js'
+import {
+  getCountRepositorySessionsSetting,
+  getReupConfigurationValue,
+  getSessionScopeSetting,
+} from './configuration.js'
 import type { ReupLogger } from './logger.js'
 import type { ExtensionSession, ReupDataSource } from './reup-data.js'
 
-type SectionId = 'workspace' | 'attention' | 'recent'
+type SectionId = 'workspace' | 'repository' | 'attention' | 'recent'
 
 interface SectionTreeNode {
   id: SectionId
@@ -36,6 +40,7 @@ export type TreeNode = ProjectTreeNode | SectionTreeNode | SessionTreeNode
 const SECTIONS: Record<SectionId, SectionTreeNode> = {
   attention: { id: 'attention', kind: 'section' },
   recent: { id: 'recent', kind: 'section' },
+  repository: { id: 'repository', kind: 'section' },
   workspace: { id: 'workspace', kind: 'section' },
 }
 
@@ -75,6 +80,7 @@ export class ReupSessionTreeProvider
     try {
       const model = await this.dataSource.loadCockpitModel({
         activeEditorPath: vscode.window.activeTextEditor?.document.uri.fsPath,
+        countRepositorySessions: getCountRepositorySessionsSetting(),
         includeArchived: getReupConfigurationValue<boolean>('includeArchived', false),
         sessionScope: getSessionScopeSetting(),
         workspaceRoots: (vscode.workspace.workspaceFolders ?? []).map(
@@ -124,6 +130,7 @@ export class ReupSessionTreeProvider
         attention: model.summary.attentionCount,
         changed,
         projects: model.projects.length,
+        repositorySessions: model.summary.repositorySessionCount,
         scope: model.resolvedScope,
         sessions: model.sessions.length,
         workspaceSessions: model.summary.workspaceSessionCount,
@@ -168,9 +175,16 @@ export class ReupSessionTreeProvider
       // Workspace scope answers for the open folder only, so the elsewhere
       // sections are absent rather than empty. buildCockpitModel already
       // cleared them; this keeps the tree from drawing two dead headers.
-      if (this.model.resolvedScope === 'workspace') return [SECTIONS.workspace]
-      return [
+      // The repository section appears only when the open folder sits inside a
+      // larger repository. Opening a repository root — the ordinary case —
+      // leaves it empty, and an empty header is worse than no header.
+      const nearby = [
         SECTIONS.workspace,
+        ...(this.model.repositoryProjects.length > 0 ? [SECTIONS.repository] : []),
+      ]
+      if (this.model.resolvedScope === 'workspace') return nearby
+      return [
+        ...nearby,
         ...(this.model.attentionElsewhere.length > 0 ? [SECTIONS.attention] : []),
         SECTIONS.recent,
       ]
@@ -212,6 +226,7 @@ export class ReupSessionTreeProvider
 
     for (const [section, groups] of [
       ['workspace', model.workspaceProjects],
+      ['repository', model.repositoryProjects],
       ['recent', model.recentElsewhere],
     ] as const) {
       for (const group of groups) {
@@ -258,7 +273,11 @@ export class ReupSessionTreeProvider
       )
     }
     const groups =
-      section === 'workspace' ? this.model.workspaceProjects : this.model.recentElsewhere
+      section === 'workspace'
+        ? this.model.workspaceProjects
+        : section === 'repository'
+          ? this.model.repositoryProjects
+          : this.model.recentElsewhere
     return groups.map(
       (group) =>
         this.projectNodes.get(projectNodeKey(section, group.project.id)) ?? {
@@ -312,6 +331,11 @@ function sectionTreeItem(
       label: 'Recent Elsewhere',
       state: vscode.TreeItemCollapsibleState.Collapsed,
     },
+    repository: {
+      icon: 'repo',
+      label: 'Rest of Repository',
+      state: vscode.TreeItemCollapsibleState.Collapsed,
+    },
     workspace: {
       icon: 'window',
       label: 'Current Workspace',
@@ -327,9 +351,11 @@ function sectionTreeItem(
     const count =
       node.id === 'workspace'
         ? model.summary.workspaceSessionCount
-        : node.id === 'attention'
-          ? model.attentionElsewhere.length
-          : model.recentElsewhere.reduce((sum, group) => sum + group.sessions.length, 0)
+        : node.id === 'repository'
+          ? model.summary.repositorySessionCount
+          : node.id === 'attention'
+            ? model.attentionElsewhere.length
+            : model.recentElsewhere.reduce((sum, group) => sum + group.sessions.length, 0)
     item.description = String(count)
   }
   return item

@@ -1,10 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { resolveGitDirectory } from '../../extension/src/git-workspace.js'
+import { resolveGitDirectory, resolveRepositoryRoot } from '../../extension/src/git-workspace.js'
 
 const treeSource = await import('node:fs/promises').then(({ readFile }) =>
   readFile('extension/src/session-tree.ts', 'utf8')
@@ -31,10 +32,13 @@ describe('workspace cockpit guardrails', () => {
       treeSource.indexOf('recent: {', definitionsStart)
     )
 
-    expect(treeSource).toContain("type SectionId = 'workspace' | 'attention' | 'recent'")
+    expect(treeSource).toContain(
+      "type SectionId = 'workspace' | 'repository' | 'attention' | 'recent'"
+    )
     expect(treeSource).toContain("label: 'Current Workspace'")
     expect(treeSource).toContain("label: 'Needs Attention Elsewhere'")
     expect(treeSource).toContain("label: 'Recent Elsewhere'")
+    expect(treeSource).toContain("label: 'Rest of Repository'")
     expect(attentionDefinition).toContain('state: vscode.TreeItemCollapsibleState.Collapsed')
     expect(treeSource).toContain('const nextSessionNodes = new Map')
     expect(treeSource).toContain('this.sessionNodes.get(session.id) ?? sessionNode')
@@ -82,6 +86,37 @@ describe('workspace cockpit guardrails', () => {
     await writeFile(join(worktree, '.git'), `gitdir: ${gitDirectory}\n`, 'utf8')
 
     expect(await resolveGitDirectory(worktree)).toBe(resolve(gitDirectory))
+  })
+
+  it('walks up to the repository that contains a subfolder workspace', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'reup-repo-root-test-'))
+    const repository = join(temporaryDirectory, 'repo')
+    const nested = join(repository, 'packages', 'app')
+    await mkdir(join(repository, '.git'), { recursive: true })
+    await mkdir(nested, { recursive: true })
+
+    expect(await resolveRepositoryRoot(nested)).toBe(repository)
+    expect(await resolveRepositoryRoot(repository)).toBe(repository)
+
+    // A folder outside any repository answers for itself, so the repository
+    // group stays empty rather than walking to the filesystem root.
+    const loose = join(temporaryDirectory, 'loose')
+    await mkdir(loose, { recursive: true })
+    expect(await resolveRepositoryRoot(loose)).toBe(resolve(loose))
+  })
+
+  it('watches HEAD through the repository, not the opened subfolder', () => {
+    // resolveGitDirectory alone returns null for a subfolder workspace, so the
+    // branch watcher silently never started for one package of a monorepo.
+    const controllerSource = readFileSync('extension/src/refresh-controller.ts', 'utf8')
+    expect(controllerSource).toContain('resolveRepositoryRoot(folder.uri.fsPath)')
+    expect(controllerSource).toContain('.then(resolveGitDirectory)')
+  })
+
+  it('separates rest-of-repository rows in Resume Here instead of mixing them in', () => {
+    expect(resumePickerSource).toContain('QuickPickItemKind.Separator')
+    expect(resumePickerSource).toContain("'Rest of Repository'")
+    expect(resumePickerSource).toContain('isSessionPickItem')
   })
 
   it('matches and ranks Resume Here across every workspace root', () => {

@@ -101,3 +101,92 @@ function projectFor(item: ExtensionSession): ExtensionProject {
     updated: item.updated,
   }
 }
+
+describe('repository grouping', () => {
+  const monorepo = {
+    // The open folder is one package; Claude ran at the repository root and in
+    // a sibling package. Neither belongs to the folder, both belong to the repo.
+    openFolder: '/work/repo/packages/app',
+    repositoryRoot: '/work/repo',
+  }
+
+  function monorepoModel(overrides: Record<string, unknown> = {}) {
+    const own = session('own', monorepo.openFolder)
+    const nested = session('nested', `${monorepo.openFolder}/src`)
+    const repoRoot = session('repo-root', monorepo.repositoryRoot)
+    const sibling = session('sibling', '/work/repo/packages/other')
+    const outside = session('outside', '/work/other-repo')
+    const sessions = [own, nested, repoRoot, sibling, outside]
+    return buildCockpitModel(sessions.map(projectFor), sessions, {
+      repositoryRoots: [monorepo.repositoryRoot],
+      workspaceRoots: [monorepo.openFolder],
+      ...overrides,
+    })
+  }
+
+  it('keeps the workspace meaning exactly the open folder', () => {
+    expect(
+      monorepoModel()
+        .workspaceProjects.flatMap((group) => group.sessions)
+        .map((item) => item.id)
+        .sort()
+    ).toEqual(['nested', 'own'])
+  })
+
+  it('groups the repository root and siblings separately, never in the workspace', () => {
+    const model = monorepoModel()
+
+    expect(
+      model.repositoryProjects
+        .flatMap((group) => group.sessions)
+        .map((item) => item.id)
+        .sort()
+    ).toEqual(['repo-root', 'sibling'])
+    expect(model.summary.repositorySessionCount).toBe(2)
+    expect(model.summary.workspaceSessionCount).toBe(2)
+  })
+
+  it('leaves sessions outside the repository elsewhere', () => {
+    const model = monorepoModel({ sessionScope: 'all' })
+
+    expect(model.recentElsewhere.flatMap((group) => group.sessions).map((item) => item.id)).toEqual(
+      ['outside']
+    )
+    expect(model.summary.elsewhereSessionCount).toBe(1)
+  })
+
+  it('stays empty when the open folder is the repository root', () => {
+    // The ordinary one-repo-per-window case: no second group, no dead header.
+    const own = session('own', '/work/repo')
+    const outside = session('outside', '/work/other')
+    const sessions = [own, outside]
+
+    const model = buildCockpitModel(sessions.map(projectFor), sessions, {
+      repositoryRoots: ['/work/repo'],
+      workspaceRoots: ['/work/repo'],
+    })
+
+    expect(model.repositoryProjects).toEqual([])
+    expect(model.summary.repositorySessionCount).toBe(0)
+  })
+
+  it('counts the repository group in the badge by default, and not when disabled', () => {
+    const own = session('own', monorepo.openFolder)
+    const repoRoot = { ...session('repo-root', monorepo.repositoryRoot), needsAttention: true }
+    const sessions = [own, repoRoot]
+    const context = {
+      repositoryRoots: [monorepo.repositoryRoot],
+      workspaceRoots: [monorepo.openFolder],
+    }
+
+    expect(
+      buildCockpitModel(sessions.map(projectFor), sessions, context).summary.scopedAttentionCount
+    ).toBe(1)
+    expect(
+      buildCockpitModel(sessions.map(projectFor), sessions, {
+        ...context,
+        countRepositorySessions: false,
+      }).summary.scopedAttentionCount
+    ).toBe(0)
+  })
+})

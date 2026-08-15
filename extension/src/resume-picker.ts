@@ -7,10 +7,17 @@ import { getReupConfigurationValue } from './configuration.js'
 import type { ReupLogger } from './logger.js'
 import type { SessionResumeService } from './resume-target.js'
 import type { ExtensionSession, ReupDataSource } from './reup-data.js'
-import { sessionMatchesWorkspace } from './reup-data.js'
+import { resolveWorkspaceRepositoryRoots, sessionMatchesWorkspace } from './reup-data.js'
 
 interface SessionQuickPickItem extends vscode.QuickPickItem {
   session: ExtensionSession
+}
+
+/** A picker row is either a session or a heading that groups the rows below it. */
+type ResumePickItem = SessionQuickPickItem | vscode.QuickPickItem
+
+function isSessionPickItem(item: ResumePickItem | undefined): item is SessionQuickPickItem {
+  return item !== undefined && 'session' in item
 }
 
 const OPEN_INSPECTOR_BUTTON: vscode.QuickInputButton = {
@@ -47,7 +54,10 @@ export async function showWorkspaceResumePicker(
   const workspacePaths = (vscode.workspace.workspaceFolders ?? []).map(
     (folder) => folder.uri.fsPath
   )
+  const repositoryPaths = await resolveWorkspaceRepositoryRoots(workspacePaths)
   const activeEditorPath = vscode.window.activeTextEditor?.document.uri.fsPath ?? null
+  const inWorkspace = (session: ExtensionSession): boolean =>
+    workspacePaths.some((workspacePath) => sessionMatchesWorkspace(session, workspacePath))
   await showResumePicker({
     dataSource,
     emptyMessage:
@@ -55,7 +65,11 @@ export async function showWorkspaceResumePicker(
         ? 'No Reup sessions match the current workspace.'
         : 'Open a workspace folder to use Resume Here.',
     filter: (session) =>
-      workspacePaths.some((workspacePath) => sessionMatchesWorkspace(session, workspacePath)),
+      inWorkspace(session) ||
+      repositoryPaths.some((repositoryPath) => sessionMatchesWorkspace(session, repositoryPath)),
+    // Sessions from the rest of the repository are offered, but never silently
+    // mixed in: they sit below a heading that says where they come from.
+    group: (session) => (inWorkspace(session) ? null : 'Rest of Repository'),
     logger,
     placeHolder: 'Resume a Claude Code session for the current workspace',
     resumeService,
@@ -70,6 +84,8 @@ async function showResumePicker(options: {
   dataSource: ReupDataSource
   emptyMessage?: string
   filter?: (session: ExtensionSession) => boolean
+  /** Heading a session belongs under, or null for the ungrouped rows on top. */
+  group?: (session: ExtensionSession) => string | null
   logger: ReupLogger
   placeHolder: string
   resumeService: SessionResumeService
@@ -91,11 +107,36 @@ async function showResumePicker(options: {
       return
     }
 
-    await runQuickPick(sessions.map(toQuickPickItem), options)
+    await runQuickPick(buildPickItems(sessions, options.group), options)
   } catch (error) {
     options.logger.error('resume picker failed', error)
     void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
   }
+}
+
+/**
+ * Lays out the rows, inserting a separator each time the heading changes. The
+ * sessions are already in relevance order, so grouping preserves it within
+ * each heading instead of re-sorting.
+ */
+function buildPickItems(
+  sessions: ExtensionSession[],
+  group?: (session: ExtensionSession) => string | null
+): ResumePickItem[] {
+  if (!group) return sessions.map(toQuickPickItem)
+
+  const items: ResumePickItem[] = []
+  let openHeading: string | null = null
+  for (const heading of [null, ...new Set(sessions.map(group).filter((value) => value !== null))]) {
+    for (const session of sessions.filter((candidate) => group(candidate) === heading)) {
+      if (heading !== null && heading !== openHeading) {
+        items.push({ kind: vscode.QuickPickItemKind.Separator, label: heading })
+        openHeading = heading
+      }
+      items.push(toQuickPickItem(session))
+    }
+  }
+  return items
 }
 
 function toQuickPickItem(session: ExtensionSession): SessionQuickPickItem {
@@ -125,7 +166,7 @@ function toQuickPickItem(session: ExtensionSession): SessionQuickPickItem {
 }
 
 async function runQuickPick(
-  items: SessionQuickPickItem[],
+  items: ResumePickItem[],
   options: {
     logger: ReupLogger
     onOpenInspector?: (session: ExtensionSession) => Promise<void>
@@ -134,7 +175,9 @@ async function runQuickPick(
     title: string
   }
 ): Promise<void> {
-  const quickPick = vscode.window.createQuickPick<SessionQuickPickItem>()
+  // Typed over the union: separators carry no session, and VS Code never
+  // selects them, so every read of `.session` goes through isSessionPickItem.
+  const quickPick = vscode.window.createQuickPick<ResumePickItem>()
   quickPick.items = items
   quickPick.matchOnDescription = true
   quickPick.matchOnDetail = true
@@ -151,7 +194,7 @@ async function runQuickPick(
     }
     quickPick.onDidAccept(() => {
       const selected = quickPick.selectedItems[0]
-      if (!selected) return
+      if (!isSessionPickItem(selected)) return
       finish()
       void options.resumeService
         .resume(selected.session)
@@ -163,6 +206,7 @@ async function runQuickPick(
         )
     })
     quickPick.onDidTriggerItemButton((event) => {
+      if (!isSessionPickItem(event.item)) return
       if (event.button === OPEN_INSPECTOR_BUTTON && options.onOpenInspector) {
         void options.onOpenInspector(event.item.session).finally(finish)
       } else if (event.button === COPY_HANDOFF_BUTTON) {

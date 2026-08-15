@@ -25,6 +25,13 @@ export interface ExtensionCockpitModel {
   projects: ExtensionProject[]
   recentElsewhere: CockpitProjectGroup[]
   /**
+   * Sessions in the same repository as an open folder but not beneath it: a
+   * monorepo root when one package is open, a sibling package. Shown as their
+   * own group rather than folded into the workspace, so the workspace keeps
+   * meaning exactly the folder while nearby work stays one click away.
+   */
+  repositoryProjects: CockpitProjectGroup[]
+  /**
    * The scope actually applied. A requested `workspace` scope collapses to
    * `all` when no folder is open, because there is then nothing to scope to.
    * Surfaces draw this answer; they never re-derive it.
@@ -35,8 +42,9 @@ export interface ExtensionCockpitModel {
     /** Counts over every locally discovered session, whatever the scope. */
     activeCount: number
     attentionCount: number
-    /** Sessions outside the workspace, counted even while they stay hidden. */
+    /** Sessions outside both the workspace and its repository. */
     elsewhereSessionCount: number
+    repositorySessionCount: number
     /** Counts over the resolved scope — what badges and the status bar draw. */
     scopedActiveCount: number
     scopedAttentionCount: number
@@ -48,7 +56,19 @@ export interface ExtensionCockpitModel {
 
 export interface CockpitContext {
   activeEditorPath?: string
+  /**
+   * Whether the repository group contributes to the badge and status counts.
+   * It is the same codebase, so it does by default; a user who wants the
+   * indicator to track the open folder alone can turn it off.
+   */
+  countRepositorySessions?: boolean
   includeArchived?: boolean
+  /**
+   * Repository roots containing the open folders, resolved by the caller
+   * because it needs the filesystem and this model stays pure. Often equal to
+   * `workspaceRoots`, and then the repository group is simply empty.
+   */
+  repositoryRoots?: string[]
   sessionScope?: SessionScope
   workspaceRoots: string[]
 }
@@ -78,10 +98,23 @@ export function buildCockpitModel(
     )
     .sort((left, right) => compareCockpitSessions(left, right, activeEditorPath))
   const workspaceIds = new Set(workspaceSessions.map((session) => session.id))
-  const sessionsElsewhere = sessions.filter((session) => !workspaceIds.has(session.id))
 
-  // Workspace scope answers for the open folder only. The elsewhere sections
-  // stay computed but empty so every surface reads one classification.
+  // Same repository, but not beneath the open folder. Disjoint from the
+  // workspace bucket by construction, so no session is ever counted twice.
+  const repositoryRoots = (context.repositoryRoots ?? []).map((root) => resolve(root))
+  const repositorySessions = sessions
+    .filter(
+      (session) =>
+        !workspaceIds.has(session.id) &&
+        isInsideAnyWorkspaceRoot(session.projectPath, repositoryRoots)
+    )
+    .sort((left, right) => compareCockpitSessions(left, right, activeEditorPath))
+  const nearbyIds = new Set([...workspaceIds, ...repositorySessions.map((session) => session.id)])
+  const sessionsElsewhere = sessions.filter((session) => !nearbyIds.has(session.id))
+
+  // Workspace scope answers for the open folder and its repository. The
+  // elsewhere sections stay computed but empty so every surface reads one
+  // classification.
   const attentionElsewhere =
     resolvedScope === 'workspace'
       ? []
@@ -93,7 +126,11 @@ export function buildCockpitModel(
     resolvedScope === 'workspace'
       ? []
       : sessionsElsewhere.filter((session) => !attentionIds.has(session.id))
-  const scopedSessions = resolvedScope === 'workspace' ? workspaceSessions : sessions
+  const countedSessions =
+    context.countRepositorySessions === false
+      ? workspaceSessions
+      : [...workspaceSessions, ...repositorySessions]
+  const scopedSessions = resolvedScope === 'workspace' ? countedSessions : sessions
 
   return {
     activeEditorPath,
@@ -103,12 +140,16 @@ export function buildCockpitModel(
     recentElsewhere: groupSessionsByProject(projects, recentElsewhereSessions)
       .sort(compareProjectGroups)
       .slice(0, RECENT_PROJECT_LIMIT),
+    repositoryProjects: groupSessionsByProject(projects, repositorySessions).sort(
+      compareProjectGroups
+    ),
     resolvedScope,
     sessions,
     summary: {
       activeCount: sessions.filter((session) => session.isActive).length,
       attentionCount: sessions.filter((session) => session.needsAttention).length,
       elsewhereSessionCount: sessionsElsewhere.length,
+      repositorySessionCount: repositorySessions.length,
       scopedActiveCount: scopedSessions.filter((session) => session.isActive).length,
       scopedAttentionCount: scopedSessions.filter((session) => session.needsAttention).length,
       workspaceSessionCount: workspaceSessions.length,

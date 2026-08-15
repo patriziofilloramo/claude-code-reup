@@ -467,6 +467,17 @@ lower-cases the Windows drive letter while Claude Code records the shell's
 casing, and one-directional, because an ancestor of the open folder is not part
 of the workspace.
 
+Nearby work is recovered by grouping rather than by widening that rule. The
+model carries a second bucket, `repositoryProjects`: sessions inside the
+repository containing an open folder but not beneath the folder itself, so a
+monorepo root and its sibling packages stay one click away without diluting
+what the workspace means. The two buckets are disjoint by construction. The
+repository root is resolved by walking up for `.git` in
+`extension/src/git-workspace.ts` and passed into the model pre-resolved, since
+`buildCockpitModel` stays pure and synchronous. The same walk fixes branch
+watching: `resolveGitDirectory` alone returns nothing for a workspace opened on
+a subfolder, so the `HEAD` watcher never started there.
+
 The full-screen dashboard is the primary discovery and resume surface. It loads
 metadata first, requests previews only for the selected session, uses the shared
 core query parser for structured search, and performs transcript search only on

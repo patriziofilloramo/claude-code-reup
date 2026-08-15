@@ -18,7 +18,11 @@ import {
   type DashboardModel,
 } from './dashboard-model.js'
 import type { ExtensionCockpitModel } from './cockpit-model.js'
-import { getReupConfigurationValue, getSessionScopeSetting } from './configuration.js'
+import {
+  getCountRepositorySessionsSetting,
+  getReupConfigurationValue,
+  getSessionScopeSetting,
+} from './configuration.js'
 import { copySessionHandoff } from './handoff.js'
 import type { ReupInspectorProvider } from './session-detail.js'
 import { pickTouchedSession } from './touched-search.js'
@@ -63,6 +67,7 @@ export class ReupDashboard implements vscode.Disposable {
   private readonly previewCache = new Map<string, SessionPreview>()
   private dashboardModel: DashboardModel | null = null
   private workspaceProjectIds = new Set<string>()
+  private repositoryProjectIds = new Set<string>()
   private previewRequestId = 0
   private refreshRequestId = 0
   private searchRequestId = 0
@@ -137,6 +142,7 @@ export class ReupDashboard implements vscode.Disposable {
         cockpitModel ??
         (await this.dataSource.loadCockpitModel({
           activeEditorPath: vscode.window.activeTextEditor?.document.uri.fsPath,
+          countRepositorySessions: getCountRepositorySessionsSetting(),
           includeArchived: true,
           sessionScope: getSessionScopeSetting(),
           workspaceRoots: (vscode.workspace.workspaceFolders ?? []).map(
@@ -152,17 +158,22 @@ export class ReupDashboard implements vscode.Disposable {
           : model.sessions
       )
       const workspaceProjectIds = new Set(model.workspaceProjects.map((group) => group.project.id))
+      const repositoryProjectIds = new Set(
+        model.repositoryProjects.map((group) => group.project.id)
+      )
       const resumeCapabilities = await this.resumeService.getCapabilities()
       if (requestId !== this.refreshRequestId || this.panel !== panel) return
 
       this.dashboardModel = dashboardModel
       this.workspaceProjectIds = workspaceProjectIds
+      this.repositoryProjectIds = repositoryProjectIds
       await panel.webview.postMessage({
         // The webview opens on the scope Reup resolved, so a dashboard in this
         // window starts on this workspace. `model.sessions` deliberately stays
         // complete: it is the table deep search resolves its hits against.
         defaultFilter: model.resolvedScope === 'workspace' ? 'workspace' : 'all',
         model: dashboardModel,
+        repositoryProjectIds: [...repositoryProjectIds],
         resumeCapabilities,
         sessionScope: model.resolvedScope,
         type: 'model',
@@ -187,6 +198,7 @@ export class ReupDashboard implements vscode.Disposable {
     this.previewCache.clear()
     this.dashboardModel = null
     this.workspaceProjectIds.clear()
+    this.repositoryProjectIds.clear()
   }
 
   private async handleMessage(message: DashboardMessage): Promise<void> {
@@ -254,7 +266,8 @@ export class ReupDashboard implements vscode.Disposable {
               message.query,
               message.filter,
               message.projectId,
-              this.workspaceProjectIds
+              this.workspaceProjectIds,
+              this.repositoryProjectIds
             )
           : []
         await this.panel?.webview.postMessage({
@@ -407,7 +420,9 @@ function isDashboardMessage(value: unknown): value is DashboardMessage {
       typeof message['query'] === 'string' &&
       typeof message['requestId'] === 'number' &&
       (message['projectId'] === null || typeof message['projectId'] === 'string') &&
-      ['active', 'all', 'archived', 'attention', 'workspace'].includes(String(message['filter']))
+      ['active', 'all', 'archived', 'attention', 'repository', 'workspace'].includes(
+        String(message['filter'])
+      )
     )
   if (['copyProjectPath', 'openProject', 'revealProjectById'].includes(String(message['type'])))
     return typeof message['projectId'] === 'string'
@@ -467,11 +482,11 @@ const DASHBOARD_CSS = String.raw`
 `
 
 const DASHBOARD_SCRIPT = String.raw`
-const vscode=acquireVsCodeApi();const app=document.getElementById('app');let model=null,usage=null,resumeCapabilities={claudeExtensionAvailable:false,preferredTarget:null},workspaceIds=new Set(),selected=null,project=null,filter=null,defaultFilter='all',sessionScope='all',query='',preview=null,previewRequest=0,searchRequest=0,metadataRequest=0,metadataSessionIds=null,deepMatches=null,touchedOverlap={};const saved=vscode.getState()||{},hadSavedSelection=Object.prototype.hasOwnProperty.call(saved,'selected');filter=saved.filter||null;query=saved.query||'';project=saved.project||null;selected=saved.selected||null;
-window.addEventListener('message',e=>{const m=e.data;if(m.type==='model'){const firstModel=model===null,uiState=captureUiState();model=m.model;resumeCapabilities=m.resumeCapabilities||resumeCapabilities;workspaceIds=new Set(m.workspaceProjectIds);sessionScope=m.sessionScope||'all';defaultFilter=m.defaultFilter||'all';if(!filter)filter=defaultFilter;
+const vscode=acquireVsCodeApi();const app=document.getElementById('app');let model=null,usage=null,resumeCapabilities={claudeExtensionAvailable:false,preferredTarget:null},workspaceIds=new Set(),repositoryIds=new Set(),selected=null,project=null,filter=null,defaultFilter='all',sessionScope='all',query='',preview=null,previewRequest=0,searchRequest=0,metadataRequest=0,metadataSessionIds=null,deepMatches=null,touchedOverlap={};const saved=vscode.getState()||{},hadSavedSelection=Object.prototype.hasOwnProperty.call(saved,'selected');filter=saved.filter||null;query=saved.query||'';project=saved.project||null;selected=saved.selected||null;
+window.addEventListener('message',e=>{const m=e.data;if(m.type==='model'){const firstModel=model===null,uiState=captureUiState();model=m.model;resumeCapabilities=m.resumeCapabilities||resumeCapabilities;workspaceIds=new Set(m.workspaceProjectIds);repositoryIds=new Set(m.repositoryProjectIds||[]);sessionScope=m.sessionScope||'all';defaultFilter=m.defaultFilter||'all';if(!filter)filter=defaultFilter;
 // A saved 'workspace' filter cannot be honoured once this window has no folder
 // open; only then is widening the user's stored choice the correct repair.
-if(filter==='workspace'&&sessionScope==='all'&&workspaceIds.size===0)filter='all';if(selected&&!model.sessions.some(s=>s.id===selected))selected=null;if(firstModel&&!hadSavedSelection&&!selected&&model.continueNow)selected=model.continueNow.id;render();restoreUiState(uiState);requestMetadataSearch();if(selected)loadPreview(selected)}else if(m.type==='resumeCapabilities'){resumeCapabilities=m.resumeCapabilities||resumeCapabilities;renderPreservingUiState()}else if(m.type==='usage'){usage=m.usage;renderUsage()}else if(m.type==='refreshState'){setRefreshState(m.refreshing)}else if(m.type==='preview'&&m.requestId===previewRequest){const uiState=captureUiState();preview=m.preview;touchedOverlap=m.touchedOverlap||{};renderDetail();restoreUiState(uiState)}else if(m.type==='focusSession'){select(m.sessionId)}else if(m.type==='metadataResults'&&m.requestId===metadataRequest){const uiState=captureUiState();metadataSessionIds=new Set(m.sessionIds);renderSearchResults();restoreUiState(uiState)}else if(m.type==='searchResults'&&m.requestId===searchRequest){deepMatches=m.matches;renderPreservingUiState()}else if(m.type==='searchProgress'&&m.requestId===searchRequest){setSearchStatus(m.scanned+'/'+m.total)}else if(m.type==='error'&&!model){renderLoadError(m.message)}else if(m.type==='error'||m.type==='actionError')toast(m.message)});
+if((filter==='workspace'||filter==='repository')&&sessionScope==='all'&&workspaceIds.size===0)filter='all';if(selected&&!model.sessions.some(s=>s.id===selected))selected=null;if(firstModel&&!hadSavedSelection&&!selected&&model.continueNow)selected=model.continueNow.id;render();restoreUiState(uiState);requestMetadataSearch();if(selected)loadPreview(selected)}else if(m.type==='resumeCapabilities'){resumeCapabilities=m.resumeCapabilities||resumeCapabilities;renderPreservingUiState()}else if(m.type==='usage'){usage=m.usage;renderUsage()}else if(m.type==='refreshState'){setRefreshState(m.refreshing)}else if(m.type==='preview'&&m.requestId===previewRequest){const uiState=captureUiState();preview=m.preview;touchedOverlap=m.touchedOverlap||{};renderDetail();restoreUiState(uiState)}else if(m.type==='focusSession'){select(m.sessionId)}else if(m.type==='metadataResults'&&m.requestId===metadataRequest){const uiState=captureUiState();metadataSessionIds=new Set(m.sessionIds);renderSearchResults();restoreUiState(uiState)}else if(m.type==='searchResults'&&m.requestId===searchRequest){deepMatches=m.matches;renderPreservingUiState()}else if(m.type==='searchProgress'&&m.requestId===searchRequest){setSearchStatus(m.scanned+'/'+m.total)}else if(m.type==='error'&&!model){renderLoadError(m.message)}else if(m.type==='error'||m.type==='actionError')toast(m.message)});
 function post(type,extra={}){vscode.postMessage({type,...extra})}function persist(){vscode.setState({filter,query,project,selected})}
 function renderLoadError(message){app.innerHTML='<div class="loading">'+BRAND_MARKUP+'<h2>Could not load Reup</h2><p>'+esc(message)+'</p><button class="btn primary" id="retry">Try again</button></div>';document.getElementById('retry').onclick=()=>{app.innerHTML='<div class="loading">'+BRAND_MARKUP+'<p>Mapping your Claude work…</p></div>';post('refresh')}}
 function render(){if(!model){return}const sessions=visibleSessions();app.innerHTML='<div class="shell"><header class="top">'+BRAND_MARKUP+'<div class="search"><input id="search" value="'+esc(query)+'" placeholder="Find sessions, projects, branches, tags…"><button class="btn deep" id="deep">Deep search</button></div><div class="usage" id="usage"></div><button class="btn" id="refresh">Refresh</button></header><main class="layout '+(selected?'show-detail':'')+'" id="layout">'+rail()+'<section class="sessions">'+hero()+filters()+'<div id="search-status"></div>'+sessionRows(sessions)+'</section><section class="detail" id="detail"></section></main></div>';bind();renderUsage();renderDetail()}
@@ -484,8 +499,8 @@ function usageLimit(label,limit,status){const p=Math.max(0,Math.min(100,Number(l
 function formatReset(v){if(!v)return '';const mins=Math.ceil((Date.parse(v)-Date.now())/60000);if(mins<=0)return 'reset now';if(mins>=1440)return 'reset '+Math.floor(mins/1440)+'d '+Math.floor((mins%1440)/60)+'h';if(mins>=60)return 'reset '+Math.floor(mins/60)+'h '+(mins%60)+'m';return 'reset '+mins+'m'}
 // Under workspace scope the rail lists this workspace's projects. Widening is
 // an explicit gesture: the "All sessions" focus row, or picking a project.
-function railProjects(){return sessionScope==='workspace'&&filter==='workspace'&&!project?model.projects.filter(p=>workspaceIds.has(p.id)):model.projects}
-function rail(){const projectRows=railProjects().map(p=>'<button class="project '+(project===p.id?'active':'')+'" data-project="'+attr(p.id)+'" title="'+attr(p.path)+'"><span class="name">'+esc(p.name)+'</span><span class="count">'+p.sessionCount+'</span></button>').join(''),workspaceCount=model.sessions.filter(s=>workspaceIds.has(s.projectId)&&!s.archived).length,allCount=model.summary.sessions-model.summary.archived,secondaryFocusRows=[focusNav('workspace','Current workspace',workspaceCount),focusNav('active','Active now',model.summary.active),focusNav('attention','Needs attention',model.summary.attention),focusNav('archived','Archived',model.summary.archived)].join(''),showAll=allCount>0&&(secondaryFocusRows||project||filter!=='all'),focusRows=(showAll?nav('all','All sessions',allCount):'')+secondaryFocusRows,focusBlock=focusRows?'<div class="rail-focus"><div class="section-title">Focus</div>'+focusRows+'</div>':'';return '<aside class="rail"><div class="section-title">Projects</div>'+projectRows+focusBlock+'</aside>'}
+function railProjects(){if(sessionScope!=='workspace'||project)return model.projects;if(filter==='workspace')return model.projects.filter(p=>workspaceIds.has(p.id)||repositoryIds.has(p.id));if(filter==='repository')return model.projects.filter(p=>repositoryIds.has(p.id));return model.projects}
+function rail(){const projectRows=railProjects().map(p=>'<button class="project '+(project===p.id?'active':'')+'" data-project="'+attr(p.id)+'" title="'+attr(p.path)+'"><span class="name">'+esc(p.name)+'</span><span class="count">'+p.sessionCount+'</span></button>').join(''),workspaceCount=model.sessions.filter(s=>workspaceIds.has(s.projectId)&&!s.archived).length,allCount=model.summary.sessions-model.summary.archived,repositoryCount=model.sessions.filter(s=>repositoryIds.has(s.projectId)&&!s.archived).length,secondaryFocusRows=[focusNav('workspace','Current workspace',workspaceCount),focusNav('repository','Rest of repository',repositoryCount),focusNav('active','Active now',model.summary.active),focusNav('attention','Needs attention',model.summary.attention),focusNav('archived','Archived',model.summary.archived)].join(''),showAll=allCount>0&&(secondaryFocusRows||project||filter!=='all'),focusRows=(showAll?nav('all','All sessions',allCount):'')+secondaryFocusRows,focusBlock=focusRows?'<div class="rail-focus"><div class="section-title">Focus</div>'+focusRows+'</div>':'';return '<aside class="rail"><div class="section-title">Projects</div>'+projectRows+focusBlock+'</aside>'}
 function nav(id,label,count){return '<button class="nav '+(filter===id&&!project?'active':'')+'" data-filter="'+id+'"><span>'+label+'</span><span class="count">'+count+'</span></button>'}
 function focusNav(id,label,count){return count>0?nav(id,label,count):''}
 function hero(){const s=model.continueNow;if(!s||query||project||filter!==defaultFilter)return '';return '<div class="hero"><div class="eyebrow">Continue now</div><h2>'+esc(s.title)+'</h2><p>'+esc(s.projectName)+' · '+relative(s.updated)+' · '+s.messageCount+' messages</p>'+resumeButtons(s,'Resume session')+'</div>'}
@@ -500,7 +515,7 @@ function touchedFiles(a){if(!a.length)return '';return '<h2>Files touched</h2><d
 function bind(){document.getElementById('search').addEventListener('input',e=>{query=e.target.value;deepMatches=null;persist();requestMetadataSearch()});document.getElementById('deep').onclick=()=>{if(query.trim().length<2)return toast('Enter at least two characters.');searchRequest++;deepMatches=[];post('deepSearch',{query:query.trim(),requestId:searchRequest});setSearchStatus('Searching transcripts…')};document.getElementById('refresh').onclick=()=>{setRefreshState(true);post('refresh')};document.querySelectorAll('[data-filter]').forEach(x=>x.onclick=()=>{filter=x.dataset.filter;project=null;deepMatches=null;persist();renderPreservingUiState();requestMetadataSearch()});document.querySelectorAll('[data-project]').forEach(x=>{x.onclick=()=>{const next=project===x.dataset.project?null:x.dataset.project;project=next;
 // Picking a project is the explicit widening gesture: keeping the workspace
 // filter on top of an out-of-workspace project would just show nothing.
-if(next&&filter==='workspace')filter='all';deepMatches=null;persist();renderPreservingUiState();requestMetadataSearch()};x.oncontextmenu=e=>{e.preventDefault();showProjectMenu(e.clientX,e.clientY,x.dataset.project)}});bindSessionRows();bindActions()}
+if(next&&(filter==='workspace'||filter==='repository'))filter='all';deepMatches=null;persist();renderPreservingUiState();requestMetadataSearch()};x.oncontextmenu=e=>{e.preventDefault();showProjectMenu(e.clientX,e.clientY,x.dataset.project)}});bindSessionRows();bindActions()}
 function bindActions(){document.querySelectorAll('[data-action]').forEach(x=>x.onclick=e=>{e.stopPropagation();const s=model.sessions.find(v=>v.id===x.dataset.id);if(s)post(x.dataset.action,{projectId:s.projectId,sessionId:s.id,...(x.dataset.target?{target:x.dataset.target}:{})})});document.querySelectorAll('[data-resume-primary]').forEach(x=>x.onclick=e=>{e.stopPropagation();const s=model.sessions.find(v=>v.id===x.dataset.resumePrimary);if(!s)return;if(resumeCapabilities.preferredTarget)post('resume',{projectId:s.projectId,sessionId:s.id,target:resumeCapabilities.preferredTarget});else showResumeMenu(e.clientX,e.clientY,s.id)});document.querySelectorAll('[data-resume-menu]').forEach(x=>x.onclick=e=>{e.stopPropagation();showResumeMenu(e.clientX,e.clientY,x.dataset.resumeMenu)});document.querySelectorAll('[data-file]').forEach(x=>x.onclick=()=>{const s=model.sessions.find(v=>v.id===selected);if(s)post('openFile',{projectId:s.projectId,sessionId:s.id,path:x.dataset.file})});document.querySelectorAll('[data-touched]').forEach(x=>x.onclick=e=>{e.stopPropagation();const s=model.sessions.find(v=>v.id===selected);if(s)post('touchedSessions',{projectId:s.projectId,sessionId:s.id,path:x.dataset.touched})})}
 function bindSessionRows(){document.querySelectorAll('[data-session]').forEach(x=>{x.onclick=()=>select(x.dataset.session);x.oncontextmenu=e=>{e.preventDefault();select(x.dataset.session);showSessionMenu(e.clientX,e.clientY,x.dataset.session)}})}
 function requestMetadataSearch(){if(!model)return;metadataRequest++;post('metadataSearch',{filter,projectId:project,query,requestId:metadataRequest})}

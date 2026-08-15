@@ -1,6 +1,6 @@
 {
   "name": "@patriziofilloramo/reup",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Find, monitor, and resume local Claude Code sessions across projects.",
   "type": "module",
   "bin": {

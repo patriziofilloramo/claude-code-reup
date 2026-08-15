@@ -1,7 +1,10 @@
 import { access } from 'node:fs/promises'
 
 import { loadProjects } from '../../src/core/project/project-discovery.js'
-import { pathsReferToSameLocation } from '../../src/core/project/path-comparison.js'
+import {
+  normalizePathForComparison,
+  pathsReferToSameLocation,
+} from '../../src/core/project/path-comparison.js'
 import { resolveLiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { LiveSessionSignals } from '../../src/core/session/live-attention.js'
 import type { SessionLiveState } from '../../src/core/session/session-live-state.js'
@@ -31,6 +34,7 @@ import {
   type ExtensionCockpitModel,
 } from './cockpit-model.js'
 import { compactProjectName, compactText } from './formatting.js'
+import { resolveRepositoryRoot } from './git-workspace.js'
 import { isSameOrInside } from './workspace-paths.js'
 import type { ReupLogger } from './logger.js'
 
@@ -156,6 +160,8 @@ export class ReupDataSource {
   }
 
   async loadCockpitModel(context: CockpitContext): Promise<ExtensionCockpitModel> {
+    const repositoryRoots =
+      context.repositoryRoots ?? (await resolveWorkspaceRepositoryRoots(context.workspaceRoots))
     const projects = await loadProjects()
     const signals = await resolveLiveSessionSignals(projects, { officialRefresh: 'background' })
     const sessions = await createExtensionSessions(projects, signals, {
@@ -167,10 +173,11 @@ export class ReupDataSource {
     const extensionProjects = projects
       .filter((project) => visibleProjectIds.has(project.id))
       .map((project) => createExtensionProject(project, sessions))
-    const model = buildCockpitModel(extensionProjects, sessions, context)
+    const model = buildCockpitModel(extensionProjects, sessions, { ...context, repositoryRoots })
     this.logger.debug('loaded Reup cockpit model', {
       attention: model.summary.attentionCount,
       projects: extensionProjects.length,
+      repositorySessions: model.summary.repositorySessionCount,
       scope: model.resolvedScope,
       sessions: sessions.length,
       workspaceSessions: model.summary.workspaceSessionCount,
@@ -277,6 +284,18 @@ export function sessionMatchesWorkspace(
   workspacePath: string | undefined
 ): boolean {
   return workspaceScore(session, workspacePath) > 0
+}
+
+/**
+ * Resolves the repository containing each open folder, de-duplicated. A folder
+ * that is its own repository root contributes nothing new, so the repository
+ * group stays empty for the ordinary one-repo-per-window case.
+ */
+export async function resolveWorkspaceRepositoryRoots(
+  workspaceRoots: readonly string[]
+): Promise<string[]> {
+  const resolved = await Promise.all(workspaceRoots.map((root) => resolveRepositoryRoot(root)))
+  return [...new Map(resolved.map((root) => [normalizePathForComparison(root), root])).values()]
 }
 
 export function isExtensionSessionVisible(

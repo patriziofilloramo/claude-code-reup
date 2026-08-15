@@ -67,12 +67,13 @@ are exposed.
 
 ## Settings
 
-| Setting                | Default     | Description                                          |
-| ---------------------- | ----------- | ---------------------------------------------------- |
-| `reup.includeArchived` | `false`     | Include locally archived sessions in extension views |
-| `reup.refreshMode`     | `watch`     | Use `watch`, `interval`, or `manual` refresh mode    |
-| `reup.sessionScope`    | `workspace` | Cover only this workspace, or `all` local projects   |
-| `reup.showStatusBar`   | `true`      | Show the compact active/attention status item        |
+| Setting                        | Default     | Description                                                    |
+| ------------------------------ | ----------- | -------------------------------------------------------------- |
+| `reup.countRepositorySessions` | `true`      | Count the Rest of Repository group in the badge and status bar |
+| `reup.includeArchived`         | `false`     | Include locally archived sessions in extension views           |
+| `reup.refreshMode`             | `watch`     | Use `watch`, `interval`, or `manual` refresh mode              |
+| `reup.sessionScope`            | `workspace` | Cover only this workspace, or `all` local projects             |
+| `reup.showStatusBar`           | `true`      | Show the compact active/attention status item                  |
 
 ## Session scope
 
@@ -87,10 +88,23 @@ the view title bar, the dashboard's "All sessions" focus row, or setting
 touched-file lookup stay global under either scope. With no folder open there
 is nothing to scope to, so Reup shows every local project.
 
-Workspace membership means the folder itself or anything beneath it. A session
-recorded in a _parent_ of the open folder — a home directory, a monorepo root
-when you opened one package — is deliberately out of scope; reach it with
-`Reup: Resume Session`.
+Workspace membership means the folder itself or anything beneath it. Nothing
+above it is ever folded in, so Current Workspace keeps meaning exactly the
+folder you opened.
+
+Work that sits nearby still stays reachable. When the open folder is inside a
+larger repository — one package of a monorepo, one service of a checkout —
+sessions recorded elsewhere in that repository appear in their own
+**Rest of Repository** group: the repository root, sibling packages. They are
+never mixed into Current Workspace, and `Reup: Resume Here` lists them below a
+separator that says where they come from. Opening a repository root, the
+ordinary case, leaves the group empty and it is not drawn at all.
+
+The group counts toward the Sessions badge and the status indicator, since it
+is the same codebase you can act on from this window. Set
+`reup.countRepositorySessions` to `false` to narrow the indicator to the open
+folder while keeping the group visible. A home directory or a shared parent
+folder is not a repository, so it never appears in either place.
 
 Pre-production settings are read as a silent migration fallback only when the
 corresponding `reup.*` key is unset. New writes use `reup.*`.

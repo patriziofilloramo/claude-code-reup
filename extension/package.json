@@ -2,7 +2,7 @@
   "name": "reup-vscode",
   "displayName": "Reup for Claude Code",
   "description": "Find, understand, and safely resume Claude Code sessions across every project.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "reup-local",
   "private": true,
   "icon": "media/reup-brand.png",
@@ -152,6 +152,11 @@
           "type": "boolean",
           "default": false,
           "description": "Include archived sessions in Reup's VS Code views."
+        },
+        "reup.countRepositorySessions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Count sessions from the rest of the repository in the Sessions view badge and the status indicator. Turn this off to make the indicator track the open folder alone; the Rest of Repository group stays visible either way."
         },
         "reup.sessionScope": {
           "type": "string",
