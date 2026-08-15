@@ -7,7 +7,7 @@ current implementation has moved beyond this document: see
 shipped dashboard, Inspector, search, live usage, actions, and resume-target
 behavior.
 
-Superseded on 2026-08-05: this document's "workspace-aware but still global"
+Superseded on 2026-08-15: this document's "workspace-aware but still global"
 framing described the Phase 1 Quick Picks and stayed accurate for them
 (`Resume Here` is scoped, `Resume Session` is global). It was wrongly carried
 into the tree, dashboard, and status badge, which shipped device-wide. That

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1
+
+### Security
+
+- Cleared two advisories published after 0.6.0 was tagged locally: `nanoid` 3.3.18 (custom
+  generators can loop indefinitely when size is zero) in the runtime tree, and `js-yaml` in the
+  extension's build tooling. Both resolutions land inside the existing semver ranges, so only
+  lockfiles changed, and `npm audit` reports zero in the root and in `extension/`.
+
 ## 0.6.0
 
 ### Added

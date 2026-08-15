@@ -4,6 +4,26 @@
 
 ### High
 
+- [ ] **VS Code tree can hold a stale needs-input reading until a manual refresh** — observed
+      2026-08-15 on a live session. With only the sidebar visible the refresh controller runs in
+      `signals` scope and watches three paths: session locks, `attention/`, `activity/`. Claude's
+      projects directory is watched only when the dashboard is open (`full` scope), and `watch`
+      mode has no safety interval. A session that returns from needs-input to working **by
+      transcript evidence alone** therefore produces no event the tree observes, and the badge
+      keeps demanding attention until the user presses Refresh or a lock changes. Evidence from the
+      reported case: an `attention` marker ("Claude needs your permission to use AskUserQuestion",
+      16:06:21Z) was newer than the last `activity` `busy` marker (15:47:46Z), and no further
+      activity marker was written when work resumed. `resolveSessionLiveState()` read the freshest
+      evidence correctly; the missing piece is a refresh trigger, not the rule. Do not "fix" this
+      by repainting the indicator — read `Documents/CLAUDE_CODE_DATA_MODEL.md` in full first. Note
+      the deliberate trade-off being revisited: full watching is reserved for the dashboard because
+      transcript churn makes the shared sidebar look perpetually busy.
+
+- [ ] **Orphaned attention markers are never reclaimed** — `~/.claude/reup/attention` still held a
+      marker from 2026-07-21 for a long-dead session. Harmless for presentation today, since a
+      marker only anchors a row that also has a live lock or a resume-visible session, but the
+      directory grows without bound and makes live-state archaeology noisier.
+
 - [x] **Windows terminal launcher shell-string blocker resolved** — `terminal.windows.ts` now
       uses structured `execFile()` / `spawn()` launch paths for Windows Terminal, PowerShell,
       and detached `cmd`, with argument-structure regression tests in
