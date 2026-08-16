@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.2
+
+### Fixed
+
+- The Sessions view no longer keeps an attention badge standing after you answer a permission
+  prompt. Answering one does not end the turn, so Claude Code fires no hook and touches no lock,
+  and with only the sidebar visible Reup watched locks and markers alone — leaving the single
+  record that work resumed, the transcript, unobserved. Reup now watches the transcript of each
+  waiting session, so the claim is retracted as soon as work continues. Nothing about how live
+  state is resolved changed, and the extra watchers exist only while a session is actually
+  waiting.
+
 ## 0.6.1
 
 ### Security
