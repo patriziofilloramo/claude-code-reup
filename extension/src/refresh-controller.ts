@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import * as vscode from 'vscode'
 
@@ -47,6 +47,9 @@ export class ReupRefreshController implements vscode.Disposable {
   private scope: RefreshScope = 'off'
   private readonly watcherDisposables: vscode.Disposable[] = []
   private readonly watchers: vscode.FileSystemWatcher[] = []
+  private needsInputTranscripts: string[] = []
+  private readonly needsInputDisposables: vscode.Disposable[] = []
+  private readonly needsInputWatchers: vscode.FileSystemWatcher[] = []
 
   constructor(
     private readonly logger: ReupLogger,
@@ -107,6 +110,33 @@ export class ReupRefreshController implements vscode.Disposable {
     } else if (mode === 'interval') {
       this.startSafetyInterval()
     }
+    this.restartNeedsInputWatchers()
+  }
+
+  /**
+   * Watches the transcript of every session that currently claims needs-input.
+   *
+   * Answering a tool-permission prompt does not end the turn, so Claude Code
+   * fires no hook and touches no lock: the transcript is the only record that
+   * work resumed. In `signals` scope the tree watches locks and markers alone,
+   * which left a stale attention badge standing until the user pressed Refresh.
+   *
+   * Watching every transcript instead would reintroduce exactly the churn that
+   * keeps full watching reserved for the dashboard. This set is the narrow one
+   * that can go stale: it is empty whenever nothing claims attention, and holds
+   * one file per waiting session otherwise. A poll was the wrong shape here —
+   * watch mode is event-driven by design, and the retraction is an event.
+   */
+  setNeedsInputTranscripts(paths: readonly string[]): void {
+    const next = [...new Set(paths)].sort()
+    if (
+      next.length === this.needsInputTranscripts.length &&
+      next.every((path, index) => path === this.needsInputTranscripts[index])
+    ) {
+      return
+    }
+    this.needsInputTranscripts = next
+    this.restartNeedsInputWatchers()
   }
 
   requestRefresh(reason: string, urgent = false): void {
@@ -157,8 +187,35 @@ export class ReupRefreshController implements vscode.Disposable {
     }
   }
 
+  /**
+   * A retraction is time-sensitive in exactly the way a lock transition is, so
+   * these bypass the watch throttle like the other needs-input signals.
+   */
+  private restartNeedsInputWatchers(): void {
+    this.clearNeedsInputWatchers()
+    if (this.scope === 'off' || this.disposed || readRefreshMode() !== 'watch') return
+
+    for (const transcriptPath of this.needsInputTranscripts) {
+      const watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(dirname(transcriptPath), basename(transcriptPath))
+      )
+      this.needsInputWatchers.push(watcher)
+      watcher.onDidChange(
+        () => this.requestRefresh('waiting session transcript', true),
+        undefined,
+        this.needsInputDisposables
+      )
+    }
+  }
+
+  private clearNeedsInputWatchers(): void {
+    for (const disposable of this.needsInputDisposables.splice(0)) disposable.dispose()
+    for (const watcher of this.needsInputWatchers.splice(0)) watcher.dispose()
+  }
+
   private clearRuntime(): void {
     this.clearDebounce()
+    this.clearNeedsInputWatchers()
     if (this.intervalTimer) clearInterval(this.intervalTimer)
     this.intervalTimer = null
     for (const disposable of this.watcherDisposables.splice(0)) disposable.dispose()

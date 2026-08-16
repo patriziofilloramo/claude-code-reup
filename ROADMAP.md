@@ -4,20 +4,16 @@
 
 ### High
 
-- [ ] **VS Code tree can hold a stale needs-input reading until a manual refresh** — observed
-      2026-08-15 on a live session. With only the sidebar visible the refresh controller runs in
-      `signals` scope and watches three paths: session locks, `attention/`, `activity/`. Claude's
-      projects directory is watched only when the dashboard is open (`full` scope), and `watch`
-      mode has no safety interval. A session that returns from needs-input to working **by
-      transcript evidence alone** therefore produces no event the tree observes, and the badge
-      keeps demanding attention until the user presses Refresh or a lock changes. Evidence from the
-      reported case: an `attention` marker ("Claude needs your permission to use AskUserQuestion",
-      16:06:21Z) was newer than the last `activity` `busy` marker (15:47:46Z), and no further
-      activity marker was written when work resumed. `resolveSessionLiveState()` read the freshest
-      evidence correctly; the missing piece is a refresh trigger, not the rule. Do not "fix" this
-      by repainting the indicator — read `Documents/CLAUDE_CODE_DATA_MODEL.md` in full first. Note
-      the deliberate trade-off being revisited: full watching is reserved for the dashboard because
-      transcript churn makes the shared sidebar look perpetually busy.
+- [x] **VS Code tree could hold a stale needs-input reading until a manual refresh** — resolved
+      2026-08-16. Answering a tool-permission prompt does not end the turn, so Claude Code fires no
+      hook and touches no lock; in `signals` scope the tree watches only locks and markers, so the
+      single record that work resumed — the transcript — raised no event it observed. The resolver
+      had read the freshest evidence correctly; the missing piece was the trigger. The controller
+      now watches the transcript of each session that claims needs-input, urgently, and that set is
+      empty whenever nothing claims attention. A periodic refresh was deliberately not used:
+      `ARCHITECTURE.md` reserves polling for interval mode, and a retraction is an event. Covered by
+      `tests/extension/refresh-controller-behavior.test.ts`, the first behavioural coverage of
+      extension code, using the `vscode` stub added alongside it.
 
 - [ ] **Orphaned attention markers are never reclaimed** — `~/.claude/reup/attention` still held a
       marker from 2026-07-21 for a long-dead session. Harmless for presentation today, since a

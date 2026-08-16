@@ -23,6 +23,8 @@ import {
   setSessionScopeSetting,
 } from './configuration.js'
 import { invalidateProjectCache } from '../../src/core/project/project-cache.js'
+import { sessionTranscriptPath } from '../../src/core/session/session-preview.js'
+import type { ExtensionCockpitModel } from './cockpit-model.js'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = createLogger()
@@ -45,6 +47,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     invalidateProjectCache()
     dataSource.invalidateTouchedFileCounts()
     const changed = await treeProvider.refresh({ notifyView: treeVisible })
+    // Answering a permission prompt ends no turn, so no hook fires and no lock
+    // moves: the waiting session's transcript is the only record that work
+    // resumed. Hand those paths to the watcher set that retracts the claim.
+    refreshController?.setNeedsInputTranscripts(waitingTranscriptPaths(treeProvider.getModel()))
     if (changed) await dashboard?.refresh(treeProvider.getModel() ?? undefined)
   }
   const inspectorProvider = new ReupInspectorProvider(dataSource, logger, refreshAll, resumeService)
@@ -226,6 +232,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.setVisible(treeView.visible)
   await openDashboardOnFirstUse(context, dashboard)
   if (treeVisible && !treeProvider.renderCurrentModel()) void refreshAll()
+}
+
+/**
+ * Transcript paths of the sessions currently claiming needs-input — the only
+ * claims a transcript write can retract, and therefore the only ones worth
+ * watching individually.
+ */
+function waitingTranscriptPaths(model: ExtensionCockpitModel | null): string[] {
+  if (!model) return []
+  return model.sessions
+    .filter((session) => session.needsInput)
+    .map((session) => sessionTranscriptPath(session.projectId, session.id))
 }
 
 async function openDashboardOnFirstUse(

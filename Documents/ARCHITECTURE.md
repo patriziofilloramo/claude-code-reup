@@ -499,6 +499,14 @@ coalesced and rate-limited, hidden Tree Views are not invalidated, and
 structurally unchanged cockpit models produce no UI refresh. Periodic
 20-second scanning is reserved for explicit interval mode.
 
+One watcher set is dynamic. A session claiming `needs-input` can be retracted
+only by its transcript when the user answers a tool-permission prompt: that ends
+no turn, so no hook fires and no lock moves. The controller therefore watches the
+transcript of each waiting session individually and urgently, rebuilding the set
+whenever it changes. It is empty whenever nothing claims attention, which is why
+this does not reintroduce the transcript churn that keeps full watching reserved
+for the dashboard.
+
 The Session Inspector is a CSP-restricted Webview. Transcript previews are
 loaded lazily and cached by transcript modification time. Every action is
 revalidated in the extension host; only reversible metadata mutations are

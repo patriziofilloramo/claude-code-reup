@@ -34,9 +34,18 @@ describe('VS Code refresh controller guardrails', () => {
     expect(source).toContain('Math.max(WATCH_DEBOUNCE_MS, throttleDelay)')
     expect(extensionSource).toContain('invalidateProjectCache()')
     expect(source).toContain("previousScope === 'signals' && scope === 'full'")
-    expect(source).not.toContain(
-      "if (mode === 'watch') {\n      this.startFilesystemWatchers()\n      this.startGitWatchers()\n      this.startSafetyInterval()"
+    // Watch mode is event-driven; periodic scanning belongs to interval mode
+    // alone. The previous guard named `startFilesystemWatchers()`, a method
+    // that no longer exists, so it could never fail. Count the call sites
+    // instead: exactly one, and it sits in the interval branch.
+    expect(source.match(/this\.startSafetyInterval\(\)/g)).toHaveLength(1)
+    expect(source).toContain("} else if (mode === 'interval') {")
+    // The waiting-session transcripts must actually be handed over on every
+    // refresh, or the watcher set silently stays empty and the badge sticks.
+    expect(extensionSource).toContain(
+      'refreshController?.setNeedsInputTranscripts(waitingTranscriptPaths('
     )
+    expect(extensionSource).toContain('.filter((session) => session.needsInput)')
     expect(source).toContain("join(getClaudeDirectory(), 'sessions')")
     expect(source).toContain('resolveGitDirectory')
   })
