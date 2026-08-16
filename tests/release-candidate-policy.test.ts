@@ -198,29 +198,42 @@ describe('release candidate integrity policy', () => {
     })
   })
 
-  it('releases the archive file descriptor before settling', async () => {
-    // yauzl's close() only unrefs its reader: it flips isOpen to false and
-    // returns while the descriptor is closed asynchronously. POSIX lets a
-    // caller unlink an open file, so a leak here is invisible outside Windows
-    // — where it failed CI cleanup with ENOTEMPTY, on the rejection path where
-    // an entry stream had already been opened.
-    const directory = mkdtempSync(join(tmpdir(), 'reup-vsix-handle-'))
-    try {
-      const path = join(directory, 'fixture.vsix')
-      const contents = 'crc-fixture-contents'
-      const corrupted = createStoredZip([['extension/package.json', contents]])
-      corrupted[corrupted.indexOf(Buffer.from(contents))] ^= 0xff
-      writeFileSync(path, corrupted)
+  it('leaves no handle on the archive, on every rejection path', async () => {
+    // yauzl never waits for its descriptor: ZipFile.close() only unrefs, and a
+    // failed open() calls fs.close(fd) without awaiting it. Both paths settled
+    // while the file was still locked. POSIX allows unlinking an open file, so
+    // this only ever surfaced on Windows — as ENOTEMPTY from the caller's
+    // cleanup, which reads like a flaky test rather than a held handle. Both
+    // rejection paths are covered because each failed CI separately: the
+    // malformed archive fails before a ZipFile exists, the corrupted one fails
+    // after an entry stream has already been opened.
+    const corruptedContents = 'crc-fixture-contents'
+    const corrupted = createStoredZip([['extension/package.json', corruptedContents]])
+    corrupted[corrupted.indexOf(Buffer.from(corruptedContents))] ^= 0xff
 
-      await expect(inspectVsixArchive(path)).rejects.toThrow(
-        'extension/package.json failed CRC-32 validation'
-      )
+    const cases: Array<readonly [string, Buffer, string]> = [
+      [
+        'malformed',
+        Buffer.from('this is not a zip archive'),
+        'End of central directory record signature not found',
+      ],
+      ['corrupted', corrupted, 'failed CRC-32 validation'],
+    ]
 
-      // Renaming observes the handle without depending on the caller's cleanup:
-      // Windows refuses it while a descriptor is open, POSIX does not care.
-      expect(() => renameSync(path, join(directory, 'released.vsix'))).not.toThrow()
-    } finally {
-      rmSync(directory, { force: true, recursive: true })
+    for (const [name, contents, expected] of cases) {
+      const directory = mkdtempSync(join(tmpdir(), `reup-vsix-handle-${name}-`))
+      try {
+        const path = join(directory, 'fixture.vsix')
+        writeFileSync(path, contents)
+
+        await expect(inspectVsixArchive(path)).rejects.toThrow(expected)
+
+        // Renaming observes the handle without depending on cleanup ordering:
+        // Windows refuses it while a descriptor is open, POSIX does not care.
+        expect(() => renameSync(path, join(directory, 'released.vsix'))).not.toThrow()
+      } finally {
+        rmSync(directory, { force: true, recursive: true })
+      }
     }
   })
 

@@ -165,10 +165,29 @@ function isSafeArchivePath(value) {
 }
 
 export async function inspectVsixArchive(vsixPath) {
+  // Read the archive into memory rather than letting the zip reader hold a
+  // descriptor for us. yauzl never waits for its descriptor to close:
+  // `ZipFile.close()` only unrefs its reader, and a failed `open()` calls
+  // `fs.close(fd)` without awaiting the callback. Both paths therefore settled
+  // while the file was still locked. POSIX allows unlinking an open file, so it
+  // surfaced only on Windows — as ENOTEMPTY raised by the *caller's* cleanup,
+  // which reads like a flaky test rather than a held handle. A buffer-backed
+  // reader has no descriptor to leak, on any path, including malformed
+  // archives that fail before a ZipFile even exists.
+  //
+  // The size bound lives here, next to the read it protects, instead of relying
+  // on every caller having checked first.
+  const size = statSync(vsixPath).size
+  if (size > MAX_VSIX_BYTES) {
+    throw archiveInspectionError(
+      vsixPath,
+      new Error(`VSIX size must be at most ${MAX_VSIX_BYTES} bytes; received ${size}.`)
+    )
+  }
+
   let archive
   try {
-    archive = await yauzl.openPromise(vsixPath, {
-      autoClose: false,
+    archive = await yauzl.fromBufferPromise(readFileSync(vsixPath), {
       strictFileNames: true,
       validateEntrySizes: true,
     })
@@ -228,35 +247,12 @@ export async function inspectVsixArchive(vsixPath) {
   } catch (error) {
     throw archiveInspectionError(vsixPath, error)
   } finally {
-    await closeArchive(archive)
+    // Releases the reader's buffer references. There is no descriptor behind it,
+    // so nothing here is asynchronous and nothing can outlive this call.
+    archive.close()
   }
 
   return { capturedText, entries, totalUncompressedBytes }
-}
-
-/**
- * Closes the archive and waits for its file descriptor to actually be released.
- *
- * yauzl's `close()` only unrefs its reader: it flips `isOpen` to false and
- * returns, while the descriptor is closed asynchronously once every read stream
- * has ended. The archive forwards that as a `close` event.
- *
- * Returning before then leaves the caller holding an open handle on a file it
- * believes it has finished with. POSIX hides this completely — a file can be
- * unlinked while open — so it surfaced only on Windows, where a caller that
- * removed its temporary directory next failed with `ENOTEMPTY`.
- *
- * `error` also settles the wait: a reader that fails to close never emits
- * `close`, and a release check must not hang on cleanup.
- */
-function closeArchive(archive) {
-  if (!archive.isOpen) return Promise.resolve()
-
-  return new Promise((resolve) => {
-    archive.once('close', resolve)
-    archive.once('error', resolve)
-    archive.close()
-  })
 }
 
 async function readArchiveEntry(archive, entry, captureLimit) {
