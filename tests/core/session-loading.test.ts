@@ -713,7 +713,12 @@ describe('session loading', () => {
 
     expect(branchesBySessionId.get(SESSION_ID)).toBe('feat/first')
     expect(branchesBySessionId.get(SECOND_SESSION_ID)).toBe('fix/second')
-  })
+    // Twelve git processes: five per repository plus one branch read each.
+    // Process creation on a loaded Windows agent pushed this past the 5s
+    // default, and the timeout then left git holding the working directory,
+    // failing cleanup with EBUSY. The assertion is about branch resolution,
+    // never about how fast git starts.
+  }, 30_000)
 
   async function createGitRepository(directory: string, branch: string): Promise<void> {
     await mkdir(directory)

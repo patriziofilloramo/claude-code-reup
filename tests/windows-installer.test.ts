@@ -166,7 +166,7 @@ describe.skipIf(process.platform !== 'win32')('Windows portable installer', () =
     } finally {
       rmSync(fixture.root, { force: true, recursive: true })
     }
-  }, 20_000)
+  }, 60_000)
 
   it('refuses to overlay a runtime owned by Inno Setup', () => {
     const fixture = createFixture({ withInnoMetadata: true })
@@ -207,6 +207,6 @@ describe.skipIf(process.platform !== 'win32')('Windows portable installer', () =
         rmSync(fixture.root, { force: true, recursive: true })
       }
     },
-    20_000
+    60_000
   )
 })
