@@ -8,6 +8,7 @@ function emptyReport(): DiagnosticsReport {
     brokenIndices: [],
     expiring: [],
     legacyProjectMemoryArtifacts: [],
+    orphanedAttentionMarkers: [],
     orphanedTranscripts: [],
     pathMissing: [],
     staleLocks: [],

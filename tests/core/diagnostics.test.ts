@@ -24,6 +24,68 @@ describe('diagnostics', () => {
     await rm(temporaryClaudeDirectory, { force: true, recursive: true })
   })
 
+  it('reports an attention marker whose session holds no live process', async () => {
+    // The marker cannot alert again — resolveSessionLiveState answers detached
+    // without a live process — but nothing collects it either: the only prune
+    // runs inside the web's live-lock loop, which an abandoned session never
+    // enters. Doctor reports it because no automatic path can reach it.
+    const attentionDirectory = join(temporaryClaudeDirectory, 'reup', 'attention')
+    await mkdir(attentionDirectory, { recursive: true })
+    await writeFile(
+      join(attentionDirectory, 'abandoned.json'),
+      JSON.stringify({
+        message: 'Claude is waiting for your input',
+        occurredAt: '2026-07-21T13:56:20.708Z',
+        schemaVersion: 1,
+        sessionId: ORPHANED_SESSION_ID,
+      }),
+      'utf8'
+    )
+
+    const report = await buildDiagnosticsReport()
+
+    expect(report.orphanedAttentionMarkers).toEqual([
+      { occurredAt: '2026-07-21T13:56:20.708Z', sessionId: ORPHANED_SESSION_ID },
+    ])
+  })
+
+  it('leaves a marker alone while its session still holds a live process', async () => {
+    // Age is never the evidence: a marker for a running session is legitimate
+    // however old it looks, so only the missing process makes one orphaned.
+    const attentionDirectory = join(temporaryClaudeDirectory, 'reup', 'attention')
+    const sessionsDirectory = join(temporaryClaudeDirectory, 'sessions')
+    await Promise.all([
+      mkdir(attentionDirectory, { recursive: true }),
+      mkdir(sessionsDirectory, { recursive: true }),
+    ])
+    await Promise.all([
+      writeFile(
+        join(attentionDirectory, 'live.json'),
+        JSON.stringify({
+          message: 'Claude needs your permission',
+          occurredAt: '2026-07-21T13:56:20.708Z',
+          schemaVersion: 1,
+          sessionId: INDEXED_SESSION_ID,
+        }),
+        'utf8'
+      ),
+      writeFile(
+        join(sessionsDirectory, `${process.pid}.json`),
+        JSON.stringify({
+          cwd: temporaryClaudeDirectory,
+          pid: process.pid,
+          sessionId: INDEXED_SESSION_ID,
+          startedAt: Date.now(),
+        }),
+        'utf8'
+      ),
+    ])
+
+    const report = await buildDiagnosticsReport()
+
+    expect(report.orphanedAttentionMarkers).toEqual([])
+  })
+
   it('finds broken indices, orphaned transcripts, and abandoned locks', async () => {
     const indexedProjectDirectory = join(temporaryClaudeDirectory, 'projects', 'indexed-project')
     const brokenProjectDirectory = join(temporaryClaudeDirectory, 'projects', 'broken-project')

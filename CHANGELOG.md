@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.4
+
+### Added
+
+- `reup doctor` and the web Lost & Found now report attention markers whose session holds no live
+  process. They cannot produce a wrong state — a session without a live process resolves to
+  `detached` before needs-input is ever consulted — but nothing collected them either: the only
+  automatic prune runs inside the web's loop over live locks, which a marker left by an abandoned
+  session never enters. Until now the sole way to remove one was `reup attention remove`, which
+  clears every marker. Doctor reports rather than deletes; permanent removal stays an explicit
+  action. A marker for a running session is left alone however old it is, because the missing
+  process is the evidence, not age.
+
 ## 0.6.3
 
 ### Changed

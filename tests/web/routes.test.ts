@@ -246,6 +246,7 @@ describe('web routes', () => {
       brokenIndices: [],
       expiring: [],
       legacyProjectMemoryArtifacts: [],
+      orphanedAttentionMarkers: [],
       orphanedTranscripts: [],
       pathMissing: [],
       staleLocks: [],

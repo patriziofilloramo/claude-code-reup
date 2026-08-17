@@ -198,6 +198,7 @@ const STRINGS = {
   diagnosticsSectionExpiring: 'Expiring ({n})',
   diagnosticsSectionMissingPaths: 'Missing paths ({n})',
   diagnosticsSectionOrphaned: 'Orphaned transcripts ({n})',
+  diagnosticsSectionOrphanedMarkers: 'Orphaned attention markers ({n})',
   diagnosticsSectionBrokenIndices: 'Broken indices ({n})',
   diagnosticsSectionStaleLocks: 'Stale locks ({n})',
   diagnosticsSectionLegacyMemory: 'Legacy Project Memory artifacts ({n})',
@@ -3319,6 +3320,33 @@ async function renderDiagnosticsPanel() {
     )
   }
 
+  if (report.orphanedAttentionMarkers && report.orphanedAttentionMarkers.length > 0) {
+    const rows = report.orphanedAttentionMarkers
+      .map(function (m) {
+        return (
+          '<div class="lf-item">' +
+          '<div class="lf-item-name lf-item-mono">' +
+          escapeHtml(m.sessionId) +
+          '</div>' +
+          '<div class="lf-item-meta">' +
+          escapeHtml(m.occurredAt || '') +
+          '</div>' +
+          '</div>'
+        )
+      })
+      .join('')
+    sections.push(
+      '<div class="lf-section">' +
+        '<div class="lf-section-title">' +
+        fmt(STRINGS.diagnosticsSectionOrphanedMarkers, {
+          n: report.orphanedAttentionMarkers.length,
+        }) +
+        '</div>' +
+        rows +
+        '</div>'
+    )
+  }
+
   if (report.orphanedTranscripts && report.orphanedTranscripts.length > 0) {
     const rows = report.orphanedTranscripts
       .map(function (t) {
@@ -3428,6 +3456,7 @@ async function renderDiagnosticsPanel() {
     (report.expiring ? report.expiring.length : 0) +
     (report.pathMissing ? report.pathMissing.length : 0) +
     (report.orphanedTranscripts ? report.orphanedTranscripts.length : 0) +
+    (report.orphanedAttentionMarkers ? report.orphanedAttentionMarkers.length : 0) +
     (report.brokenIndices ? report.brokenIndices.length : 0) +
     (report.staleLocks ? report.staleLocks.length : 0) +
     (report.legacyProjectMemoryArtifacts ? report.legacyProjectMemoryArtifacts.length : 0)

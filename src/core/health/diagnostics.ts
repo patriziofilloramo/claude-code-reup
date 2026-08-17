@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { getClaudeProjectsDirectory, resolveProjectPath } from '../project/claude-paths.js'
 import { loadProjects } from '../project/project-discovery.js'
 import { inspectProjectSidecarLock } from '../project/project-sidecar-lock.js'
+import { getLiveSessionRecords } from '../session/active-sessions.js'
+import { readAttentionMarkers } from '../session/attention.js'
 import { inspectAttentionHookHealth } from '../session/attention-hooks-integration.js'
 import { isValidSessionId } from '../session/session-model.js'
 import type { Project, Session, SessionStatus } from '../session/session-model.js'
@@ -35,6 +37,23 @@ export interface StaleSidecarLock {
   reason: string
 }
 
+/**
+ * An attention marker whose session holds no live process.
+ *
+ * The marker can never alert again — `resolveSessionLiveState()` answers
+ * `detached` without a live process, before it ever consults needs-input — so
+ * this is hygiene, not a wrong state. It is reported because nothing collects
+ * it: `resolveUserInputWait()` deliberately stays pure and only names a stale
+ * marker for a caller to delete, the web is the sole caller that does, and its
+ * call sites sit inside the live-lock loop. A marker left by an abandoned
+ * session is therefore unreachable by every automatic path, and only
+ * `reup attention remove`, which clears the whole directory, can remove it.
+ */
+export interface OrphanedAttentionMarker {
+  occurredAt: string
+  sessionId: string
+}
+
 export interface LegacyProjectMemoryArtifact {
   kind: 'link-marker' | 'project-memory-directory'
   path: string
@@ -52,6 +71,7 @@ export interface DiagnosticsReport {
   brokenIndices: BrokenSessionIndex[]
   expiring: DiagnosticsSession[]
   legacyProjectMemoryArtifacts: LegacyProjectMemoryArtifact[]
+  orphanedAttentionMarkers: OrphanedAttentionMarker[]
   orphanedTranscripts: OrphanedTranscript[]
   pathMissing: DiagnosticsSession[]
   staleLocks: StaleSidecarLock[]
@@ -60,9 +80,11 @@ export interface DiagnosticsReport {
 /** Performs non-destructive checks shared by the web Lost & Found view and CLI doctor. */
 export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
   const projectsDirectory = getClaudeProjectsDirectory()
-  const [projects, projectDirectoryNames] = await Promise.all([
+  const [projects, projectDirectoryNames, attentionMarkers, liveSessions] = await Promise.all([
     loadProjects(),
     listProjectDirectoryNames(projectsDirectory),
+    readAttentionMarkers(),
+    getLiveSessionRecords(),
   ])
   const projectsById = new Map(projects.map((project) => [project.id, project]))
   const hookHealth = await inspectAttentionHookHealth()
@@ -71,10 +93,19 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
     brokenIndices: [],
     expiring: [],
     legacyProjectMemoryArtifacts: [],
+    orphanedAttentionMarkers: [],
     orphanedTranscripts: [],
     pathMissing: [],
     staleLocks: [],
   }
+
+  // Absence of a live process is the evidence here, never age: a marker for a
+  // running session is legitimate however old it looks.
+  const liveSessionIds = new Set(liveSessions.map((record) => record.sessionId))
+  report.orphanedAttentionMarkers = attentionMarkers
+    .filter((marker) => !liveSessionIds.has(marker.sessionId))
+    .map((marker) => ({ occurredAt: marker.occurredAt, sessionId: marker.sessionId }))
+    .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt))
 
   if (hookHealth.state === 'broken') {
     report.brokenAttentionHook = {

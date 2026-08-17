@@ -15,10 +15,35 @@
       `tests/extension/refresh-controller-behavior.test.ts`, the first behavioural coverage of
       extension code, using the `vscode` stub added alongside it.
 
-- [ ] **Orphaned attention markers are never reclaimed** — `~/.claude/reup/attention` still held a
-      marker from 2026-07-21 for a long-dead session. Harmless for presentation today, since a
-      marker only anchors a row that also has a live lock or a resume-visible session, but the
-      directory grows without bound and makes live-state archaeology noisier.
+- [x] **Orphaned attention markers are now reported** — resolved 2026-08-17 by adding them to
+      `reup doctor`, which had never looked at markers at all. Verified first that they cannot lie:
+      running the real resolver over real data, the abandoned session answers `detached` and appears
+      in neither the needs-input nor the active set, because `resolveSessionLiveState()` returns on
+      the missing live process before it consults needs-input. The non-obvious part is why nothing
+      collected them. A prune already exists — `resolveUserInputWait()` stays pure and names a stale
+      marker for a caller to delete — but only `src/web/live-activity-model.ts` is that caller, and
+      its call sites sit inside the loop over live lock records. A marker left by an abandoned
+      session therefore enters no automatic path at all, and only `reup attention remove`, which
+      clears the whole directory, could remove it. Doctor reports rather than deletes: permanent
+      removal stays an explicit user action. Absence of a live process is the evidence, never age.
+
+### Medium
+
+- [ ] **A finished turn that is waiting for you raises nothing on any surface** — found 2026-08-17
+      while testing the needs-input retraction. `needs-input` requires reported evidence, and
+      Claude Code does not report one when a turn simply ends: over 571 captured hooks there are
+      293 `UserPromptSubmit`, 263 `Stop`, and only 24 `Notification`, of which seven of the last
+      eight followed a `UserPromptSubmit` — permission prompts raised mid-turn, not idle waits. The
+      one that followed a `Stop` came after 2.5 days of silence. Measured directly: a plain question
+      left unanswered for 2m14s produced `Stop` and no `Notification`, so no badge appeared in
+      either the tree or the TUI. Reup is behaving correctly — a quiet session is `attached`, and
+      inventing needs-input from silence is exactly what the data model forbids, since a long tool
+      call looks identical from outside. But the most common case of "this session needs you" is
+      therefore invisible, which cuts against the product's central promise. Note that `Stop`
+      already writes a work marker with state `idle` (`attention.ts`), which is reported evidence
+      and currently unused for this purpose. Any change here alters the shared four-state
+      vocabulary and touches every surface: start from `Documents/CLAUDE_CODE_DATA_MODEL.md` in
+      full, and treat it as its own session.
 
 - [x] **Windows terminal launcher shell-string blocker resolved** — `terminal.windows.ts` now
       uses structured `execFile()` / `spawn()` launch paths for Windows Terminal, PowerShell,

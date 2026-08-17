@@ -64,6 +64,15 @@ function doctorSections(report: DiagnosticsReport): DoctorSection[] {
       ),
     },
     {
+      title: 'Orphaned attention markers',
+      why: 'The marker names a session that holds no live process, so it can never alert again.',
+      nextStep:
+        'Harmless to leave. `reup attention remove` clears every marker; there is no per-marker removal.',
+      items: report.orphanedAttentionMarkers.map((item) =>
+        formatItem(item.sessionId.slice(0, 8), [`waiting since ${item.occurredAt}`])
+      ),
+    },
+    {
       title: 'Orphaned transcripts',
       why: 'The transcript exists on disk but is absent from its project index.',
       nextStep: 'Keep it if you need the transcript; otherwise cleanup can archive stale sessions.',

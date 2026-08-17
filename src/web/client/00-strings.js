@@ -189,6 +189,7 @@ const STRINGS = {
   diagnosticsSectionExpiring: 'Expiring ({n})',
   diagnosticsSectionMissingPaths: 'Missing paths ({n})',
   diagnosticsSectionOrphaned: 'Orphaned transcripts ({n})',
+  diagnosticsSectionOrphanedMarkers: 'Orphaned attention markers ({n})',
   diagnosticsSectionBrokenIndices: 'Broken indices ({n})',
   diagnosticsSectionStaleLocks: 'Stale locks ({n})',
   diagnosticsSectionLegacyMemory: 'Legacy Project Memory artifacts ({n})',

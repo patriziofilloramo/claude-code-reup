@@ -65,6 +65,7 @@ export const LABELS = {
   brokenIndices: 'Broken session indices',
   brokenIndicesExplan: 'Claude Code owns these files; Reup falls back to readable transcripts.',
   staleLocks: 'Stale sidecar locks',
+  orphanedAttentionMarkers: 'Orphaned attention markers',
   orphanedTranscripts: 'Orphaned transcripts',
   missingPaths: 'Missing session paths',
 
