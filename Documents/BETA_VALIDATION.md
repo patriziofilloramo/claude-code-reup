@@ -163,8 +163,8 @@ For each session, store only:
 - follow-up usage after seven days, when the tester volunteers it.
 
 Keep raw transcripts, Claude session titles, repository names, paths, and
-screenshots out of the feedback record. Summarize repeated findings in
-`Documents/PROJECT_MEMORY.md` only after they affect a durable product decision.
+screenshots out of the feedback record. Summarize repeated findings in the
+narrowest affected document only after they change a durable product decision.
 
 Use synthetic, deterministic projects and sessions for public screenshots,
 videos, and social cards. Never publish a maintainer's real paths, session

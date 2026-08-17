@@ -8,13 +8,7 @@ import { getReupDirectory } from '../../src/core/project/claude-paths.js'
 const LEGACY_NAME = ['swo', 'op'].join('')
 const LEGACY_ENV_PREFIX = ['SW', 'OOP'].join('')
 const REPOSITORY_ROOT = process.cwd()
-const PUBLIC_DOCUMENTS = [
-  'CHANGELOG.md',
-  'CLAUDE.md',
-  'README.md',
-  'ROADMAP.md',
-  'extension/README.md',
-]
+const PUBLIC_DOCUMENTS = ['CHANGELOG.md', 'README.md', 'ROADMAP.md', 'extension/README.md']
 const PUBLIC_DIRECTORIES = ['Documents', 'src']
 
 describe('Reup branding', () => {

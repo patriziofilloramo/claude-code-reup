@@ -287,5 +287,5 @@ that existed at the time. The failures were in _measurement_, so:
 
 - `ARCHITECTURE.md` → "Shared Live State", "Live State Confidence" — the
   current design.
-- `PROJECT_MEMORY.md` → dated decisions, including superseded ones. Read for
-  _why_, not for current behaviour.
+- `ROADMAP.md` → open defects and their diagnoses, including the ones this
+  document's traps came from. Read for _why_, not for current behaviour.

@@ -6,3 +6,9 @@ release/
 .claude/
 .claude-memory/
 .claude-memory-legacy-backup*/
+
+# Private working notes. Kept on disk because Claude Code loads CLAUDE.md from
+# the repository root, and mirrored to a private companion repository so they
+# stay durable — see the memory protocol in CLAUDE.md.
+CLAUDE.md
+Documents/PROJECT_MEMORY.md

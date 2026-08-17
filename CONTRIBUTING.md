@@ -37,7 +37,7 @@ Claude Code data.
 - Every filesystem, process, HTTP, and persisted-data boundary requires runtime
   validation.
 
-Before changing live-state behavior, read `CLAUDE.md` and
+Before changing live-state behavior, read
 `Documents/CLAUDE_CODE_DATA_MODEL.md` completely. In particular:
 
 - `null` evidence is common and must stay distinct from idle;
@@ -128,9 +128,10 @@ Do not include real transcripts, session titles, repository paths, credentials,
 or customer data in commits, fixtures, screenshots, or logs. Use synthetic
 UUIDs and minimal generated JSONL fixtures.
 
-If a change creates durable product or architecture knowledge, update the
-narrowest appropriate file described by the Shared Project Memory Protocol in
-`CLAUDE.md`.
+If a change creates durable product or architecture knowledge, record it in
+the narrowest appropriate document: `Documents/ARCHITECTURE.md` for design and
+invariants, `ROADMAP.md` for sequencing, and the document closest to the
+subject otherwise.
 
 ## Reporting security issues
 
