@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.3
+
+### Changed
+
+- The README and landing page now route you to an interface by situation — terminal, second
+  screen, inside a repository, scripting — instead of describing all four and leaving the choice
+  to you. Both state that the interfaces read the same local data rather than competing.
+- Both pages now say what Reup costs: six runtime dependencies, no database or daemon, lazy
+  command loading worth about 15 ms over bare Node, and a VSIX around 240 KB. Listing time is
+  described as scaling with your own history rather than quoted as a number, because it does.
+- The shared four-state vocabulary moved out of the accuracy caveats and into the workflow, where
+  it belongs: one state resolved once and drawn identically everywhere, with a badge backed by a
+  reported fact rather than inferred from silence.
+
 ## 0.6.2
 
 ### Fixed
