@@ -26,10 +26,15 @@ remember is buried in the conversation; or ask which sessions touched a file.
 
 ### 2. Know what needs you
 
-Scan live processes and locally anchored background tasks without visiting
-every terminal. Reup prefers Claude Code's documented Agent View inventory
-when available and uses bounded local lock, hook, and transcript fallbacks when
-reported fields are unavailable.
+Scan live processes and locally anchored background tasks without visiting every
+terminal. Four states — `needs-input`, `working`, `attached`, `detached` — are
+resolved once from all available evidence and drawn identically by every
+interface, so two of them never disagree about the same session.
+
+Reup prefers Claude Code's documented Agent View inventory and falls back to
+bounded lock, hook, and transcript evidence. A badge that claims something
+happened is backed by a reported fact, not by inference from silence: a long
+tool call and a finished turn look identical from outside.
 
 ### 3. Resume in context
 
@@ -68,10 +73,10 @@ change as Claude Code evolves.
 
 ## Try the current beta
 
-Reup is not published to npm yet and the repository currently has no tagged
-public release. The source beta requires Node.js 20+ and the Claude Code CLI.
-These commands install the Reup CLI and local web dashboard; the VS Code
-extension is packaged separately.
+Reup is not published to npm yet. Tagged pre-releases carry the npm tarball, the
+VSIX, Windows installers, SBOMs, and checksums. The source beta requires
+Node.js 20+ and the Claude Code CLI; these commands install the Reup CLI and
+local web dashboard, while the VS Code extension is packaged separately.
 
 ```bash
 git clone https://github.com/patriziofilloramo/claude-code-reup.git reup
@@ -82,11 +87,11 @@ npm link
 reup
 ```
 
-Release-candidate artifacts will appear on
-[GitHub Releases](https://github.com/patriziofilloramo/claude-code-reup/releases)
-when published. Until the release page says otherwise, treat Windows and macOS
-artifacts as unsigned and macOS artifacts as not notarized; verify the published
-SHA-256 checksums before installation.
+Artifacts live on
+[GitHub Releases](https://github.com/patriziofilloramo/claude-code-reup/releases).
+They are marked pre-release: until a release says otherwise, treat Windows and
+macOS artifacts as unsigned and macOS artifacts as not notarized, and verify the
+published SHA-256 checksums before installing.
 
 On the first `reup`, `reup web`, or `reup config` launch, Reup registers local
 Claude Code hooks for turn boundaries and reports the change together with the
@@ -127,20 +132,35 @@ Additional maintenance and automation commands:
 `reup list`, `reup resume`, and `reup handoff` accept globally unambiguous
 session ID prefixes with a minimum length of eight characters.
 
-## Interfaces
+## Which one to open
 
-- **Terminal UI** — the default, keyboard-first path for finding, inspecting,
-  and resuming work quickly.
-- **Local web dashboard** — an always-open view with live updates, project and
-  session organization, and an inspector. Run `reup web` or choose another port
-  with `reup web --port 4000`.
-- **VS Code extension** — a local workspace view, full dashboard, and session
-  inspector. Resume through the Claude Code extension when available or through
-  the integrated terminal.
-- **CLI output** — concise human output and JSON where supported for scripts and
-  automation.
+All four read the same local data. Pick by where you already are.
 
-These are interfaces over local Reup discovery; they are not a sync service.
+| If you                                | Open                  | Because                                                                   |
+| ------------------------------------- | --------------------- | ------------------------------------------------------------------------- |
+| live in the terminal                  | `reup`                | Keyboard-first, and nothing to install beyond the CLI                     |
+| want a view open on a second screen   | `reup web`            | Live updates and a persistent overview on `127.0.0.1`                     |
+| work inside one repository in VS Code | the VS Code extension | Answers for the folder you opened, with the rest of the repo a click away |
+| are scripting                         | `reup list --json`    | Machine-readable output                                                   |
+
+They are complementary, not alternatives — the same discovery, surfaced where
+you work. None of them is a sync service.
+
+`reup web --port 4000` moves the dashboard off the default port. The extension
+resumes through Anthropic's Claude Code extension when it is installed, and
+through the integrated terminal otherwise.
+
+## Light by construction
+
+Six runtime dependencies. No database, no daemon, no background service, no
+account. The CLI loads each command on demand, so `reup --version` costs about
+15 ms more than starting Node itself, and the terminal UI's React and Ink are
+never loaded unless you open it. The VS Code extension ships as a VSIX of about
+240 KB.
+
+Discovery reads your transcripts, so the first listing scales with how much
+history you keep. Every surface then serves from an in-memory cache, and the
+long-running ones pay that cost once at startup.
 
 ## Signal accuracy and limits
 
