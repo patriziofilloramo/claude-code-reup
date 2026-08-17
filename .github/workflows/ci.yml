@@ -72,3 +72,16 @@ jobs:
       - name: Verify npm package dry-run
         if: runner.os == 'Linux'
         run: npm run release:package:check
+
+      # Launches a real VS Code. It is the only place that can answer whether
+      # the editor delivers the events the extension depends on — notably a
+      # watcher on a single file outside the workspace, which retracts a stale
+      # needs-input badge. A stub cannot answer that, and it had only ever been
+      # confirmed on Windows.
+      - name: VS Code extension host smoke test
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run test:extension-host
+
+      - name: VS Code extension host smoke test
+        if: runner.os != 'Linux'
+        run: npm run test:extension-host
