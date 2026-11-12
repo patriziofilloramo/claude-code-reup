@@ -86,7 +86,7 @@
     "*.{md,json,yml}": "prettier --write"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.4",
+    "@hono/node-server": "^2.1.6",
     "clipboardy": "^4.0.0",
     "hono": "^4.0.0",
     "ink": "^5.0.0",
